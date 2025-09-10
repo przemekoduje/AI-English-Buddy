@@ -1,0 +1,520 @@
+
+.topic-buttons button.selected {
+    background-color: #61dafb;
+    color: #282c34;
+    border-color: #61dafb;
+  }
+  
+  .generate-button {
+    margin-top: 20px;
+    padding: 12px 24px;
+    font-size: 1.2em;
+    font-weight: bold;
+  }
+  
+  .details-section {
+    margin-top: 20px;
+    width: 100%;
+    max-width: 550px;
+  }
+  
+  .details-section textarea {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 2px solid #555;
+    background-color: #282c34;
+    color: white;
+    font-family: sans-serif;
+    font-size: 16px;
+    box-sizing: border-box; /* Ważne, aby padding nie rozszerzał elementu */
+  }
+  
+  /* Nowa, rozbudowana sekcja kontrolek audio - DOSTOSOWANA DO ESTETYKI APPLE */
+  .audio-controls {
+    background-color: rgba(240, 240, 240, 0.8); /* Bardzo jasne, subtelne tło */
+    padding: 10px 15px; /* Mniejszy padding */
+    border-radius: 8px; /* Lekko zaokrąglone rogi */
+    margin: 15px auto 25px auto; /* Marginesy, centrowanie poziome, większy odstęp od tekstu */
+    width: 100%;
+    max-width: 700px; /* Ograniczona szerokość, żeby nie była zbyt długa */
+    box-sizing: border-box;
+    display: flex; /* Flexbox dla lepszego ułożenia */
+    flex-direction: column; /* Elementy w kolumnach */
+    gap: 8px; /* Mniejsza przestrzeń między elementami */
+    border: 1px solid #e0e0e0; /* Bardzo delikatna ramka */
+  }
+  
+  .voice-selector, .speech-sliders, .playback-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start; /* Wyrównanie do lewej */
+    gap: 10px; /* Mniejsza przestrzeń */
+    margin-bottom: 0; /* Brak marginesów wewnętrznych */
+    width: 100%; /* Rozciągnij na całą szerokość */
+  }
+  
+  .voice-selector label, .speech-sliders label {
+    font-size: 0.9em; /* Mniejsza czcionka */
+    color: #555; /* Ciemniejszy, ale stonowany kolor tekstu */
+    min-width: 60px; /* Ustalona minimalna szerokość dla etykiet */
+    text-align: right; /* Etykiety wyrównane do prawej */
+  }
+  
+  .voice-selector select {
+    padding: 6px 10px; /* Trochę większy padding */
+    border-radius: 5px;
+    background-color: #f8f8f8; /* Bardzo jasne tło dla selecta */
+    color: #333; /* Ciemniejszy tekst */
+    border: 1px solid #ccc; /* Subtelna ramka */
+    flex-grow: 1; /* Rozciągnij, by wypełnić dostępną przestrzeń */
+    font-size: 0.9em;
+  }
+  
+  .speech-sliders {
+    flex-direction: row; /* Suwaki obok siebie */
+    justify-content: space-between; /* Rozłóż równomiernie */
+    width: 100%;
+  }
+  
+  .speech-sliders > div {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1; /* Każdy suwak zajmuje równą przestrzeń */
+  }
+  
+  .speech-sliders input[type="range"] {
+    width: 80px; /* Mniejsza szerokość suwaków */
+    -webkit-appearance: none; /* Reset stylu domyślnego */
+    appearance: none;
+    background: #ddd; /* Jasne tło paska */
+    height: 4px; /* Cieńszy pasek */
+    border-radius: 2px;
+    outline: none;
+  }
+  
+  .speech-sliders input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px; /* Mniejszy uchwyt */
+    height: 14px;
+    border-radius: 50%;
+    background: #007aff; /* Niebieski uchwyt (jak Apple) */
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  
+  .speech-sliders input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #007aff;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  
+  .speech-sliders span {
+    min-width: 20px; /* Mniejsza szerokość wyświetlania wartości */
+    font-weight: normal; /* Normalna waga czcionki */
+    font-size: 0.9em;
+    color: #555;
+  }
+  
+  .playback-buttons {
+    justify-content: center; /* Przyciski odtwarzania na środku */
+    margin-top: 5px; /* Lekki odstęp od suwaków */
+  }
+  
+  .playback-buttons button {
+    border: 1px solid #007aff; /* Niebieska ramka */
+    color: #007aff; /* Niebieski tekst */
+    padding: 6px 12px; /* Mniejszy padding */
+    border-radius: 6px; /* Lekko zaokrąglone rogi */
+    background-color: transparent; /* Przezroczyste tło */
+    font-size: 0.9em; /* Mniejsza czcionka */
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+  }
+  
+  .playback-buttons button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  
+  .playback-buttons button:hover:not(:disabled) {
+    background-color: rgba(0, 122, 255, 0.08); /* Delikatne podświetlenie na hover */
+    color: #007aff;
+  }
+  
+  /* Układ główny: historia + notatnik */
+  .main-content {
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    width: 100%;
+    max-width: 1200px;
+    margin: 20px auto;
+    padding: 0 20px;
+  }
+  
+  .story-container {
+    flex: 3; /* Kontener na historię zajmuje 3/4 szerokości */
+    min-width: 0;
+  }
+  
+  .notebook-sidebar {
+    flex: 1; /* Notatnik zajmuje 1/4 szerokości */
+    background-color: #3e4451;
+    border-radius: 10px;
+    padding: 20px;
+    height: fit-content;
+    min-height: 300px;
+  }
+  
+  .notebook-sidebar h2 {
+    margin-top: 0;
+    color: #61dafb;
+  }
+  
+  .notebook-sidebar ul.notebook-list { /* Używamy nowej klasy */
+    list-style-type: none;
+    padding: 0;
+  }
+  
+  .notebook-sidebar li.notebook-item { /* Używamy nowej klasy */
+    background-color: #f0f0f5; /* Bardzo jasne tło dla każdego elementu */
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    text-align: left; /* Tekst wyrównany do lewej */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Delikatny cień */
+  }
+  
+  .notebook-sidebar .notebook-original-word {
+    display: block; /* Każde słowo w nowej linii */
+    font-weight: 600; /* Pogrubione słowo oryginalne */
+    color: #333; /* Ciemniejszy kolor */
+    font-size: 1.1em;
+    margin-bottom: 3px;
+  }
+  
+  .notebook-sidebar .notebook-translated-word {
+    display: block; /* Tłumaczenie w nowej linii */
+    font-style: italic; /* Kursywa dla tłumaczenia */
+    color: #666; /* Bardziej stonowany kolor */
+    font-size: 0.95em;
+  }
+  
+  .empty-notebook {
+    color: #9e9e9e;
+    font-style: italic;
+    font-size: 0.9em;
+  }
+  
+  /* Style dla menu kontekstowego */
+  .context-menu {
+    position: absolute;
+    background-color: #4a505e;
+    border: 1px solid #61dafb;
+    border-radius: 8px;
+    padding: 5px;
+    z-index: 1000;
+    transform: translateX(-50%); /* Centruje menu względem kursora */
+    display: flex;
+    gap: 5px;
+  }
+  
+  .context-menu button {
+    background-color: #282c34;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  
+  .context-menu button:hover {
+    background-color: #3e4451;
+  }
+  
+  
+  /* Style dla modalu tłumaczenia */
+  .translation-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.4); /* Półprzezroczyste, delikatne tło */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000; /* Wyżej niż inne elementy */
+  }
+  
+  .translation-modal-content {
+    background-color: #ffffff; /* Białe tło */
+    padding: 30px 40px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); /* Delikatny cień */
+    position: relative;
+    max-width: 500px;
+    width: 90%;
+    text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+    color: #333;
+  }
+  
+  .close-modal-button {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #888;
+    padding: 5px;
+    line-height: 1;
+  }
+  
+  .close-modal-button:hover {
+    color: #333;
+  }
+  
+  .translation-modal-content h3 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #1a1a1a;
+  }
+  
+  .translation-modal-content .original-text {
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 10px;
+    color: #555;
+    line-height: 1.4;
+  }
+  
+  .translation-modal-content .translated-text {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 25px;
+    line-height: 1.5;
+  }
+  
+  .add-to-notebook-button {
+    background-color: #007aff; /* Standardowy niebieski Apple */
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    transition: background-color 0.2s ease-in-out;
+  }
+  
+  .add-to-notebook-button:hover {
+    background-color: #005bb5;
+  }
+  
+  .story-text-display {
+    text-align: left; /* Zapewniamy, że tekst historii jest wyrównany do lewej */
+    line-height: 1.6; /* Dla lepszej czytelności */
+    font-size: 1.15em; /* Nieco większy rozmiar */
+    color: #333; /* Ciemny, czytelny kolor */
+    margin-top: 20px;
+  }
+  
+  .highlighted-text {
+    background-color: #ffe082; /* Łagodny żółty kolor */
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease-in-out; /* Płynne przejście */
+  }
+  
+  /* Style dla selektora zapisanych historii */
+  .story-loader {
+    margin-bottom: 30px;
+    text-align: left;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .story-loader label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+    color: #888;
+  }
+  
+  .story-loader select {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+    font-size: 1em;
+    cursor: pointer;
+  }
+  
+  /* Style dla przycisku zapisu historii */
+  .save-story-container {
+    margin-top: 25px;
+    text-align: center;
+  }
+  
+  .save-story-button {
+    background-color: #4cd964; /* Zielony w stylu Apple */
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
+  }
+  
+  .save-story-button:hover:not(:disabled) {
+    background-color: #37b74d;
+  }
+  
+  .save-story-button:disabled {
+    background-color: #8f8f8f;
+    cursor: not-allowed;
+  }
+  
+  .email-notebook-button {
+    padding: 10px 15px;
+    background-color: #6a1b9a; /* Fioletowy kolor */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1rem;
+    margin-top: 10px;
+    transition: background-color 0.3s ease;
+  }
+  
+  .email-notebook-button:hover:not(:disabled) {
+    background-color: #4a148c;
+  }
+  
+  .email-notebook-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+  
+  /* Style dla inputa w modalu e-maila */
+  .translation-modal-content .email-input {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin: 15px 0 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+  }
+  
+  grammar-analysis-button {
+    padding: 10px 15px;
+    background-color: #007bff; /* Jakiś niebieski kolor, możesz dostosować */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1rem;
+    margin-top: 10px;
+    margin-left: 10px; /* Jeśli ma być obok innych */
+    transition: background-color 0.3s ease;
+  }
+  
+  .grammar-analysis-button:hover:not(:disabled) {
+    background-color: #0056b3;
+  }
+  
+  .grammar-analysis-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+  
+  /* Style dla modala analizy gramatycznej (możesz ponownie wykorzystać style od modal_translation) */
+  .grammar-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+  
+  .grammar-modal-content {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh; /* Ogranicz wysokość */
+    overflow-y: auto; /* Dodaj scrolla jeśli treść jest długa */
+    position: relative;
+  }
+  
+  .grammar-modal-content h3 {
+    color: #333;
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+    text-align: center;
+  }
+  
+  .grammar-results-list {
+    margin-top: 20px;
+  }
+  
+  .grammar-item {
+    background-color: #f8f8f8;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+  }
+  
+  .grammar-item h4 {
+    color: #4a148c; /* Kolor fioletowy dla tytułu gramatycznego */
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.2rem;
+  }
+  
+  .grammar-example-sentence {
+    font-style: italic;
+    color: #555;
+    margin-bottom: 10px;
+    background-color: #e6f7ff; /* Jasnoniebieskie tło dla przykładu */
+    padding: 8px;
+    border-left: 3px solid #007bff;
+    border-radius: 4px;
+  }
+  
+  .grammar-explanation {
+    color: #666;
+    line-height: 1.6;
+  }
+  
+  .action-buttons-group {
+    display: flex;
+    flex-wrap: wrap; /* Pozwala przyciskom przejść do nowej linii na mniejszych ekranach */
+    justify-content: center;
+    gap: 10px; /* Odstępy między przyciskami */
+    margin-top: 20px;
+    margin-bottom: 20px; /* Odstęp od nagłówka */
+  }

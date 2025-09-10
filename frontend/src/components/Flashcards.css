@@ -1,0 +1,214 @@
+/* src/components/Flashcards.css */
+.flashcards-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 30px;
+    min-height: calc(100vh - 100px); /* Dopasuj do wysokości viewportu */
+    background-color: #f9f9f9;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+    color: #333;
+  }
+  
+  .flashcards-container h2 {
+    font-size: 2.2em;
+    color: #1a1a1a;
+    margin-bottom: 20px;
+  }
+  
+  .progress-info {
+    font-size: 1.1em;
+    color: #666;
+    margin-bottom: 15px;
+  }
+  
+  .flashcard {
+    width: 100%;
+    max-width: 450px;
+    height: 250px; /* Stała wysokość fiszki */
+    perspective: 1000px; /* Dla efektu 3D flip */
+    cursor: pointer;
+    margin-bottom: 20px;
+  }
+  
+  .flashcard-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    border-radius: 15px;
+    background-color: #fff;
+  }
+  
+  .flashcard.is-flipped .flashcard-inner {
+    transform: rotateY(180deg);
+  }
+  
+  .flashcard-front, .flashcard-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    -webkit-backface-visibility: hidden; /* Ukryj tył przy obrocie */
+  backface-visibility: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 15px;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  
+  .flashcard-front {
+    background-color: #f0f8ff; /* Bardzo jasny niebieski */
+    color: #1a1a1a;
+    font-size: 1.8em;
+    font-weight: 700;
+  }
+  
+  .flashcard-back {
+    background-color: #e6ffe6; /* Bardzo jasny zielony */
+    color: #1a1a1a;
+    transform: rotateY(180deg);
+    font-size: 1.6em;
+    font-weight: 500;
+  }
+
+.flashcard-inner.is-flipped { /* Zmieniono selektor z .flashcard.is-flipped .flashcard-inner */
+  transform: rotateY(180deg);
+}
+  
+  .flashcard-text {
+    margin: 0;
+  }
+  
+  .flashcard-actions {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .flip-button,
+  .action-button-known,
+  .action-button-unknown,
+  .skip-button,
+  .end-session-button,
+  .back-to-main-button,
+  .start-new-session-button {
+    padding: 12px 25px;
+    border-radius: 8px;
+    border: none;
+    font-size: 1.05em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  }
+  
+  .flip-button {
+    background-color: #007aff;
+    color: white;
+  }
+  .flip-button:hover {
+    background-color: #005bb5;
+  }
+  
+  .action-button-known {
+    background-color: #4cd964; /* Zielony Apple */
+    color: white;
+  }
+  .action-button-known:hover {
+    background-color: #37b74d;
+  }
+  
+  .action-button-unknown {
+    background-color: #ff3b30; /* Czerwony Apple */
+    color: white;
+  }
+  .action-button-unknown:hover {
+    background-color: #cc2a20;
+  }
+  
+  .skip-button {
+      background-color: #ff9500; /* Pomarańczowy Apple */
+      color: white;
+  }
+  .skip-button:hover {
+      background-color: #cc7a00;
+  }
+  
+  
+  .end-session-button,
+  .back-to-main-button,
+  .start-new-session-button {
+    background-color: #e0e0e0;
+    color: #555;
+    border: 1px solid #ccc;
+  }
+  .end-session-button:hover,
+  .back-to-main-button:hover,
+  .start-new-session-button:hover {
+    background-color: #d0d0d0;
+    color: #333;
+  }
+  
+  .session-summary {
+    text-align: center;
+    margin-top: 50px;
+    padding: 30px;
+    background-color: #fff;
+    border-radius: 15px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    max-width: 500px;
+    width: 90%;
+  }
+  
+  .session-summary h3 {
+    font-size: 1.8em;
+    color: #1a1a1a;
+    margin-bottom: 15px;
+  }
+  
+  .session-summary p {
+    font-size: 1.2em;
+    color: #555;
+    margin-bottom: 30px;
+  }
+  
+  .session-summary button {
+      margin: 0 10px;
+  }
+  
+  .empty-message {
+    font-size: 1.3em;
+    color: #777;
+    margin-top: 50px;
+    text-align: center;
+  }
+  
+  /* Styl dla przycisku "Ćwicz Notatnik" */
+  .App-header .exercise-button {
+    margin-top: 20px; /* Odstęp od poprzednich elementów */
+    padding: 12px 25px;
+    border-radius: 8px;
+    border: none;
+    font-size: 1.1em;
+    font-weight: 600;
+    cursor: pointer;
+    background-color: #5ac8fa; /* Jasnoniebieski Apple */
+    color: white;
+    transition: background-color 0.2s ease-in-out;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  }
+  
+  .App-header .exercise-button:hover:not(:disabled) {
+    background-color: #31a7e4;
+  }
+  
+  .App-header .exercise-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }

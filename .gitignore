@@ -1,0 +1,36 @@
+# Node modules
+node_modules
+build
+.env
+.DS_Store
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor directories and files
+.vscode
+.idea
+*.sublime-project
+*.sublime-workspace
+
+# MacOS specific
+.DS_Store
+
+# Pliki konfiguracyjne backendu
+backend/.env
+backend/firebase_service_account.json
+backend/__pycache__/
+backend/venv/
+
+# Pliki konfiguracyjne frontendu (jeśli jakieś są, np. klucze API)
+frontend/.env # Jeśli używasz .env również we frontendzie
+frontend/node_modules/
+frontend/build/
