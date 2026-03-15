@@ -1,33 +1,41 @@
 // frontend/src/App.js
 import React, { useState } from 'react';
 import './App.css';
+import Sidebar from './components/Sidebar';
+import TopBar from './components/TopBar';
 import Dashboard from './components/Dashboard';
 import Workspace from './components/Workspace';
-import Navbar from './components/Navbar';
 
 function App() {
-  const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard' lub 'workspace'
+  const [currentView, setCurrentView] = useState('dashboard');
 
-  // Funkcja, którą przekażemy do Dashboard, aby mógł zmienić widok
-  const navigateToWorkspace = () => {
-    setCurrentView('workspace');
+  const handleNavigate = (view) => {
+    setCurrentView(view);
   };
 
-  // Funkcja do powrotu do Dashboard (na przyszłość)
-  const navigateToDashboard = () => {
-    setCurrentView('dashboard');
+  const getPageTitle = () => {
+    switch (currentView) {
+      case 'dashboard': return 'Mission Control';
+      case 'workspace': return 'Practice Room';
+      case 'notebook': return 'My Vocabulary';
+      default: return 'AI English Buddy';
+    }
   };
 
   return (
-    <div className="App">
-      {/* Navbar będzie renderowany zawsze, niezależnie od widoku */}
-      <Navbar currentView={currentView} onNavigateToDashboard={navigateToDashboard} /> 
-
-      {currentView === 'dashboard' ? (
-        <Dashboard onNavigateToWorkspace={navigateToWorkspace} />
-      ) : (
-        <Workspace onNavigateToDashboard={navigateToDashboard} />
-      )}
+    <div className="App mission-layout">
+      <Sidebar currentView={currentView} onNavigate={handleNavigate} />
+      
+      <main className="main-content">
+        <TopBar title={getPageTitle()} />
+        <div className="view-container">
+          {currentView === 'dashboard' ? (
+            <Dashboard onNavigateToWorkspace={() => handleNavigate('workspace')} />
+          ) : (
+            <Workspace onNavigateToDashboard={() => handleNavigate('dashboard')} />
+          )}
+        </div>
+      </main>
     </div>
   );
 }

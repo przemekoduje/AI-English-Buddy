@@ -11,11 +11,12 @@ import random
 import json
 
 import requests
+from openai import OpenAI
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Inicjalizacja Firebase Admin SDK
 # Upewnij się, że plik firebase_service_account.json jest w katalogu backend
@@ -31,7 +32,18 @@ except Exception as e:
     # ale operacje na Firestorze będą zgłaszać błędy.
 
 
-    # --- KONFIGURACJA EMAIL (ZMIENNE ŚRODOWISKOWE) ---
+    # Klient OpenAI (DeepSeek)
+client = None
+if os.getenv("DEEPSEEK_API_KEY"):
+    client = OpenAI(
+        api_key=os.getenv("DEEPSEEK_API_KEY"),
+        base_url="https://api.deepseek.com"
+    )
+    print("Klient DeepSeek zainicjalizowany.")
+else:
+    print("OSTRZEŻENIE: Brak DEEPSEEK_API_KEY w .env.")
+
+# --- KONFIGURACJA EMAIL (ZMIENNE ŚRODOWISKOWE) ---
 EMAIL_HOST = os.getenv("EMAIL_HOST")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
 EMAIL_USERNAME = os.getenv("EMAIL_USERNAME")
@@ -319,8 +331,144 @@ def analyze_grammar():
     except Exception as e:
         print(f"Nieoczekiwany błąd podczas analizy gramatycznej: {e}")
         return jsonify({"error": f"Wystąpił nieoczekiwany błąd: {e}"}), 500
+@app.route("/api/mastery-prepare", methods=['POST'])
+def prepare_mastery_content():
+    data = request.get_json()
+    text = data.get('text')
 
+    if not text:
+        return jsonify({"error": "Tekst jest wymagany."}), 400
 
+    try:
+        # Prompt prosi AI o podział tekstu na zdania i tłumaczenie każdego z nich.
+        mastery_prompt = f"""
+        Objective: Split the following English text into logical, natural sentences and provide its HIGH-QUALITY Polish translation. Additionally, split each sentence into smaller phrasal segments (3-5 words) for pronunciation practice.
+        
+        Rules:
+        1. Split the text into a JSON list of objects.
+        2. Each object MUST have "en" (original English sentence), "pl" (natural Polish translation), and "segments" (a list of short, logical English phrases from that sentence).
+        3. The Polish text must be encoded in UTF-8.
+        4. Focus segments on natural breathing points or grammatical boundaries.
+
+        Text to analyze:
+        "{text}"
+
+        Output format:
+        [
+          {{
+            "en": "Sentence 1", 
+            "pl": "Zdanie 1", 
+            "segments": ["Phrase 1", "Phrase 2"]
+          }},
+          ...
+        ]
+        
+        Respond only with the JSON list.
+        """
+        
+        deepseek_response = query_deepseek(mastery_prompt)
+        raw_content = deepseek_response['choices'][0]['message']['content'].strip()
+        
+        # Oczyszczanie odpowiedzi
+        start_index = raw_content.find('[')
+        end_index = raw_content.rfind(']')
+        if start_index != -1 and end_index != -1:
+            json_string = raw_content[start_index : end_index + 1]
+            mastery_data = json.loads(json_string)
+        else:
+            mastery_data = json.loads(raw_content)
+
+        return jsonify(mastery_data), 200
+
+    except Exception as e:
+        print(f"Błąd przygotowania Mastery Path: {e}")
+        return jsonify({"error": f"Błąd serwera AI: {e}"}), 500
+
+@app.route('/api/mastery-evaluate', methods=['POST'])
+def evaluate_mastery():
+    if 'audio' not in request.files:
+        return jsonify({"error": "No audio file"}), 400
+    
+    audio_file = request.files['audio']
+    original_text = request.form.get('target_text', '')
+    
+    # HF Inference API for Whisper
+    HF_TOKEN = os.getenv("HF_API_TOKEN")
+    API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+
+    try:
+        # 1. Transkrypcja
+        audio_data = audio_file.read()
+        print(f"Sending audio to Whisper Turbo... Size: {len(audio_data)} bytes")
+        
+        # Jawną specyfikacja formatu może pomóc HF API
+        asr_headers = headers.copy()
+        asr_headers["Content-Type"] = "audio/webm" 
+        
+        response = requests.post(API_URL, headers=asr_headers, data=audio_data, timeout=30)
+        
+        if response.status_code != 200:
+            print(f"Whisper API error: {response.status_code} - {response.text}")
+            try:
+                error_info = response.json()
+            except:
+                error_info = {"error": response.text[:500]}
+                
+            if isinstance(error_info, dict) and "estimated_time" in error_info:
+                 return jsonify({"error": "AI model is warming up. Please try again in 20-30 seconds.", "details": error_info}), 503
+            return jsonify({"error": "Transcription failed", "details": error_info}), 500
+            
+        transcription_result = response.json()
+        transcription = transcription_result.get("text", "")
+        
+        if not transcription:
+             print("Whisper returned empty transcription.")
+             return jsonify({"error": "No speech detected. Please speak louder or closer to the mic."}), 400
+             
+        print(f"Transcription success: '{transcription}'")
+
+        # 2. Ewaluacja przez AI
+        evaluation_prompt = f"""
+        Objective: Compare a student's speech transcription with the target English text.
+        Target: "{original_text}"
+        Transcription: "{transcription}"
+
+        Provide:
+        1. A score from 0 to 100.
+        2. "corrections": A short markdown string highlighting differences (e.g., missing words, wrong pronunciation). Use ~~strikethrough~~ for extra words, **bold** for correctly matched, and *italics* for expected but missed words.
+        3. A brief motivational tip in Polish.
+
+        Respond in JSON format:
+        {{
+          "score": 85,
+          "transcription": "...",
+          "corrections": "...",
+          "tip": "..."
+        }}
+        """
+        
+        if not client:
+             print("DeepSeek client is not initialized.")
+             return jsonify({"error": "AI Evaluation service is currently unavailable (missing API key)."}), 500
+
+        print(f"Starting DeepSeek evaluation for: {original_text[:20]}...")
+        ai_response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": evaluation_prompt}],
+            response_format={"type": "json_object"}
+        )
+        
+        print("DeepSeek responded. Parsing JSON...")
+        result = json.loads(ai_response.choices[0].message.content)
+        print("Mastery evaluation complete.")
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"CRITICAL ERROR in evaluate_mastery: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     # db.create_all() # Nie potrzebne dla Firestore, Firebase zarządza strukturą dokumentów

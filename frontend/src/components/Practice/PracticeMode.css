@@ -1,0 +1,336 @@
+/* src/components/Practice/PracticeMode.css */
+.practice-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.practice-content {
+  width: 100%;
+  max-width: 1100px;
+  height: 90vh;
+  background: white;
+  border-radius: var(--radius-2xl);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  animation: modalEnter 0.6s var(--transition-soft);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@keyframes modalEnter {
+  from { opacity: 0; transform: translateY(30px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Header & Phases */
+.practice-header {
+  padding: 1.5rem 3rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--slate-50);
+  border-bottom: 1px solid var(--border);
+}
+
+.phase-indicator {
+  display: flex;
+  gap: 1rem;
+}
+
+.phase-indicator .dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: var(--slate-400);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.phase-indicator .dot.active {
+  background: var(--primary-50);
+  border-color: var(--primary-500);
+  color: var(--primary-600);
+}
+
+.phase-indicator .dot.current {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+  color: white;
+  transform: scale(1.15);
+  box-shadow: 0 0 15px rgba(124, 58, 237, 0.3);
+}
+
+.header-titles h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  margin: 0;
+}
+
+.sub-hint {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--slate-500);
+  text-transform: uppercase;
+  margin-top: 0.2rem;
+}
+
+/* Main Body - Stable Flex Layout */
+.practice-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 2rem 3rem;
+  background: white;
+  overflow: hidden; /* Constraint for children */
+}
+
+.phase-1-controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.step-btn {
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: white;
+  font-weight: 700;
+  color: var(--slate-600);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.step-btn.active {
+  background: var(--primary-600);
+  color: white;
+  border-color: var(--primary-600);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
+}
+
+.training-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-height: 0; /* Critical for scrollability in flexbox */
+}
+
+/* Scrollable Text Box */
+.training-text-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2.5rem;
+  background: var(--slate-50);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  font-size: 1.65rem;
+  line-height: 1.7;
+  color: var(--slate-900);
+  font-family: var(--font-main);
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.training-sentence {
+  cursor: pointer;
+  padding: 0 2px;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.training-sentence:hover {
+  border-color: var(--primary-200);
+  color: var(--primary-600);
+}
+
+.training-sentence.active {
+  background: var(--primary-50);
+  color: var(--primary-700);
+  border-bottom-color: var(--primary-600);
+  font-weight: 600;
+}
+
+/* Fixed Bottom Controller */
+.sentence-controller {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 1.5rem 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2.5rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  margin-top: auto; /* Push to bottom of training-area */
+}
+
+.controller-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.index-badge {
+  background: var(--slate-900);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 800;
+  width: fit-content;
+  text-transform: uppercase;
+}
+
+/* Progress bar inside controller */
+.speak-progress-container {
+  height: 6px;
+  background: var(--slate-100);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.speak-progress-bar {
+  height: 100%;
+  background: var(--grad-primary);
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+.speak-progress-bar.pulse {
+  background: var(--grad-premium);
+  animation: recPulse 1.5s infinite;
+}
+
+@keyframes recPulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+/* Controller Actions */
+.controller-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.ctrl-btn {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 1.25rem;
+  color: var(--slate-700);
+}
+
+.ctrl-btn:hover:not(:disabled) {
+  border-color: var(--primary-400);
+  background: var(--primary-50);
+  color: var(--primary-600);
+  transform: scale(1.05);
+}
+
+.ctrl-btn.next-main {
+  width: auto;
+  padding: 0 2rem;
+  background: var(--slate-900);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 800;
+  gap: 0.75rem;
+}
+
+.ctrl-btn.next-main:hover {
+  background: var(--primary-600);
+  box-shadow: 0 8px 15px rgba(124, 58, 237, 0.3);
+}
+
+.record-btn.active {
+  background: var(--vibrant-pink);
+  border-color: var(--vibrant-pink);
+  color: white;
+  animation: shake 0.5s infinite;
+}
+
+@keyframes shake {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* Evaluation Box refinements */
+.evaluation-result-box {
+  background: var(--slate-50);
+  padding: 1.25rem;
+  border-radius: var(--radius-lg);
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  border-left: 4px solid var(--primary-500);
+}
+
+.eval-score-circle {
+  width: 60px;
+  height: 60px;
+  background: var(--slate-900);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.eval-feedback p { margin: 0; }
+.eval-transcription { font-size: 0.8rem; color: var(--slate-500); }
+.eval-corrections { font-weight: 700; color: var(--slate-900); margin: 0.2rem 0; }
+.eval-tip { font-size: 0.75rem; color: var(--primary-700); font-weight: 500; }
+
+/* Footer */
+.practice-footer {
+  padding: 1.5rem 3rem;
+  background: var(--slate-50);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 1.5rem;
+}
+
+.exit-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--slate-400);
+  cursor: pointer;
+  padding: 0.5rem;
+}
+
+.exit-btn:hover { color: var(--vibrant-pink); }

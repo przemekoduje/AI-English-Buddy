@@ -1,0 +1,105 @@
+.story-generator {
+  padding: 3rem;
+  background: white;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+  animation: view-enter 0.5s var(--transition-soft);
+}
+
+.generator-header h2 {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  margin-bottom: 0.5rem;
+  letter-spacing: -1px;
+}
+
+.generator-header p {
+  color: var(--slate-500);
+  font-size: 1.1rem;
+}
+
+.topic-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.topic-chip {
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--slate-50);
+  color: var(--slate-700);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.topic-chip:hover {
+  background: var(--slate-100);
+  border-color: var(--primary-500);
+  color: var(--primary-600);
+}
+
+.topic-chip.selected {
+  background: var(--primary-600);
+  color: white;
+  border-color: var(--primary-600);
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.2);
+}
+
+.details-composer textarea {
+  width: 100%;
+  padding: 1.25rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--slate-50);
+  font-family: var(--font-main);
+  font-size: 1rem;
+  resize: vertical;
+  transition: var(--transition-fast);
+}
+
+.details-composer textarea:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.05);
+}
+
+.generate-story-btn {
+  padding: 1.25rem 3rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--slate-900);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  box-shadow: var(--shadow-lg);
+}
+
+.generate-story-btn:hover:not(:disabled) {
+  background: var(--primary-600);
+  transform: translateY(-2px) scale(1.02);
+}
+
+.generate-story-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-icon {
+  font-size: 1.5rem;
+}

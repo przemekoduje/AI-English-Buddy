@@ -1,97 +1,79 @@
-// src/components/Flashcards.js
-import React, { useState, useEffect } from 'react';
-import './Flashcards.css'; // Nowy plik CSS dla fiszek
+import React, { useState } from "react";
+import "./Flashcards.css";
 
 function Flashcards({ notebookWords, onFinishExercises }) {
-  const [shuffledWords, setShuffledWords] = useState([]);
-  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [isSessionFinished, setIsSessionFinished] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [score, setScore] = useState(0);
 
-  useEffect(() => {
-    // Mieszanie słówek tylko raz, przy starcie sesji
-    const shuffled = [...notebookWords].sort(() => Math.random() - 0.5);
-    setShuffledWords(shuffled);
-    setCurrentCardIndex(0);
+  const total = notebookWords.length;
+  const currentWord = notebookWords[currentIndex];
+
+  const handleFlip = () => setIsFlipped(!isFlipped);
+
+  const handleNext = (known) => {
+    if (known) setScore(score + 1);
     setIsFlipped(false);
-    setIsSessionFinished(false);
-  }, [notebookWords]); // Zresetuj fiszki, jeśli notatnik się zmieni
+    
+    setTimeout(() => {
+      if (currentIndex + 1 < total) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
+        setShowResults(true);
+      }
+    }, 150);
+  };
 
-  if (notebookWords.length === 0) {
+  if (showResults) {
     return (
-      <div className="flashcards-container">
-        <p className="empty-message">Twój notatnik jest pusty. Dodaj słówka, aby rozpocząć ćwiczenia!</p>
-        <button className="back-to-main-button" onClick={onFinishExercises}>Wróć</button>
+      <div className="flashcards-results glass-panel">
+        <h2>Practice Complete! 🎉</h2>
+        <div className="score-circle">
+          <span className="score-num">{score}</span>
+          <span className="score-total">/ {total}</span>
+        </div>
+        <p>{score === total ? "Perfect! You're a pro." : "Great job! Keep practicing."}</p>
+        <button onClick={onFinishExercises} className="premium-btn">Back to Workspace</button>
       </div>
     );
   }
 
-  const currentCard = shuffledWords[currentCardIndex];
-
-  const handleFlip = () => {
-    setIsFlipped(!isFlipped);
-  };
-
-  const handleNext = (known) => {
-    // Tutaj w przyszłości można dodać logikę SRS (Spaced Repetition System)
-    // np. na podstawie 'known' (true/false) ustalić następny termin powtórki dla danego słowa.
-    
-    setIsFlipped(false); // Odwróć z powrotem na następną kartę
-
-    if (currentCardIndex < shuffledWords.length - 1) {
-      setCurrentCardIndex(currentCardIndex + 1);
-    } else {
-      setIsSessionFinished(true); // Koniec sesji
-    }
-  };
-
   return (
     <div className="flashcards-container">
-      <h2>Ćwiczenia - Fiszki</h2>
+      <div className="progress-bar">
+        <div 
+          className="progress-fill" 
+          style={{ width: `${((currentIndex) / total) * 100}%` }}
+        ></div>
+      </div>
+      
+      <div className="flashcards-header">
+        <button className="close-btn" onClick={onFinishExercises}>✕</button>
+        <h3>Card {currentIndex + 1} of {total}</h3>
+      </div>
 
-      {isSessionFinished ? (
-        <div className="session-summary">
-          <h3>Gratulacje! Ukończyłeś sesję!</h3>
-          <p>Przejrzałeś {shuffledWords.length} słówek.</p>
-          <button className="back-to-main-button" onClick={onFinishExercises}>Wróć do głównej</button>
-          <button className="start-new-session-button" onClick={() => {
-            const shuffled = [...notebookWords].sort(() => Math.random() - 0.5);
-            setShuffledWords(shuffled);
-            setCurrentCardIndex(0);
-            setIsFlipped(false);
-            setIsSessionFinished(false);
-          }}>Rozpocznij nową sesję</button>
+      <div className={`flashcard-scene ${isFlipped ? "is-flipped" : ""}`} onClick={handleFlip}>
+        <div className="flashcard-card">
+          <div className="flashcard-face front">
+            <span className="card-label">Original Phrase</span>
+            <p className="card-text">{currentWord.original}</p>
+            <span className="tap-hint">Tap to see translation</span>
+          </div>
+          <div className="flashcard-face back">
+            <span className="card-label">Translation</span>
+            <p className="card-text">{currentWord.translated}</p>
+            <span className="tap-hint">Tap to see original</span>
+          </div>
         </div>
-      ) : (
-        <>
-          <p className="progress-info">
-            Karta {currentCardIndex + 1} z {shuffledWords.length}
-          </p>
-          <div className="flashcard" onClick={handleFlip}>
-            <div className={`flashcard-inner ${isFlipped ? 'is-flipped' : ''}`}>
-              <div className="flashcard-front">
-                <p className="flashcard-text">{currentCard?.original}</p>
-              </div>
-              <div className="flashcard-back">
-                <p className="flashcard-text">{currentCard?.translated}</p>
-              </div>
-            </div>
-          </div>
-          <div className="flashcard-actions">
-            {!isFlipped ? (
-              <button className="flip-button" onClick={handleFlip}>Pokaż tłumaczenie</button>
-            ) : (
-              <>
-                <button className="action-button-known" onClick={() => handleNext(true)}>✅ Znam</button>
-                <button className="action-button-unknown" onClick={() => handleNext(false)}>❌ Nie znam</button>
-              </>
-            )}
-            {/* Przycisk do przejścia bez oceniania (np. po pomyłce) */}
-            {isFlipped && <button className="skip-button" onClick={() => handleNext(false)}>Następne</button>}
-          </div>
-          <button className="end-session-button" onClick={onFinishExercises}>Zakończ sesję</button>
-        </>
-      )}
+      </div>
+
+      <div className="evaluation-buttons">
+        <button className="eval-btn secondary" onClick={() => handleNext(false)}>Still learning ❌</button>
+        <button className="eval-btn primary" onClick={() => handleNext(true)}>I know this! ✅</button>
+      </div>
+
+
     </div>
   );
 }
