@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,16 +7,28 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Modal,
   Alert,
   SafeAreaView,
   Dimensions,
+  Switch,
+  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
+import { Audio } from 'expo-av';
 import Svg, { Path } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
+
+const EDGE_TTS_VOICES = [
+  { identifier: 'en-US-BrianNeural', name: 'Brian (US - Male) 🌟', language: 'en-US' },
+  { identifier: 'en-US-AriaNeural', name: 'Aria (US - Female) 🌟', language: 'en-US' },
+  { identifier: 'en-US-EmmaMultilingualNeural', name: 'Emma (US - Multilingual) 🌟', language: 'en-US' },
+  { identifier: 'en-GB-SoniaNeural', name: 'Sonia (UK - Female)', language: 'en-GB' },
+  { identifier: 'en-GB-RyanNeural', name: 'Ryan (UK - Male)', language: 'en-GB' },
+  { identifier: 'pl-PL-ZofiaNeural', name: 'Zofia (PL - Kobieta) 🌟', language: 'pl-PL' },
+  { identifier: 'pl-PL-MarekNeural', name: 'Marek (PL - Mężczyzna) 🌟', language: 'pl-PL' },
+];
 
 // Material outline SVG Icons mapped to simple components
 const HomeIcon = ({ color }: { color: string }) => (
@@ -44,7 +56,7 @@ const SettingsIcon = ({ color }: { color: string }) => (
 );
 
 export default function HomeScreen() {
-  const [backendUrl, setBackendUrl] = useState('https://angry-spoons-knock.loca.lt'); // Default local dev tunnel
+  const [backendUrl, setBackendUrl] = useState('http://192.168.100.27:5001'); // Local network IP
   const [user, setUser] = useState<{ token: string; email: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<'dashboard' | 'workspace' | 'stories' | 'notebook' | 'settings'>('dashboard');
@@ -71,20 +83,24 @@ export default function HomeScreen() {
   const [currentStoryId, setCurrentStoryId] = useState<string | null>(null);
   const [suggestedTopics, setSuggestedTopics] = useState<string[]>([]);
   const [selectedTopicChip, setSelectedTopicChip] = useState<string | null>(null);
+  const [selectedLevel, setSelectedLevel] = useState<'simple' | 'medium' | 'advanced'>('medium');
+  const [selectedLength, setSelectedLength] = useState<'short' | 'medium' | 'long'>('medium');
 
   // Reader States
   const [sentences, setSentences] = useState<string[]>([]);
-  const [activeSentenceIndex, setActiveSentenceIndex] = useState<number | null>(null);
   const [speakingSentenceIndex, setSpeakingSentenceIndex] = useState<number | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [readMode, setReadMode] = useState<'single' | 'all'>('single');
+  const speakingRef = useRef(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const prefetchCache = useRef<{[key: number]: string}>({});
 
-  // Translation Modal State
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalType, setModalType] = useState<'sentence' | 'word'>('sentence');
-  const [modalOriginalText, setModalOriginalText] = useState('');
-  const [modalTranslatedText, setModalTranslatedText] = useState('');
-  const [modalGrammarAnalysis, setModalGrammarAnalysis] = useState('');
-  const [modalActionLoading, setModalActionLoading] = useState(false);
+  // Sentence Translation States
+  const [translatedSentenceIdx, setTranslatedSentenceIdx] = useState<number | null>(null);
+  const [translationText, setTranslationText] = useState<string>('');
+  const [isTranslating, setIsTranslating] = useState<boolean>(false);
+
+
 
   // Saved Stories List
   const [savedStories, setSavedStories] = useState<any[]>([]);
@@ -95,16 +111,37 @@ export default function HomeScreen() {
   const [loadingVocabulary, setLoadingVocabulary] = useState(false);
 
   // Load session and settings on startup
+  const [selectedVoice, setSelectedVoice] = useState<string>('en-US-BrianNeural');
+
   useEffect(() => {
     (async () => {
       try {
         const storedUser = await AsyncStorage.getItem('buddy_user');
         const storedIP = await AsyncStorage.getItem('buddy_backend_url');
+        const storedVoice = await AsyncStorage.getItem('buddy_tts_voice');
         if (storedUser) {
           setUser(JSON.parse(storedUser));
         }
         if (storedIP) {
           setBackendUrl(storedIP);
+        }
+        if (storedVoice && EDGE_TTS_VOICES.some(v => v.identifier === storedVoice)) {
+          setSelectedVoice(storedVoice);
+        } else {
+          setSelectedVoice('en-US-BrianNeural');
+          await AsyncStorage.setItem('buddy_tts_voice', 'en-US-BrianNeural');
+        }
+
+        // Configure Audio session for playback
+        try {
+          await Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            allowsRecordingIOS: false,
+            staysActiveInBackground: false,
+            shouldRouteThroughEarpieceAndroid: false,
+          });
+        } catch (audioErr) {
+          console.log('Error setting audio mode', audioErr);
         }
       } catch (err) {
         console.error(err);
@@ -226,7 +263,6 @@ export default function HomeScreen() {
     setGeneratedText('');
     setCurrentStoryTitle('');
     setSentences([]);
-    setActiveSentenceIndex(null);
     setCurrentView('dashboard');
   };
 
@@ -246,27 +282,35 @@ export default function HomeScreen() {
           'X-Session-Token': user?.token || '',
         },
         body: JSON.stringify({
-          prompt: promptValue,
-          settings: { level: 'B2', length: 'medium' },
+          topics: [promptValue],
+          settings: {
+            language_level: selectedLevel,
+            length: selectedLength,
+            is_factual: false,
+            genre: 'educational'
+          },
         }),
       });
       const data = await response.json();
-      if (response.ok && data.text) {
-        setGeneratedText(data.text);
-        const title = data.title || promptValue.substring(0, 30);
+      // Backend returns [{generated_text: "...", title: "..."}]
+      const item = Array.isArray(data) ? data[0] : data;
+      const storyText = item?.generated_text || item?.text;
+      if (response.ok && storyText) {
+        setGeneratedText(storyText);
+        const title = item?.title || promptValue.substring(0, 30);
         setCurrentStoryTitle(title);
-        setCurrentStoryId(data.story_id || null);
+        setCurrentStoryId(item?.story_id || null);
         
         // Clean sentences
-        const parsedSentences = data.text
+        const parsedSentences = storyText
           .split(/(?<=[.!?])\s+/)
           .filter((s: string) => s.trim().length > 0);
         setSentences(parsedSentences);
-        setActiveSentenceIndex(null);
         setStoryPrompt('');
         setSelectedTopicChip(null);
+        setCurrentView('workspace');
       } else {
-        Alert.alert('Błąd', data.error || 'Nie udało się wygenerować opowiadania');
+        Alert.alert('Błąd', item?.error || data?.error || 'Nie udało się wygenerować opowiadania');
       }
     } catch (err) {
       Alert.alert('Błąd', 'Problem z połączeniem z API');
@@ -284,106 +328,180 @@ export default function HomeScreen() {
       .split(/(?<=[.!?])\s+/)
       .filter((s: string) => s.trim().length > 0);
     setSentences(parsedSentences);
-    setActiveSentenceIndex(null);
     setCurrentView('workspace');
   };
 
   // TTS
   const speakSentence = async (index: number) => {
-    await Speech.stop();
-    setSpeakingSentenceIndex(index);
-    setIsSpeaking(true);
-    Speech.speak(sentences[index], {
-      rate: 0.85,
-      onDone: () => {
-        setSpeakingSentenceIndex(null);
-        setIsSpeaking(false);
-      },
-      onError: () => {
-        setSpeakingSentenceIndex(null);
-        setIsSpeaking(false);
-      },
-    });
+    try {
+      await stopSpeech();
+      setSpeakingSentenceIndex(index);
+      setIsSpeaking(true);
+
+      const response = await customFetch(`${backendUrl}/api/tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: sentences[index],
+          voice: selectedVoice || 'en-US-BrianNeural',
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.audio_base64) {
+        throw new Error(data.error || 'Nie udało się pobrać dźwięku z serwera');
+      }
+
+      const uri = `data:audio/mpeg;base64,${data.audio_base64}`;
+      const { sound } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: true }
+      );
+      
+      soundRef.current = sound;
+      
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setSpeakingSentenceIndex(null);
+          setIsSpeaking(false);
+          sound.unloadAsync();
+          soundRef.current = null;
+        }
+      });
+    } catch (err: any) {
+      console.log('Error playing sound', err);
+      Alert.alert('Błąd odtwarzania', `Nie udało się odtworzyć dźwięku: ${err?.message || String(err)}`);
+      setSpeakingSentenceIndex(null);
+      setIsSpeaking(false);
+    }
   };
 
   const stopSpeech = async () => {
+    speakingRef.current = false;
+    if (soundRef.current) {
+      try {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+      } catch (e) {
+        // Ignore errors from stopping
+      }
+      soundRef.current = null;
+    }
     await Speech.stop();
     setSpeakingSentenceIndex(null);
     setIsSpeaking(false);
   };
 
-  // Translate Sentence
-  const translateSentence = async (text: string) => {
-    setModalType('sentence');
-    setModalOriginalText(text);
-    setModalTranslatedText('');
-    setModalGrammarAnalysis('');
-    setModalVisible(true);
-    setModalActionLoading(true);
+  const speakAll = async (sentenceList: string[]) => {
+    if (sentenceList.length === 0) return;
+    try {
+      await stopSpeech();
+      speakingRef.current = true;
+      setIsSpeaking(true);
+      prefetchCache.current = {}; // Reset cache
+
+      let currentIdx = 0;
+
+      const fetchSentenceBase64 = async (idx: number): Promise<string> => {
+        if (prefetchCache.current[idx]) {
+          return prefetchCache.current[idx];
+        }
+        const response = await customFetch(`${backendUrl}/api/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: sentenceList[idx],
+            voice: selectedVoice || 'en-US-BrianNeural',
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.audio_base64) {
+          throw new Error(data.error || 'Failed to fetch audio');
+        }
+        const uri = `data:audio/mpeg;base64,${data.audio_base64}`;
+        prefetchCache.current[idx] = uri;
+        return uri;
+      };
+
+      const playNext = async () => {
+        if (!speakingRef.current || currentIdx >= sentenceList.length) {
+          setIsSpeaking(false);
+          setSpeakingSentenceIndex(null);
+          speakingRef.current = false;
+          return;
+        }
+
+        setSpeakingSentenceIndex(currentIdx);
+
+        try {
+          // Get audio uri for current sentence
+          const uri = await fetchSentenceBase64(currentIdx);
+
+          // Start prefetching next sentence in background
+          if (currentIdx + 1 < sentenceList.length) {
+            fetchSentenceBase64(currentIdx + 1).catch(() => {});
+          }
+
+          // Play sound
+          const { sound } = await Audio.Sound.createAsync(
+            { uri },
+            { shouldPlay: true }
+          );
+          soundRef.current = sound;
+
+          sound.setOnPlaybackStatusUpdate(async (status) => {
+            if (status.isLoaded && status.didJustFinish) {
+              sound.unloadAsync();
+              soundRef.current = null;
+              currentIdx++;
+              playNext();
+            }
+          });
+        } catch (playErr) {
+          console.log('Error playing in speakAll sequence', playErr);
+          currentIdx++;
+          playNext();
+        }
+      };
+
+      playNext();
+    } catch (err: any) {
+      console.log('Error starting speakAll', err);
+      Alert.alert('Błąd odtwarzania', `Nie udało się rozpocząć czytania: ${err?.message || String(err)}`);
+      setIsSpeaking(false);
+      speakingRef.current = false;
+    }
+  };
+
+  const handleLongPressSentence = async (index: number) => {
+    if (translatedSentenceIdx === index) {
+      setTranslatedSentenceIdx(null);
+      setTranslationText('');
+      return;
+    }
+    
+    setIsTranslating(true);
+    setTranslatedSentenceIdx(index);
+    setTranslationText('Tłumaczenie...');
+    
     try {
       const response = await customFetch(`${backendUrl}/api/translate`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Session-Token': user?.token || '',
-        },
-        body: JSON.stringify({ text, target_lang: 'PL' }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: sentences[index] }),
       });
-      if (response.ok) {
-        const data = await response.json();
-        setModalTranslatedText(data.translation);
+      const data = await response.json();
+      if (response.ok && data.translation) {
+        setTranslationText(data.translation);
+      } else {
+        setTranslationText('Błąd tłumaczenia');
       }
     } catch (err) {
-      setModalTranslatedText('Błąd tłumaczenia.');
+      setTranslationText('Błąd połączenia');
     } finally {
-      setModalActionLoading(false);
-    }
-  };
-
-  // Analyze Grammar
-  const analyzeSentenceGrammar = async () => {
-    setModalActionLoading(true);
-    try {
-      const response = await customFetch(`${backendUrl}/api/analyze-grammar`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Session-Token': user?.token || '',
-        },
-        body: JSON.stringify({ text: modalOriginalText }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setModalGrammarAnalysis(data.analysis);
-      }
-    } catch (err) {
-      setModalGrammarAnalysis('Błąd analizy gramatycznej.');
-    } finally {
-      setModalActionLoading(false);
-    }
-  };
-
-  // Add word to notebook
-  const addWordToNotebook = async (word: string, translation: string) => {
-    if (!user) return;
-    try {
-      const response = await customFetch(`${backendUrl}/api/vocabulary`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Session-Token': user.token,
-        },
-        body: JSON.stringify({
-          original: word,
-          translation: translation,
-          story_id: currentStoryId || 'general',
-        }),
-      });
-      if (response.ok) {
-        Alert.alert('Sukces', `Słowo "${word}" zostało zapisane.`);
-      }
-    } catch (err) {
-      console.error(err);
+      setIsTranslating(false);
     }
   };
 
@@ -404,31 +522,34 @@ export default function HomeScreen() {
     }
   };
 
-  // Translate Word
-  const translateWord = async (word: string) => {
-    setModalType('word');
-    setModalOriginalText(word);
-    setModalTranslatedText('');
-    setModalGrammarAnalysis('');
-    setModalVisible(true);
-    setModalActionLoading(true);
+  const addToVocabulary = async (original: string, translated: string) => {
+    if (!user) {
+      Alert.alert('Błąd', 'Musisz być zalogowany, aby dodać słowo do słownika.');
+      return;
+    }
     try {
-      const response = await customFetch(`${backendUrl}/api/translate`, {
+      const response = await customFetch(`${backendUrl}/api/vocabulary`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Session-Token': user?.token || '',
+          'X-Session-Token': user.token,
         },
-        body: JSON.stringify({ text: word, target_lang: 'PL' }),
+        body: JSON.stringify({
+          original: original,
+          translated: translated,
+          story_id: currentStoryId,
+        }),
       });
       if (response.ok) {
-        const data = await response.json();
-        setModalTranslatedText(data.translation);
+        Alert.alert('Sukces', 'Dodano zdanie do słowniczka!');
+        fetchNotebookWords();
+      } else {
+        const errData = await response.json();
+        Alert.alert('Błąd', errData.error || 'Nie udało się dodać do słowniczka');
       }
     } catch (err) {
-      setModalTranslatedText('Błąd.');
-    } finally {
-      setModalActionLoading(false);
+      console.error(err);
+      Alert.alert('Błąd', 'Wystąpił błąd połączenia');
     }
   };
 
@@ -509,18 +630,61 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.appContainer}>
       {/* Top Header */}
-      <View style={styles.appHeader}>
-        <Text style={styles.appTitle}>
-          {currentView === 'dashboard' && 'Mission Control'}
-          {currentView === 'workspace' && 'Practice Room'}
-          {currentView === 'stories' && 'Saved Stories'}
-          {currentView === 'notebook' && 'Vocabulary'}
-          {currentView === 'settings' && 'Settings'}
-        </Text>
-        <Text style={styles.userEmail} numberOfLines={1}>
-          {user.email}
-        </Text>
-      </View>
+      {/* Header — schowany gdy workspace z historią */}
+      {!(currentView === 'workspace' && generatedText) && (
+        <View style={styles.appHeader}>
+          <Text style={styles.appTitle}>
+            {currentView === 'dashboard' && 'Mission Control'}
+            {currentView === 'workspace' && 'Practice Room'}
+            {currentView === 'stories' && 'Saved Stories'}
+            {currentView === 'notebook' && 'Vocabulary'}
+            {currentView === 'settings' && 'Settings'}
+          </Text>
+          <Text style={styles.userEmail} numberOfLines={1}>
+            {user.email}
+          </Text>
+        </View>
+      )}
+
+      {/* Przełącznik trybu czytania — tylko w workspace z historią */}
+      {currentView === 'workspace' && generatedText ? (
+        <View style={styles.readerToolbar}>
+          <Text style={[styles.readerModeLabel, readMode === 'single' && styles.readerModeLabelActive]}>
+            Zdanie
+          </Text>
+          <Switch
+            value={readMode === 'all'}
+            onValueChange={(val) => {
+              if (val) {
+                setReadMode('all');
+                speakAll(sentences);
+              } else {
+                setReadMode('single');
+                stopSpeech();
+              }
+            }}
+            trackColor={{ false: '#DADCE0', true: '#1A73E8' }}
+            thumbColor="#FFFFFF"
+            ios_backgroundColor="#DADCE0"
+            style={{ marginHorizontal: 8 }}
+          />
+          <Text style={[styles.readerModeLabel, readMode === 'all' && styles.readerModeLabelActive]}>
+            Cały tekst
+          </Text>
+
+          {isSpeaking && (
+            <TouchableOpacity
+              style={styles.readerStopBtn}
+              onPress={() => {
+                stopSpeech();
+                setReadMode('single');
+              }}
+            >
+              <Text style={styles.readerStopBtnText}>⏹ Stop</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : null}
 
       {/* Primary Content Switcher */}
       <View style={styles.contentArea}>
@@ -604,6 +768,52 @@ export default function HomeScreen() {
                   })}
                 </View>
 
+                {/* Poziom trudności */}
+                <Text style={styles.selectorLabel}>Poziom trudności angielskiego:</Text>
+                <View style={styles.selectorRow}>
+                  {[
+                    { id: 'simple', label: 'Prosty (A1-A2)' },
+                    { id: 'medium', label: 'Średni (B1-B2)' },
+                    { id: 'advanced', label: 'Zaawansowany (C1-C2)' }
+                  ].map((lvl) => {
+                    const isSel = selectedLevel === lvl.id;
+                    return (
+                      <TouchableOpacity
+                        key={lvl.id}
+                        style={[styles.selectorBtn, isSel ? styles.selectorBtnActive : null]}
+                        onPress={() => setSelectedLevel(lvl.id as any)}
+                      >
+                        <Text style={[styles.selectorBtnText, isSel ? styles.selectorBtnTextActive : null]}>
+                          {lvl.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Długość */}
+                <Text style={styles.selectorLabel}>Długość opowiadania:</Text>
+                <View style={styles.selectorRow}>
+                  {[
+                    { id: 'short', label: 'Krótkie' },
+                    { id: 'medium', label: 'Średnie' },
+                    { id: 'long', label: 'Długie' }
+                  ].map((len) => {
+                    const isSel = selectedLength === len.id;
+                    return (
+                      <TouchableOpacity
+                        key={len.id}
+                        style={[styles.selectorBtn, isSel ? styles.selectorBtnActive : null]}
+                        onPress={() => setSelectedLength(len.id as any)}
+                      >
+                        <Text style={[styles.selectorBtnText, isSel ? styles.selectorBtnTextActive : null]}>
+                          {len.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
                 <TouchableOpacity
                   style={styles.generateButton}
                   onPress={handleGenerateStory}
@@ -627,49 +837,36 @@ export default function HomeScreen() {
                       setGeneratedText('');
                       setCurrentStoryTitle('');
                       setSentences([]);
-                      setActiveSentenceIndex(null);
                     }}
                   >
                     <Text style={styles.clearStoryButtonText}>Reset</Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Sentences flow */}
                 <View style={styles.storyTextCard}>
                   <Text style={styles.instructionsText}>
-                    Dotknij dowolnego zdania, aby odsłuchać, przetłumaczyć lub przeanalizować.
+                    Dotknij zdania, aby je odsłuchać. Przytrzymaj, aby zobaczyć tłumaczenie.
                   </Text>
-                  <View style={styles.sentencesWrapper}>
+                  <Text style={styles.paragraphText}>
                     {sentences.map((sentence, idx) => {
-                      const isActive = activeSentenceIndex === idx;
                       const isSpeakingSentence = speakingSentenceIndex === idx;
                       return (
-                        <TouchableOpacity
+                        <Text
                           key={idx}
-                          activeOpacity={0.7}
                           style={[
-                            styles.sentenceTouchable,
-                            isActive ? styles.sentenceActive : null,
-                            isSpeakingSentence ? styles.sentenceSpeaking : null,
+                            styles.sentenceText,
+                            isSpeakingSentence ? styles.sentenceTextActive : null,
                           ]}
-                          onPress={() => {
-                            setActiveSentenceIndex(idx);
-                            translateSentence(sentence);
-                          }}
+                          onPress={() => readMode === 'single' ? speakSentence(idx) : null}
+                          onLongPress={() => handleLongPressSentence(idx)}
                         >
-                          <Text
-                            style={[
-                              styles.sentenceText,
-                              isActive ? styles.sentenceTextActive : null,
-                            ]}
-                          >
-                            {sentence}{' '}
-                          </Text>
-                        </TouchableOpacity>
+                          {sentence}{' '}
+                        </Text>
                       );
                     })}
-                  </View>
+                  </Text>
                 </View>
+
               </View>
             )}
           </ScrollView>
@@ -748,6 +945,36 @@ export default function HomeScreen() {
                 autoCapitalize="none"
               />
 
+              <Text style={styles.authLabel}>Głos lektora (Neural TTS):</Text>
+              <ScrollView 
+                style={styles.voiceSelectorContainer}
+                nestedScrollEnabled={true}
+              >
+                {EDGE_TTS_VOICES.map((voice) => {
+                  const isSelected = selectedVoice === voice.identifier;
+                  return (
+                    <TouchableOpacity
+                      key={voice.identifier}
+                      style={[
+                        styles.voiceItem,
+                        isSelected ? styles.voiceItemActive : null
+                      ]}
+                      onPress={async () => {
+                        setSelectedVoice(voice.identifier);
+                        await AsyncStorage.setItem('buddy_tts_voice', voice.identifier);
+                      }}
+                    >
+                      <Text style={[
+                        styles.voiceItemText,
+                        isSelected ? styles.voiceItemTextActive : null
+                      ]}>
+                        {voice.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
               <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                 <Text style={styles.logoutButtonText}>Wyloguj się</Text>
               </TouchableOpacity>
@@ -756,105 +983,7 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Interactive Sentence/Word Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>
-                {modalType === 'sentence' ? 'Zdanie' : 'Słowo'}
-              </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalCloseX}>✕</Text>
-              </TouchableOpacity>
-            </View>
 
-            <ScrollView style={styles.modalScroll}>
-              <Text style={styles.modalLabel}>Oryginał</Text>
-              <Text style={styles.modalOriginalText}>{modalOriginalText}</Text>
-
-              <Text style={styles.modalLabel}>Tłumaczenie</Text>
-              {modalActionLoading && !modalTranslatedText ? (
-                <ActivityIndicator color="#1A73E8" size="small" />
-              ) : (
-                <Text style={styles.modalTranslatedText}>
-                  {modalTranslatedText || 'Brak tłumaczenia'}
-                </Text>
-              )}
-
-              {modalType === 'sentence' && (
-                <>
-                  <Text style={styles.modalLabel}>Rozbicie na słowa</Text>
-                  <View style={styles.wordsWrapper}>
-                    {(modalOriginalText || '')
-                      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
-                      .split(/\s+/)
-                      .filter(w => w.trim().length > 0)
-                      .map((word, wIdx) => (
-                        <TouchableOpacity
-                          key={wIdx}
-                          style={styles.wordBubble}
-                          onPress={() => translateWord(word)}
-                        >
-                          <Text style={styles.wordBubbleText}>{word}</Text>
-                        </TouchableOpacity>
-                      ))}
-                  </View>
-
-                  <Text style={styles.modalLabel}>Analiza Gramatyczna</Text>
-                  {modalGrammarAnalysis ? (
-                    <Text style={styles.modalGrammarText}>{modalGrammarAnalysis}</Text>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.grammarButton}
-                      onPress={analyzeSentenceGrammar}
-                      disabled={modalActionLoading}
-                    >
-                      <Text style={styles.grammarButtonText}>Wygeneruj analizę gramatyki</Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              )}
-            </ScrollView>
-
-            <View style={styles.modalActions}>
-              {modalType === 'sentence' && activeSentenceIndex !== null && (
-                <TouchableOpacity
-                  style={[styles.modalActionBtn, { backgroundColor: '#1A73E8' }]}
-                  onPress={() => {
-                    speakSentence(activeSentenceIndex);
-                  }}
-                >
-                  <Text style={styles.modalActionBtnText}>Czytaj audio</Text>
-                </TouchableOpacity>
-              )}
-
-              {modalType === 'word' && (
-                <TouchableOpacity
-                  style={[styles.modalActionBtn, { backgroundColor: '#34A853' }]}
-                  onPress={() => {
-                    addWordToNotebook(modalOriginalText, modalTranslatedText);
-                  }}
-                >
-                  <Text style={styles.modalActionBtnText}>Dodaj do słownika</Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity
-                style={[styles.modalActionBtn, { backgroundColor: '#DADCE0' }]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={[styles.modalActionBtnText, { color: '#3C4043' }]}>Zamknij</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
@@ -908,6 +1037,70 @@ export default function HomeScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Dymek z tłumaczeniem zdania (renderowany na poziomie głównym, aby poprawnie pozycjonował się na górze ekranu) */}
+      {translatedSentenceIdx !== null && translationText ? (
+        <Modal
+          transparent={true}
+          visible={true}
+          animationType="fade"
+          onRequestClose={() => {
+            setTranslatedSentenceIdx(null);
+            setTranslationText('');
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            {/* Backdrop to close the modal */}
+            <TouchableOpacity
+              style={styles.modalBackdrop}
+              activeOpacity={1}
+              onPress={() => {
+                setTranslatedSentenceIdx(null);
+                setTranslationText('');
+              }}
+            />
+
+            {/* Floating translation card bubble */}
+            <View style={styles.translationBubble}>
+              <View style={styles.bubbleHeader}>
+                <Text style={styles.bubbleHeaderTitle}>Tłumaczenie</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setTranslatedSentenceIdx(null);
+                    setTranslationText('');
+                  }}
+                >
+                  <Text style={styles.bubbleCloseBtn}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <Text style={styles.bubbleOriginalText}>
+                {sentences[translatedSentenceIdx]}
+              </Text>
+              
+              <Text style={styles.bubbleTranslatedText}>
+                {translationText}
+              </Text>
+              
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={[styles.bubbleListenBtn, { flex: 1 }]}
+                  onPress={() => speakSentence(translatedSentenceIdx)}
+                >
+                  <Text style={styles.bubbleListenBtnText}>🔊 Odsłuchaj</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.bubbleSaveBtn, { flex: 1 }]}
+                  onPress={() => addToVocabulary(sentences[translatedSentenceIdx], translationText)}
+                >
+                  <Text style={styles.bubbleSaveBtnText}>💾 Zapisz</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1004,6 +1197,37 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#DADCE0',
     backgroundColor: '#FFFFFF',
+  },
+  readerToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#F8F9FA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#DADCE0',
+    gap: 8,
+  },
+  readerModeLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#9AA0A6',
+  },
+  readerModeLabelActive: {
+    color: '#202124',
+    fontWeight: '700',
+  },
+  readerStopBtn: {
+    marginLeft: 'auto' as any,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#EA4335',
+  },
+  readerStopBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   appTitle: {
     fontSize: 18,
@@ -1187,6 +1411,172 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  selectorLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#202124',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  selectorRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  selectorBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  selectorBtnActive: {
+    borderColor: '#1A73E8',
+    backgroundColor: 'rgba(26, 115, 232, 0.04)',
+  },
+  selectorBtnText: {
+    fontSize: 12,
+    color: '#5F6368',
+    fontWeight: '500',
+  },
+  selectorBtnTextActive: {
+    color: '#1A73E8',
+    fontWeight: '600',
+  },
+  paragraphText: {
+    fontSize: 16,
+    lineHeight: 26,
+    color: '#3C4043',
+  },
+  translationLineText: {
+    fontSize: 13,
+    color: '#137333',
+    fontStyle: 'italic',
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 80,
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  translationBubble: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+  },
+  bubbleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F3F4',
+    paddingBottom: 8,
+  },
+  bubbleHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A73E8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  bubbleCloseBtn: {
+    fontSize: 18,
+    color: '#5F6368',
+    padding: 4,
+  },
+  bubbleOriginalText: {
+    fontSize: 14,
+    color: '#5F6368',
+    fontStyle: 'italic',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  bubbleTranslatedText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#202124',
+    marginBottom: 18,
+    lineHeight: 26,
+  },
+  bubbleListenBtn: {
+    backgroundColor: '#E8F0FE',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bubbleListenBtnText: {
+    color: '#1A73E8',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  bubbleSaveBtn: {
+    backgroundColor: '#E6F4EA',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bubbleSaveBtnText: {
+    color: '#137333',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  voiceSelectorContainer: {
+    maxHeight: 180,
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    borderRadius: 8,
+    backgroundColor: '#F8F9FA',
+    padding: 6,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  voiceItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8EAED',
+    borderRadius: 6,
+  },
+  voiceItemActive: {
+    backgroundColor: 'rgba(26, 115, 232, 0.08)',
+  },
+  voiceItemText: {
+    fontSize: 13,
+    color: '#3C4043',
+  },
+  voiceItemTextActive: {
+    color: '#1A73E8',
+    fontWeight: '600',
+  },
+  noVoicesText: {
+    fontSize: 13,
+    color: '#5F6368',
+    fontStyle: 'italic',
+    marginTop: 8,
+    marginBottom: 16,
+  },
   readerContainer: {
     gap: 16,
   },
@@ -1345,11 +1735,6 @@ const styles = StyleSheet.create({
   navTextActive: {
     color: '#1A73E8',
     fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: 'white',

@@ -1,7 +1,13 @@
 import os
+import base64
 from dotenv import load_dotenv # Upewnij się, że to jest na górze!
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response, send_file
 from flask_cors import CORS
+import io
+import queue
+import threading
+import asyncio
+import edge_tts
 import firebase_admin
 from firebase_admin import credentials, firestore
 import hashlib
@@ -1024,7 +1030,37 @@ def evaluate_mastery():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/tts", methods=['GET', 'POST'])
+def get_tts_audio():
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        text = data.get("text", "")
+        voice = data.get("voice", "en-US-BrianNeural")
+    else:
+        text = request.args.get("text", "")
+        voice = request.args.get("voice", "en-US-BrianNeural")
+
+    if "Neural" not in voice:
+        voice = "en-US-BrianNeural"
+    if not text:
+        return jsonify({"error": "Brak parametru text"}), 400
+
+    async def get_all_audio():
+        communicate = edge_tts.Communicate(text, voice)
+        audio_data = b""
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_data += chunk["data"]
+        return audio_data
+
+    try:
+        data = asyncio.run(get_all_audio())
+        base64_data = base64.b64encode(data).decode('utf-8')
+        return jsonify({"audio_base64": base64_data})
+    except Exception as e:
+        return jsonify({"error": f"Błąd generowania mowy: {str(e)}"}), 500
+
 if __name__ == "__main__":
     # db.create_all() # Nie potrzebne dla Firestore, Firebase zarządza strukturą dokumentów
     # print("Baza danych zainicjalizowana.")
-    app.run(debug=True, port=5001)
+    app.run(debug=True, host='0.0.0.0', port=5001)
