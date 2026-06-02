@@ -33,16 +33,31 @@ except Exception as e:
     # ale operacje na Firestorze będą zgłaszać błędy.
 
 
-    # Klient OpenAI (DeepSeek)
+# Klient OpenAI / DeepSeek
 client = None
-if os.getenv("DEEPSEEK_API_KEY"):
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+
+if OPENAI_API_KEY:
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    print("Klient OpenAI zainicjalizowany.")
+    MODEL_NAME = "gpt-4o-mini"
+    API_URL = "https://api.openai.com/v1/chat/completions"
+    API_TOKEN = OPENAI_API_KEY
+elif DEEPSEEK_API_KEY:
     client = OpenAI(
-        api_key=os.getenv("DEEPSEEK_API_KEY"),
+        api_key=DEEPSEEK_API_KEY,
         base_url="https://api.deepseek.com"
     )
     print("Klient DeepSeek zainicjalizowany.")
+    MODEL_NAME = "deepseek-chat"
+    API_URL = "https://api.deepseek.com/chat/completions"
+    API_TOKEN = DEEPSEEK_API_KEY
 else:
-    print("OSTRZEŻENIE: Brak DEEPSEEK_API_KEY w .env.")
+    print("OSTRZEŻENIE: Brak klucza OPENAI_API_KEY lub DEEPSEEK_API_KEY w .env.")
+    MODEL_NAME = "gpt-4o-mini"
+    API_URL = "https://api.openai.com/v1/chat/completions"
+    API_TOKEN = ""
 
 import secrets
 
@@ -161,8 +176,8 @@ if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
     # Możesz tu np. wyłączyć endpoint wysyłania e-maili, jeśli wolisz.
 
 
-API_TOKEN = os.getenv("DEEPSEEK_API_KEY")
-API_URL = "https://api.deepseek.com/chat/completions"
+API_TOKEN = API_TOKEN
+API_URL = API_URL
 headers = {
     "Authorization": f"Bearer {API_TOKEN}",
     "Content-Type": "application/json"
@@ -176,7 +191,7 @@ PREDEFINED_TOPICS = [
 
 def query_deepseek(prompt_text):
     payload = {
-        "model": "deepseek-chat",
+        "model": MODEL_NAME,
         "messages": [
             {"role": "user", "content": prompt_text}
         ]
@@ -188,7 +203,7 @@ def query_deepseek(prompt_text):
 
 def query_deepseek_with_system(system_prompt, user_prompt):
     payload = {
-        "model": "deepseek-chat",
+        "model": MODEL_NAME,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
@@ -315,8 +330,8 @@ def generate_text():
     custom_details = data.get("customDetails", "")
     settings = data.get("settings", {})
 
-    if not topics:
-        return jsonify({"error": "Brak wybranych tematów"}), 400
+    if not topics and not custom_details.strip():
+        return jsonify({"error": "Brak wybranych tematów lub opisu szczegółów w zapytaniu"}), 400
 
     # Dynamic prompt construction
     system_prompt = (
@@ -330,7 +345,12 @@ def generate_text():
         "}"
     )
 
-    user_prompt = f"Write an educational English story combining these topics: {', '.join(topics)}.\n"
+    user_prompt = ""
+    if topics:
+        user_prompt += f"Write an educational English story combining these topics: {', '.join(topics)}.\n"
+    else:
+        user_prompt += "Write an educational English story.\n"
+
     if custom_details.strip():
         user_prompt += f"Additionally, incorporate these details: \"{custom_details}\"\n"
 
@@ -967,12 +987,12 @@ def evaluate_mastery():
         """
         
         if not client:
-             print("DeepSeek client is not initialized.")
+             print("OpenAI/DeepSeek client is not initialized.")
              return jsonify({"error": "AI Evaluation service is currently unavailable (missing API key)."}), 500
 
-        print(f"Starting DeepSeek evaluation for: {original_text[:20]}...")
+        print(f"Starting AI evaluation for: {original_text[:20]}...")
         ai_response = client.chat.completions.create(
-            model="deepseek-chat",
+            model=MODEL_NAME,
             messages=[{"role": "user", "content": evaluation_prompt}],
             response_format={"type": "json_object"}
         )

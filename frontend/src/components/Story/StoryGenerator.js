@@ -41,8 +41,8 @@ const StoryGenerator = ({ onGenerate, isLoading, suggestedTopics, user }) => {
   };
 
   const handleGenerateStory = async () => {
-    if (selectedTopics.length === 0) {
-      alert("Proszę wybrać co najmniej jeden temat.");
+    if (selectedTopics.length === 0 && !customDetails.trim()) {
+      alert("Proszę wybrać co najmniej jeden temat lub opisać szczegóły w polu tekstowym.");
       return;
     }
 
@@ -131,22 +131,6 @@ const StoryGenerator = ({ onGenerate, isLoading, suggestedTopics, user }) => {
               </div>
             </div>
 
-            <div className="setting-group">
-              <label>Genre & Style</label>
-              <select
-                className="premium-select"
-                value={settings.genre}
-                onChange={(e) => setSettings(prev => ({ ...prev, genre: e.target.value }))}
-                disabled={isLoading}
-              >
-                <option value="adventure">🎒 Adventure</option>
-                <option value="professional">💼 Professional / Business</option>
-                <option value="daily_life">🏠 Daily Life</option>
-                <option value="sci_fi">🚀 Science Fiction</option>
-                <option value="mystery">🕵️ Mystery</option>
-                <option value="historical">⏳ Historical</option>
-              </select>
-            </div>
 
             <div className="setting-group">
               <label>Grammar & Vocab Focus</label>
@@ -203,7 +187,7 @@ const StoryGenerator = ({ onGenerate, isLoading, suggestedTopics, user }) => {
 
       <button
         onClick={handleGenerateStory}
-        disabled={isLoading || selectedTopics.length === 0}
+        disabled={isLoading || (selectedTopics.length === 0 && !customDetails.trim())}
         className="generate-story-btn"
       >
         {isLoading ? (
