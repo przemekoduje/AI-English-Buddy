@@ -47,8 +47,16 @@ const getInitialVoiceURI = (voices) => {
   return englishVoices[0].voiceURI;
 };
 
-function Workspace({ onNavigateToDashboard }) {
-  const [generatedText, setGeneratedText] = useState("");
+function Workspace({
+  onNavigateToDashboard,
+  user,
+  generatedText,
+  setGeneratedText,
+  currentStoryTitle,
+  setCurrentStoryTitle,
+  currentStoryId,
+  setCurrentStoryId,
+}) {
   const [showPracticeMode, setShowPracticeMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -66,33 +74,35 @@ function Workspace({ onNavigateToDashboard }) {
   const [translationContent, setTranslationContent] = useState({ original: "", translated: "" });
   const [textChunks, setTextChunks] = useState([]);
   const [currentChunkIndex, setCurrentChunkIndex] = useState(-1);
+  const [playSingle, setPlaySingle] = useState(false);
   const [showFlashcards, setShowFlashcards] = useState(false);
-  const [savedStories, setSavedStories] = useState([]);
-  const [isCurrentStorySaved, setIsCurrentStorySaved] = useState(false);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [showGrammarAnalysis, setShowGrammarAnalysis] = useState(false);
-  const [grammarResults, setGrammarResults] = useState([]);
-  const [isAnalyzingGrammar, setIsAnalyzingGrammar] = useState(false);
-  const [currentStoryTitle, setCurrentStoryTitle] = useState("");
   
   const currentUtteranceRef = useRef(null);
 
-  const loadStories = useCallback(async () => {
+  const loadVocabulary = useCallback(async () => {
+    if (!user) return;
+    if (!currentStoryId) {
+      setNotebookWords([]);
+      return;
+    }
     try {
-      const response = await fetch("http://127.0.0.1:5001/api/stories");
+      const response = await fetch(`http://127.0.0.1:5001/api/vocabulary?story_id=${currentStoryId}`, {
+        headers: { "X-Session-Token": user.token }
+      });
       if (response.ok) {
         const data = await response.json();
-        setSavedStories(data);
+        setNotebookWords(data);
       }
-    } catch (error) {
-      console.error("Błąd podczas wczytywania historii:", error);
+    } catch (err) {
+      console.error("Błąd podczas ładowania słownika:", err);
     }
-  }, []);
+  }, [user, currentStoryId]);
 
   useEffect(() => {
-    loadStories();
-  }, [loadStories]);
+    loadVocabulary();
+  }, [loadVocabulary]);
 
   useEffect(() => {
     const populateVoiceList = () => {
@@ -120,7 +130,15 @@ function Workspace({ onNavigateToDashboard }) {
 
   useEffect(() => {
     if (generatedText) {
-      const sentences = generatedText.split(/(?<=[.?!])\s+/g).filter((s) => s.trim() !== "");
+      const abbreviations = /\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Co|Corp|Inc|Ltd|e\.g|i\.e|vs|a\.m|p\.m)\.$/i;
+      const markedText = generatedText.replace(/([.?!]["')\]]*)\s+/g, (match, p1, offset, string) => {
+        const beforeText = string.substring(0, offset + 1);
+        if (abbreviations.test(beforeText)) {
+          return match;
+        }
+        return p1 + "\u0000";
+      });
+      const sentences = markedText.split("\u0000").filter((s) => s.trim() !== "");
       setTextChunks(sentences);
       setCurrentChunkIndex(-1);
     } else {
@@ -129,22 +147,51 @@ function Workspace({ onNavigateToDashboard }) {
     }
   }, [generatedText]);
 
-  const generateStory = async (promptToGenerate) => {
+  const saveStoryToDb = async (title, text) => {
+    if (!user) return null;
+    try {
+      const response = await fetch("http://127.0.0.1:5001/api/stories", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+        body: JSON.stringify({ title, text })
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.error("Błąd zapisu historii:", err);
+    }
+    return null;
+  };
+
+  const generateStory = async (topics, customDetails, settings) => {
     handleStop();
     setIsLoading(true);
     setGeneratedText("");
-    setIsCurrentStorySaved(false);
     setCurrentStoryTitle("");
+    setCurrentStoryId(null);
     try {
       const response = await fetch("http://127.0.0.1:5001/api/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: promptToGenerate }),
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+        body: JSON.stringify({ topics, customDetails, settings }),
       });
       const data = await response.json();
       if (data && data[0] && data[0].generated_text) {
         setGeneratedText(data[0].generated_text);
-        setCurrentStoryTitle(data[0].title || "My AI Story");
+        const title = data[0].title || "My AI Story";
+        setCurrentStoryTitle(title);
+        // Automatycznie zapisz historię w bazie danych
+        const savedStory = await saveStoryToDb(title, data[0].generated_text);
+        if (savedStory && savedStory.id) {
+          setCurrentStoryId(savedStory.id);
+        }
       }
     } catch (error) {
       console.error("Błąd generowania:", error);
@@ -153,7 +200,7 @@ function Workspace({ onNavigateToDashboard }) {
     }
   };
 
-  const speakChunk = (index) => {
+  const speakChunk = (index, single = false) => {
     if (index >= textChunks.length) {
       handleStop();
       return;
@@ -164,8 +211,19 @@ function Workspace({ onNavigateToDashboard }) {
     utterance.voice = selectedVoice;
     utterance.rate = speechRate;
     utterance.pitch = speechPitch;
-    utterance.onstart = () => { setIsSpeaking(true); setIsPaused(false); };
-    utterance.onend = () => { if (!isPaused) speakChunk(index + 1); else setIsSpeaking(false); };
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+      setIsPaused(false);
+      setPlaySingle(single);
+    };
+    utterance.onend = () => {
+      if (single) {
+        handleStop();
+      } else {
+        if (!isPaused) speakChunk(index + 1, false);
+        else setIsSpeaking(false);
+      }
+    };
     currentUtteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
   };
@@ -176,7 +234,7 @@ function Workspace({ onNavigateToDashboard }) {
       if (isPaused) { window.speechSynthesis.resume(); setIsPaused(false); }
       else { window.speechSynthesis.pause(); setIsPaused(true); }
     } else {
-      speakChunk(currentChunkIndex === -1 || currentChunkIndex >= textChunks.length ? 0 : currentChunkIndex);
+      speakChunk(currentChunkIndex === -1 || currentChunkIndex >= textChunks.length ? 0 : currentChunkIndex, false);
     }
   };
 
@@ -185,6 +243,16 @@ function Workspace({ onNavigateToDashboard }) {
     setIsSpeaking(false);
     setIsPaused(false);
     setCurrentChunkIndex(-1);
+    setPlaySingle(false);
+  };
+
+  const handlePlaySentence = (index, single = false) => {
+    if (isSpeaking && currentChunkIndex === index && playSingle === single) {
+      handlePlayback();
+    } else {
+      window.speechSynthesis.cancel();
+      speakChunk(index, single);
+    }
   };
 
   const handleTextSelection = () => {
@@ -202,7 +270,10 @@ function Workspace({ onNavigateToDashboard }) {
     try {
       const response = await fetch("http://127.0.0.1:5001/api/translate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
         body: JSON.stringify({ text: selectedText }),
       });
       const data = await response.json();
@@ -214,21 +285,116 @@ function Workspace({ onNavigateToDashboard }) {
     setMenuVisible(false);
   };
 
-  const handleSaveToNotebook = () => {
+  const handleSaveToNotebook = async () => {
     if (translationContent.original && translationContent.translated) {
       const newEntry = { original: translationContent.original, translated: translationContent.translated };
       if (!notebookWords.some(e => e.original === newEntry.original)) {
         setNotebookWords(prev => [...prev, newEntry]);
       }
+
+      try {
+        await fetch("http://127.0.0.1:5001/api/vocabulary", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user.token
+          },
+          body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
+        });
+      } catch (err) {
+        console.error("Błąd podczas zapisywania słówka:", err);
+      }
     }
     setShowTranslationModal(false);
   };
+
+  const handleAddDirectly = async () => {
+    if (!selectedText) return;
+    const textToTranslate = selectedText;
+    setMenuVisible(false);
+
+    // Dodanie optymistyczne z komunikatem oczekiwania
+    const tempEntry = { original: textToTranslate, translated: "Tłumaczenie..." };
+    setNotebookWords(prev => {
+      if (!prev.some(e => e.original === tempEntry.original)) {
+        return [...prev, tempEntry];
+      }
+      return prev;
+    });
+
+    try {
+      const response = await fetch("http://127.0.0.1:5001/api/translate", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+        body: JSON.stringify({ text: textToTranslate }),
+      });
+      const data = await response.json();
+      if (data.translation) {
+        setNotebookWords(prev =>
+          prev.map(item =>
+            item.original === textToTranslate
+              ? { ...item, translated: data.translation }
+              : item
+          )
+        );
+
+        // Zapisz słówko w bazie danych
+        await fetch("http://127.0.0.1:5001/api/vocabulary", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user.token
+          },
+          body: JSON.stringify({ original: textToTranslate, translated: data.translation, story_id: currentStoryId })
+        });
+      } else {
+        setNotebookWords(prev =>
+          prev.map(item =>
+            item.original === textToTranslate && item.translated === "Tłumaczenie..."
+              ? { ...item, translated: "(brak tłumaczenia)" }
+              : item
+          )
+        );
+      }
+    } catch (err) {
+      console.error("Błąd automatycznego tłumaczenia:", err);
+      setNotebookWords(prev =>
+        prev.map(item =>
+          item.original === textToTranslate && item.translated === "Tłumaczenie..."
+            ? { ...item, translated: "(błąd połączenia)" }
+            : item
+        )
+      );
+    }
+  };
+
+  const handleDeleteWord = async (wordToDelete) => {
+    setNotebookWords(prev => prev.filter(w => w.original !== wordToDelete));
+    try {
+      const url = `http://127.0.0.1:5001/api/vocabulary/${encodeURIComponent(wordToDelete)}` + 
+        (currentStoryId ? `?story_id=${currentStoryId}` : "");
+      await fetch(url, {
+        method: "DELETE",
+        headers: { "X-Session-Token": user.token }
+      });
+    } catch (err) {
+      console.error("Błąd usuwania słówka z bazy:", err);
+    }
+  };
+
+  // Usunięto handleDeleteStory, ponieważ historia jest teraz zarządzana w dedykowanej zakładce.
 
   const handleSendEmail = async () => {
     try {
       const response = await fetch("http://127.0.0.1:5001/api/send-notebook-email", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
         body: JSON.stringify({ recipient_email: recipientEmail, notebook_words: notebookWords }),
       });
       if (response.ok) {
@@ -243,7 +409,7 @@ function Workspace({ onNavigateToDashboard }) {
       {menuVisible && (
         <div className="context-menu" style={{ top: menuPosition.top, left: menuPosition.left }}>
           <button onClick={handleTranslate}>Translate</button>
-          <button onClick={() => { setTranslationContent({ original: selectedText, translated: "..." }); handleSaveToNotebook(); }}>Add directly</button>
+          <button onClick={handleAddDirectly}>Add directly</button>
         </div>
       )}
 
@@ -287,6 +453,7 @@ function Workspace({ onNavigateToDashboard }) {
             onGenerate={generateStory} 
             isLoading={isLoading} 
             suggestedTopics={suggestedTopics} 
+            user={user}
           />
         ) : (
           <Reader 
@@ -297,6 +464,8 @@ function Workspace({ onNavigateToDashboard }) {
             isPaused={isPaused}
             onPlayback={handlePlayback}
             onStop={handleStop}
+            onPlaySentence={handlePlaySentence}
+            playSingle={playSingle}
             voices={voices}
             selectedVoiceURI={selectedVoiceURI}
             setSelectedVoiceURI={setSelectedVoiceURI}
@@ -306,6 +475,12 @@ function Workspace({ onNavigateToDashboard }) {
             setSpeechPitch={setSpeechPitch}
             onTextSelection={handleTextSelection}
             onStartMastery={() => setShowPracticeMode(true)}
+            onClearStory={() => {
+              handleStop();
+              setGeneratedText("");
+              setCurrentStoryTitle("");
+              setCurrentStoryId(null);
+            }}
           />
         )}
       </main>
@@ -318,6 +493,7 @@ function Workspace({ onNavigateToDashboard }) {
           u.voice = voices.find(v => v.voiceURI === selectedVoiceURI);
           window.speechSynthesis.speak(u);
         }}
+        onDeleteWord={handleDeleteWord}
         onOpenEmailModal={() => setShowSendEmailModal(true)}
         onOpenFlashcards={() => setShowFlashcards(true)}
       />
@@ -327,6 +503,7 @@ function Workspace({ onNavigateToDashboard }) {
           text={generatedText}
           voices={voices}
           selectedVoiceURI={selectedVoiceURI}
+          user={user}
           onExit={() => setShowPracticeMode(false)}
         />
       )}

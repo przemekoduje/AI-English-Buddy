@@ -1,10 +1,11 @@
 import React from 'react';
 import './Sidebar.css';
 
-const Sidebar = ({ currentView, onNavigate }) => {
+const Sidebar = ({ currentView, onNavigate, user, onLogout }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'workspace', label: 'Practice Room', icon: '📝' },
+    { id: 'stories', label: 'Saved Stories', icon: '📚' },
     { id: 'notebook', label: 'Vocabulary', icon: '📓' },
     { id: 'academy', label: 'Academy', icon: '🎓' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -31,6 +32,15 @@ const Sidebar = ({ currentView, onNavigate }) => {
       </nav>
 
       <div className="sidebar-footer">
+        {user && (
+          <div className="user-profile-card">
+            <div className="user-info">
+              <span className="user-avatar">👤</span>
+              <span className="user-email" title={user.email}>{user.email}</span>
+            </div>
+            <button className="logout-btn" onClick={onLogout} title="Logout">Wyloguj 🚪</button>
+          </div>
+        )}
         <div className="agent-card">
           <div className="agent-status">
             <span className="status-dot"></span>

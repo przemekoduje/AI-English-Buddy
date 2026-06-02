@@ -162,10 +162,8 @@
 }
 
 .training-sentence.active {
-  background: var(--primary-50);
-  color: var(--primary-700);
+  color: var(--primary-600);
   border-bottom-color: var(--primary-600);
-  font-weight: 600;
 }
 
 /* Fixed Bottom Controller */

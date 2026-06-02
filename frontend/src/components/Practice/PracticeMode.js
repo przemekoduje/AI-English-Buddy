@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./PracticeMode.css";
 
-const PracticeMode = ({ text, voices, selectedVoiceURI, onExit }) => {
+const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
   const [phase, setPhase] = useState(1);
   const [subPhase, setSubPhase] = useState(1);
   const [masteryData, setMasteryData] = useState([]);
@@ -19,6 +19,8 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, onExit }) => {
   const progressIntervalRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const recognitionRef = useRef(null);
+  const speechTranscriptRef = useRef("");
 
   useEffect(() => {
     prepareContent();
@@ -42,7 +44,10 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, onExit }) => {
     try {
       const response = await fetch("http://127.0.0.1:5001/api/mastery-prepare", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
         body: JSON.stringify({ text }),
       });
       const data = await response.json();
@@ -125,14 +130,51 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, onExit }) => {
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
       mediaRecorderRef.current.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      mediaRecorderRef.current.onstop = () => { handleEvaluate(new Blob(audioChunksRef.current, { type: 'audio/webm' })); };
+      
+      speechTranscriptRef.current = "";
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const rec = new SpeechRecognition();
+        rec.lang = "en-US";
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.maxAlternatives = 1;
+        
+        rec.onresult = (event) => {
+          const resultText = event.results[0][0].transcript;
+          console.log("Local speech recognition transcript:", resultText);
+          speechTranscriptRef.current = resultText;
+        };
+        rec.onerror = (e) => {
+          console.warn("Local speech recognition error:", e.error);
+        };
+        recognitionRef.current = rec;
+        rec.start();
+      }
+
+      mediaRecorderRef.current.onstop = () => {
+        setTimeout(() => {
+          handleEvaluate(new Blob(audioChunksRef.current, { type: 'audio/webm' }), speechTranscriptRef.current);
+        }, 500);
+      };
+
       mediaRecorderRef.current.start();
       setIsRecording(true);
       setEvaluation(null);
-    } catch (err) { alert("Microphone access denied."); }
+    } catch (err) { 
+      console.error(err);
+      alert("Microphone access denied."); 
+    }
   };
 
   const stopRecording = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.warn("Error stopping recognition:", e);
+      }
+    }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -140,14 +182,21 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, onExit }) => {
     }
   };
 
-  const handleEvaluate = async (audioBlob) => {
+  const handleEvaluate = async (audioBlob, localTranscript = "") => {
     setIsEvaluating(true);
     setEvaluation(null);
     try {
       const formData = new FormData();
       formData.append('audio', audioBlob, 'speech.webm');
       formData.append('target_text', masteryData[currentIndex].en);
-      const res = await fetch("http://127.0.0.1:5001/api/mastery-evaluate", { method: "POST", body: formData });
+      if (localTranscript) {
+        formData.append('transcription', localTranscript);
+      }
+      const res = await fetch("http://127.0.0.1:5001/api/mastery-evaluate", { 
+        method: "POST", 
+        headers: { "X-Session-Token": user.token },
+        body: formData 
+      });
       const result = await res.json();
       setEvaluation(result);
     } catch (err) { console.error("Evaluation error:", err); }

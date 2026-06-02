@@ -117,3 +117,127 @@
   background: var(--slate-100);
   color: var(--primary-600);
 }
+
+/* Saved Stories History Section */
+.saved-stories-section {
+  margin-top: 3rem;
+  border-top: 1px solid var(--border);
+  padding-top: 2rem;
+}
+
+.saved-stories-section h3 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  margin-bottom: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stories-history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.story-history-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  transition: all var(--transition-fast);
+}
+
+.story-history-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary-500);
+  box-shadow: var(--shadow-md);
+}
+
+.story-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.story-card-title {
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--slate-900);
+  margin: 0;
+}
+
+.story-card-date {
+  font-size: 0.75rem;
+  color: var(--slate-400);
+  font-weight: 600;
+}
+
+.story-card-snippet {
+  font-size: 0.85rem;
+  color: var(--slate-600);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.story-card-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  border-top: 1px solid var(--slate-100);
+  padding-top: 0.75rem;
+}
+
+.read-story-btn {
+  background: var(--grad-primary);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.read-story-btn:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
+}
+
+.delete-story-btn {
+  background: white;
+  border: 1px solid var(--border);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  color: var(--slate-400);
+}
+
+.delete-story-btn:hover {
+  color: var(--secondary-500);
+  background: var(--slate-50);
+  border-color: var(--secondary-500);
+}
+
+.no-stories-state {
+  text-align: center;
+  padding: 2.5rem;
+  background: var(--slate-50);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--border);
+  color: var(--slate-500);
+  font-size: 0.9rem;
+}

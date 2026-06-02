@@ -4,6 +4,7 @@ import "./NotebookSidebar.css";
 const NotebookSidebar = ({
   notebookWords,
   onSpeakWord,
+  onDeleteWord,
   onOpenEmailModal,
   onOpenFlashcards,
 }) => {
@@ -44,13 +45,22 @@ const NotebookSidebar = ({
                   <span className="original-word">{entry.original}</span>
                   <span className="translated-word">{entry.translated}</span>
                 </div>
-                <button
-                  className="pronounce-btn"
-                  onClick={() => onSpeakWord(entry.original)}
-                  title="Listen"
-                >
-                  🔊
-                </button>
+                <div className="card-actions">
+                  <button
+                    className="pronounce-btn"
+                    onClick={() => onSpeakWord(entry.original)}
+                    title="Listen"
+                  >
+                    🔊
+                  </button>
+                  <button
+                    className="delete-word-btn"
+                    onClick={() => onDeleteWord(entry.original)}
+                    title="Delete"
+                  >
+                    🗑️
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

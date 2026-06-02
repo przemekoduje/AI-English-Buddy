@@ -149,6 +149,33 @@
   transform: scale(1.1);
 }
 
+.card-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.delete-word-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-fast);
+  color: var(--slate-400);
+}
+
+.delete-word-btn:hover {
+  color: var(--secondary-500);
+  background: var(--slate-100);
+  transform: scale(1.1);
+}
+
 .empty-state {
   text-align: center;
   padding: 4rem 1rem;

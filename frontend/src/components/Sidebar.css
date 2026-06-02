@@ -123,3 +123,56 @@
   opacity: 0.1;
   transform: rotate(-15deg);
 }
+
+.user-profile-card {
+  background: var(--slate-50);
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+.user-avatar {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.user-email {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--slate-700);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.logout-btn {
+  padding: 0.5rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--slate-600);
+  font-weight: 700;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+  width: 100%;
+}
+
+.logout-btn:hover {
+  background: var(--slate-100);
+  color: var(--secondary-600);
+  border-color: var(--secondary-500);
+  transform: translateY(-1px);
+}

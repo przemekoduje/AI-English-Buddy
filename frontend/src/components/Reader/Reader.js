@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import "./Reader.css";
 
 const Reader = ({
@@ -9,6 +9,8 @@ const Reader = ({
   isPaused,
   onPlayback,
   onStop,
+  onPlaySentence,
+  playSingle,
   voices,
   selectedVoiceURI,
   setSelectedVoiceURI,
@@ -18,8 +20,36 @@ const Reader = ({
   setSpeechPitch,
   onTextSelection,
   onStartMastery,
+  onClearStory,
 }) => {
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+  const hoverTimerRef = useRef(null);
+
+  const handleMouseEnter = (index) => {
+    // Only trigger hover controls on desktop pointer devices
+    const isDesktop = window.matchMedia("(hover: hover)").matches;
+    if (!isDesktop) return;
+
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+    }
+
+    if (hoveredIndex === index) return;
+
+    hoverTimerRef.current = setTimeout(() => {
+      setHoveredIndex(index);
+    }, 2000); // 2 seconds delay
+  };
+
+  const handleMouseLeave = () => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+    }
+    hoverTimerRef.current = setTimeout(() => {
+      setHoveredIndex(null);
+    }, 300); // 300ms debounce
+  };
 
   const handleTextSelectionWrapper = (e) => {
     if (onTextSelection) onTextSelection(e);
@@ -34,12 +64,21 @@ const Reader = ({
         >
           ✨ Mastery Path Training
         </button>
-        <button 
-          className="toggle-controls" 
-          onClick={() => setControlsVisible(!controlsVisible)}
-        >
-          {controlsVisible ? "Collapse Controls" : "Show Voice Controls"}
-        </button>
+        <div className="header-controls-wrapper">
+          <button 
+            className="clear-story-btn" 
+            onClick={onClearStory}
+            title="Clear workspace"
+          >
+            🧹 Clear Workspace
+          </button>
+          <button 
+            className="toggle-controls" 
+            onClick={() => setControlsVisible(!controlsVisible)}
+          >
+            {controlsVisible ? "Collapse Controls" : "Show Voice Controls"}
+          </button>
+        </div>
       </div>
 
       {controlsVisible && (
@@ -106,15 +145,80 @@ const Reader = ({
       )}
 
       <div className="story-typography" onMouseUp={handleTextSelectionWrapper}>
-        {textChunks.map((chunk, index) => (
-          <span
-            key={index}
-            className={`story-sentence ${index === currentChunkIndex ? "reading-now" : ""}`}
-          >
-            {chunk}
-            {index < textChunks.length - 1 ? " " : ""}
-          </span>
-        ))}
+        {textChunks.map((chunk, index) => {
+          const isCurrentReading = index === currentChunkIndex;
+          return (
+            <span
+              key={index}
+              className={`story-sentence ${isCurrentReading ? "reading-now" : ""}`}
+              onMouseEnter={() => handleMouseEnter(index)}
+              onMouseLeave={handleMouseLeave}
+            >
+              {chunk}
+              {hoveredIndex === index && (
+                <span 
+                  className="sentence-hover-popup-wrapper" 
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseUp={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <span className="sentence-hover-popup">
+                    <button
+                      className={`sentence-hover-btn play-btn ${
+                        isSpeaking && !isPaused && isCurrentReading && playSingle ? "active" : ""
+                      }`}
+                      onClick={() => onPlaySentence(index, true)}
+                      title="Play only this sentence"
+                    >
+                      {isSpeaking && !isPaused && isCurrentReading && playSingle ? (
+                        <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                        </svg>
+                      ) : (
+                        <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M8 5v14l11-7z"/>
+                        </svg>
+                      )}
+                      <span className="btn-text">Only Sentence</span>
+                    </button>
+                    
+                    <button
+                      className={`sentence-hover-btn play-all-btn ${
+                        isSpeaking && !isPaused && isCurrentReading && !playSingle ? "active" : ""
+                      }`}
+                      onClick={() => onPlaySentence(index, false)}
+                      title="Play from this sentence onwards"
+                    >
+                      {isSpeaking && !isPaused && isCurrentReading && !playSingle ? (
+                        <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                        </svg>
+                      ) : (
+                        <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M5 13h11.86l-5.43 5.43 1.42 1.42L21.14 12l-8.29-8.29-1.42 1.42 5.43 5.43H5v2z"/>
+                        </svg>
+                      )}
+                      <span className="btn-text">From Here</span>
+                    </button>
+                    
+                    <button
+                      className="sentence-hover-btn stop-btn"
+                      onClick={onStop}
+                      disabled={!(isSpeaking && isCurrentReading)}
+                      title="Stop playback"
+                    >
+                      <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 6h12v12H6z"/>
+                      </svg>
+                      <span className="btn-text">Stop</span>
+                    </button>
+                  </span>
+                </span>
+              )}
+              {index < textChunks.length - 1 ? " " : ""}
+            </span>
+          );
+        })}
       </div>
     </div>
   );

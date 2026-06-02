@@ -103,3 +103,157 @@
 .btn-icon {
   font-size: 1.5rem;
 }
+
+/* Collapsible Settings Toggler */
+.settings-toggle-container {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.settings-toggle-btn {
+  background: white;
+  border: 1px solid var(--border);
+  color: var(--slate-700);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: all var(--transition-fast);
+}
+
+.settings-toggle-btn:hover {
+  background: var(--slate-50);
+  border-color: var(--primary-500);
+  color: var(--primary-600);
+}
+
+.settings-toggle-btn.active {
+  background: var(--slate-900);
+  color: white;
+  border-color: var(--slate-900);
+}
+
+/* Settings Panel Grid */
+.generator-settings-panel {
+  padding: 2rem;
+  background: var(--slate-50);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  animation: slide-down 0.4s var(--transition-soft);
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 2rem;
+}
+
+.setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.setting-group label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--slate-500);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Stylized select chips (language level & length) */
+.setting-chips {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.setting-chip {
+  flex: 1;
+  padding: 0.6rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--slate-600);
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.setting-chip:hover {
+  background: var(--slate-50);
+  border-color: var(--primary-400);
+  color: var(--primary-600);
+}
+
+.setting-chip.active {
+  background: var(--primary-600);
+  color: white;
+  border-color: var(--primary-600);
+  box-shadow: 0 4px 10px rgba(124, 58, 237, 0.15);
+}
+
+/* Custom premium controls */
+.premium-text-input {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--slate-900);
+  font-family: var(--font-main);
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.premium-text-input:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+}
+
+/* Factuality Switch / Checkbox Row */
+.checkbox-group {
+  justify-content: flex-end;
+  display: flex;
+  align-items: flex-start;
+}
+
+.switch-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--slate-700);
+  cursor: pointer;
+  margin-top: 1.75rem;
+}
+
+.switch-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary-600);
+  cursor: pointer;
+}
+
+.checkbox-text {
+  user-select: none;
+}
