@@ -94,6 +94,8 @@ export default function HomeScreen() {
   const speakingRef = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
   const prefetchCache = useRef<{[key: number]: string}>({});
+  const chatScrollRef = useRef<ScrollView>(null);
+  const workspaceScrollRef = useRef<ScrollView>(null);
 
   // Sentence Translation States
   const [translatedSentenceIdx, setTranslatedSentenceIdx] = useState<number | null>(null);
@@ -106,6 +108,15 @@ export default function HomeScreen() {
   const [isBotSpeaking, setIsBotSpeaking] = useState<boolean>(false);
   const [isRecordingAnswer, setIsRecordingAnswer] = useState<boolean>(false);
   const [recordingObject, setRecordingObject] = useState<Audio.Recording | null>(null);
+
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      setTimeout(() => {
+        chatScrollRef.current?.scrollToEnd({ animated: true });
+        workspaceScrollRef.current?.scrollToEnd({ animated: true });
+      }, 150);
+    }
+  }, [chatMessages]);
 
 
 
@@ -915,7 +926,7 @@ export default function HomeScreen() {
         )}
 
         {currentView === 'workspace' && (
-          <ScrollView contentContainerStyle={styles.workspaceContainer}>
+          <ScrollView ref={workspaceScrollRef} contentContainerStyle={styles.workspaceContainer}>
             {/* Generator input if no story generated */}
             {!generatedText ? (
               <View style={styles.generatorCard}>
@@ -1061,7 +1072,12 @@ export default function HomeScreen() {
                   <View style={styles.chatCard}>
                     <Text style={styles.questionsHeader}>Rozmowa z lektorem (Audio Chat):</Text>
                     
-                    <View style={styles.chatContainer}>
+                    <ScrollView
+                      ref={chatScrollRef}
+                      style={styles.chatContainer}
+                      contentContainerStyle={{ gap: 12 }}
+                      nestedScrollEnabled={true}
+                    >
                       {chatMessages.map((msg) => {
                         const isBot = msg.sender === 'bot';
                         return (
@@ -1104,7 +1120,7 @@ export default function HomeScreen() {
                           </View>
                         );
                       })}
-                    </View>
+                    </ScrollView>
 
                     {/* Przyciski sterowania głosem */}
                     <View style={styles.chatControlsContainer}>
