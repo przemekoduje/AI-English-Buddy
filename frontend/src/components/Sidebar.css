@@ -68,60 +68,19 @@
 }
 
 .nav-item.active {
-  background: rgba(124, 58, 237, 0.08);
+  background: rgba(26, 115, 232, 0.08);
   color: var(--primary-600);
 }
 
 .nav-icon {
-  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .sidebar-footer {
   margin-top: auto;
-}
-
-.agent-card {
-  background: var(--slate-50);
-  padding: 1.25rem;
-  border-radius: var(--radius-lg);
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--border);
-}
-
-.agent-status {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.7rem;
-  font-weight: 800;
-  color: var(--slate-500);
-  letter-spacing: 1px;
-  margin-bottom: 0.5rem;
-}
-
-.status-dot {
-  width: 6px;
-  height: 6px;
-  background: #10B981;
-  border-radius: 50%;
-  box-shadow: 0 0 8px #10B981;
-}
-
-.agent-quote {
-  font-size: 0.85rem;
-  color: var(--slate-700);
-  font-style: italic;
-  max-width: 80%;
-}
-
-.agent-icon {
-  position: absolute;
-  right: -10px;
-  bottom: -10px;
-  font-size: 3rem;
-  opacity: 0.1;
-  transform: rotate(-15deg);
 }
 
 .user-profile-card {
@@ -129,7 +88,6 @@
   padding: 1rem;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
-  margin-bottom: 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -143,8 +101,10 @@
 }
 
 .user-avatar {
-  font-size: 1.1rem;
-  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slate-500);
 }
 
 .user-email {
@@ -172,7 +132,67 @@
 
 .logout-btn:hover {
   background: var(--slate-100);
-  color: var(--secondary-600);
-  border-color: var(--secondary-500);
-  transform: translateY(-1px);
+  color: var(--primary-600);
+  border-color: var(--primary-500);
+}
+
+/* Mobile responsive layout */
+@media (max-width: 768px) {
+  .mission-sidebar {
+    width: 100vw;
+    height: 56px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    flex-direction: row;
+    padding: 0;
+    border-right: none;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    z-index: 999;
+  }
+
+  .sidebar-brand {
+    display: none !important;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    gap: 0;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: space-around;
+  }
+
+  .nav-item {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 0;
+    font-size: 0.65rem;
+    font-weight: 500;
+    text-align: center;
+    flex: 1;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  .nav-item.active {
+    background: transparent;
+    color: var(--primary-500);
+  }
+
+  .nav-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .sidebar-footer {
+    display: none !important;
+  }
 }

@@ -264,7 +264,12 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
              <h2>Phase {phase}: {phase === 1 ? "Immersion" : phase === 2 ? "Precision" : phase === 3 ? "Shadowing" : "Mastery"}</h2>
              <p className="sub-hint">{phase === 1 ? "Absorb the rhythm" : phase === 2 ? "Break it down" : phase === 3 ? "Synchronize" : "Final Challenge"}</p>
           </div>
-          <button className="exit-btn" onClick={onExit}>✕</button>
+          <button className="exit-btn" onClick={onExit}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </header>
 
         <div className="practice-body">
@@ -302,7 +307,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
                     <div className="eval-feedback">
                       <p className="eval-transcription">Transcription: "{evaluation.transcription}"</p>
                       <div className="eval-corrections" dangerouslySetInnerHTML={{ __html: evaluation.corrections }}></div>
-                      <p className="eval-tip">💡 {evaluation.tip}</p>
+                      <p className="eval-tip">Tip: {evaluation.tip}</p>
                     </div>
                   </div>
                 )}
@@ -318,13 +323,27 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
                 )}
                 {phase === 4 ? (
                   <button className={`ctrl-btn record-btn ${isRecording ? "active" : ""}`} onClick={isRecording ? stopRecording : startRecording}>
-                    {isRecording ? "🛑" : "🎤"}
+                    {isRecording ? (
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <rect x="4" y="4" width="16" height="16" rx="2" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                        <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                        <line x1="12" y1="19" x2="12" y2="22" />
+                      </svg>
+                    )}
                   </button>
                 ) : (
-                  <button className="ctrl-btn repeat" onClick={handleRepeat}>↺</button>
+                  <button className="ctrl-btn repeat" onClick={handleRepeat}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                    </svg>
+                  </button>
                 )}
                 <button className="ctrl-btn next-main" onClick={handleNext} disabled={currentIndex === masteryData.length - 1 && (phase !== 2 || currentSegmentIndex === masteryData[currentIndex].segments?.length - 1)}>
-                  Dalej ⏭
+                  Dalej
                 </button>
               </div>
             </div>
