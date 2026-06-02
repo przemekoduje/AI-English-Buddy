@@ -100,6 +100,13 @@ export default function HomeScreen() {
   const [translationText, setTranslationText] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
 
+  // Voice Chatbot States
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [isProcessingChat, setIsProcessingChat] = useState<boolean>(false);
+  const [isBotSpeaking, setIsBotSpeaking] = useState<boolean>(false);
+  const [isRecordingAnswer, setIsRecordingAnswer] = useState<boolean>(false);
+  const [recordingObject, setRecordingObject] = useState<Audio.Recording | null>(null);
+
 
 
   // Saved Stories List
@@ -309,6 +316,7 @@ export default function HomeScreen() {
         setStoryPrompt('');
         setSelectedTopicChip(null);
         setCurrentView('workspace');
+        startChatSession(storyText);
       } else {
         Alert.alert('Błąd', item?.error || data?.error || 'Nie udało się wygenerować opowiadania');
       }
@@ -329,6 +337,7 @@ export default function HomeScreen() {
       .filter((s: string) => s.trim().length > 0);
     setSentences(parsedSentences);
     setCurrentView('workspace');
+    startChatSession(story.text);
   };
 
   // TTS
@@ -550,6 +559,176 @@ export default function HomeScreen() {
     } catch (err) {
       console.error(err);
       Alert.alert('Błąd', 'Wystąpił błąd połączenia');
+    }
+  };
+
+  const speakBotText = async (text: string) => {
+    try {
+      await stopSpeech();
+      setIsBotSpeaking(true);
+
+      const response = await customFetch(`${backendUrl}/api/tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text,
+          voice: selectedVoice || 'en-US-BrianNeural',
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.audio_base64) {
+        throw new Error(data.error || 'Nie udało się pobrać dźwięku z serwera');
+      }
+
+      const uri = `data:audio/mpeg;base64,${data.audio_base64}`;
+      const { sound } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: true }
+      );
+      
+      soundRef.current = sound;
+      
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setIsBotSpeaking(false);
+          sound.unloadAsync();
+          soundRef.current = null;
+        }
+      });
+    } catch (err: any) {
+      console.log('Error playing bot speech', err);
+      setIsBotSpeaking(false);
+    }
+  };
+
+  const startChatSession = async (storyText: string) => {
+    if (!user) return;
+    setIsProcessingChat(true);
+    setChatMessages([]);
+    try {
+      const formData = new FormData();
+      formData.append('story_text', storyText);
+      formData.append('history', JSON.stringify([]));
+
+      const response = await customFetch(`${backendUrl}/api/stories/chat-next`, {
+        method: 'POST',
+        headers: {
+          'X-Session-Token': user.token,
+        },
+        body: formData,
+      });
+
+      const result = await response.json();
+      if (response.ok && result.bot_response) {
+        const botMsg = {
+          id: String(Date.now()),
+          sender: 'bot',
+          text: result.bot_response,
+        };
+        setChatMessages([botMsg]);
+        speakBotText(result.bot_response);
+      }
+    } catch (err) {
+      console.error('Error starting chat:', err);
+    } finally {
+      setIsProcessingChat(false);
+    }
+  };
+
+  const startRecordingAnswer = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Błąd', 'Wymagane jest zezwolenie na korzystanie z mikrofonu.');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecordingObject(recording);
+      setIsRecordingAnswer(true);
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+      Alert.alert('Błąd', 'Nie udało się rozpocząć nagrywania.');
+    }
+  };
+
+  const sendVoiceAnswerToChat = async () => {
+    if (!recordingObject) return;
+    setIsRecordingAnswer(false);
+    setIsProcessingChat(true);
+    try {
+      await recordingObject.stopAndUnloadAsync();
+      const uri = recordingObject.getURI();
+      setRecordingObject(null);
+
+      if (!uri) {
+        Alert.alert('Błąd', 'Brak nagrania audio.');
+        setIsProcessingChat(false);
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+
+      const historyForAPI = chatMessages.map(msg => ({
+        sender: msg.sender,
+        text: msg.text
+      }));
+
+      const formData = new FormData();
+      formData.append('story_text', generatedText);
+      formData.append('history', JSON.stringify(historyForAPI));
+      formData.append('audio', {
+        uri: uri,
+        name: 'answer.m4a',
+        type: 'audio/m4a',
+      } as any);
+
+      const response = await customFetch(`${backendUrl}/api/stories/chat-next`, {
+        method: 'POST',
+        headers: {
+          'X-Session-Token': user?.token || '',
+        },
+        body: formData,
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        const userMsg = {
+          id: String(Date.now()) + '_user',
+          sender: 'user',
+          text: result.user_transcription || '...',
+          evaluation: result.user_evaluation,
+        };
+
+        const botMsg = {
+          id: String(Date.now() + 1) + '_bot',
+          sender: 'bot',
+          text: result.bot_response,
+        };
+
+        setChatMessages(prev => [...prev, userMsg, botMsg]);
+        speakBotText(result.bot_response);
+      } else {
+        Alert.alert('Błąd', result.error || 'Nie udało się przetworzyć odpowiedzi.');
+      }
+    } catch (err) {
+      console.error('Error sending voice chat answer:', err);
+      Alert.alert('Błąd', 'Wystąpił problem z połączeniem podczas przesyłania odpowiedzi.');
+    } finally {
+      setIsProcessingChat(false);
     }
   };
 
@@ -837,6 +1016,8 @@ export default function HomeScreen() {
                       setGeneratedText('');
                       setCurrentStoryTitle('');
                       setSentences([]);
+                      setChatMessages([]);
+                      setIsBotSpeaking(false);
                     }}
                   >
                     <Text style={styles.clearStoryButtonText}>Reset</Text>
@@ -866,6 +1047,109 @@ export default function HomeScreen() {
                     })}
                   </Text>
                 </View>
+
+                {/* Loader rozpoczynania rozmowy */}
+                {isProcessingChat && chatMessages.length === 0 && (
+                  <View style={styles.loadingQuestionsContainer}>
+                    <ActivityIndicator size="small" color="#1A73E8" />
+                    <Text style={styles.loadingQuestionsText}>Rozpoczynanie rozmowy audio z lektorem...</Text>
+                  </View>
+                )}
+
+                {/* Rozmowa audio z lektorem */}
+                {chatMessages.length > 0 && (
+                  <View style={styles.chatCard}>
+                    <Text style={styles.questionsHeader}>Rozmowa z lektorem (Audio Chat):</Text>
+                    
+                    <View style={styles.chatContainer}>
+                      {chatMessages.map((msg) => {
+                        const isBot = msg.sender === 'bot';
+                        return (
+                          <View
+                            key={msg.id}
+                            style={[
+                              styles.chatBubbleContainer,
+                              isBot ? styles.chatBubbleContainerBot : styles.chatBubbleContainerUser
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.chatBubble,
+                                isBot ? styles.chatBubbleBot : styles.chatBubbleUser
+                              ]}
+                            >
+                              <Text style={[
+                                styles.chatBubbleText,
+                                isBot ? styles.chatBubbleTextBot : styles.chatBubbleTextUser
+                              ]}>
+                                {msg.text}
+                              </Text>
+
+                              {/* Ocenianie wypowiedzi użytkownika */}
+                              {!isBot && msg.evaluation && (
+                                <View style={styles.chatEvaluationBox}>
+                                  <View style={styles.evaluationScoreRow}>
+                                    <Text style={styles.chatEvalScore}>
+                                      Wynik: {msg.evaluation.score}/100 ({msg.evaluation.is_correct ? 'Ok' : 'Popraw'})
+                                    </Text>
+                                  </View>
+                                  {msg.evaluation.feedback && (
+                                    <Text style={styles.chatEvalFeedback}>
+                                      💡 {msg.evaluation.feedback}
+                                    </Text>
+                                  )}
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {/* Przyciski sterowania głosem */}
+                    <View style={styles.chatControlsContainer}>
+                      {isProcessingChat ? (
+                        <View style={styles.evaluatingLoader}>
+                          <ActivityIndicator size="small" color="#1A73E8" />
+                          <Text style={styles.evaluatingText}>
+                            {chatMessages.length > 1 ? 'Bot słucha i analizuje...' : 'Bot myśli...'}
+                          </Text>
+                        </View>
+                      ) : isRecordingAnswer ? (
+                        <TouchableOpacity
+                          style={styles.recordButtonActive}
+                          onPress={sendVoiceAnswerToChat}
+                        >
+                          <Text style={styles.recordButtonText}>⏹ Wyślij odpowiedź</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity
+                            style={styles.recordButton}
+                            onPress={startRecordingAnswer}
+                            disabled={isBotSpeaking}
+                          >
+                            <Text style={styles.recordButtonText}>
+                              🎙 {isBotSpeaking ? 'Bot mówi...' : 'Odpowiedz głosem'}
+                            </Text>
+                          </TouchableOpacity>
+
+                          {isBotSpeaking && (
+                            <TouchableOpacity
+                              style={[styles.recordButtonActive, { backgroundColor: '#5F6368' }]}
+                              onPress={() => {
+                                stopSpeech();
+                                setIsBotSpeaking(false);
+                              }}
+                            >
+                              <Text style={styles.recordButtonText}>🔇 Wycisz</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
 
               </View>
             )}
@@ -1543,6 +1827,168 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
+  questionsCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+  },
+  questionsHeader: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#202124',
+    marginBottom: 12,
+  },
+  questionNavRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  qNavDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F3F4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qNavDotActive: {
+    backgroundColor: '#1A73E8',
+  },
+  qNavDotText: {
+    fontSize: 14,
+    color: '#3C4043',
+    fontWeight: '600',
+  },
+  qNavDotTextActive: {
+    color: '#FFFFFF',
+  },
+  questionBox: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#1A73E8',
+    marginBottom: 16,
+  },
+  questionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#202124',
+    lineHeight: 22,
+  },
+  recordingContainer: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  evaluatingLoader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+  },
+  evaluatingText: {
+    fontSize: 14,
+    color: '#5F6368',
+  },
+  recordButton: {
+    backgroundColor: '#1A73E8',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1A73E8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  recordButtonActive: {
+    backgroundColor: '#EA4335',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#EA4335',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  recordButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  evaluationCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    marginTop: 8,
+  },
+  evaluationScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  evaluationLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#5F6368',
+    marginRight: 6,
+  },
+  evaluationScore: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  scoreCorrect: {
+    color: '#137333',
+  },
+  scoreIncorrect: {
+    color: '#C5221F',
+  },
+  evaluationSubLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#5F6368',
+    textTransform: 'uppercase',
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  evaluationTranscription: {
+    fontSize: 14,
+    color: '#202124',
+    fontStyle: 'italic',
+  },
+  evaluationFeedback: {
+    fontSize: 14,
+    color: '#202124',
+    lineHeight: 20,
+  },
+  loadingQuestionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+  },
+  loadingQuestionsText: {
+    fontSize: 14,
+    color: '#5F6368',
+  },
   voiceSelectorContainer: {
     maxHeight: 180,
     borderWidth: 1,
@@ -1832,5 +2278,82 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
+  },
+  chatCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+  },
+  chatContainer: {
+    gap: 12,
+    marginBottom: 16,
+    maxHeight: 400,
+  },
+  chatBubbleContainer: {
+    flexDirection: 'row',
+    width: '100%',
+  },
+  chatBubbleContainerBot: {
+    justifyContent: 'flex-start',
+  },
+  chatBubbleContainerUser: {
+    justifyContent: 'flex-end',
+  },
+  chatBubble: {
+    maxWidth: '85%',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  chatBubbleBot: {
+    backgroundColor: '#F1F3F4',
+    borderTopLeftRadius: 0,
+  },
+  chatBubbleUser: {
+    backgroundColor: '#E8F0FE',
+    borderTopRightRadius: 0,
+  },
+  chatBubbleText: {
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  chatBubbleTextBot: {
+    color: '#202124',
+  },
+  chatBubbleTextUser: {
+    color: '#1A73E8',
+    fontWeight: '500',
+  },
+  chatEvaluationBox: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(26, 115, 232, 0.15)',
+  },
+  chatEvalScore: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#137333',
+    textTransform: 'uppercase',
+  },
+  chatEvalFeedback: {
+    fontSize: 12,
+    color: '#5F6368',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  chatControlsContainer: {
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F3F4',
+    paddingTop: 12,
   },
 });

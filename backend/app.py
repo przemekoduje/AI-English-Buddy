@@ -410,7 +410,28 @@ def generate_text():
 
         title, story_text = parse_story_response(generated_content)
 
-        return jsonify([{"generated_text": story_text, "title": title}])
+        # Zapisz wygenerowaną historię do Firestore
+        text_hash = hashlib.sha256(story_text.encode('utf-8')).hexdigest()
+        stories_ref = db.collection('stories')
+        
+        # Sprawdź czy identyczna historia już istnieje
+        existing_stories = stories_ref.where('user_email', '==', user_email).where('text_hash', '==', text_hash).limit(1).get()
+        story_id = None
+        for doc in existing_stories:
+            story_id = doc.id
+            
+        if not story_id:
+            new_story_data = {
+                'user_email': user_email,
+                'title': title,
+                'text': story_text,
+                'text_hash': text_hash,
+                'timestamp': firestore.SERVER_TIMESTAMP
+            }
+            doc_ref = stories_ref.add(new_story_data)
+            story_id = doc_ref[1].id
+
+        return jsonify([{"generated_text": story_text, "title": title, "story_id": story_id}])
     except (KeyError, IndexError) as e:
         return jsonify({"error": "Nie udało się sparsować odpowiedzi z DeepSeek", "details": str(e)}), 500
     except requests.exceptions.RequestException as e:
@@ -927,9 +948,9 @@ def evaluate_mastery():
         
         audio_file = request.files['audio']
         
-        # HF Inference API for Whisper
+        # HF Inference API for Whisper (new router domain for 2026)
         HF_TOKEN = os.getenv("HF_API_TOKEN")
-        API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
+        API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
         headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
         try:
@@ -1059,6 +1080,272 @@ def get_tts_audio():
         return jsonify({"audio_base64": base64_data})
     except Exception as e:
         return jsonify({"error": f"Błąd generowania mowy: {str(e)}"}), 500
+
+@app.route("/api/stories/generate-questions", methods=['POST'])
+def generate_story_questions():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    data = request.get_json() or {}
+    story_text = data.get("text", "").strip()
+    if not story_text:
+        return jsonify({"error": "Brak tekstu opowiadania"}), 400
+
+    prompt = f"""
+    Based on the following story, write exactly 3 simple comprehension questions in English.
+    The questions should test if the user understood the main events or details of the story.
+    
+    Story:
+    "{story_text}"
+    
+    Respond ONLY with a JSON array containing the questions, using the exact key "question". No markdown formatting or extra text.
+    Example:
+    [
+      {{"question": "Who was the main character?"}},
+      {{"question": "What did they find in the forest?"}},
+      {{"question": "Why were they happy at the end?"}}
+    ]
+    """
+
+    if not client:
+        return jsonify({"error": "Serwis AI nie jest dostępny (brak klucza API)."}), 500
+
+    try:
+        ai_response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw_content = ai_response.choices[0].message.content.strip()
+        if raw_content.startswith("```"):
+            lines = raw_content.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            raw_content = "\n".join(lines).strip()
+
+        questions = json.loads(raw_content)
+        if isinstance(questions, dict) and "questions" in questions:
+            questions = questions["questions"]
+        elif isinstance(questions, dict):
+            for val in questions.values():
+                if isinstance(val, list):
+                    questions = val
+                    break
+        
+        if not isinstance(questions, list):
+             questions = [{"question": questions.get("question", "What is the story about?")}]
+             
+        formatted_questions = []
+        for i, q in enumerate(questions):
+            q_text = q.get("question", "") if isinstance(q, dict) else str(q)
+            formatted_questions.append({"id": i + 1, "question": q_text})
+
+        return jsonify(formatted_questions)
+    except Exception as e:
+        print(f"Error generating questions: {e}")
+        return jsonify({"error": f"Błąd generowania pytań: {str(e)}"}), 500
+
+@app.route("/api/stories/evaluate-answer", methods=['POST'])
+def evaluate_story_answer():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    question = request.form.get('question', '').strip()
+    story_text = request.form.get('story_text', '').strip()
+    transcription = request.form.get('transcription', '').strip()
+
+    if not question or not story_text:
+        return jsonify({"error": "Pytanie i tekst opowiadania są wymagane."}), 400
+
+    if not transcription:
+        if 'audio' not in request.files:
+            return jsonify({"error": "Brak pliku audio lub gotowej transkrypcji."}), 400
+
+        audio_file = request.files['audio']
+        
+        HF_TOKEN = os.getenv("HF_API_TOKEN")
+        API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
+        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+
+        try:
+            audio_data = audio_file.read()
+            asr_headers = headers.copy()
+            asr_headers["Content-Type"] = "audio/webm"
+            
+            response = requests.post(API_URL, headers=asr_headers, data=audio_data, timeout=30)
+            if response.status_code != 200:
+                print(f"Whisper error: {response.status_code} - {response.text}")
+                return jsonify({"error": "Nie udało się przeprowadzić transkrypcji mowy."}), 500
+                
+            transcription_result = response.json()
+            transcription = transcription_result.get("text", "")
+            if not transcription:
+                return jsonify({"error": "Nie wykryto mowy. Spróbuj mówić głośniej."}), 400
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Whisper processing error: {e}")
+            return jsonify({"error": f"Błąd komunikacji z serwisem transkrypcji mowy: {str(e)}"}), 500
+
+    prompt = f"""
+    You are an English teacher evaluating a student's answer to a comprehension question about a story.
+    
+    Story:
+    "{story_text}"
+    
+    Question:
+    "{question}"
+    
+    Student's Answer (Speech-to-Text Transcription):
+    "{transcription}"
+    
+    Instructions:
+    1. Decide if the answer is factually correct and makes sense based on the story.
+    2. Provide a score from 0 to 100 representing how correct and well-expressed the answer is.
+    3. Write a brief feedback/explanation in Polish (1-2 sentences) under the key "feedback".
+    4. Respond ONLY with a valid JSON object. Do NOT include markdown code blocks or extra characters.
+    
+    Example format:
+    {{
+      "is_correct": true,
+      "score": 90,
+      "feedback": "Twoja odpowiedź jest poprawna i dobrze sformułowana. Świetna robota!"
+    }}
+    """
+
+    if not client:
+        return jsonify({"error": "AI Evaluation service is currently unavailable."}), 500
+
+    try:
+        ai_response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw_json = ai_response.choices[0].message.content.strip()
+        if raw_json.startswith("```"):
+            lines = raw_json.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            raw_json = "\n".join(lines).strip()
+
+        result = json.loads(raw_json)
+        result["transcription"] = transcription
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error evaluating answer: {e}")
+        return jsonify({"error": f"Błąd oceny odpowiedzi przez AI: {str(e)}"}), 500
+
+@app.route("/api/stories/chat-next", methods=['POST'])
+def chat_next():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    story_text = request.form.get('story_text', '').strip()
+    history_str = request.form.get('history', '[]').strip()
+    transcription = request.form.get('transcription', '').strip()
+
+    try:
+        history = json.loads(history_str)
+    except Exception as e:
+        return jsonify({"error": "Błędny format historii czatu."}), 400
+
+    if not story_text:
+        return jsonify({"error": "Tekst opowiadania jest wymagany."}), 400
+
+    if not transcription and 'audio' in request.files:
+        audio_file = request.files['audio']
+        HF_TOKEN = os.getenv("HF_API_TOKEN")
+        API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
+        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+
+        try:
+            audio_data = audio_file.read()
+            asr_headers = headers.copy()
+            asr_headers["Content-Type"] = "audio/webm"
+            
+            response = requests.post(API_URL, headers=asr_headers, data=audio_data, timeout=30)
+            if response.status_code == 200:
+                transcription_result = response.json()
+                transcription = transcription_result.get("text", "").strip()
+            else:
+                print(f"Whisper error: {response.status_code} - {response.text}")
+        except Exception as e:
+            print(f"Whisper error in chat: {e}")
+
+    if 'audio' in request.files and not transcription:
+        return jsonify({"error": "Nie wykryto mowy. Spróbuj mówić głośniej."}), 400
+
+    system_prompt = f"""
+    You are an encouraging and professional English tutor. You are holding a voice-based conversation with a student about the following story:
+    
+    Story context:
+    "{story_text}"
+    
+    Instructions:
+    1. If this is the start of the conversation (student has not answered anything yet), greet them briefly and ask a simple, engaging question about the story.
+    2. If the student has answered a question (provided in 'Student\'s Answer'), evaluate their answer:
+       - Grade their answer from 0 to 100 based on correctness and grammar.
+       - Provide a short feedback/explanation (in English, 1-2 sentences) about their answer.
+    3. Formulate your verbal response ('bot_response') in English. Keep it concise, warm, and natural (1-3 sentences max).
+       - First, give brief encouragement/correction on their previous answer (e.g. "Excellent! That's correct.", "Not quite, actually...").
+       - Second, ask the next comprehension question about the story.
+    4. Respond ONLY with a valid JSON object. Do NOT include markdown code blocks or extra characters.
+    
+    JSON format structure:
+    {{
+      "user_evaluation": {{
+        "score": 85,
+        "is_correct": true,
+        "feedback": "..."
+      }},
+      "bot_response": "..."
+    }}
+    
+    If it's the start (no user answer), set "user_evaluation" to null.
+    """
+
+    user_prompt = f"Chat History:\n"
+    for msg in history:
+        role = "Student" if msg.get("sender") == "user" else "Tutor"
+        user_prompt += f"{role}: {msg.get('text')}\n"
+
+    if transcription:
+        user_prompt += f"Latest Student's Answer: \"{transcription}\"\n"
+    else:
+        user_prompt += "Latest Student's Answer: (None, this is the start)\n"
+
+    if not client:
+        return jsonify({"error": "AI client is currently unavailable."}), 500
+
+    try:
+        ai_response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        )
+        raw_json = ai_response.choices[0].message.content.strip()
+        if raw_json.startswith("```"):
+            lines = raw_json.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            raw_json = "\n".join(lines).strip()
+
+        result = json.loads(raw_json)
+        result["transcription"] = transcription
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error in chat-next: {e}")
+        return jsonify({"error": f"Błąd komunikacji z serwisem AI: {str(e)}"}), 500
 
 if __name__ == "__main__":
     # db.create_all() # Nie potrzebne dla Firestore, Firebase zarządza strukturą dokumentów
