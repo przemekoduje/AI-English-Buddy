@@ -34,3 +34,6 @@ backend/venv/
 frontend/.env # Jeśli używasz .env również we frontendzie
 frontend/node_modules/
 frontend/build/
+
+# Ignore codebase dump containing secrets
+codebase_dump.txt

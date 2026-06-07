@@ -96,6 +96,9 @@ export default function HomeScreen() {
   const prefetchCache = useRef<{[key: number]: string}>({});
   const chatScrollRef = useRef<ScrollView>(null);
   const workspaceScrollRef = useRef<ScrollView>(null);
+  const storyCardYRef = useRef<number>(0);               // Y offset of storyTextCard in the ScrollView
+  const paragraphHeightRef = useRef<number>(0);          // Total height of the paragraph text
+  const chatSessionStarted = useRef<boolean>(false);     // ensures chat starts only once
 
   // Sentence Translation States
   const [translatedSentenceIdx, setTranslatedSentenceIdx] = useState<number | null>(null);
@@ -326,8 +329,15 @@ export default function HomeScreen() {
         setSentences(parsedSentences);
         setStoryPrompt('');
         setSelectedTopicChip(null);
+        // Reset chat state
+        setChatMessages([]);
+        chatSessionStarted.current = false;
+        paragraphHeightRef.current = 0;
         setCurrentView('workspace');
-        startChatSession(storyText);
+        // Scroll to top of workspace after a short delay so content is rendered
+        setTimeout(() => {
+          workspaceScrollRef.current?.scrollTo({ y: 0, animated: false });
+        }, 100);
       } else {
         Alert.alert('Błąd', item?.error || data?.error || 'Nie udało się wygenerować opowiadania');
       }
@@ -347,16 +357,49 @@ export default function HomeScreen() {
       .split(/(?<=[.!?])\s+/)
       .filter((s: string) => s.trim().length > 0);
     setSentences(parsedSentences);
+    // Reset chat state
+    setChatMessages([]);
+    chatSessionStarted.current = false;
+    paragraphHeightRef.current = 0;
     setCurrentView('workspace');
-    startChatSession(story.text);
+    // Scroll to top
+    setTimeout(() => {
+      workspaceScrollRef.current?.scrollTo({ y: 0, animated: false });
+    }, 100);
   };
 
-  // TTS
+  // Auto-scroll to active sentence using text proportion (since inline Text onLayout is unreliable)
+  const scrollToSentence = (index: number) => {
+    if (workspaceScrollRef.current && paragraphHeightRef.current > 0) {
+      // Calculate how many characters are before this sentence
+      const charsBefore = sentences.slice(0, index).join(' ').length;
+      const totalChars = sentences.join(' ').length;
+      
+      const ratio = totalChars > 0 ? charsBefore / totalChars : 0;
+      
+      // Approximate Y offset of the sentence within the paragraph
+      const estimatedSentenceY = ratio * paragraphHeightRef.current;
+      
+      // Absolute Y = storyCard offset + estimated sentence offset
+      const absoluteY = storyCardYRef.current + estimatedSentenceY;
+      const targetY = Math.max(0, absoluteY - 100);
+      
+      console.log(`[AutoScroll] idx=${index}, ratio=${ratio.toFixed(2)}, estY=${estimatedSentenceY}, absoluteY=${absoluteY}, scrolling to targetY=${targetY}`);
+      
+      workspaceScrollRef.current.scrollTo({
+        y: targetY,
+        animated: true,
+      });
+    }
+  };
+
+  // TTS — single sentence
   const speakSentence = async (index: number) => {
     try {
       await stopSpeech();
       setSpeakingSentenceIndex(index);
       setIsSpeaking(true);
+      scrollToSentence(index);
 
       const response = await customFetch(`${backendUrl}/api/tts`, {
         method: 'POST',
@@ -388,6 +431,11 @@ export default function HomeScreen() {
           setIsSpeaking(false);
           sound.unloadAsync();
           soundRef.current = null;
+          // If this was the last sentence, auto-start chat
+          if (index === sentences.length - 1 && !chatSessionStarted.current) {
+            chatSessionStarted.current = true;
+            startChatSession(generatedText);
+          }
         }
       });
     } catch (err: any) {
@@ -447,13 +495,20 @@ export default function HomeScreen() {
 
       const playNext = async () => {
         if (!speakingRef.current || currentIdx >= sentenceList.length) {
+          // All sentences finished — auto-start chat if not already started
           setIsSpeaking(false);
           setSpeakingSentenceIndex(null);
           speakingRef.current = false;
+          if (!chatSessionStarted.current) {
+            chatSessionStarted.current = true;
+            startChatSession(generatedText);
+          }
           return;
         }
 
         setSpeakingSentenceIndex(currentIdx);
+        // Auto-scroll to current sentence
+        scrollToSentence(currentIdx);
 
         try {
           // Get audio uri for current sentence
@@ -1035,11 +1090,24 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.storyTextCard}>
+                <View
+                  style={styles.storyTextCard}
+                  onLayout={(e) => {
+                    // Track where storyTextCard starts in the ScrollView
+                    storyCardYRef.current = e.nativeEvent.layout.y;
+                  }}
+                >
                   <Text style={styles.instructionsText}>
                     Dotknij zdania, aby je odsłuchać. Przytrzymaj, aby zobaczyć tłumaczenie.
                   </Text>
-                  <Text style={styles.paragraphText}>
+
+                  {/* Paragraph Text with onLayout to capture total height */}
+                  <Text 
+                    style={styles.paragraphText}
+                    onLayout={(e) => {
+                      paragraphHeightRef.current = e.nativeEvent.layout.height;
+                    }}
+                  >
                     {sentences.map((sentence, idx) => {
                       const isSpeakingSentence = speakingSentenceIndex === idx;
                       return (
@@ -1212,14 +1280,22 @@ export default function HomeScreen() {
                     <View key={idx} style={styles.vocabItem}>
                       <View style={styles.vocabTextContainer}>
                         <Text style={styles.vocabOriginal}>{item.original}</Text>
-                        <Text style={styles.vocabTranslation}>{item.translation}</Text>
+                        <Text style={styles.vocabTranslation}>{item.translated}</Text>
                       </View>
-                      <TouchableOpacity
-                        style={styles.deleteVocabBtn}
-                        onPress={() => deleteWord(item.original)}
-                      >
-                        <Text style={styles.deleteVocabText}>Usuń</Text>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                        <TouchableOpacity
+                          style={styles.deleteVocabBtn}
+                          onPress={() => speakBotText(item.original)}
+                        >
+                          <Text style={{ color: '#1A73E8', fontSize: 13, fontWeight: '600' }}>🎧 Odtwórz</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.deleteVocabBtn}
+                          onPress={() => deleteWord(item.original)}
+                        >
+                          <Text style={styles.deleteVocabText}>Usuń</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   ))
                 )}
@@ -2098,10 +2174,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 26,
     color: '#3C4043',
+    marginBottom: 6,
   },
   sentenceTextActive: {
     color: '#1A73E8',
     fontWeight: '600',
+    backgroundColor: '#E8F0FE',
+    borderRadius: 4,
+    paddingHorizontal: 2,
   },
   listContainer: {
     padding: 16,

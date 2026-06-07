@@ -258,46 +258,48 @@ def translate_text():
         return jsonify({"error": f"Błąd połączenia z DeepSeek API: {str(e)}"}), 500
 
 def parse_story_response(generated_content):
-    start_idx = generated_content.find('{')
-    end_idx = generated_content.rfind('}')
-    
-    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-        json_str = generated_content[start_idx:end_idx + 1]
-        
-        try:
-            parsed = json.loads(json_str)
-            title = parsed.get("title", "My AI Story").strip()
-            story = parsed.get("story", "").strip()
-            if title and story:
-                return title, story
-        except Exception:
-            pass
+    content = generated_content.strip()
+    # Remove markdown code blocks if present
+    if content.startswith('```json'):
+        content = content[7:]
+    elif content.startswith('```'):
+        content = content[3:]
+    if content.endswith('```'):
+        content = content[:-3]
+    content = content.strip()
 
-        title = "My AI Story"
-        story = ""
-
-        title_match = re.search(r'"title"\s*:\s*"((?:[^\n"\\]|\\.)*)"', json_str)
-        if title_match:
-            title_raw = title_match.group(1)
-            try:
-                title = json.loads('"' + title_raw + '"')
-            except Exception:
-                title = title_raw.strip()
-
-        story_match = re.search(r'"story"\s*:\s*"((?:[^"\\]|\\.)*)"', json_str, re.DOTALL)
-        if story_match:
-            story_raw = story_match.group(1)
-            story_escaped = story_raw.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
-            try:
-                story = json.loads('"' + story_escaped + '"')
-            except Exception:
-                story = story_raw.replace('\\"', '"').replace('\\\\', '\\').replace('\\t', '\t').replace('\\n', '\n')
-        else:
-            story = json_str
-
+    # 1. Try standard JSON parsing
+    try:
+        parsed = json.loads(content)
+        title = parsed.get("title", "My AI Story").strip()
+        story = parsed.get("story", "").strip()
         if title and story:
-            return title.strip(), story.strip()
+            return title, story
+    except Exception:
+        pass
 
+    # 2. Try aggressive Regex parsing (handles truncated JSON from API and unescaped newlines)
+    title = "My AI Story"
+    title_match = re.search(r'"title"\s*:\s*"((?:[^"\\]|\\.)*)"', content)
+    if title_match:
+        # Evaluate escaped characters
+        try:
+            title = json.loads('"' + title_match.group(1) + '"')
+        except Exception:
+            title = title_match.group(1).replace('\\"', '"').strip()
+
+    # Match from "story": " until the end
+    story_match = re.search(r'"story"\s*:\s*"(.*)', content, re.DOTALL)
+    if story_match:
+        story_raw = story_match.group(1)
+        # Remove trailing JSON structures if it wasn't cut off
+        story_raw = re.sub(r'"\s*\}?\s*$', '', story_raw)
+        
+        # Unescape common sequences including the literal \n seen in screenshots
+        story_escaped = story_raw.replace('\\n', '\n').replace('\\"', '"').replace('\\\\', '\\')
+        return title, story_escaped.strip()
+
+    # 3. Ultimate Fallback: Just treat it as plain text
     lines = generated_content.split('\n')
     first_line = lines[0].strip()
     if (first_line.startswith("#") or first_line.lower().startswith("title:")) and len(first_line) < 100:
