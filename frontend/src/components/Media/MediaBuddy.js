@@ -47,6 +47,9 @@ function MediaBuddy({ user }) {
   const [customUrl, setCustomUrl] = useState("");
   const [isLoadingCustom, setIsLoadingCustom] = useState(false);
   const [customError, setCustomError] = useState("");
+  const [showManualPaste, setShowManualPaste] = useState(false);
+  const [manualText, setManualText] = useState("");
+  const [manualVideoId, setManualVideoId] = useState("");
   const [customVideos, setCustomVideos] = useState(() => {
     try {
       const saved = localStorage.getItem("media_buddy_custom_videos");
@@ -485,6 +488,7 @@ function MediaBuddy({ user }) {
   const handleLoadCustomVideo = async (e) => {
     e.preventDefault();
     setCustomError("");
+    setShowManualPaste(false);
     const videoId = extractVideoId(customUrl);
     if (!videoId || videoId.length !== 11) {
       setCustomError("Nieprawidłowy adres URL lub ID wideo. Upewnij się, że ID ma 11 znaków.");
@@ -520,10 +524,61 @@ function MediaBuddy({ user }) {
       } else {
         const errData = await response.json();
         setCustomError(errData.error || "Błąd podczas pobierania transkrypcji.");
+        setShowManualPaste(true);
+        setManualVideoId(videoId);
       }
     } catch (err) {
       console.error(err);
-      setCustomError("Błąd połączenia z serwerem.");
+      setCustomError("Błąd pobierania transkrypcji z serwisu YouTube.");
+      setShowManualPaste(true);
+      setManualVideoId(videoId);
+    } finally {
+      setIsLoadingCustom(false);
+    }
+  };
+
+  const handleSaveManualTranscript = async (e) => {
+    e.preventDefault();
+    if (!manualText.trim()) return;
+
+    setIsLoadingCustom(true);
+    setCustomError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/media/transcript/manual`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+        body: JSON.stringify({
+          video_id: manualVideoId,
+          raw_text: manualText
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newCustomVid = {
+          id: `custom_${manualVideoId}`,
+          title: data.title || `Własne wideo (${manualVideoId})`,
+          youtubeId: manualVideoId,
+          transcript: data.transcript
+        };
+
+        if (!customVideos.some(v => v.youtubeId === manualVideoId)) {
+          setCustomVideos([...customVideos, newCustomVid]);
+        }
+        setCurrentVideo(newCustomVid);
+        setCustomUrl("");
+        setManualText("");
+        setShowManualPaste(false);
+      } else {
+        const errData = await response.json();
+        setCustomError(errData.error || "Błąd przetwarzania napisów ręcznych.");
+      }
+    } catch (err) {
+      console.error(err);
+      setCustomError("Błąd połączenia podczas przesyłania napisów.");
     } finally {
       setIsLoadingCustom(false);
     }
@@ -547,6 +602,33 @@ function MediaBuddy({ user }) {
           </button>
         </form>
         {customError && <p className="loader-error">{customError}</p>}
+
+        {showManualPaste && (
+          <div className="manual-paste-section">
+            <div className="manual-paste-info">
+              💡 <strong>YouTube zablokował automatyczne pobieranie na serwerze:</strong>
+              <ol>
+                <li>Otwórz ten film bezpośrednio na YouTube w przeglądarce.</li>
+                <li>Kliknij przycisk <strong>„Pokaż transkrypcję” (Show transcript)</strong> pod filmem.</li>
+                <li>Zaznacz i skopiuj całą treść transkrypcji (wraz ze znacznikami czasu, np. 0:03).</li>
+                <li>Wklej skopiowany tekst poniżej i zatwierdź.</li>
+              </ol>
+            </div>
+            <form onSubmit={handleSaveManualTranscript} className="manual-paste-form">
+              <textarea
+                className="manual-paste-textarea"
+                placeholder="Wklej skopiowaną transkrypcję tutaj (np.:&#10;0:03&#10;Hello buddy...&#10;0:06&#10;Do you hear me?)"
+                value={manualText}
+                onChange={(e) => setManualText(e.target.value)}
+                rows={6}
+                required
+              />
+              <button type="submit" className="manual-paste-btn" disabled={isLoadingCustom}>
+                {isLoadingCustom ? "Przetwarzanie..." : "Zapisz napisy i załaduj wideo 💾"}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
 
       {/* Video Selector Row */}

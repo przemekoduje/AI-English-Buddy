@@ -1231,6 +1231,73 @@ def parse_srt(srt_text):
                 })
     return entries
 
+def parse_manual_transcript(raw_text):
+    import re
+    lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
+    temp_entries = []
+    
+    def ts_to_secs(ts_str):
+        try:
+            parts = list(map(int, ts_str.split(':')))
+            if len(parts) == 2:
+                return parts[0] * 60 + parts[1]
+            elif len(parts) == 3:
+                return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        except Exception:
+            pass
+        return 0
+
+    i = 0
+    # Dopasowanie ciągów jak "0:03", "00:03", "1:02:03"
+    ts_regex = r'^(\d{1,2}:)?\d{1,2}:\d{2}$'
+    
+    while i < len(lines):
+        line = lines[i]
+        if re.match(ts_regex, line):
+            ts = ts_to_secs(line)
+            text_parts = []
+            i += 1
+            while i < len(lines) and not re.match(ts_regex, lines[i]):
+                text_parts.append(lines[i])
+                i += 1
+            text = " ".join(text_parts).strip()
+            if text:
+                temp_entries.append((ts, text))
+        else:
+            # Sprawdzenie znacznika w linii np. "0:03 Hello there"
+            match = re.match(r'^([0-9\:]+)\s+(.*)$', line)
+            first_word = line.split()[0] if line.split() else ""
+            if match and re.match(ts_regex, first_word):
+                ts = ts_to_secs(first_word)
+                text = match.group(2).strip()
+                temp_entries.append((ts, text))
+                i += 1
+            else:
+                if temp_entries:
+                    prev_ts, prev_text = temp_entries[-1]
+                    temp_entries[-1] = (prev_ts, prev_text + " " + line)
+                i += 1
+                
+    temp_entries.sort(key=lambda x: x[0])
+    parsed = []
+    for idx, (ts, text) in enumerate(temp_entries):
+        start = float(ts)
+        if idx < len(temp_entries) - 1:
+            end = float(temp_entries[idx+1][0])
+        else:
+            end = start + 4.0
+            
+        if end <= start:
+            end = start + 2.0
+            
+        parsed.append({
+            "start": round(start, 2),
+            "end": round(end, 2),
+            "text": text
+        })
+        
+    return parsed
+
 @app.route("/api/media/transcript", methods=['GET'])
 def get_youtube_transcript():
     user_email = get_user_from_request()
@@ -1364,6 +1431,46 @@ def debug_youtube_transcript():
     debug_info["client_results"] = client_results
     
     return jsonify(debug_info)
+
+@app.route("/api/media/transcript/manual", methods=['POST'])
+def parse_manual_transcript_endpoint():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    data = request.get_json() or {}
+    video_id = data.get("video_id")
+    raw_text = data.get("raw_text", "").strip()
+    video_title = data.get("title", "").strip()
+
+    if not video_id or not raw_text:
+        return jsonify({"error": "Brak identyfikatora wideo lub tekstu transkrypcji"}), 400
+
+    if not video_title:
+        video_title = f"Wideo YouTube ({video_id})"
+        try:
+            oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+            response = requests.get(oembed_url, timeout=5)
+            if response.ok:
+                video_title = response.json().get("title", video_title)
+        except Exception as e:
+            print(f"Error fetching title for manual {video_id}: {e}")
+
+    try:
+        formatted = parse_manual_transcript(raw_text)
+        if not formatted:
+            return jsonify({"error": "Nie znaleziono poprawnych napisów w przesłanym tekście. Upewnij się, że tekst zawiera znaczniki czasu (np. 0:03)."}), 400
+
+        aggregated = semantic_group_transcript(formatted)
+        
+        return jsonify({
+            "video_id": video_id,
+            "title": video_title,
+            "transcript": aggregated
+        })
+    except Exception as e:
+        print(f"Error parsing manual transcript: {e}")
+        return jsonify({"error": f"Błąd przetwarzania napisów: {str(e)}"}), 500
 
 def parse_story_response(generated_content):
     content = generated_content.strip()
