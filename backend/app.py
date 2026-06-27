@@ -1207,6 +1207,30 @@ def semantic_group_transcript(entries):
             
     return grouped_results
 
+def parse_srt(srt_text):
+    import re
+    entries = []
+    srt_text = srt_text.replace('\r\n', '\n').replace('\r', '\n')
+    blocks = re.split(r'\n\s*\n', srt_text.strip())
+    for block in blocks:
+        lines = [l.strip() for l in block.split('\n') if l.strip()]
+        if len(lines) >= 3:
+            # Pierwsza linia to indeks, druga to czas, kolejne to tekst
+            time_line = lines[1]
+            text_lines = lines[2:]
+            match = re.match(r'(\d+):(\d+):(\d+)[,\.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,\.](\d+)', time_line)
+            if match:
+                sh, sm, ss, sms, eh, em, es, ems = map(int, match.groups())
+                start = sh * 3600 + sm * 60 + ss + sms / 1000.0
+                end = eh * 3600 + em * 60 + es + ems / 1000.0
+                text = " ".join(text_lines).strip()
+                entries.append({
+                    "start": round(start, 2),
+                    "end": round(end, 2),
+                    "text": text
+                })
+    return entries
+
 @app.route("/api/media/transcript", methods=['GET'])
 def get_youtube_transcript():
     user_email = get_user_from_request()
@@ -1227,36 +1251,79 @@ def get_youtube_transcript():
     except Exception as e:
         print(f"Error fetching title for {video_id}: {e}")
 
+    formatted = []
+    
+    # Try pytubefix first as it is less blocked by YouTube on cloud datacenter IPs (like Render)
     try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-        api = YouTubeTranscriptApi()
-        transcript = api.fetch(video_id, languages=['en'])
+        print(f"Attempting to fetch transcript using pytubefix for video {video_id}...", flush=True)
+        from pytubefix import YouTube
+        url = f"https://youtube.com/watch?v={video_id}"
+        yt = YouTube(url)
         
-        formatted = []
-        for entry in transcript:
-            start = round(entry.start, 2)
-            duration = round(entry.duration, 2)
-            end = round(start + duration, 2)
-            text = entry.text.replace('\n', ' ').strip()
-            if text:
-                formatted.append({
-                    "start": start,
-                    "end": end,
-                    "text": text
-                })
+        if video_title == f"Wideo YouTube ({video_id})":
+            try:
+                video_title = yt.title
+            except Exception as title_err:
+                print(f"Could not fetch title from pytubefix: {title_err}")
         
+        # Try to find English captions
+        caption = yt.captions.get('en') or yt.captions.get('a.en')
+        if not caption:
+            # Fallback: search for any caption that starts or ends with 'en'
+            for c_code in yt.captions:
+                if c_code.startswith('en') or c_code.endswith('.en'):
+                    caption = yt.captions[c_code]
+                    break
+                    
+        if caption:
+            srt_data = caption.generate_srt_captions()
+            formatted = parse_srt(srt_data)
+            print(f"Successfully fetched {len(formatted)} segments using pytubefix.", flush=True)
+        else:
+            print(f"No English captions track found in pytubefix for {video_id}.", flush=True)
+            
+    except Exception as py_err:
+        print(f"Pytubefix failed for {video_id}: {py_err}. Falling back to youtube-transcript-api...", flush=True)
+
+    # Fallback to youtube-transcript-api if pytubefix failed or returned nothing
+    if not formatted:
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            api = YouTubeTranscriptApi()
+            transcript = api.fetch(video_id, languages=['en'])
+            
+            for entry in transcript:
+                start = round(entry.start, 2)
+                duration = round(entry.duration, 2)
+                end = round(start + duration, 2)
+                text = entry.text.replace('\n', ' ').strip()
+                if text:
+                    formatted.append({
+                        "start": start,
+                        "end": end,
+                        "text": text
+                    })
+            print(f"Successfully fetched {len(formatted)} segments using youtube-transcript-api fallback.", flush=True)
+        except Exception as e:
+            print(f"Both methods failed for {video_id}: {e}", flush=True)
+            return jsonify({
+                "error": "Nie udało się pobrać transkrypcji dla tego filmu. Upewnij się, że film posiada angielskie napisy."
+            }), 500
+
+    try:
         aggregated = semantic_group_transcript(formatted)
-        
         return jsonify({
             "video_id": video_id,
             "title": video_title,
             "transcript": aggregated
         })
-    except Exception as e:
-        print(f"Error fetching transcript for {video_id}: {e}")
+    except Exception as group_err:
+        print(f"Error semantic grouping transcript: {group_err}")
         return jsonify({
-            "error": "Nie udało się pobrać transkrypcji dla tego filmu. Upewnij się, że film posiada angielskie napisy i nie jest zablokowany."
-        }), 500
+            "video_id": video_id,
+            "title": video_title,
+            "transcript": formatted
+        })
 
 def parse_story_response(generated_content):
     content = generated_content.strip()

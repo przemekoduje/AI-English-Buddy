@@ -13,6 +13,7 @@ import {
   Switch,
   Modal,
   Image,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
@@ -118,8 +119,18 @@ const MediaIcon = ({ color }: { color: string }) => (
   </Svg>
 );
 
+const getInitialBackendUrl = () => {
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
+      return 'https://ai-english-buddy-backend.onrender.com';
+    }
+  }
+  return 'http://192.168.100.31:5001';
+};
+
 export default function HomeScreen() {
-  const [backendUrl, setBackendUrl] = useState('http://192.168.100.31:5001'); // Local network IP
+  const [backendUrl, setBackendUrl] = useState(getInitialBackendUrl()); // Local network IP or Render production URL
   const [user, setUser] = useState<{ token: string; email: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<'dashboard' | 'workspace' | 'stories' | 'notebook' | 'settings' | 'media'>('dashboard');
@@ -219,7 +230,7 @@ export default function HomeScreen() {
   // --- Voice Tutor (Tutor Głosowy) Constants & States ---
   const VOICE_DB_THRESHOLD = -42;
   const INTERRUPTION_DB_THRESHOLD = -35;
-  const VOICE_SILENCE_DURATION = 1500;
+  const VOICE_SILENCE_DURATION = 800;
 
   const [isVoiceTutorActive, setIsVoiceTutorActive] = useState<boolean>(false);
   const [voiceTutorMessages, setVoiceTutorMessages] = useState<any[]>([]);
@@ -273,10 +284,18 @@ export default function HomeScreen() {
   const voiceTutorSilenceTimerRef = useRef<any>(null);
   const voiceTutorIsUserSpeakingRef = useRef<boolean>(false);
   const voiceTutorInterruptionCounterRef = useRef<number>(0);
+  const voiceTutorMaxDurationTimerRef = useRef<any>(null);
 
   const voiceTutorIsBotSpeakingRef = useRef<boolean>(false);
   const voiceTutorIsRecordingRef = useRef<boolean>(false);
   const voiceTutorIsProcessingRef = useRef<boolean>(false);
+
+  // Web-specific audio/recording refs
+  const webStreamRef = useRef<any>(null);
+  const webMediaRecorderRef = useRef<any>(null);
+  const webAudioContextRef = useRef<any>(null);
+  const webAnalyserRef = useRef<any>(null);
+  const webAnimationFrameRef = useRef<any>(null);
 
   useEffect(() => {
     voiceTutorIsBotSpeakingRef.current = isVoiceTutorBotSpeaking;
@@ -313,24 +332,52 @@ export default function HomeScreen() {
   };
 
   const stopVoiceTutorRecordingLocally = async () => {
-    if (voiceTutorRecordingRef.current) {
-      try {
-        await voiceTutorRecordingRef.current.stopAndUnloadAsync();
-      } catch (e) {
-        console.warn("Failed to stop recording locally:", e);
+    if (Platform.OS === 'web') {
+      if (webMediaRecorderRef.current && webMediaRecorderRef.current.state !== 'inactive') {
+        try {
+          webMediaRecorderRef.current.stop();
+        } catch (e) {}
       }
-      voiceTutorRecordingRef.current = null;
-    }
-    setIsVoiceTutorRecording(false);
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        playThroughEarpieceAndroid: false,
-      });
-    } catch (e) {
-      console.warn("Failed to reset audio mode after recording:", e);
+      webMediaRecorderRef.current = null;
+
+      if (webStreamRef.current) {
+        webStreamRef.current.getTracks().forEach((track: any) => track.stop());
+        webStreamRef.current = null;
+      }
+
+      if (webAnimationFrameRef.current) {
+        cancelAnimationFrame(webAnimationFrameRef.current);
+        webAnimationFrameRef.current = null;
+      }
+
+      if (webAudioContextRef.current) {
+        try {
+          webAudioContextRef.current.close();
+        } catch (e) {}
+          webAudioContextRef.current = null;
+      }
+      webAnalyserRef.current = null;
+      setIsVoiceTutorRecording(false);
+    } else {
+      if (voiceTutorRecordingRef.current) {
+        try {
+          await voiceTutorRecordingRef.current.stopAndUnloadAsync();
+        } catch (e) {
+          console.warn("Failed to stop recording locally:", e);
+        }
+        voiceTutorRecordingRef.current = null;
+      }
+      setIsVoiceTutorRecording(false);
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          playThroughEarpieceAndroid: false,
+        });
+      } catch (e) {
+        console.warn("Failed to reset audio mode after recording:", e);
+      }
     }
   };
 
@@ -338,6 +385,10 @@ export default function HomeScreen() {
     if (voiceTutorSilenceTimerRef.current) {
       clearTimeout(voiceTutorSilenceTimerRef.current);
       voiceTutorSilenceTimerRef.current = null;
+    }
+    if (voiceTutorMaxDurationTimerRef.current) {
+      clearTimeout(voiceTutorMaxDurationTimerRef.current);
+      voiceTutorMaxDurationTimerRef.current = null;
     }
     voiceTutorIsUserSpeakingRef.current = false;
     setVoiceTutorUserIsSpeaking(false);
@@ -355,126 +406,277 @@ export default function HomeScreen() {
       clearTimeout(voiceTutorSilenceTimerRef.current);
       voiceTutorSilenceTimerRef.current = null;
     }
+    if (voiceTutorMaxDurationTimerRef.current) {
+      clearTimeout(voiceTutorMaxDurationTimerRef.current);
+      voiceTutorMaxDurationTimerRef.current = null;
+    }
 
     try {
-      // 1. Request microphone permission
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
-        Alert.alert('Błąd', 'Zezwól na dostęp do mikrofonu, aby rozmawiać z lektorem.');
-        setIsVoiceTutorActive(false);
-        return;
-      }
+      if (Platform.OS === 'web') {
+        // Request microphone permission
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        webStreamRef.current = stream;
 
-      // 2. Configure audio mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        playThroughEarpieceAndroid: false,
-      });
+        // Configure AudioContext & Analyser for metering/VAD
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+        }
+        webAudioContextRef.current = audioCtx;
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        webAnalyserRef.current = analyser;
 
-      // Stop previous recording if any
-      if (voiceTutorRecordingRef.current) {
-        try {
-          await voiceTutorRecordingRef.current.stopAndUnloadAsync();
-        } catch (e) {}
-      }
-
-      // Create new recording with metering
-      const recording = new Audio.Recording();
-      
-      // Set status update handler
-      recording.setOnRecordingStatusUpdate((status) => {
-        if (!status.isRecording) return;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
         
-        // Convert status.metering (dB: -160 to 0) to normalized volume (0 to 1) for orb animation
-        const db = status.metering ?? -160;
-        const normVol = Math.max(0, (db + 60) / 60); // -60dB -> 0, 0dB -> 1
-        setVoiceTutorRmsVolume(normVol);
-
-        // VAD Logic
-        if (voiceTutorIsBotSpeakingRef.current) {
-          // A. Interruption Check (User speaks over Tutor)
-          if (db > INTERRUPTION_DB_THRESHOLD) {
-            voiceTutorInterruptionCounterRef.current += 1;
-            if (voiceTutorInterruptionCounterRef.current > 6) { // ~600ms of active speech
-              console.log("Mobile interruption detected: stopping tutor playback.");
-              voiceTutorInterruptionCounterRef.current = 0;
-              stopVoiceTutorAudio(); // Stops bot speaking state and unloads sound
-              // Start a new recording session to capture fresh user speech (discarding current)
-              startVoiceTutorRecording();
-            }
-          } else {
-            voiceTutorInterruptionCounterRef.current = Math.max(0, voiceTutorInterruptionCounterRef.current - 1);
+        // VAD/Volume loop
+        const updateVolume = () => {
+          if (!webAnalyserRef.current) return;
+          webAnalyserRef.current.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
           }
-        } else {
-          // B. Turn-taking Silence Check (User speaks and finishes)
-          if (!voiceTutorIsProcessingRef.current) {
-            if (db > VOICE_DB_THRESHOLD) {
-              if (!voiceTutorIsUserSpeakingRef.current) {
-                voiceTutorIsUserSpeakingRef.current = true;
-                setVoiceTutorUserIsSpeaking(true);
-              }
-              if (voiceTutorSilenceTimerRef.current) {
-                clearTimeout(voiceTutorSilenceTimerRef.current);
-                voiceTutorSilenceTimerRef.current = null;
+          const avg = sum / dataArray.length;
+          const normVol = Math.min(1, avg / 128);
+          setVoiceTutorRmsVolume(normVol);
+
+          // VAD Logic
+          if (voiceTutorIsBotSpeakingRef.current) {
+            // A. Interruption Check
+            if (normVol > 0.15) {
+              voiceTutorInterruptionCounterRef.current += 1;
+              if (voiceTutorInterruptionCounterRef.current > 6) { // ~150ms
+                console.log("Web interruption detected: stopping playback.");
+                voiceTutorInterruptionCounterRef.current = 0;
+                stopVoiceTutorAudio();
+                startVoiceTutorRecording();
               }
             } else {
-              if (voiceTutorIsUserSpeakingRef.current && !voiceTutorSilenceTimerRef.current) {
-                voiceTutorSilenceTimerRef.current = setTimeout(async () => {
-                  console.log("Mobile silence detected: ending turn.");
-                  voiceTutorIsUserSpeakingRef.current = false;
-                  setVoiceTutorUserIsSpeaking(false);
+              voiceTutorInterruptionCounterRef.current = Math.max(0, voiceTutorInterruptionCounterRef.current - 1);
+            }
+          } else {
+            // B. Turn-taking Silence Check
+            if (!voiceTutorIsProcessingRef.current) {
+              if (normVol > 0.08) { // Próg czułości dostosowany do eliminacji szumów tła
+                if (!voiceTutorIsUserSpeakingRef.current) {
+                  voiceTutorIsUserSpeakingRef.current = true;
+                  setVoiceTutorUserIsSpeaking(true);
+                }
+                if (voiceTutorSilenceTimerRef.current) {
+                  clearTimeout(voiceTutorSilenceTimerRef.current);
                   voiceTutorSilenceTimerRef.current = null;
-                  
-                  // Stop recording and send audio
-                  await stopVoiceTutorRecordingAndSend();
-                }, VOICE_SILENCE_DURATION);
+                }
+              } else { // User is silent
+                if (voiceTutorIsUserSpeakingRef.current && !voiceTutorSilenceTimerRef.current) {
+                  voiceTutorSilenceTimerRef.current = setTimeout(async () => {
+                    console.log("Web silence detected: ending turn.");
+                    voiceTutorIsUserSpeakingRef.current = false;
+                    setVoiceTutorUserIsSpeaking(false);
+                    voiceTutorSilenceTimerRef.current = null;
+                    
+                    await stopVoiceTutorRecordingAndSend();
+                  }, 800); // 800ms ciszy dla szybszego przepływu rozmowy
+                }
               }
             }
           }
+          webAnimationFrameRef.current = requestAnimationFrame(updateVolume);
+        };
+        webAnimationFrameRef.current = requestAnimationFrame(updateVolume);
+
+        // Configure MediaRecorder
+        let options = { mimeType: "audio/webm" };
+        if (typeof MediaRecorder !== 'undefined' && !MediaRecorder.isTypeSupported("audio/webm")) {
+          options = { mimeType: "audio/mp4" };
         }
-      });
+        
+        let mediaRecorder: any;
+        try {
+          mediaRecorder = new MediaRecorder(stream, options);
+        } catch (e) {
+          mediaRecorder = new MediaRecorder(stream);
+        }
+        
+        webMediaRecorderRef.current = mediaRecorder;
+        const chunks: Blob[] = [];
+        mediaRecorder.ondataavailable = (e: any) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+        mediaRecorder.onstop = async () => {
+          const mimeType = mediaRecorder.mimeType || "audio/webm";
+          const audioBlob = new Blob(chunks, { type: mimeType });
+          
+          const webUri = URL.createObjectURL(audioBlob);
+          (window as any)._lastVoiceTutorBlob = audioBlob;
+          
+          await handleSendVoiceTutor(webUri);
+        };
 
-      // Use the high quality preset but enable metering for VAD / volume levels
-      const recordingOptions = {
-        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
-        isMeteringEnabled: true,
-      };
+        mediaRecorder.start();
+        setIsVoiceTutorRecording(true);
 
-      await recording.prepareToRecordAsync(recordingOptions);
-      await recording.startAsync();
-      voiceTutorRecordingRef.current = recording;
-      setIsVoiceTutorRecording(true);
-    } catch (err) {
+        // Max 12-second recording safety net
+        voiceTutorMaxDurationTimerRef.current = setTimeout(async () => {
+          console.log("Web max recording duration reached (12s). Force sending...");
+          await stopVoiceTutorRecordingAndSend();
+        }, 12000);
+      } else {
+        // 1. Request microphone permission
+        const permission = await Audio.requestPermissionsAsync();
+        if (permission.status !== 'granted') {
+          Alert.alert('Błąd', 'Zezwól na dostęp do mikrofonu, aby rozmawiać z lektorem.');
+          setIsVoiceTutorActive(false);
+          return;
+        }
+
+        // 2. Configure audio mode
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          playThroughEarpieceAndroid: false,
+        });
+
+        // Stop previous recording if any
+        if (voiceTutorRecordingRef.current) {
+          try {
+            await voiceTutorRecordingRef.current.stopAndUnloadAsync();
+          } catch (e) {}
+        }
+
+        // Create new recording with metering
+        const recording = new Audio.Recording();
+        
+        // Set status update handler
+        recording.setOnRecordingStatusUpdate((status) => {
+          if (!status.isRecording) return;
+          
+          // Convert status.metering (dB: -160 to 0) to normalized volume (0 to 1) for orb animation
+          const db = status.metering ?? -160;
+          const normVol = Math.max(0, (db + 60) / 60); // -60dB -> 0, 0dB -> 1
+          setVoiceTutorRmsVolume(normVol);
+
+          // VAD Logic
+          if (voiceTutorIsBotSpeakingRef.current) {
+            // A. Interruption Check (User speaks over Tutor)
+            if (db > INTERRUPTION_DB_THRESHOLD) {
+              voiceTutorInterruptionCounterRef.current += 1;
+              if (voiceTutorInterruptionCounterRef.current > 6) { // ~600ms of active speech
+                console.log("Mobile interruption detected: stopping tutor playback.");
+                voiceTutorInterruptionCounterRef.current = 0;
+                stopVoiceTutorAudio(); // Stops bot speaking state and unloads sound
+                // Start a new recording session to capture fresh user speech (discarding current)
+                startVoiceTutorRecording();
+              }
+            } else {
+              voiceTutorInterruptionCounterRef.current = Math.max(0, voiceTutorInterruptionCounterRef.current - 1);
+            }
+          } else {
+            // B. Turn-taking Silence Check (User speaks and finishes)
+            if (!voiceTutorIsProcessingRef.current) {
+              if (db > VOICE_DB_THRESHOLD) {
+                if (!voiceTutorIsUserSpeakingRef.current) {
+                  voiceTutorIsUserSpeakingRef.current = true;
+                  setVoiceTutorUserIsSpeaking(true);
+                }
+                if (voiceTutorSilenceTimerRef.current) {
+                  clearTimeout(voiceTutorSilenceTimerRef.current);
+                  voiceTutorSilenceTimerRef.current = null;
+                }
+              } else {
+                if (voiceTutorIsUserSpeakingRef.current && !voiceTutorSilenceTimerRef.current) {
+                  voiceTutorSilenceTimerRef.current = setTimeout(async () => {
+                    console.log("Mobile silence detected: ending turn.");
+                    voiceTutorIsUserSpeakingRef.current = false;
+                    setVoiceTutorUserIsSpeaking(false);
+                    voiceTutorSilenceTimerRef.current = null;
+                    
+                    // Stop recording and send audio
+                    await stopVoiceTutorRecordingAndSend();
+                  }, VOICE_SILENCE_DURATION);
+                }
+              }
+            }
+          }
+        });
+
+        // Use the high quality preset but enable metering for VAD / volume levels
+        const recordingOptions = {
+          ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+          isMeteringEnabled: true,
+        };
+
+        await recording.prepareToRecordAsync(recordingOptions);
+        await recording.startAsync();
+        voiceTutorRecordingRef.current = recording;
+        setIsVoiceTutorRecording(true);
+
+        // Max 12-second recording safety net
+        voiceTutorMaxDurationTimerRef.current = setTimeout(async () => {
+          console.log("Native max recording duration reached (12s). Force sending...");
+          await stopVoiceTutorRecordingAndSend();
+        }, 12000);
+      }
+    } catch (err: any) {
       console.error('Failed to start voice tutor recording:', err);
+      Alert.alert('Błąd mikrofonu', 'Nie udało się uzyskać dostępu do mikrofonu lub uruchomić nagrywania: ' + err.message);
+      setIsVoiceTutorActive(false);
     }
   };
 
   const stopVoiceTutorRecordingAndSend = async () => {
-    if (!voiceTutorRecordingRef.current || voiceTutorIsProcessingRef.current) return;
+    const hasRecording = Platform.OS === 'web' ? !!webMediaRecorderRef.current : !!voiceTutorRecordingRef.current;
+    if (!hasRecording || voiceTutorIsProcessingRef.current) return;
 
     setIsVoiceTutorProcessing(true);
     setIsVoiceTutorRecording(false);
     cleanupVoiceTutorVAD();
 
     try {
-      const recording = voiceTutorRecordingRef.current;
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      voiceTutorRecordingRef.current = null;
+      if (Platform.OS === 'web') {
+        const mediaRecorder = webMediaRecorderRef.current;
+        webMediaRecorderRef.current = null;
+        
+        if (webStreamRef.current) {
+          webStreamRef.current.getTracks().forEach((track: any) => track.stop());
+          webStreamRef.current = null;
+        }
 
-      if (!uri) {
-        console.warn("No recording URI generated");
-        setIsVoiceTutorProcessing(false);
-        startVoiceTutorRecording();
-        return;
+        if (webAnimationFrameRef.current) {
+          cancelAnimationFrame(webAnimationFrameRef.current);
+          webAnimationFrameRef.current = null;
+        }
+
+        if (webAudioContextRef.current) {
+          try { webAudioContextRef.current.close(); } catch (e) {}
+          webAudioContextRef.current = null;
+        }
+        webAnalyserRef.current = null;
+
+        mediaRecorder.stop();
+      } else {
+        const recording = voiceTutorRecordingRef.current;
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        voiceTutorRecordingRef.current = null;
+
+        if (!uri) {
+          console.warn("No recording URI generated");
+          setIsVoiceTutorProcessing(false);
+          voiceTutorIsProcessingRef.current = false;
+          startVoiceTutorRecording();
+          return;
+        }
+
+        await handleSendVoiceTutor(uri);
       }
-
-      await handleSendVoiceTutor(uri);
     } catch (err) {
       console.error("Error stopping recording and sending:", err);
       setIsVoiceTutorProcessing(false);
+      voiceTutorIsProcessingRef.current = false;
       startVoiceTutorRecording();
     }
   };
@@ -490,11 +692,31 @@ export default function HomeScreen() {
       }));
 
       const formData = new FormData();
-      formData.append("audio", {
-        uri: uri,
-        name: "user_speech.m4a",
-        type: "audio/m4a",
-      } as any);
+      
+      if (Platform.OS === 'web') {
+        const audioBlob = (window as any)._lastVoiceTutorBlob;
+        let mimeType = audioBlob?.type || "audio/webm";
+        let fileExtension = "webm";
+        if (mimeType.includes("mp4")) {
+          fileExtension = "mp4";
+        } else if (mimeType.includes("m4a")) {
+          fileExtension = "m4a";
+        } else if (mimeType.includes("aac")) {
+          fileExtension = "aac";
+        } else if (mimeType.includes("ogg")) {
+          fileExtension = "ogg";
+        } else if (mimeType.includes("wav")) {
+          fileExtension = "wav";
+        }
+        formData.append("audio", audioBlob, `user_speech.${fileExtension}`);
+      } else {
+        formData.append("audio", {
+          uri: uri,
+          name: "user_speech.m4a",
+          type: "audio/m4a",
+        } as any);
+      }
+      
       formData.append("history", JSON.stringify(historyForApi));
       formData.append("voice", selectedVoice || "en-US-BrianNeural");
 
@@ -527,14 +749,20 @@ export default function HomeScreen() {
 
       setVoiceTutorMessages((prev) => [...prev, userMsg, botMsg]);
 
+      // Wyczyszczenie flagi ładowania przed odtwarzaniem, aby zapobiec zablokowaniu restartu mikrofonu
+      setIsVoiceTutorProcessing(false);
+      voiceTutorIsProcessingRef.current = false;
+
       await playVoiceTutorAudio(result.bot_response, result.audio_base64);
     } catch (err: any) {
       console.error("Error sending voice tutor speech:", err);
       Alert.alert("Błąd połączenia", "Nie udało się przesłać dźwięku: " + err.message);
       setIsVoiceTutorProcessing(false);
+      voiceTutorIsProcessingRef.current = false;
       startVoiceTutorRecording();
     } finally {
       setIsVoiceTutorProcessing(false);
+      voiceTutorIsProcessingRef.current = false;
     }
   };
 
@@ -569,44 +797,151 @@ export default function HomeScreen() {
 
       const uri = `data:audio/mpeg;base64,${base64_data}`;
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        playThroughEarpieceAndroid: false,
-      });
+      if (Platform.OS === 'web') {
+        const webAudio = new Audio(uri);
+        voiceTutorSoundRef.current = {
+          stopAsync: async () => { webAudio.pause(); },
+          unloadAsync: async () => { webAudio.pause(); },
+          setOnPlaybackStatusUpdate: (cb: any) => {
+            webAudio.onended = () => cb({ isLoaded: true, didJustFinish: true });
+          }
+        } as any;
 
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: true }
-      );
-
-      voiceTutorSoundRef.current = sound;
-
-      // Do not start recording during tutor speech on iOS to prevent routing to earpiece
-      // await startVoiceTutorRecording();
-
-      sound.setOnPlaybackStatusUpdate(async (status) => {
-        if (status.isLoaded && status.didJustFinish) {
+        webAudio.play().catch(async (e) => {
+          console.warn("Failed to play web audio (possibly blocked by Safari):", e);
           setIsVoiceTutorBotSpeaking(false);
-          sound.unloadAsync();
+          voiceTutorIsBotSpeakingRef.current = false;
           voiceTutorSoundRef.current = null;
-          // Keep recording, but reset VAD flags for user speech
+          
+          // Lokalna synteza mowy w przeglądarce jako rezerwowy i szybki fallback
+          if (typeof window !== 'undefined' && window.speechSynthesis) {
+            console.log("Web: fallback do SpeechSynthesis...");
+            try {
+              const utterance = new SpeechSynthesisUtterance(text);
+              const voices = window.speechSynthesis.getVoices();
+              const englishVoice = voices.find(v => v.lang.startsWith('en'));
+              if (englishVoice) utterance.voice = englishVoice;
+              
+              setIsVoiceTutorBotSpeaking(true);
+              voiceTutorIsBotSpeakingRef.current = true;
+              
+              utterance.onend = async () => {
+                setIsVoiceTutorBotSpeaking(false);
+                voiceTutorIsBotSpeakingRef.current = false;
+                await startVoiceTutorRecording();
+              };
+              utterance.onerror = async () => {
+                setIsVoiceTutorBotSpeaking(false);
+                voiceTutorIsBotSpeakingRef.current = false;
+                await startVoiceTutorRecording();
+              };
+              
+              window.speechSynthesis.speak(utterance);
+              return;
+            } catch (ttsErr) {
+              console.error("SpeechSynthesis failed:", ttsErr);
+            }
+          }
+          await startVoiceTutorRecording();
+        });
+        
+        webAudio.onended = async () => {
+          setIsVoiceTutorBotSpeaking(false);
+          voiceTutorIsBotSpeakingRef.current = false;
+          voiceTutorSoundRef.current = null;
           voiceTutorIsUserSpeakingRef.current = false;
           setVoiceTutorUserIsSpeaking(false);
           voiceTutorInterruptionCounterRef.current = 0;
-          // Start voice recording when tutor finishes speaking
           await startVoiceTutorRecording();
-        }
-      });
+        };
+      } else {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          playThroughEarpieceAndroid: false,
+        });
+
+        const { sound } = await Audio.Sound.createAsync(
+          { uri },
+          { shouldPlay: true }
+        );
+
+        voiceTutorSoundRef.current = sound;
+
+        sound.setOnPlaybackStatusUpdate(async (status) => {
+          if (status.isLoaded && status.didJustFinish) {
+            setIsVoiceTutorBotSpeaking(false);
+            voiceTutorIsBotSpeakingRef.current = false;
+            sound.unloadAsync();
+            voiceTutorSoundRef.current = null;
+            // Keep recording, but reset VAD flags for user speech
+            voiceTutorIsUserSpeakingRef.current = false;
+            setVoiceTutorUserIsSpeaking(false);
+            voiceTutorInterruptionCounterRef.current = 0;
+            // Start voice recording when tutor finishes speaking
+            await startVoiceTutorRecording();
+          }
+        });
+      }
     } catch (err) {
       console.error("Error playing Voice Tutor TTS:", err);
       setIsVoiceTutorBotSpeaking(false);
+      voiceTutorIsBotSpeakingRef.current = false;
+      
+      // Fallback lokalnej syntezy mowy jeśli wygenerowanie mowy z serwera nie powiodło się
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.speechSynthesis) {
+        console.log("Web: TTS generation error, falling back to local SpeechSynthesis...");
+        try {
+          const utterance = new SpeechSynthesisUtterance(text);
+          const voices = window.speechSynthesis.getVoices();
+          const englishVoice = voices.find(v => v.lang.startsWith('en'));
+          if (englishVoice) utterance.voice = englishVoice;
+          
+          setIsVoiceTutorBotSpeaking(true);
+          voiceTutorIsBotSpeakingRef.current = true;
+          
+          utterance.onend = async () => {
+            setIsVoiceTutorBotSpeaking(false);
+            voiceTutorIsBotSpeakingRef.current = false;
+            await startVoiceTutorRecording();
+          };
+          utterance.onerror = async () => {
+            setIsVoiceTutorBotSpeaking(false);
+            voiceTutorIsBotSpeakingRef.current = false;
+            await startVoiceTutorRecording();
+          };
+          
+          window.speechSynthesis.speak(utterance);
+          return;
+        } catch (ttsErr) {
+          console.error("SpeechSynthesis failed:", ttsErr);
+        }
+      }
+      
       await startVoiceTutorRecording();
     }
   };
 
   const handleStartVoiceTutorSession = async () => {
+    // Odblokowanie odtwarzania audio i syntezy mowy na iOS/Safari (musi nastąpić bezpośrednio w akcji kliknięcia)
+    if (Platform.OS === 'web') {
+      try {
+        const dummyAudio = new Audio();
+        dummyAudio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA"; // krótki cichy szum
+        dummyAudio.play().catch(() => {});
+
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+          const dummyUtterance = new SpeechSynthesisUtterance(" ");
+          dummyUtterance.volume = 0;
+          window.speechSynthesis.speak(dummyUtterance);
+        }
+        console.log("Web: Odblokowano Audio i SpeechSynthesis.");
+      } catch (e) {
+        console.warn("Failed to unlock web audio:", e);
+      }
+    }
+
     cleanupVoiceTutorVAD();
     setIsVoiceTutorActive(true);
     setVoiceTutorMessages([]);
@@ -744,6 +1079,21 @@ export default function HomeScreen() {
         if (storedIP && storedIP.includes('192.168.100.27')) {
           storedIP = 'http://192.168.100.31:5001';
           await AsyncStorage.setItem('buddy_backend_url', storedIP);
+        }
+
+        // Jeśli aplikacja działa w przeglądarce na produkcji, a zapisane IP jest adresem lokalnym, wymuś zmianę na Render
+        if (typeof window !== 'undefined' && window.location) {
+          const hostname = window.location.hostname;
+          if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
+            if (!storedIP || storedIP.includes('192.168.') || storedIP.includes('127.0.0.1') || storedIP.includes('localhost')) {
+              storedIP = 'https://ai-english-buddy-backend.onrender.com';
+              await AsyncStorage.setItem('buddy_backend_url', storedIP);
+            }
+          }
+        }
+
+        if (!storedIP) {
+          storedIP = getInitialBackendUrl();
         }
         const storedVoice = await AsyncStorage.getItem('buddy_tts_voice');
         const storedCustomVideos = await AsyncStorage.getItem('buddy_custom_videos');
@@ -1771,7 +2121,7 @@ export default function HomeScreen() {
                   <Path d="M65 30C65 20 55 15 45 15C30 15 30 35 50 45C70 55 70 75 55 85C45 90 35 85 35 75" stroke="#111827" strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
               </View>
-              <Text style={[styles.appTitle, { textAlign: 'center', flex: 1 }]}>Speakling</Text>
+              <Text style={[styles.appTitle, { textAlign: 'center', flex: 1 }]}>Chat Live</Text>
               <View style={{ width: 32 }} />
             </View>
           ) : (
@@ -2755,7 +3105,7 @@ export default function HomeScreen() {
         >
           <HomeIcon color={currentView === 'dashboard' ? '#1A73E8' : '#5F6368'} />
           <Text style={[styles.navText, currentView === 'dashboard' ? styles.navTextActive : null]}>
-            Speakling
+            Chat Live
           </Text>
         </TouchableOpacity>
 

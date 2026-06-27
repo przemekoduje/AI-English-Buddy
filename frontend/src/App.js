@@ -51,7 +51,7 @@ function App() {
 
   const getPageTitle = () => {
     switch (currentView) {
-      case 'dashboard': return 'Speakling';
+      case 'dashboard': return 'Chat Live';
       case 'workspace': return 'Practice Room';
       case 'stories': return 'Saved Stories';
       case 'notebook': return 'My Vocabulary';

@@ -465,7 +465,7 @@ function Dashboard({ user }) {
       
       {/* Title / Brand */}
       <h1 className="tutor-minimal-title">
-        Speakling
+        Chat Live
       </h1>
 
       {/* Main Action Stage (Can be centered or split row-wise on desktop) */}
