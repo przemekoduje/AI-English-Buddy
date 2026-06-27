@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
+import { API_BASE_URL } from '../../config';
 import "./PracticeMode.css";
 
-const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
+const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActivity }) => {
   const [phase, setPhase] = useState(1);
   const [subPhase, setSubPhase] = useState(1);
   const [masteryData, setMasteryData] = useState([]);
@@ -15,7 +16,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
   const [evaluation, setEvaluation] = useState(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
 
-  const currentUtteranceRef = useRef(null);
+  const currentAudioRef = useRef(null);
   const progressIntervalRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -25,7 +26,10 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
   useEffect(() => {
     prepareContent();
     return () => {
-      window.speechSynthesis.cancel();
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     };
   }, []);
@@ -42,7 +46,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
   const prepareContent = async () => {
     setIsPreparing(true);
     try {
-      const response = await fetch("http://127.0.0.1:5001/api/mastery-prepare", {
+      const response = await fetch(`${API_BASE_URL}/api/mastery-prepare`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -65,22 +69,11 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
     }
   };
 
-  const getBestMaleVoice = (lang) => {
-    const langVoices = voices.filter(v => v.lang.startsWith(lang));
-    if (lang === "en" && selectedVoiceURI) {
-      const preferred = langVoices.find(v => v.voiceURI === selectedVoiceURI);
-      if (preferred) return preferred;
+  const speakSentence = async (index, lang = "en", segmentIdx = -1) => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
     }
-    const malePatterns = ["Natural", "Neural", "Evan", "Nathan", "Microsoft Guy Online", "Google UK English Male", "Google US English Male", "Alex", "Marek"];
-    for (const pattern of malePatterns) {
-      const found = langVoices.find(v => v.name.includes(pattern));
-      if (found) return found;
-    }
-    return langVoices.find(v => v.name.toLowerCase().includes("male")) || langVoices[0];
-  };
-
-  const speakSentence = (index, lang = "en", segmentIdx = -1) => {
-    window.speechSynthesis.cancel();
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     setProgress(0);
 
@@ -96,32 +89,70 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
     const item = masteryData[index];
     const textToSpeak = (segmentIdx !== -1 && item.segments) ? item.segments[segmentIdx] : (lang === "en" ? item.en : item.pl);
 
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utterance.voice = getBestMaleVoice(lang === "en" ? "en" : "pl");
-    utterance.lang = lang === "en" ? "en-GB" : "pl-PL";
-    utterance.rate = phase === 2 ? 0.7 : phase === 3 ? 1.0 : 0.9;
-    utterance.pitch = 1.0;
+    let voiceToUse = "en-US-BrianNeural";
+    if (lang === "en") {
+      voiceToUse = selectedVoiceURI || "en-US-BrianNeural";
+    } else {
+      voiceToUse = "pl-PL-MarekNeural";
+    }
 
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-      const startTime = Date.now();
-      const estimatedDuration = (textToSpeak.length * 85) / utterance.rate;
-      progressIntervalRef.current = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const newProgress = Math.min((elapsed / estimatedDuration) * 100, 100);
-        setProgress(newProgress);
-        if (newProgress >= 100) clearInterval(progressIntervalRef.current);
-      }, 50);
-    };
+    const rate = phase === 2 ? 0.7 : phase === 3 ? 1.0 : 0.9;
 
-    utterance.onend = () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: textToSpeak,
+          voice: voiceToUse
+        })
+      });
+
+      if (!response.ok) throw new Error("TTS generation failed");
+      const data = await response.json();
+      if (!data.audio_base64) throw new Error("No audio data returned");
+
+      const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+      const audio = new Audio(audioUrl);
+      audio.playbackRate = rate;
+
+      audio.onplay = () => {
+        setIsSpeaking(true);
+        const startTime = Date.now();
+        
+        audio.addEventListener('loadedmetadata', () => {
+          const durationMs = (audio.duration || (textToSpeak.length * 0.085)) * 1000;
+          progressIntervalRef.current = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const newProgress = Math.min((elapsed / durationMs) * 100, 100);
+            setProgress(newProgress);
+            if (newProgress >= 100) clearInterval(progressIntervalRef.current);
+          }, 50);
+        });
+      };
+
+      audio.onended = () => {
+        setIsSpeaking(false);
+        setProgress(100);
+        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+        currentAudioRef.current = null;
+      };
+
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        setProgress(0);
+        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+        currentAudioRef.current = null;
+      };
+
+      currentAudioRef.current = audio;
+      audio.play();
+
+    } catch (err) {
+      console.error("Error playing practice voice:", err);
       setIsSpeaking(false);
-      setProgress(100);
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    };
-
-    currentUtteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
+      setProgress(0);
+    }
   };
 
   const startRecording = async () => {
@@ -192,13 +223,26 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
       if (localTranscript) {
         formData.append('transcription', localTranscript);
       }
-      const res = await fetch("http://127.0.0.1:5001/api/mastery-evaluate", { 
+      const res = await fetch(`${API_BASE_URL}/api/mastery-evaluate`, { 
         method: "POST", 
         headers: { "X-Session-Token": user.token },
         body: formData 
       });
       const result = await res.json();
       setEvaluation(result);
+
+      if (onLogActivity && result && typeof result.score !== 'undefined') {
+        onLogActivity({
+          type: "practice",
+          word_or_phrase: masteryData[currentIndex].en,
+          timestamp: Date.now(),
+          details: {
+            practice_score: result.score,
+            practice_sentence: masteryData[currentIndex].en,
+            practice_transcription: result.transcription || localTranscript || ""
+          }
+        });
+      }
     } catch (err) { console.error("Evaluation error:", err); }
     finally { setIsEvaluating(false); }
   };
@@ -229,7 +273,11 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit }) => {
     setCurrentSegmentIndex(newPhase === 2 ? 0 : -1);
     setIsSpeaking(false);
     setEvaluation(null);
-    window.speechSynthesis.cancel();
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
   };
 
   const startPhaseSubStep = (step) => {

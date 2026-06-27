@@ -19,12 +19,20 @@ const Reader = ({
   speechPitch,
   setSpeechPitch,
   onTextSelection,
-  onStartMastery,
-  onClearStory,
+  showVoiceControls,
 }) => {
-  const [controlsVisible, setControlsVisible] = useState(true);
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const hoverTimerRef = useRef(null);
+
+  // Auto-scroll currently read sentence into view
+  React.useEffect(() => {
+    if (currentChunkIndex !== -1) {
+      const activeEl = document.querySelector(".story-sentence.reading-now");
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, [currentChunkIndex]);
 
   const handleMouseEnter = (index) => {
     // Only trigger hover controls on desktop pointer devices
@@ -57,31 +65,7 @@ const Reader = ({
 
   return (
     <div className="reader-container">
-      <div className="reader-header">
-        <button 
-          className="mastery-btn" 
-          onClick={onStartMastery}
-        >
-          Mastery Path Training
-        </button>
-        <div className="header-controls-wrapper">
-          <button 
-            className="clear-story-btn" 
-            onClick={onClearStory}
-            title="Clear workspace"
-          >
-            Clear Workspace
-          </button>
-          <button 
-            className="toggle-controls" 
-            onClick={() => setControlsVisible(!controlsVisible)}
-          >
-            {controlsVisible ? "Collapse Controls" : "Show Voice Controls"}
-          </button>
-        </div>
-      </div>
-
-      {controlsVisible && (
+      {showVoiceControls && (
         <div className="audio-dashboard">
           <div className="control-group">
             <label htmlFor="voice-select">Voice Persona</label>
@@ -130,34 +114,7 @@ const Reader = ({
             </div>
           </div>
 
-          <div className="playback-actions">
-            <button 
-              className={`playback-btn ${isSpeaking && !isPaused ? 'active' : ''}`}
-              onClick={onPlayback}
-            >
-              {isSpeaking && !isPaused ? (
-                <>
-                  <svg className="playback-btn-icon" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                  </svg>
-                  <span>Pause Reading</span>
-                </>
-              ) : (
-                <>
-                  <svg className="playback-btn-icon" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M8 5v14l11-7z"/>
-                  </svg>
-                  <span>Start Listening</span>
-                </>
-              )}
-            </button>
-            <button className="stop-btn" onClick={onStop} disabled={!isSpeaking}>
-              <svg className="playback-btn-icon" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 6h12v12H6z"/>
-              </svg>
-              <span>Stop</span>
-            </button>
-          </div>
+
         </div>
       )}
 

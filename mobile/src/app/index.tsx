@@ -12,11 +12,14 @@ import {
   Dimensions,
   Switch,
   Modal,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
 import Svg, { Path } from 'react-native-svg';
+import YoutubePlayer from 'react-native-youtube-iframe';
+import transcriptsData from '../constants/transcripts.json';
 
 const { width } = Dimensions.get('window');
 
@@ -28,6 +31,27 @@ const EDGE_TTS_VOICES = [
   { identifier: 'en-GB-RyanNeural', name: 'Ryan (UK - Male)', language: 'en-GB' },
   { identifier: 'pl-PL-ZofiaNeural', name: 'Zofia (PL - Kobieta) 🌟', language: 'pl-PL' },
   { identifier: 'pl-PL-MarekNeural', name: 'Marek (PL - Mężczyzna) 🌟', language: 'pl-PL' },
+];
+
+const CURATED_VIDEOS = [
+  {
+    id: "james_veitch_spam",
+    youtubeId: "_QdPW8JrYzQ",
+    title: "James Veitch - Spammer",
+    transcript: (transcriptsData as any).james_veitch_spam || []
+  },
+  {
+    id: "james_veitch_unsubscribe",
+    youtubeId: "Dceyy0cX6J4",
+    title: "James Veitch - Unsubscribe",
+    transcript: (transcriptsData as any).james_veitch_unsubscribe || []
+  },
+  {
+    id: "jeff_allen_teenagers",
+    youtubeId: "cqjhCC4sP4Q",
+    title: "Jeff Allen - Teenagers",
+    transcript: (transcriptsData as any).jeff_allen_teenagers || []
+  }
 ];
 
 // Material outline SVG Icons mapped to simple components
@@ -55,11 +79,17 @@ const SettingsIcon = ({ color }: { color: string }) => (
   </Svg>
 );
 
+const MediaIcon = ({ color }: { color: string }) => (
+  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+    <Path d="M10 16.5l6-4.5-6-4.5v9zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill={color} />
+  </Svg>
+);
+
 export default function HomeScreen() {
-  const [backendUrl, setBackendUrl] = useState('http://192.168.100.27:5001'); // Local network IP
+  const [backendUrl, setBackendUrl] = useState('http://192.168.100.31:5001'); // Local network IP
   const [user, setUser] = useState<{ token: string; email: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'workspace' | 'stories' | 'notebook' | 'settings'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'workspace' | 'stories' | 'notebook' | 'settings' | 'media'>('dashboard');
 
   const customFetch = async (url: string, options: any = {}) => {
     const headers = {
@@ -105,6 +135,38 @@ export default function HomeScreen() {
   const [translationText, setTranslationText] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
 
+  // --- Media Buddy States ---
+  const [customVideos, setCustomVideos] = useState<any[]>([]);
+  const [currentVideo, setCurrentVideo] = useState<any>(CURATED_VIDEOS[0]);
+  const [videoCurrentTime, setVideoCurrentTime] = useState<number>(0);
+  const [videoIsPlaying, setVideoIsPlaying] = useState<boolean>(false);
+  const [videoActiveSegmentIdx, setVideoActiveSegmentIdx] = useState<number>(-1);
+  const [videoCustomUrl, setVideoCustomUrl] = useState<string>('');
+  const [videoIsLoadingCustom, setVideoIsLoadingCustom] = useState<boolean>(false);
+  const [videoCustomError, setVideoCustomError] = useState<string>('');
+  
+  // Translation
+  const [videoSelectedWord, setVideoSelectedWord] = useState<string>('');
+  const [videoWordTranslation, setVideoWordTranslation] = useState<string>('');
+  const [videoIsTranslatingWord, setVideoIsTranslatingWord] = useState<boolean>(false);
+  const [videoIsWordSaved, setVideoIsWordSaved] = useState<boolean>(false);
+  
+  const [videoSegmentTranslation, setVideoSegmentTranslation] = useState<string>('');
+  const [videoIsTranslatingSegment, setVideoIsTranslatingSegment] = useState<boolean>(false);
+  const [videoIsSegmentSaved, setVideoIsSegmentSaved] = useState<boolean>(false);
+  
+  // Joke Explanation
+  const [videoSelectedJokeText, setVideoSelectedJokeText] = useState<string>('');
+  const [videoJokeExplanation, setVideoJokeExplanation] = useState<any>(null);
+  const [videoIsExplainingJoke, setVideoIsExplainingJoke] = useState<boolean>(false);
+  const [videoShowJokeModal, setVideoShowJokeModal] = useState<boolean>(false);
+  const [videoShowSelectorModal, setVideoShowSelectorModal] = useState<boolean>(false);
+  
+  // Refs
+  const playerRef = useRef<any>(null);
+  const timerRef = useRef<any>(null);
+  const transcriptScrollRef = useRef<ScrollView>(null);
+
   // Voice Chatbot States
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [isProcessingChat, setIsProcessingChat] = useState<boolean>(false);
@@ -120,6 +182,486 @@ export default function HomeScreen() {
       }, 150);
     }
   }, [chatMessages]);
+
+  // --- Voice Tutor (Tutor Głosowy) Constants & States ---
+  const VOICE_DB_THRESHOLD = -42;
+  const INTERRUPTION_DB_THRESHOLD = -35;
+  const VOICE_SILENCE_DURATION = 1500;
+
+  const [isVoiceTutorActive, setIsVoiceTutorActive] = useState<boolean>(false);
+  const [voiceTutorMessages, setVoiceTutorMessages] = useState<any[]>([]);
+  const [isVoiceTutorRecording, setIsVoiceTutorRecording] = useState<boolean>(false);
+  const [isVoiceTutorProcessing, setIsVoiceTutorProcessing] = useState<boolean>(false);
+  const [isVoiceTutorBotSpeaking, setIsVoiceTutorBotSpeaking] = useState<boolean>(false);
+  const [voiceTutorRmsVolume, setVoiceTutorRmsVolume] = useState<number>(0);
+  const [voiceTutorUserIsSpeaking, setVoiceTutorUserIsSpeaking] = useState<boolean>(false);
+  const [voiceTutorShowTranscript, setVoiceTutorShowTranscript] = useState<boolean>(false);
+  const [voiceTutorSummary, setVoiceTutorSummary] = useState<any>(null);
+  const [isVoiceTutorGeneratingSummary, setIsVoiceTutorGeneratingSummary] = useState<boolean>(false);
+  const [voiceTutorSavedWords, setVoiceTutorSavedWords] = useState<string[]>([]);
+  const [voiceTutorEmail, setVoiceTutorEmail] = useState<string>('');
+
+  useEffect(() => {
+    if (user && user.email) {
+      setVoiceTutorEmail(user.email);
+    }
+  }, [user]);
+
+  // Refs for VAD loops & state sync
+  const voiceTutorRecordingRef = useRef<Audio.Recording | null>(null);
+  const voiceTutorSoundRef = useRef<Audio.Sound | null>(null);
+  const voiceTutorSilenceTimerRef = useRef<any>(null);
+  const voiceTutorIsUserSpeakingRef = useRef<boolean>(false);
+  const voiceTutorInterruptionCounterRef = useRef<number>(0);
+
+  const voiceTutorIsBotSpeakingRef = useRef<boolean>(false);
+  const voiceTutorIsRecordingRef = useRef<boolean>(false);
+  const voiceTutorIsProcessingRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    voiceTutorIsBotSpeakingRef.current = isVoiceTutorBotSpeaking;
+  }, [isVoiceTutorBotSpeaking]);
+
+  useEffect(() => {
+    voiceTutorIsRecordingRef.current = isVoiceTutorRecording;
+  }, [isVoiceTutorRecording]);
+
+  useEffect(() => {
+    voiceTutorIsProcessingRef.current = isVoiceTutorProcessing;
+  }, [isVoiceTutorProcessing]);
+
+  // Clean up Voice Tutor on unmount
+  useEffect(() => {
+    return () => {
+      stopVoiceTutorAudio();
+      stopVoiceTutorRecordingLocally();
+      cleanupVoiceTutorVAD();
+    };
+  }, []);
+
+  const stopVoiceTutorAudio = async () => {
+    if (voiceTutorSoundRef.current) {
+      try {
+        await voiceTutorSoundRef.current.stopAsync();
+        await voiceTutorSoundRef.current.unloadAsync();
+      } catch (e) {
+        console.warn("Failed to stop sound:", e);
+      }
+      voiceTutorSoundRef.current = null;
+    }
+    setIsVoiceTutorBotSpeaking(false);
+  };
+
+  const stopVoiceTutorRecordingLocally = async () => {
+    if (voiceTutorRecordingRef.current) {
+      try {
+        await voiceTutorRecordingRef.current.stopAndUnloadAsync();
+      } catch (e) {
+        console.warn("Failed to stop recording locally:", e);
+      }
+      voiceTutorRecordingRef.current = null;
+    }
+    setIsVoiceTutorRecording(false);
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        playThroughEarpieceAndroid: false,
+      });
+    } catch (e) {
+      console.warn("Failed to reset audio mode after recording:", e);
+    }
+  };
+
+  const cleanupVoiceTutorVAD = () => {
+    if (voiceTutorSilenceTimerRef.current) {
+      clearTimeout(voiceTutorSilenceTimerRef.current);
+      voiceTutorSilenceTimerRef.current = null;
+    }
+    voiceTutorIsUserSpeakingRef.current = false;
+    setVoiceTutorUserIsSpeaking(false);
+    voiceTutorInterruptionCounterRef.current = 0;
+    setVoiceTutorRmsVolume(0);
+  };
+
+  const startVoiceTutorRecording = async () => {
+    if (voiceTutorIsProcessingRef.current) return;
+
+    // Reset VAD state
+    voiceTutorIsUserSpeakingRef.current = false;
+    setVoiceTutorUserIsSpeaking(false);
+    if (voiceTutorSilenceTimerRef.current) {
+      clearTimeout(voiceTutorSilenceTimerRef.current);
+      voiceTutorSilenceTimerRef.current = null;
+    }
+
+    try {
+      // 1. Request microphone permission
+      const permission = await Audio.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Błąd', 'Zezwól na dostęp do mikrofonu, aby rozmawiać z lektorem.');
+        setIsVoiceTutorActive(false);
+        return;
+      }
+
+      // 2. Configure audio mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        playThroughEarpieceAndroid: false,
+      });
+
+      // Stop previous recording if any
+      if (voiceTutorRecordingRef.current) {
+        try {
+          await voiceTutorRecordingRef.current.stopAndUnloadAsync();
+        } catch (e) {}
+      }
+
+      // Create new recording with metering
+      const recording = new Audio.Recording();
+      
+      // Set status update handler
+      recording.setOnRecordingStatusUpdate((status) => {
+        if (!status.isRecording) return;
+        
+        // Convert status.metering (dB: -160 to 0) to normalized volume (0 to 1) for orb animation
+        const db = status.metering ?? -160;
+        const normVol = Math.max(0, (db + 60) / 60); // -60dB -> 0, 0dB -> 1
+        setVoiceTutorRmsVolume(normVol);
+
+        // VAD Logic
+        if (voiceTutorIsBotSpeakingRef.current) {
+          // A. Interruption Check (User speaks over Tutor)
+          if (db > INTERRUPTION_DB_THRESHOLD) {
+            voiceTutorInterruptionCounterRef.current += 1;
+            if (voiceTutorInterruptionCounterRef.current > 6) { // ~600ms of active speech
+              console.log("Mobile interruption detected: stopping tutor playback.");
+              voiceTutorInterruptionCounterRef.current = 0;
+              stopVoiceTutorAudio(); // Stops bot speaking state and unloads sound
+              // Start a new recording session to capture fresh user speech (discarding current)
+              startVoiceTutorRecording();
+            }
+          } else {
+            voiceTutorInterruptionCounterRef.current = Math.max(0, voiceTutorInterruptionCounterRef.current - 1);
+          }
+        } else {
+          // B. Turn-taking Silence Check (User speaks and finishes)
+          if (!voiceTutorIsProcessingRef.current) {
+            if (db > VOICE_DB_THRESHOLD) {
+              if (!voiceTutorIsUserSpeakingRef.current) {
+                voiceTutorIsUserSpeakingRef.current = true;
+                setVoiceTutorUserIsSpeaking(true);
+              }
+              if (voiceTutorSilenceTimerRef.current) {
+                clearTimeout(voiceTutorSilenceTimerRef.current);
+                voiceTutorSilenceTimerRef.current = null;
+              }
+            } else {
+              if (voiceTutorIsUserSpeakingRef.current && !voiceTutorSilenceTimerRef.current) {
+                voiceTutorSilenceTimerRef.current = setTimeout(async () => {
+                  console.log("Mobile silence detected: ending turn.");
+                  voiceTutorIsUserSpeakingRef.current = false;
+                  setVoiceTutorUserIsSpeaking(false);
+                  voiceTutorSilenceTimerRef.current = null;
+                  
+                  // Stop recording and send audio
+                  await stopVoiceTutorRecordingAndSend();
+                }, VOICE_SILENCE_DURATION);
+              }
+            }
+          }
+        }
+      });
+
+      // Use the high quality preset but enable metering for VAD / volume levels
+      const recordingOptions = {
+        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        isMeteringEnabled: true,
+      };
+
+      await recording.prepareToRecordAsync(recordingOptions);
+      await recording.startAsync();
+      voiceTutorRecordingRef.current = recording;
+      setIsVoiceTutorRecording(true);
+    } catch (err) {
+      console.error('Failed to start voice tutor recording:', err);
+    }
+  };
+
+  const stopVoiceTutorRecordingAndSend = async () => {
+    if (!voiceTutorRecordingRef.current || voiceTutorIsProcessingRef.current) return;
+
+    setIsVoiceTutorProcessing(true);
+    setIsVoiceTutorRecording(false);
+    cleanupVoiceTutorVAD();
+
+    try {
+      const recording = voiceTutorRecordingRef.current;
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      voiceTutorRecordingRef.current = null;
+
+      if (!uri) {
+        console.warn("No recording URI generated");
+        setIsVoiceTutorProcessing(false);
+        startVoiceTutorRecording();
+        return;
+      }
+
+      await handleSendVoiceTutor(uri);
+    } catch (err) {
+      console.error("Error stopping recording and sending:", err);
+      setIsVoiceTutorProcessing(false);
+      startVoiceTutorRecording();
+    }
+  };
+
+  const handleSendVoiceTutor = async (uri: string) => {
+    if (!user) return;
+    setIsVoiceTutorProcessing(true);
+
+    try {
+      const historyForApi = voiceTutorMessages.map((msg) => ({
+        sender: msg.sender,
+        text: msg.text,
+      }));
+
+      const formData = new FormData();
+      formData.append("audio", {
+        uri: uri,
+        name: "user_speech.m4a",
+        type: "audio/m4a",
+      } as any);
+      formData.append("history", JSON.stringify(historyForApi));
+      formData.append("voice", selectedVoice || "en-US-BrianNeural");
+
+      const response = await fetch(`${backendUrl}/api/chat-free`, {
+        method: "POST",
+        headers: {
+          "X-Session-Token": user.token,
+          "bypass-tunnel-reminder": "true",
+        },
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("API connection error");
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+
+      const userMsgId = "user-" + Date.now();
+      const userMsg = {
+        id: userMsgId,
+        sender: "user",
+        text: result.transcription || "(Brak transkrypcji)",
+        evaluation: result.user_evaluation,
+      };
+
+      const botMsg = {
+        id: "bot-" + (Date.now() + 1),
+        sender: "bot",
+        text: result.bot_response,
+      };
+
+      setVoiceTutorMessages((prev) => [...prev, userMsg, botMsg]);
+
+      await playVoiceTutorAudio(result.bot_response, result.audio_base64);
+    } catch (err: any) {
+      console.error("Error sending voice tutor speech:", err);
+      Alert.alert("Błąd połączenia", "Nie udało się przesłać dźwięku: " + err.message);
+      setIsVoiceTutorProcessing(false);
+      startVoiceTutorRecording();
+    } finally {
+      setIsVoiceTutorProcessing(false);
+    }
+  };
+
+  const playVoiceTutorAudio = async (text: string, cachedBase64?: string) => {
+    await stopVoiceTutorAudio();
+    setIsVoiceTutorBotSpeaking(true);
+
+    try {
+      let base64_data = cachedBase64;
+      if (!base64_data) {
+        console.log("Mobile: TTS base64 not pre-generated, fetching from api...");
+        const response = await fetch(`${backendUrl}/api/tts`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "bypass-tunnel-reminder": "true",
+          },
+          body: JSON.stringify({
+            text: text,
+            voice: selectedVoice || "en-US-BrianNeural",
+          }),
+        });
+
+        if (!response.ok) throw new Error("TTS generation failed");
+        const data = await response.json();
+        base64_data = data.audio_base64;
+      } else {
+        console.log("Mobile: Using pre-generated TTS audio base64.");
+      }
+
+      if (!base64_data) throw new Error("No audio base64 returned");
+
+      const uri = `data:audio/mpeg;base64,${base64_data}`;
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        playThroughEarpieceAndroid: false,
+      });
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: true }
+      );
+
+      voiceTutorSoundRef.current = sound;
+
+      // Do not start recording during tutor speech on iOS to prevent routing to earpiece
+      // await startVoiceTutorRecording();
+
+      sound.setOnPlaybackStatusUpdate(async (status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setIsVoiceTutorBotSpeaking(false);
+          sound.unloadAsync();
+          voiceTutorSoundRef.current = null;
+          // Keep recording, but reset VAD flags for user speech
+          voiceTutorIsUserSpeakingRef.current = false;
+          setVoiceTutorUserIsSpeaking(false);
+          voiceTutorInterruptionCounterRef.current = 0;
+          // Start voice recording when tutor finishes speaking
+          await startVoiceTutorRecording();
+        }
+      });
+    } catch (err) {
+      console.error("Error playing Voice Tutor TTS:", err);
+      setIsVoiceTutorBotSpeaking(false);
+      await startVoiceTutorRecording();
+    }
+  };
+
+  const handleStartVoiceTutorSession = async () => {
+    cleanupVoiceTutorVAD();
+    setIsVoiceTutorActive(true);
+    setVoiceTutorMessages([]);
+    setVoiceTutorSummary(null);
+    setVoiceTutorSavedWords([]);
+    await stopVoiceTutorAudio();
+    setVoiceTutorShowTranscript(false);
+
+    await startVoiceTutorRecording();
+  };
+
+  const handleEndVoiceTutorSession = async () => {
+    await stopVoiceTutorAudio();
+    await stopVoiceTutorRecordingLocally();
+    cleanupVoiceTutorVAD();
+    setIsVoiceTutorActive(false);
+    setVoiceTutorShowTranscript(false);
+
+    if (voiceTutorMessages.length > 0) {
+      setIsVoiceTutorGeneratingSummary(true);
+      try {
+        const response = await fetch(`${backendUrl}/api/chat-free/summary`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || "",
+            "bypass-tunnel-reminder": "true",
+          },
+          body: JSON.stringify({
+            history: voiceTutorMessages.map((msg) => ({
+              sender: msg.sender,
+              text: msg.text,
+            })),
+          }),
+        });
+
+        if (response.ok) {
+          const summaryData = await response.json();
+          setVoiceTutorSummary(summaryData);
+        } else {
+          Alert.alert("Błąd", "Nie udało się wygenerować podsumowania sesji.");
+        }
+      } catch (err) {
+        console.error("Error generating session summary on mobile:", err);
+        Alert.alert("Błąd połączenia", "Problem z wygenerowaniem podsumowania sesji.");
+      } finally {
+        setIsVoiceTutorGeneratingSummary(false);
+      }
+    } else {
+      setVoiceTutorMessages([]);
+    }
+  };
+
+  const handleCloseVoiceTutorSummary = () => {
+    setVoiceTutorSummary(null);
+    setVoiceTutorMessages([]);
+    setVoiceTutorSavedWords([]);
+  };
+
+  const handleSaveWordFromVoiceTutor = async (word: string, translation: string) => {
+    if (!user) return false;
+    try {
+      const response = await customFetch(`${backendUrl}/api/vocabulary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token,
+        },
+        body: JSON.stringify({
+          original: word,
+          translated: translation,
+          story_id: "chat-free",
+        }),
+      });
+      if (response.ok) {
+        Alert.alert("Sukces", `Słowo "${word}" zostało zapisane do notesu.`);
+        fetchNotebookWords();
+        return true;
+      } else {
+        const errData = await response.json();
+        Alert.alert("Błąd", errData.error || "Nie udało się zapisać słowa");
+      }
+    } catch (err) {
+      console.error("Error saving word:", err);
+      Alert.alert("Błąd", "Błąd połączenia z serwerem");
+    }
+    return false;
+  };
+
+  const handleSendVoiceTutorEmail = async (recipientEmail: string) => {
+    if (!user || !voiceTutorSummary) return false;
+    try {
+      const response = await customFetch(`${backendUrl}/api/send-chat-summary-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token,
+        },
+        body: JSON.stringify({
+          recipient_email: recipientEmail,
+          summary: voiceTutorSummary,
+        }),
+      });
+      if (response.ok) {
+        Alert.alert("Sukces", "E-mail z podsumowaniem został wysłany!");
+        return true;
+      } else {
+        Alert.alert("Błąd", "Nie udało się wysłać e-maila.");
+      }
+    } catch (err) {
+      console.error("Error sending email:", err);
+      Alert.alert("Błąd połączenia", "Problem z wysłaniem e-maila.");
+    }
+    return false;
+  };
 
 
 
@@ -138,8 +680,13 @@ export default function HomeScreen() {
     (async () => {
       try {
         const storedUser = await AsyncStorage.getItem('buddy_user');
-        const storedIP = await AsyncStorage.getItem('buddy_backend_url');
+        let storedIP = await AsyncStorage.getItem('buddy_backend_url');
+        if (storedIP && storedIP.includes('192.168.100.27')) {
+          storedIP = 'http://192.168.100.31:5001';
+          await AsyncStorage.setItem('buddy_backend_url', storedIP);
+        }
         const storedVoice = await AsyncStorage.getItem('buddy_tts_voice');
+        const storedCustomVideos = await AsyncStorage.getItem('buddy_custom_videos');
         if (storedUser) {
           setUser(JSON.parse(storedUser));
         }
@@ -152,6 +699,9 @@ export default function HomeScreen() {
           setSelectedVoice('en-US-BrianNeural');
           await AsyncStorage.setItem('buddy_tts_voice', 'en-US-BrianNeural');
         }
+        if (storedCustomVideos) {
+          setCustomVideos(JSON.parse(storedCustomVideos));
+        }
 
         // Configure Audio session for playback
         try {
@@ -159,7 +709,7 @@ export default function HomeScreen() {
             playsInSilentModeIOS: true,
             allowsRecordingIOS: false,
             staysActiveInBackground: false,
-            shouldRouteThroughEarpieceAndroid: false,
+            playThroughEarpieceAndroid: false,
           });
         } catch (audioErr) {
           console.log('Error setting audio mode', audioErr);
@@ -237,6 +787,282 @@ export default function HomeScreen() {
       fetchNotebookWords();
     }
   }, [user, currentView]);
+
+  // --- Media Buddy Hooks and Handlers ---
+  // Poll player current time when playing
+  useEffect(() => {
+    if (currentView !== 'media') return;
+    if (videoIsPlaying) {
+      timerRef.current = setInterval(() => {
+        if (playerRef.current) {
+          playerRef.current.getCurrentTime().then((time: number) => {
+            setVideoCurrentTime(time);
+          }).catch(() => {});
+        }
+      }, 100);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [videoIsPlaying, currentView]);
+
+  // Synchronize active segment index based on currentTime + 0.4s early offset
+  useEffect(() => {
+    if (currentView !== 'media') return;
+    const checkTime = videoCurrentTime + 0.4;
+    const idx = currentVideo.transcript.findIndex(
+      (seg: any) => checkTime >= seg.start && checkTime <= seg.end
+    );
+    if (idx !== -1) {
+      if (idx !== videoActiveSegmentIdx) {
+        setVideoActiveSegmentIdx(idx);
+        // Scroll active card into view
+        if (transcriptScrollRef.current) {
+          transcriptScrollRef.current.scrollTo({ y: idx * 95, animated: true });
+        }
+      }
+    } else {
+      // Clear active segment highlight if we are outside the segment boundary (with a tight 0.2s tolerance using checkTime)
+      const lastSeg = currentVideo.transcript[videoActiveSegmentIdx];
+      if (lastSeg && (checkTime < lastSeg.start - 0.2 || checkTime > lastSeg.end + 0.2)) {
+        setVideoActiveSegmentIdx(-1);
+      }
+    }
+  }, [videoCurrentTime, currentVideo, videoActiveSegmentIdx, currentView]);
+
+  // Auto-translate active segment when video is paused
+  useEffect(() => {
+    if (currentView !== 'media') return;
+    if (!videoIsPlaying && videoActiveSegmentIdx !== -1) {
+      const activeSeg = currentVideo.transcript[videoActiveSegmentIdx];
+      if (activeSeg) {
+        const text = activeSeg.text;
+        setVideoIsTranslatingSegment(true);
+        setVideoIsSegmentSaved(false);
+        customFetch(`${backendUrl}/api/translate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text })
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.translation) {
+              setVideoSegmentTranslation(data.translation);
+            } else {
+              setVideoSegmentTranslation("(Błąd tłumaczenia)");
+            }
+          })
+          .catch(() => {
+            setVideoSegmentTranslation("(Błąd połączenia)");
+          })
+          .finally(() => {
+            setVideoIsTranslatingSegment(false);
+          });
+      }
+    } else {
+      setVideoSegmentTranslation('');
+    }
+  }, [videoIsPlaying, videoActiveSegmentIdx, currentVideo, currentView]);
+
+  const extractYoutubeId = (url: string) => {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : url;
+  };
+
+  const handleLoadCustomVideo = async () => {
+    if (!videoCustomUrl.trim()) {
+      setVideoCustomError("Wpisz link lub ID wideo");
+      return;
+    }
+    const yId = extractYoutubeId(videoCustomUrl.trim());
+    if (yId.length !== 11) {
+      setVideoCustomError("Niepoprawny identyfikator YouTube ID (musi mieć 11 znaków)");
+      return;
+    }
+    
+    // Check if already in curated or custom list
+    const existingCurated = CURATED_VIDEOS.find(v => v.youtubeId === yId);
+    if (existingCurated) {
+      setCurrentVideo(existingCurated);
+      setVideoCustomUrl('');
+      setVideoCustomError('');
+      setVideoIsPlaying(false);
+      setVideoCurrentTime(0);
+      setVideoActiveSegmentIdx(-1);
+      return;
+    }
+    
+    const existingCustom = customVideos.find(v => v.youtubeId === yId);
+    if (existingCustom) {
+      setCurrentVideo(existingCustom);
+      setVideoCustomUrl('');
+      setVideoCustomError('');
+      setVideoIsPlaying(false);
+      setVideoCurrentTime(0);
+      setVideoActiveSegmentIdx(-1);
+      return;
+    }
+
+    setVideoIsLoadingCustom(true);
+    setVideoCustomError('');
+    try {
+      const response = await customFetch(`${backendUrl}/api/media/transcript?video_id=${yId}`);
+      if (!response.ok) {
+        throw new Error("Nie udało się pobrać transkrypcji z serwera");
+      }
+      const data = await response.json();
+      
+      const newVideo = {
+        id: "custom_" + yId,
+        youtubeId: yId,
+        title: data.title || "Custom Video",
+        transcript: data.transcript || []
+      };
+      
+      const updatedCustom = [newVideo, ...customVideos];
+      setCustomVideos(updatedCustom);
+      await AsyncStorage.setItem('buddy_custom_videos', JSON.stringify(updatedCustom));
+      
+      setCurrentVideo(newVideo);
+      setVideoCustomUrl('');
+      setVideoIsPlaying(false);
+      setVideoCurrentTime(0);
+      setVideoActiveSegmentIdx(-1);
+    } catch (err: any) {
+      console.error(err);
+      setVideoCustomError(err.message || "Błąd pobierania transkrypcji");
+    } finally {
+      setVideoIsLoadingCustom(false);
+    }
+  };
+
+  const handleDeleteCustomVideo = async (yId: string) => {
+    const updatedCustom = customVideos.filter(v => v.youtubeId !== yId);
+    setCustomVideos(updatedCustom);
+    await AsyncStorage.setItem('buddy_custom_videos', JSON.stringify(updatedCustom));
+    
+    if (currentVideo.youtubeId === yId) {
+      setCurrentVideo(CURATED_VIDEOS[0]);
+      setVideoIsPlaying(false);
+      setVideoCurrentTime(0);
+      setVideoActiveSegmentIdx(-1);
+    }
+  };
+
+  const handleWordClick = async (word: string) => {
+    setVideoIsPlaying(false); // Pause wideo
+    const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "").trim();
+    if (!cleanWord) return;
+    
+    setVideoSelectedWord(cleanWord);
+    setVideoWordTranslation('');
+    setVideoIsTranslatingWord(true);
+    setVideoIsWordSaved(false);
+    
+    try {
+      const response = await customFetch(`${backendUrl}/api/translate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: cleanWord })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setVideoWordTranslation(data.translation || "(Brak tłumaczenia)");
+      } else {
+        setVideoWordTranslation("(Błąd serwera)");
+      }
+    } catch (e) {
+      setVideoWordTranslation("(Błąd połączenia)");
+    } finally {
+      setVideoIsTranslatingWord(false);
+    }
+  };
+
+  const handleSaveWord = async () => {
+    if (!user || !videoSelectedWord || !videoWordTranslation) return;
+    try {
+      const response = await customFetch(`${backendUrl}/api/vocabulary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token,
+        },
+        body: JSON.stringify({
+          original: videoSelectedWord,
+          translated: videoWordTranslation,
+          story_id: "media_" + currentVideo.youtubeId
+        })
+      });
+      if (response.ok) {
+        setVideoIsWordSaved(true);
+        Alert.alert("Sukces", `Słowo "${videoSelectedWord}" zostało zapisane.`);
+        fetchNotebookWords();
+      }
+    } catch (e) {
+      Alert.alert("Błąd", "Błąd zapisu słowa");
+    }
+  };
+
+  const handleSaveSegmentPhrase = async () => {
+    if (!user || videoActiveSegmentIdx === -1 || !videoSegmentTranslation) return;
+    const originalText = currentVideo.transcript[videoActiveSegmentIdx].text;
+    try {
+      const response = await customFetch(`${backendUrl}/api/vocabulary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token,
+        },
+        body: JSON.stringify({
+          original: originalText,
+          translated: videoSegmentTranslation,
+          story_id: "media_" + currentVideo.youtubeId
+        })
+      });
+      if (response.ok) {
+        setVideoIsSegmentSaved(true);
+        Alert.alert("Sukces", "Tłumaczenie całej frazy zostało zapisane.");
+        fetchNotebookWords();
+      }
+    } catch (e) {
+      Alert.alert("Błąd", "Błąd zapisu frazy");
+    }
+  };
+
+  const handleExplainJoke = async (segmentText: string) => {
+    setVideoIsPlaying(false);
+    setVideoSelectedJokeText(segmentText);
+    setVideoJokeExplanation(null);
+    setVideoIsExplainingJoke(true);
+    setVideoShowJokeModal(true);
+    
+    try {
+      const response = await customFetch(`${backendUrl}/api/media/explain-joke`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: segmentText })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setVideoJokeExplanation(data.explanation || {});
+      } else {
+        setVideoJokeExplanation({ error: "Błąd serwera podczas wyjaśniania żartu." });
+      }
+    } catch (e) {
+      setVideoJokeExplanation({ error: "Błąd połączenia z serwerem." });
+    } finally {
+      setVideoIsExplainingJoke(false);
+    }
+  };
 
   // Handle Auth
   const handleAuth = async () => {
@@ -879,10 +1705,11 @@ export default function HomeScreen() {
       {!(currentView === 'workspace' && generatedText) && (
         <View style={styles.appHeader}>
           <Text style={styles.appTitle}>
-            {currentView === 'dashboard' && 'Mission Control'}
+            {currentView === 'dashboard' && 'Tutor Głosowy'}
             {currentView === 'workspace' && 'Practice Room'}
             {currentView === 'stories' && 'Saved Stories'}
             {currentView === 'notebook' && 'Vocabulary'}
+            {currentView === 'media' && 'Media Buddy'}
             {currentView === 'settings' && 'Settings'}
           </Text>
           <Text style={styles.userEmail} numberOfLines={1}>
@@ -933,52 +1760,178 @@ export default function HomeScreen() {
 
       {/* Primary Content Switcher */}
       <View style={styles.contentArea}>
-        {currentView === 'dashboard' && (
-          <ScrollView contentContainerStyle={styles.dashboardContainer}>
-            {/* Welcome Google Style Card */}
-            <View style={styles.welcomeCard}>
-              <Text style={styles.welcomeBadge}>SUPER BRAIN EDITION</Text>
-              <Text style={styles.welcomeTitle}>Meet Your AI English Assistant</Text>
-              <Text style={styles.welcomeDesc}>
-                Your personalized mission to master English. Context-aware learning, native-level feedback, and real-time evolution.
+        {currentView === 'dashboard' && (() => {
+          // Determine current active state for the voice orb
+          let orbStatus = "inactive";
+          if (isVoiceTutorActive) {
+            if (isVoiceTutorProcessing) {
+              orbStatus = "thinking";
+            } else if (isVoiceTutorBotSpeaking) {
+              orbStatus = "speaking";
+            } else if (isVoiceTutorRecording) {
+              orbStatus = voiceTutorUserIsSpeaking ? "user-speaking" : "listening";
+            }
+          }
+
+          // Scale value based on volume metering level
+          const scaleValue = orbStatus === "user-speaking" ? 1 + voiceTutorRmsVolume * 0.4 : 1;
+
+          return (
+            <View style={styles.voiceTutorContainer}>
+              
+              {/* Title / Brand */}
+              <Text style={styles.voiceTutorHeader}>
+                Tutor <Text style={styles.blueGradientText}>AI Voice</Text>
               </Text>
-              <View style={styles.welcomeActions}>
-                <TouchableOpacity
-                  style={[styles.btnPrimary, { marginRight: 8 }]}
-                  onPress={() => setCurrentView('workspace')}
-                >
-                  <Text style={styles.btnPrimaryText}>Start Practice</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
 
-            {/* Streak card */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricTitle}>DAILY STREAK</Text>
-              <View style={styles.streakRow}>
-                {[0, 1, 2, 3, 4, 5, 6].map((_, i) => (
-                  <View
-                    key={i}
-                    style={[styles.streakDot, i < 5 ? styles.streakDotActive : null]}
-                  />
-                ))}
-              </View>
-              <Text style={styles.metricDesc}>5 days strong! Keep evolving.</Text>
-            </View>
-
-            {/* General metrics */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricTitle}>LANGUAGE LEVEL</Text>
-              <View style={styles.gaugeRow}>
-                <Text style={styles.gaugeValue}>B2</Text>
-                <View style={styles.gaugeContainer}>
-                  <View style={[styles.gaugeBar, { width: '78%' }]} />
+              {/* Main Stage */}
+              <View style={styles.voiceTutorStage}>
+                
+                {/* Orb Section */}
+                <View style={styles.orbWrapper}>
+                  {/* Outer pulse rings for premium visual style */}
+                  {isVoiceTutorActive && (
+                    <>
+                      <View style={[styles.orbPulseRing, styles.orbPulseRing1, orbStatus === 'user-speaking' && styles.ringGreen, orbStatus === 'thinking' && styles.ringBlue]} />
+                      <View style={[styles.orbPulseRing, styles.orbPulseRing2, orbStatus === 'user-speaking' && styles.ringGreen, orbStatus === 'thinking' && styles.ringBlue]} />
+                    </>
+                  )}
+                  
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={[
+                      styles.voiceOrbButton,
+                      orbStatus === "inactive" && styles.orbInactive,
+                      orbStatus === "speaking" && styles.orbSpeaking,
+                      orbStatus === "listening" && styles.orbListening,
+                      orbStatus === "user-speaking" && styles.orbUserSpeaking,
+                      orbStatus === "thinking" && styles.orbThinking,
+                      { transform: [{ scale: scaleValue }] }
+                    ]}
+                    onPress={isVoiceTutorActive ? handleEndVoiceTutorSession : handleStartVoiceTutorSession}
+                  >
+                    <View style={styles.orbCore}>
+                      {orbStatus === "inactive" && (
+                        <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
+                          <Path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" fill="#FFFFFF" />
+                          <Path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" fill="#FFFFFF" />
+                        </Svg>
+                      )}
+                      {orbStatus === "speaking" && (
+                        <View style={styles.orbWaveContainer}>
+                          <View style={[styles.orbWaveBar, { height: 16 }]} />
+                          <View style={[styles.orbWaveBar, { height: 28 }]} />
+                          <View style={[styles.orbWaveBar, { height: 16 }]} />
+                        </View>
+                      )}
+                      {orbStatus === "listening" && (
+                        <View style={styles.orbPulseDot} />
+                      )}
+                      {orbStatus === "user-speaking" && (
+                        <View style={styles.orbWaveContainer}>
+                          <View style={[styles.orbWaveBar, styles.orbWaveBarGreen, { height: 16 }]} />
+                          <View style={[styles.orbWaveBar, styles.orbWaveBarGreen, { height: 32 }]} />
+                          <View style={[styles.orbWaveBar, styles.orbWaveBarGreen, { height: 16 }]} />
+                        </View>
+                      )}
+                      {orbStatus === "thinking" && (
+                        <ActivityIndicator size="large" color="#FFFFFF" />
+                      )}
+                    </View>
+                  </TouchableOpacity>
                 </View>
+
+                {/* Status label */}
+                <Text style={styles.voiceTutorStatusText}>
+                  {orbStatus === "inactive" && "Naciśnij orb, aby rozpocząć rozmowę"}
+                  {orbStatus === "speaking" && "Lektor mówi (zacznij mówić, aby wtrącić)"}
+                  {orbStatus === "listening" && "Słucham... powiedz coś"}
+                  {orbStatus === "user-speaking" && "Mówisz..."}
+                  {orbStatus === "thinking" && "Lektor myśli..."}
+                </Text>
+
+                {/* Toggle Transcript button */}
+                {isVoiceTutorActive && voiceTutorMessages.length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.transcriptToggleBtn, voiceTutorShowTranscript ? styles.transcriptToggleBtnActive : null]}
+                    onPress={() => setVoiceTutorShowTranscript(!voiceTutorShowTranscript)}
+                  >
+                    <Text style={[styles.transcriptToggleBtnText, voiceTutorShowTranscript ? styles.transcriptToggleBtnTextActive : null]}>
+                      {voiceTutorShowTranscript ? "🙈 Ukryj tekst" : "👁 Pokaż tekst"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
-              <Text style={styles.metricDesc}>Strongly Improving</Text>
+
+              {/* Tips when inactive */}
+              {!isVoiceTutorActive && !voiceTutorSummary && (
+                <View style={styles.voiceTutorTips}>
+                  <Text style={styles.voiceTutorTipsText}>
+                    🎧 Używaj słuchawek, aby zapobiec zapętleniu dźwięku.
+                  </Text>
+                </View>
+              )}
+
+              {/* Slide-up Transcript Drawer */}
+              {isVoiceTutorActive && voiceTutorMessages.length > 0 && voiceTutorShowTranscript && (
+                <View style={styles.mobileTranscriptDrawer}>
+                  <View style={styles.drawerHeader}>
+                    <Text style={styles.drawerTitle}>Zapis rozmowy</Text>
+                    <TouchableOpacity onPress={() => setVoiceTutorShowTranscript(false)}>
+                      <Text style={styles.drawerCloseText}>Ukryj</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView
+                    ref={chatScrollRef}
+                    style={styles.drawerScroll}
+                    contentContainerStyle={{ gap: 12, paddingBottom: 16 }}
+                    nestedScrollEnabled={true}
+                  >
+                    {voiceTutorMessages.map((msg) => {
+                      const isBot = msg.sender === "bot";
+                      return (
+                        <View
+                          key={msg.id}
+                          style={[
+                            styles.mobileBubbleContainer,
+                            isBot ? styles.mobileBubbleContainerBot : styles.mobileBubbleContainerUser
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.mobileBubble,
+                              isBot ? styles.mobileBubbleBot : styles.mobileBubbleUser
+                            ]}
+                          >
+                            <Text style={styles.mobileBubbleSpeaker}>{isBot ? "Lektor:" : "Ty:"}</Text>
+                            <Text style={[
+                              styles.mobileBubbleText,
+                              isBot ? styles.mobileBubbleTextBot : styles.mobileBubbleTextUser
+                            ]}>
+                              {msg.text}
+                            </Text>
+                            {!isBot && msg.evaluation && (
+                              <View style={styles.mobileBubbleEval}>
+                                <Text style={styles.mobileBubbleEvalScore}>
+                                  🏆 Ocena: <strong>{msg.evaluation.score}/100</strong>
+                                </Text>
+                                {msg.evaluation.feedback && (
+                                  <Text style={styles.mobileBubbleEvalFeedback}>
+                                    💡 {msg.evaluation.feedback}
+                                  </Text>
+                                )}
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
             </View>
-          </ScrollView>
-        )}
+          );
+        })()}
 
         {currentView === 'workspace' && (
           <ScrollView ref={workspaceScrollRef} contentContainerStyle={styles.workspaceContainer}>
@@ -1304,6 +2257,393 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {currentView === 'media' && (
+          <View style={styles.mediaMainContainer}>
+            {/* Header Bar with Dropdown/Selector trigger */}
+            <View style={styles.mediaHeaderBar}>
+              <Text style={styles.mediaVideoTitle} numberOfLines={1}>
+                {currentVideo.title}
+              </Text>
+              <TouchableOpacity 
+                style={styles.selectVideoHeaderBtn}
+                onPress={() => setVideoShowSelectorModal(true)}
+              >
+                <Text style={styles.selectVideoHeaderBtnText}>Wybierz film 🎬</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* YouTube Player Card (Fixed Height at top) */}
+            <View style={styles.playerCardCompact}>
+              <YoutubePlayer
+                ref={playerRef}
+                height={((width - 32) * 9) / 16}
+                width={width - 32}
+                videoId={currentVideo.youtubeId}
+                play={videoIsPlaying}
+                onChangeState={(state: any) => {
+                  if (state === "playing") setVideoIsPlaying(true);
+                  if (state === "paused") setVideoIsPlaying(false);
+                  if (state === "ended") setVideoIsPlaying(false);
+                }}
+              />
+              <View style={styles.playerControlsCompact}>
+                <TouchableOpacity 
+                  style={[styles.controlBtnCompact, videoIsPlaying ? styles.controlBtnCompactActive : null]}
+                  onPress={() => setVideoIsPlaying(!videoIsPlaying)}
+                >
+                  <Text style={[styles.controlBtnCompactText, videoIsPlaying ? styles.controlBtnCompactTextActive : null]}>
+                    {videoIsPlaying ? "⏸ Pauza" : "▶ Odtwórz"}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.playerTimeTextCompact}>
+                  {Math.floor(videoCurrentTime)}s / {currentVideo.transcript.length > 0 ? Math.floor(currentVideo.transcript[currentVideo.transcript.length - 1].end) : 0}s
+                </Text>
+              </View>
+            </View>
+
+            {/* Transcript Scroll Container (Flexible height) */}
+            <View style={styles.mediaTranscriptFlexContainer}>
+              <ScrollView 
+                ref={transcriptScrollRef}
+                style={styles.transcriptScrollView}
+                contentContainerStyle={styles.transcriptScrollContent}
+                nestedScrollEnabled={true}
+              >
+                {currentVideo.transcript.length === 0 ? (
+                  <Text style={styles.emptyText}>Brak transkrypcji dla tego wideo.</Text>
+                ) : (
+                  currentVideo.transcript.map((seg: any, idx: number) => {
+                    const isActive = idx === videoActiveSegmentIdx;
+                    const words = seg.text.split(" ");
+                    
+                    return (
+                      <View 
+                        key={idx} 
+                        style={[styles.segmentCard, isActive && styles.segmentCardActive]}
+                      >
+                        <View style={styles.segmentHeader}>
+                          <Text style={styles.segmentTime}>
+                            {Math.floor(seg.start)}s - {Math.floor(seg.end)}s
+                          </Text>
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity 
+                              style={styles.cardActionBtn}
+                              onPress={() => handleExplainJoke(seg.text)}
+                            >
+                              <Text style={styles.cardActionBtnText}>💡 Wyjaśnij żart</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              style={styles.cardActionBtn}
+                              onPress={async () => {
+                                setVideoIsPlaying(false);
+                                if (playerRef.current) {
+                                  await playerRef.current.seekTo(seg.start, true);
+                                  setVideoCurrentTime(seg.start);
+                                  setVideoActiveSegmentIdx(idx);
+                                }
+                              }}
+                            >
+                              <Text style={styles.cardActionBtnText}>▶ Odtwórz stąd</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                        <View style={styles.wordsRow}>
+                          {words.map((w: string, wIdx: number) => (
+                            <TouchableOpacity 
+                              key={wIdx} 
+                              onPress={() => handleWordClick(w)}
+                              style={styles.wordTouch}
+                            >
+                              <Text style={styles.wordText}>{w}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
+
+            {/* Floating Dictionary & Translation Sheet */}
+            {(videoSelectedWord !== '' || videoSegmentTranslation !== '') && (
+              <View style={styles.floatingDictCard}>
+                <View style={styles.dictCardHeader}>
+                  <Text style={styles.dictCardTitle}>📓 Słownik i Tłumaczenie</Text>
+                  <TouchableOpacity 
+                    style={styles.dictCardCloseBtn}
+                    onPress={() => {
+                      setVideoSelectedWord('');
+                      setVideoWordTranslation('');
+                      setVideoSegmentTranslation('');
+                    }}
+                  >
+                    <Text style={styles.dictCardCloseBtnText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled={true}>
+                  {/* Word translation */}
+                  {videoSelectedWord !== '' && (
+                    <View style={styles.dictSection}>
+                      <Text style={styles.dictLabel}>TŁUMACZENIE SŁOWA:</Text>
+                      <View style={styles.dictRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.dictOriginal}>"{videoSelectedWord}"</Text>
+                          <Text style={styles.dictTranslated}>{videoWordTranslation || "Tłumaczenie..."}</Text>
+                        </View>
+                        <TouchableOpacity 
+                          style={[styles.dictSaveBtn, videoIsWordSaved && styles.dictSaveBtnDisabled]}
+                          onPress={handleSaveWord}
+                          disabled={videoIsWordSaved}
+                        >
+                          <Text style={styles.dictSaveBtnText}>
+                            {videoIsWordSaved ? "Zapisane" : "Zapisz (+)"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Phrase translation */}
+                  {videoSegmentTranslation !== '' && (
+                    <View style={[styles.dictSection, videoSelectedWord !== '' && styles.dictSectionDivider]}>
+                      <Text style={styles.dictLabel}>TŁUMACZENIE FRAZY:</Text>
+                      <View style={styles.dictRow}>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <Text style={styles.dictOriginalPhrase}>
+                            "{currentVideo.transcript[videoActiveSegmentIdx]?.text}"
+                          </Text>
+                          <Text style={styles.dictTranslatedPhrase}>{videoSegmentTranslation}</Text>
+                        </View>
+                        <TouchableOpacity 
+                          style={[styles.dictSaveBtn, videoIsSegmentSaved && styles.dictSaveBtnDisabled]}
+                          onPress={handleSaveSegmentPhrase}
+                          disabled={videoIsSegmentSaved}
+                        >
+                          <Text style={styles.dictSaveBtnText}>
+                            {videoIsSegmentSaved ? "Zapisane" : "Zapisz (+)"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Video Selector Modal */}
+        <Modal
+          visible={videoShowSelectorModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setVideoShowSelectorModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.videoSelectorModalContent}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalHeading}>Wybierz lub dodaj film</Text>
+                <TouchableOpacity 
+                  style={styles.modalCloseBtn}
+                  onPress={() => setVideoShowSelectorModal(false)}
+                >
+                  <Text style={styles.modalCloseBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView contentContainerStyle={styles.videoSelectorModalScroll}>
+                <Text style={styles.modalSectionLabel}>Dostępne wideo:</Text>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.videoCarouselModal}
+                >
+                  {/* Curated Videos */}
+                  {CURATED_VIDEOS.map((vid) => {
+                    const isSelected = currentVideo.youtubeId === vid.youtubeId;
+                    return (
+                      <TouchableOpacity
+                        key={vid.id}
+                        style={[styles.videoCard, isSelected && styles.videoCardActive]}
+                        onPress={() => {
+                          setCurrentVideo(vid);
+                          setVideoIsPlaying(false);
+                          setVideoCurrentTime(0);
+                          setVideoActiveSegmentIdx(-1);
+                          setVideoSelectedWord('');
+                          setVideoWordTranslation('');
+                          setVideoSegmentTranslation('');
+                          setVideoShowSelectorModal(false);
+                        }}
+                      >
+                        <View style={styles.thumbnailWrapper}>
+                          <Image 
+                            source={{ uri: `https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg` }}
+                            style={styles.videoThumbnail}
+                            resizeMode="cover"
+                          />
+                          {isSelected && (
+                            <View style={styles.activeVideoOverlay}>
+                              <Text style={styles.activeOverlayText}>▶ Aktywny</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.videoCardTitle, isSelected && styles.videoCardTitleActive]} numberOfLines={2}>
+                          {vid.title}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+
+                  {/* Custom Videos */}
+                  {customVideos.map((vid) => {
+                    const isSelected = currentVideo.youtubeId === vid.youtubeId;
+                    return (
+                      <TouchableOpacity
+                        key={vid.id}
+                        style={[styles.videoCard, isSelected && styles.videoCardActive]}
+                        onPress={() => {
+                          setCurrentVideo(vid);
+                          setVideoIsPlaying(false);
+                          setVideoCurrentTime(0);
+                          setVideoActiveSegmentIdx(-1);
+                          setVideoSelectedWord('');
+                          setVideoWordTranslation('');
+                          setVideoSegmentTranslation('');
+                          setVideoShowSelectorModal(false);
+                        }}
+                      >
+                        <View style={styles.thumbnailWrapper}>
+                          <Image 
+                            source={{ uri: `https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg` }}
+                            style={styles.videoThumbnail}
+                            resizeMode="cover"
+                          />
+                          <TouchableOpacity 
+                            style={styles.deleteCustomVideoBadge}
+                            onPress={() => handleDeleteCustomVideo(vid.youtubeId)}
+                          >
+                            <Text style={styles.deleteCustomVideoText}>✕</Text>
+                          </TouchableOpacity>
+                          {isSelected && (
+                            <View style={styles.activeVideoOverlay}>
+                              <Text style={styles.activeOverlayText}>▶ Aktywny</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.videoCardTitle, isSelected && styles.videoCardTitleActive]} numberOfLines={2}>
+                          {vid.title}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Custom Video Form inside selector modal */}
+                <View style={styles.customVideoFormModal}>
+                  <Text style={styles.formLabel}>Dodaj własny film z YouTube:</Text>
+                  <View style={styles.inputRow}>
+                    <TextInput
+                      style={styles.formInput}
+                      value={videoCustomUrl}
+                      onChangeText={setVideoCustomUrl}
+                      placeholder="Wklej link YouTube..."
+                      placeholderTextColor="#9AA0A6"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <TouchableOpacity 
+                      style={styles.formBtn}
+                      onPress={async () => {
+                        await handleLoadCustomVideo();
+                      }}
+                      disabled={videoIsLoadingCustom}
+                    >
+                      {videoIsLoadingCustom ? (
+                        <ActivityIndicator color="white" size="small" />
+                      ) : (
+                        <Text style={styles.formBtnText}>Dodaj</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  {videoCustomError ? (
+                    <Text style={styles.errorText}>{videoCustomError}</Text>
+                  ) : null}
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Joke Explanation Modal */}
+        <Modal
+          visible={videoShowJokeModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setVideoShowJokeModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.jokeModalContent}>
+              <View style={styles.jokeModalHeaderRow}>
+                <Text style={styles.modalHeading}>Wyjaśnienie humoru</Text>
+                <TouchableOpacity 
+                  style={styles.modalCloseBtn}
+                  onPress={() => setVideoShowJokeModal(false)}
+                >
+                  <Text style={styles.modalCloseBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <ScrollView contentContainerStyle={styles.jokeModalScroll}>
+                <View style={styles.quoteCard}>
+                  <Text style={styles.quoteLabel}>CYTAT:</Text>
+                  <Text style={styles.quoteText}>"{videoSelectedJokeText}"</Text>
+                </View>
+
+                {videoIsExplainingJoke ? (
+                  <View style={styles.jokeLoadingContainer}>
+                    <ActivityIndicator size="large" color="#1A73E8" />
+                    <Text style={styles.loadingText}>Analizuję kontekst i humor...</Text>
+                  </View>
+                ) : videoJokeExplanation ? (
+                  videoJokeExplanation.error ? (
+                    <Text style={styles.errorText}>{videoJokeExplanation.error}</Text>
+                  ) : (
+                    <View style={styles.explanationGrid}>
+                      <View style={styles.expCard}>
+                        <Text style={styles.expTitle}>📝 Dosłowne znaczenie</Text>
+                        <Text style={styles.expDesc}>{videoJokeExplanation.literal_meaning || "N/A"}</Text>
+                      </View>
+
+                      <View style={styles.expCard}>
+                        <Text style={styles.expTitle}>🌍 Kontekst kulturowy</Text>
+                        <Text style={styles.expDesc}>{videoJokeExplanation.cultural_context || "N/A"}</Text>
+                      </View>
+
+                      <View style={styles.expCard}>
+                        <Text style={styles.expTitle}>🎭 Sarkazm i ton</Text>
+                        <Text style={styles.expDesc}>{videoJokeExplanation.sarcasm_and_tone || "N/A"}</Text>
+                      </View>
+
+                      <View style={styles.expCard}>
+                        <Text style={styles.expTitle}>💬 Gra słów i humor</Text>
+                        <Text style={styles.expDesc}>{videoJokeExplanation.wordplay_and_humor || "N/A"}</Text>
+                      </View>
+
+                      <View style={styles.expCardPrimary}>
+                        <Text style={styles.expTitlePrimary}>💡 Komentarz AI</Text>
+                        <Text style={styles.expDescPrimary}>{videoJokeExplanation.ai_comment || "N/A"}</Text>
+                      </View>
+                    </View>
+                  )
+                ) : null}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
         {currentView === 'settings' && (
           <ScrollView contentContainerStyle={styles.dashboardContainer}>
             <View style={styles.welcomeCard}>
@@ -1369,7 +2709,7 @@ export default function HomeScreen() {
         >
           <HomeIcon color={currentView === 'dashboard' ? '#1A73E8' : '#5F6368'} />
           <Text style={[styles.navText, currentView === 'dashboard' ? styles.navTextActive : null]}>
-            Home
+            Tutor
           </Text>
         </TouchableOpacity>
 
@@ -1400,6 +2740,20 @@ export default function HomeScreen() {
           <BookIcon color={currentView === 'notebook' ? '#1A73E8' : '#5F6368'} />
           <Text style={[styles.navText, currentView === 'notebook' ? styles.navTextActive : null]}>
             Vocab
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => {
+            setCurrentView('media');
+            // Pause pronunciation or speech tutor if switching to media
+            stopVoiceTutorAudio();
+          }}
+        >
+          <MediaIcon color={currentView === 'media' ? '#1A73E8' : '#5F6368'} />
+          <Text style={[styles.navText, currentView === 'media' ? styles.navTextActive : null]}>
+            Media
           </Text>
         </TouchableOpacity>
 
@@ -1477,11 +2831,668 @@ export default function HomeScreen() {
           </View>
         </Modal>
       ) : null}
+
+      {/* Voice Session Summary Modal */}
+      {voiceTutorSummary && (
+        <Modal
+          transparent={true}
+          visible={true}
+          animationType="slide"
+          onRequestClose={handleCloseVoiceTutorSummary}
+        >
+          <View style={styles.summaryModalOverlay}>
+            <View style={styles.summaryModalContent}>
+              <View style={styles.summaryModalHeader}>
+                <Text style={styles.summaryModalTitle}>Podsumowanie Lekcji Głosowej AI</Text>
+                <TouchableOpacity onPress={handleCloseVoiceTutorSummary}>
+                  <Text style={styles.summaryModalCloseBtn}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.summaryModalBody} contentContainerStyle={{ gap: 16, paddingBottom: 24 }}>
+                {/* 1. Score Card */}
+                <View style={[styles.summaryCard, { borderLeftColor: '#1A73E8' }]}>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardTitle}>🏆 Wynik i ocena lekcji</Text>
+                    <View style={styles.scoreBadge}>
+                      <Text style={styles.scoreBadgeText}>Średnia: {voiceTutorSummary.average_score || 0}/100</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.feedbackText}>{voiceTutorSummary.feedback_pl || ''}</Text>
+                </View>
+
+                {/* 2. Issues to reinforce */}
+                <Text style={styles.sectionTitle}>🗣️ Zagadnienia do utrwalenia</Text>
+                {(!voiceTutorSummary.issues || voiceTutorSummary.issues.length === 0) ? (
+                  <Text style={styles.noDataText}>Świetnie! Nie zanotowano poważniejszych błędów językowych.</Text>
+                ) : (
+                  voiceTutorSummary.issues.map((item: any, idx: number) => (
+                    <View key={idx} style={styles.issueCard}>
+                      <Text style={styles.issueLabelOriginal}>❌ Twoja wypowiedź:</Text>
+                      <Text style={styles.issueTextOriginal}>"{item.original}"</Text>
+                      
+                      <View style={styles.issueCorrectContainer}>
+                        <Text style={styles.issueLabelCorrect}>👉 Propozycja poprawy / urozmaicenia:</Text>
+                        <Text style={styles.issueTextCorrect}>"{item.corrected}"</Text>
+                      </View>
+                      
+                      <View style={styles.issueExplanationContainer}>
+                        <Text style={styles.issueTextExplanation}>💡 Komentarz: {item.explanation_pl}</Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+
+                {/* 3. Session Vocabulary */}
+                <Text style={styles.sectionTitle}>📓 Słownictwo z lekcji</Text>
+                {(!voiceTutorSummary.vocabulary || voiceTutorSummary.vocabulary.length === 0) ? (
+                  <Text style={styles.noDataText}>Brak nowego słownictwa do wyodrębnienia z tej sesji.</Text>
+                ) : (
+                  voiceTutorSummary.vocabulary.map((item: any, idx: number) => {
+                    const isSaved = voiceTutorSavedWords.includes(item.word);
+                    return (
+                      <View key={idx} style={styles.vocabularyCard}>
+                        <View style={styles.vocabRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.vocabWord}>{item.word}</Text>
+                            <Text style={styles.summaryVocabTranslation}>— {item.translation}</Text>
+                          </View>
+                          <TouchableOpacity
+                            style={[styles.vocabSaveBtn, isSaved && styles.vocabSaveBtnActive]}
+                            disabled={isSaved}
+                            onPress={async () => {
+                              const success = await handleSaveWordFromVoiceTutor(item.word, item.translation);
+                              if (success) {
+                                setVoiceTutorSavedWords(prev => [...prev, item.word]);
+                              }
+                            }}
+                          >
+                            <Text style={[styles.vocabSaveBtnText, isSaved && styles.vocabSaveBtnTextActive]}>
+                              {isSaved ? "✓ Zapisano" : "Zapisz"}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+
+                {/* 4. Email report form */}
+                <View style={styles.emailSection}>
+                  <Text style={styles.emailSectionTitle}>Wyślij podsumowanie na e-mail</Text>
+                  <View style={styles.emailInputRow}>
+                    <TextInput
+                      style={styles.emailTextInput}
+                      placeholder="Wpisz adres e-mail"
+                      value={voiceTutorEmail}
+                      onChangeText={setVoiceTutorEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <TouchableOpacity
+                      style={styles.emailSendBtn}
+                      onPress={async () => {
+                        if (!voiceTutorEmail.trim()) {
+                          Alert.alert("Info", "Wpisz adres e-mail.");
+                          return;
+                        }
+                        await handleSendVoiceTutorEmail(voiceTutorEmail.trim());
+                      }}
+                    >
+                      <Text style={styles.emailSendBtnText}>Wyślij</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity style={styles.summaryCloseFooterBtn} onPress={handleCloseVoiceTutorSummary}>
+                <Text style={styles.summaryCloseFooterBtnText}>Zamknij podsumowanie</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Loading Overlay for Summary Generation */}
+      {isVoiceTutorGeneratingSummary && (
+        <Modal transparent={true} visible={true} animationType="fade">
+          <View style={styles.summaryLoadingOverlay}>
+            <View style={styles.summaryLoadingContent}>
+              <ActivityIndicator size="large" color="#1A73E8" />
+              <Text style={styles.summaryLoadingTitle}>Generowanie podsumowania lekcji...</Text>
+              <Text style={styles.summaryLoadingDesc}>
+                Analizuję Twoje błędy gramatyczne, wymowę oraz nowe słownictwo, aby przygotować raport.
+              </Text>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  // --- Voice Tutor (Tutor Głosowy) Styles ---
+  voiceTutorContainer: {
+    flex: 1,
+    padding: 24,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  voiceTutorHeader: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#202124',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  blueGradientText: {
+    color: '#1A73E8',
+  },
+  voiceTutorStage: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  orbWrapper: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 220,
+    height: 220,
+    marginBottom: 36,
+  },
+  voiceOrbButton: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  orbInactive: {
+    backgroundColor: '#5F6368',
+  },
+  orbListening: {
+    backgroundColor: '#1A73E8',
+  },
+  orbUserSpeaking: {
+    backgroundColor: '#34A853',
+  },
+  orbSpeaking: {
+    backgroundColor: '#4285F4',
+  },
+  orbThinking: {
+    backgroundColor: '#8AB4F8',
+  },
+  orbCore: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  orbPulseRing: {
+    position: 'absolute',
+    borderRadius: 110,
+    borderWidth: 1.5,
+    borderColor: 'rgba(26, 115, 232, 0.25)',
+  },
+  orbPulseRing1: {
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+  },
+  orbPulseRing2: {
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+  },
+  ringGreen: {
+    borderColor: 'rgba(52, 168, 83, 0.25)',
+  },
+  ringBlue: {
+    borderColor: 'rgba(138, 180, 248, 0.25)',
+  },
+  orbPulseDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  orbWaveContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  orbWaveBar: {
+    width: 4,
+    borderRadius: 2,
+    backgroundColor: '#FFFFFF',
+  },
+  orbWaveBarGreen: {
+    backgroundColor: '#FFFFFF',
+  },
+  voiceTutorStatusText: {
+    fontSize: 15,
+    color: '#5F6368',
+    textAlign: 'center',
+    fontWeight: '500',
+    marginHorizontal: 32,
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  transcriptToggleBtn: {
+    borderWidth: 1.5,
+    borderColor: '#DADCE0',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+  },
+  transcriptToggleBtnActive: {
+    backgroundColor: '#E8F0FE',
+    borderColor: '#1A73E8',
+  },
+  transcriptToggleBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3C4043',
+  },
+  transcriptToggleBtnTextActive: {
+    color: '#1A73E8',
+  },
+  voiceTutorTips: {
+    padding: 12,
+    backgroundColor: 'rgba(241, 243, 244, 0.8)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8EAED',
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 'auto',
+  },
+  voiceTutorTipsText: {
+    fontSize: 12,
+    color: '#5F6368',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  mobileTranscriptDrawer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '52%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#DADCE0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  drawerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F3F4',
+  },
+  drawerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#202124',
+  },
+  drawerCloseText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A73E8',
+  },
+  drawerScroll: {
+    flex: 1,
+    padding: 16,
+  },
+  mobileBubbleContainer: {
+    flexDirection: 'row',
+    width: '100%',
+    marginVertical: 4,
+  },
+  mobileBubbleContainerBot: {
+    justifyContent: 'flex-start',
+  },
+  mobileBubbleContainerUser: {
+    justifyContent: 'flex-end',
+  },
+  mobileBubble: {
+    maxWidth: '85%',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  mobileBubbleBot: {
+    backgroundColor: '#F1F3F4',
+    borderTopLeftRadius: 0,
+  },
+  mobileBubbleUser: {
+    backgroundColor: '#E8F0FE',
+    borderTopRightRadius: 0,
+  },
+  mobileBubbleSpeaker: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#5F6368',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  mobileBubbleText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  mobileBubbleTextBot: {
+    color: '#202124',
+  },
+  mobileBubbleTextUser: {
+    color: '#1A73E8',
+    fontWeight: '500',
+  },
+  mobileBubbleEval: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(26, 115, 232, 0.15)',
+  },
+  mobileBubbleEvalScore: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#137333',
+  },
+  mobileBubbleEvalFeedback: {
+    fontSize: 11,
+    color: '#5F6368',
+    marginTop: 2,
+  },
+
+  // --- Voice Session Summary Modal Styles ---
+  summaryModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  summaryModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 24,
+  },
+  summaryModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F3F4',
+    backgroundColor: '#E8F0FE',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  summaryModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A73E8',
+  },
+  summaryModalCloseBtn: {
+    fontSize: 20,
+    color: '#5F6368',
+    padding: 4,
+  },
+  summaryModalBody: {
+    flex: 1,
+    padding: 20,
+  },
+  summaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    borderLeftWidth: 5,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#202124',
+  },
+  scoreBadge: {
+    backgroundColor: '#E8F0FE',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  scoreBadgeText: {
+    color: '#1A73E8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  feedbackText: {
+    fontSize: 14,
+    color: '#3C4043',
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#202124',
+    marginTop: 16,
+    marginBottom: 10,
+  },
+  noDataText: {
+    fontSize: 13,
+    color: '#5F6368',
+    fontStyle: 'italic',
+    paddingLeft: 4,
+  },
+  issueCard: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#EF4444',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  issueLabelOriginal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EF4444',
+    marginBottom: 4,
+  },
+  issueTextOriginal: {
+    fontSize: 14,
+    color: '#7F1D1D',
+    fontStyle: 'italic',
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  issueCorrectContainer: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  issueLabelCorrect: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#16A34A',
+    marginBottom: 2,
+  },
+  issueTextCorrect: {
+    fontSize: 14,
+    color: '#14532D',
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  issueExplanationContainer: {
+    backgroundColor: 'rgba(239, 68, 68, 0.04)',
+    padding: 8,
+    borderRadius: 6,
+  },
+  issueTextExplanation: {
+    fontSize: 13,
+    color: '#991B1B',
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  vocabularyCard: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    borderLeftWidth: 4,
+    borderLeftColor: '#16A34A',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+  },
+  vocabRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  vocabWord: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#15803D',
+    marginBottom: 2,
+  },
+  summaryVocabTranslation: {
+    fontSize: 13,
+    color: '#14532D',
+  },
+  vocabSaveBtn: {
+    backgroundColor: '#1A73E8',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  vocabSaveBtnActive: {
+    backgroundColor: '#16A34A',
+  },
+  vocabSaveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  vocabSaveBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  emailSection: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+  },
+  emailSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#202124',
+    marginBottom: 10,
+  },
+  emailInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  emailTextInput: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    backgroundColor: '#FFFFFF',
+    color: '#202124',
+  },
+  emailSendBtn: {
+    backgroundColor: '#1A73E8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  emailSendBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  summaryCloseFooterBtn: {
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F1F3F4',
+    borderTopWidth: 1,
+    borderTopColor: '#DADCE0',
+  },
+  summaryCloseFooterBtnText: {
+    color: '#3C4043',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  // --- Voice Session Summary Loading Styles ---
+  summaryLoadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  summaryLoadingContent: {
+    alignItems: 'center',
+    gap: 16,
+  },
+  summaryLoadingTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#202124',
+    textAlign: 'center',
+  },
+  summaryLoadingDesc: {
+    fontSize: 14,
+    color: '#5F6368',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -2451,5 +4462,512 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F1F3F4',
     paddingTop: 12,
+  },
+
+  // --- Media Buddy (Lekcje Wideo) Styles ---
+  // --- Media Buddy (Optimized Layout) Styles ---
+  mediaMainContainer: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+  },
+  mediaHeaderBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8EAED',
+    gap: 12,
+  },
+  mediaVideoTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#202124',
+  },
+  selectVideoHeaderBtn: {
+    backgroundColor: '#E8F0FE',
+    borderWidth: 1,
+    borderColor: '#1A73E8',
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  selectVideoHeaderBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1A73E8',
+  },
+  playerCardCompact: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DADCE0',
+    alignItems: 'center',
+  },
+  playerControlsCompact: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 8,
+  },
+  controlBtnCompact: {
+    backgroundColor: '#1A73E8',
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  controlBtnCompactActive: {
+    backgroundColor: '#5F6368',
+  },
+  controlBtnCompactText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  controlBtnCompactTextActive: {
+    color: '#FFFFFF',
+  },
+  playerTimeTextCompact: {
+    fontSize: 13,
+    color: '#5F6368',
+    fontWeight: '500',
+  },
+  mediaTranscriptFlexContainer: {
+    flex: 1,
+  },
+  transcriptScrollView: {
+    flex: 1,
+  },
+  transcriptScrollContent: {
+    padding: 16,
+    paddingBottom: 220,
+  },
+  segmentCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#F1F3F4',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  segmentCardActive: {
+    borderColor: '#1A73E8',
+    backgroundColor: '#F8F9FF',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  segmentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F3F4',
+    paddingBottom: 6,
+  },
+  segmentTime: {
+    fontSize: 12,
+    color: '#5F6368',
+    fontWeight: '600',
+  },
+  cardActionBtn: {
+    backgroundColor: '#F1F3F4',
+    borderRadius: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  cardActionBtnText: {
+    fontSize: 11,
+    color: '#3C4043',
+    fontWeight: '600',
+  },
+  wordsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 8,
+    columnGap: 4,
+  },
+  wordTouch: {
+    backgroundColor: '#F1F3F4',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  wordText: {
+    fontSize: 14,
+    color: '#3C4043',
+  },
+
+  // Floating Dictionary styles
+  floatingDictCard: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#E8EAED',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 16,
+  },
+  dictCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F3F4',
+    paddingBottom: 8,
+  },
+  dictCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#202124',
+  },
+  dictCardCloseBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#F1F3F4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dictCardCloseBtnText: {
+    fontSize: 11,
+    color: '#5F6368',
+    fontWeight: '700',
+  },
+  dictSection: {
+    marginVertical: 4,
+  },
+  dictSectionDivider: {
+    borderTopWidth: 1,
+    borderTopColor: '#F1F3F4',
+    paddingTop: 12,
+    marginTop: 12,
+  },
+  dictLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1A73E8',
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  dictRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dictOriginal: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#202124',
+    fontStyle: 'italic',
+  },
+  dictTranslated: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#137333',
+    marginTop: 2,
+  },
+  dictOriginalPhrase: {
+    fontSize: 13,
+    color: '#5F6368',
+    fontStyle: 'italic',
+  },
+  dictTranslatedPhrase: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#202124',
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  dictSaveBtn: {
+    backgroundColor: '#E8F0FE',
+    borderWidth: 1,
+    borderColor: '#1A73E8',
+    borderRadius: 12,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  dictSaveBtnDisabled: {
+    backgroundColor: '#E6F4EA',
+    borderColor: '#137333',
+  },
+  dictSaveBtnText: {
+    color: '#1A73E8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // Modal selector styles
+  videoSelectorModalContent: {
+    width: '95%',
+    height: '75%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 24,
+  },
+  videoSelectorModalScroll: {
+    paddingBottom: 24,
+  },
+  modalSectionLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#202124',
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  videoCarouselModal: {
+    paddingBottom: 16,
+    gap: 12,
+  },
+  customVideoFormModal: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#E8EAED',
+  },
+  videoCard: {
+    width: 140,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E8EAED',
+    padding: 6,
+    marginRight: 10,
+  },
+  videoCardActive: {
+    borderColor: '#1A73E8',
+    backgroundColor: '#F8F9FF',
+  },
+  thumbnailWrapper: {
+    position: 'relative',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 6,
+    backgroundColor: '#F1F3F4',
+  },
+  videoThumbnail: {
+    width: 124,
+    height: 70,
+    borderRadius: 8,
+  },
+  activeVideoOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(26, 115, 232, 0.95)',
+    paddingVertical: 2,
+    alignItems: 'center',
+  },
+  activeOverlayText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  deleteCustomVideoBadge: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  deleteCustomVideoText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  videoCardTitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#3C4043',
+    lineHeight: 14,
+    textAlign: 'center',
+  },
+  videoCardTitleActive: {
+    color: '#1A73E8',
+    fontWeight: '700',
+  },
+  formLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3C4043',
+    marginBottom: 6,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  formInput: {
+    flex: 1,
+    height: 38,
+    borderWidth: 1.5,
+    borderColor: '#DADCE0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    color: '#202124',
+    backgroundColor: '#FFFFFF',
+  },
+  formBtn: {
+    backgroundColor: '#1A73E8',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  formBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  errorText: {
+    color: '#D93025',
+    fontSize: 13,
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  jokeModalContent: {
+    width: '90%',
+    height: '75%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 24,
+  },
+  jokeModalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#F1F3F4',
+    paddingBottom: 12,
+    marginBottom: 12,
+  },
+  modalHeading: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#202124',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F3F4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseBtnText: {
+    fontSize: 14,
+    color: '#5F6368',
+    fontWeight: '700',
+  },
+  jokeModalScroll: {
+    paddingBottom: 24,
+  },
+  quoteCard: {
+    backgroundColor: '#E8F0FE',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#1A73E8',
+  },
+  quoteLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1A73E8',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  quoteText: {
+    fontSize: 14,
+    color: '#202124',
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  jokeLoadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#5F6368',
+  },
+  explanationGrid: {
+    gap: 12,
+  },
+  expCard: {
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    borderRadius: 12,
+    padding: 12,
+  },
+  expCardPrimary: {
+    backgroundColor: '#E8F0FE',
+    borderWidth: 1.5,
+    borderColor: '#1A73E8',
+    borderRadius: 12,
+    padding: 12,
+  },
+  expTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#3C4043',
+    marginBottom: 6,
+  },
+  expTitlePrimary: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1A73E8',
+    marginBottom: 6,
+  },
+  expDesc: {
+    fontSize: 13,
+    color: '#5F6368',
+    lineHeight: 18,
+  },
+  expDescPrimary: {
+    fontSize: 13,
+    color: '#1A73E8',
+    lineHeight: 18,
+    fontWeight: '500',
   },
 });

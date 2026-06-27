@@ -20,34 +20,187 @@
 }
 
 .workspace-header {
-  margin-bottom: 2rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.75rem;
+}
+
+.header-left-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
 }
 
 .workspace-header h1 {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--slate-800);
-  margin-top: 0.25rem;
+  margin: 0;
 }
 
-.back-btn {
+.header-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 1.5rem;
+}
+
+.header-action-btn {
+  background: var(--slate-50);
+  border: 1px solid var(--border);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slate-500);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0;
+}
+
+.header-action-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.header-action-btn:hover {
+  background: var(--slate-100);
+  color: var(--primary-600);
+  border-color: var(--primary-200);
+  transform: scale(1.05);
+}
+
+.header-action-btn.active {
+  background: var(--primary-50);
+  color: var(--primary-600);
+  border-color: var(--primary-300);
+}
+
+.header-action-btn.clear-btn:hover {
+  color: var(--red-600);
+  border-color: var(--red-200);
+  background: var(--red-50);
+}
+
+/* Floating Apple Player Controls */
+.apple-player-controls-floating {
+  position: fixed;
+  top: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 0.35rem 0.75rem 0.35rem 0.5rem;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.08), 0 8px 15px -6px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  user-select: none;
+}
+
+.apple-player-controls-floating.dragging {
+  box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.12), 0 10px 20px -6px rgba(0, 0, 0, 0.08);
+  border-color: var(--primary-300);
+}
+
+/* Drag Handle */
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--slate-400);
+  margin-right: 0.15rem;
+  cursor: grab;
+  transition: color 0.2s ease;
+}
+
+.drag-handle:hover {
+  color: var(--slate-600);
+}
+
+.apple-player-controls-floating.dragging .drag-handle {
+  cursor: grabbing;
+  color: var(--primary-500);
+}
+
+.drag-handle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.player-btn {
   background: transparent;
   border: none;
-  color: var(--slate-500);
-  font-weight: 600;
-  font-family: var(--font-main);
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slate-600);
   cursor: pointer;
-  padding: 0;
-  margin-bottom: 0.25rem;
-  display: block;
-  transition: var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
-.back-btn:hover {
+.player-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.player-btn:hover:not(:disabled) {
+  background: var(--slate-200);
+  color: var(--slate-900);
+}
+
+.player-btn:disabled {
+  color: var(--slate-300);
+  cursor: not-allowed;
+}
+
+.player-btn.play-pause-btn.playing {
+  background: var(--primary-500);
+  color: white;
+}
+
+.player-btn.play-pause-btn.playing:hover {
+  background: var(--primary-600);
+}
+
+.back-btn-inline {
+  background: var(--slate-50);
+  border: 1px solid var(--border);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slate-500);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0;
+}
+
+.back-btn-inline:hover {
+  background: var(--slate-100);
   color: var(--primary-600);
+  border-color: var(--primary-200);
+  transform: translateX(-2px);
+}
+
+.back-btn-inline svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Modals */
@@ -244,4 +397,97 @@
   border: 1px dashed var(--border);
   color: var(--slate-500);
   font-size: 0.9rem;
+}
+
+/* Chapter Tabs */
+.chapter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+}
+
+.chapter-tab {
+  background: var(--slate-50);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 1.25rem;
+  font-family: var(--font-main);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--slate-600);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.chapter-tab:hover {
+  background: var(--slate-100);
+  color: var(--slate-800);
+  border-color: var(--slate-300);
+}
+
+.chapter-tab.active {
+  background: var(--slate-900);
+  border-color: var(--slate-900);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.chapter-tab.continue-tab {
+  background: transparent;
+  border-style: dashed;
+  color: var(--primary-600);
+  border-color: var(--primary-400);
+}
+
+.chapter-tab.continue-tab:hover {
+  background: rgba(124, 58, 237, 0.05);
+  border-color: var(--primary-500);
+}
+
+.chapter-tab.continue-tab.active {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+  color: white;
+  border-style: solid;
+}
+
+/* Continuation Actions */
+.continuation-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 1.5rem;
+}
+
+.cancel-continuation-btn {
+  background: white;
+  border: 1px solid var(--border);
+  color: var(--slate-700);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cancel-continuation-btn:hover {
+  background: var(--slate-50);
+  color: var(--slate-900);
+  border-color: var(--slate-400);
+}
+
+/* Context Menu Divider & Practice Button Styles */
+.context-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.25rem 0;
+}
+
+.context-menu button.context-menu-practice-btn {
+  color: var(--primary-500);
+}
+
+.context-menu button.context-menu-practice-btn:hover {
+  background: rgba(26, 115, 232, 0.05);
+  color: var(--primary-600);
 }

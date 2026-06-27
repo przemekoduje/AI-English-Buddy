@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { API_BASE_URL } from '../../config';
 import "./StoryGenerator.css";
 
 const StoryGenerator = ({ onGenerate, isLoading, suggestedTopics, user }) => {
@@ -11,19 +12,23 @@ const StoryGenerator = ({ onGenerate, isLoading, suggestedTopics, user }) => {
     is_factual: false,
     protagonist: "",
     genre: "adventure",
-    focus_area: "none"
+    focus_area: "none",
+    is_popular_science: false,
+    scientific_bias: false,
+    scientific_communication: false,
+    scientific_language_link: false
   });
 
   useEffect(() => {
     const fetchSettings = async () => {
       if (!user) return;
       try {
-        const response = await fetch("http://127.0.0.1:5001/api/user-settings", {
+        const response = await fetch(`${API_BASE_URL}/api/user-settings`, {
           headers: { "X-Session-Token": user.token }
         });
         if (response.ok) {
           const data = await response.json();
-          setSettings(data);
+          setSettings(prev => ({ ...prev, ...data }));
         }
       } catch (err) {
         console.error("Błąd podczas ładowania ustawień:", err);
@@ -47,7 +52,7 @@ const StoryGenerator = ({ onGenerate, isLoading, suggestedTopics, user }) => {
     }
 
     try {
-      await fetch("http://127.0.0.1:5001/api/user-settings", {
+      await fetch(`${API_BASE_URL}/api/user-settings`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -176,6 +181,61 @@ const StoryGenerator = ({ onGenerate, isLoading, suggestedTopics, user }) => {
                 />
                 <span className="checkbox-text">Based on real-world facts</span>
               </label>
+            </div>
+
+            <div className="setting-group checkbox-group popular-science-section">
+              <label className="switch-label main-popular-science-switch">
+                <input
+                  type="checkbox"
+                  checked={settings.is_popular_science || false}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setSettings(prev => ({
+                      ...prev,
+                      is_popular_science: checked,
+                      scientific_bias: checked ? true : prev.scientific_bias,
+                      scientific_communication: checked ? true : prev.scientific_communication,
+                      scientific_language_link: checked ? true : prev.scientific_language_link
+                    }));
+                  }}
+                  disabled={isLoading}
+                />
+                <span className="checkbox-text">Popular science style (Styl popularnonaukowy)</span>
+              </label>
+
+              {settings.is_popular_science && (
+                <div className="popular-science-suboptions">
+                  <label className="switch-label sub-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={settings.scientific_bias || false}
+                      onChange={(e) => setSettings(prev => ({ ...prev, scientific_bias: e.target.checked }))}
+                      disabled={isLoading}
+                    />
+                    <span className="checkbox-text">Explain cognitive biases & psychology</span>
+                  </label>
+
+                  <label className="switch-label sub-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={settings.scientific_communication || false}
+                      onChange={(e) => setSettings(prev => ({ ...prev, scientific_communication: e.target.checked }))}
+                      disabled={isLoading}
+                    />
+                    <span className="checkbox-text">Focus on communication barriers & paradoxes</span>
+                  </label>
+
+                  <label className="switch-label sub-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={settings.scientific_language_link || false}
+                      onChange={(e) => setSettings(prev => ({ ...prev, scientific_language_link: e.target.checked }))}
+                      disabled={isLoading}
+                    />
+                    <span className="checkbox-text">Relate to language learning & agility</span>
+                  </label>
+                </div>
+              )}
             </div>
           </div>
         </div>

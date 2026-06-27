@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { API_BASE_URL } from '../config';
 import "../App.css";
 import "./Workspace.css";
 import Flashcards from "./Flashcards";
@@ -6,46 +7,17 @@ import StoryGenerator from "./Story/StoryGenerator";
 import Reader from "./Reader/Reader";
 import NotebookSidebar from "./Notebook/NotebookSidebar";
 import PracticeMode from "./Practice/PracticeMode";
+import WordExplanationModal from "./Notebook/WordExplanationModal";
+import SessionSummaryModal from "./Notebook/SessionSummaryModal";
+import PronunciationPracticeModal from "./Notebook/PronunciationPracticeModal";
 
-const getInitialVoiceURI = (voices) => {
-  if (!voices || voices.length === 0) return null;
-  const englishVoices = voices.filter((voice) => voice.lang.startsWith("en-"));
-  if (englishVoices.length === 0) return null;
-
-  // 1. Priorytet: Głosy oznaczone jako "Natural" lub "Neural" (np. w Edge/Chrome)
-  const naturalVoices = englishVoices.filter(v => 
-    v.name.toLowerCase().includes("natural") || 
-    v.name.toLowerCase().includes("neural")
-  );
-  if (naturalVoices.length > 0) {
-    const maleNatural = naturalVoices.find(v => v.name.toLowerCase().includes("male"));
-    if (maleNatural) return maleNatural.voiceURI;
-    return naturalVoices[0].voiceURI;
-  }
-
-  // 2. Priorytet: Sprawdzone, wysokiej jakości męskie głosy systemowe (Mac, Windows, Google)
-  const preferredNames = [
-    "Evan",               // Mac (High quality male)
-    "Nathan",             // Mac (High quality male)
-    "Google US English Male",
-    "Google UK English Male",
-    "Microsoft Nathan Online (Natural)",
-    "Microsoft Guy Online (Natural)",
-    "Microsoft Mark",     // Windows
-    "Alex",               // Mac standard male
-  ];
-
-  for (const name of preferredNames) {
-    const found = englishVoices.find(v => v.name.includes(name));
-    if (found) return found.voiceURI;
-  }
-
-  // 3. Fallback: Jakikolwiek męski
-  const anyMale = englishVoices.find(v => v.name.toLowerCase().includes("male"));
-  if (anyMale) return anyMale.voiceURI;
-
-  return englishVoices[0].voiceURI;
-};
+const PREMIUM_VOICES = [
+  { voiceURI: 'en-US-BrianNeural', name: 'Brian (US - Male) 🌟', lang: 'en-US' },
+  { voiceURI: 'en-US-AriaNeural', name: 'Aria (US - Female) 🌟', lang: 'en-US' },
+  { voiceURI: 'en-US-EmmaMultilingualNeural', name: 'Emma (US - Multilingual) 🌟', lang: 'en-US' },
+  { voiceURI: 'en-GB-RyanNeural', name: 'Ryan (UK - Male)', lang: 'en-GB' },
+  { voiceURI: 'en-GB-SoniaNeural', name: 'Sonia (UK - Female)', lang: 'en-GB' },
+];
 
 function Workspace({
   onNavigateToDashboard,
@@ -61,8 +33,8 @@ function Workspace({
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [suggestedTopics, setSuggestedTopics] = useState([]);
-  const [voices, setVoices] = useState([]);
-  const [selectedVoiceURI, setSelectedVoiceURI] = useState(null);
+  const voices = PREMIUM_VOICES;
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState('en-US-BrianNeural');
   const [speechRate, setSpeechRate] = useState(0.9);
   const [speechPitch, setSpeechPitch] = useState(1);
   const [notebookWords, setNotebookWords] = useState([]);
@@ -75,11 +47,90 @@ function Workspace({
   const [textChunks, setTextChunks] = useState([]);
   const [currentChunkIndex, setCurrentChunkIndex] = useState(-1);
   const [playSingle, setPlaySingle] = useState(false);
+  const [showVoiceControls, setShowVoiceControls] = useState(false);
   const [showFlashcards, setShowFlashcards] = useState(false);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState("");
+  const [explanationWord, setExplanationWord] = useState(null);
+  const [showPracticeModal, setShowPracticeModal] = useState(false);
+  const [practiceTargetText, setPracticeTargetText] = useState("");
   
-  const currentUtteranceRef = useRef(null);
+  // States for story parts / continuation
+  const [storyParts, setStoryParts] = useState([]);
+  const [activePartIndex, setActivePartIndex] = useState(-1);
+  const [isContinuing, setIsContinuing] = useState(false);
+  const [continuationDetails, setContinuationDetails] = useState("");
+  const [selectedContinuationTopics, setSelectedContinuationTopics] = useState([]);
+  const [loadedRootId, setLoadedRootId] = useState(null);
+  
+  const currentAudioRef = useRef(null);
+  const contextMenuRef = useRef(null);
+  
+  // Telemetry & summary states
+  const [activityLog, setActivityLog] = useState([]);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [summaryData, setSummaryData] = useState(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const explanationStartTimeRef = useRef(null);
+  const prevExplanationWordRef = useRef(null);
+
+  // Floating player dragging state & event handlers
+  const [playerPosition, setPlayerPosition] = useState({ x: 0, y: 0 });
+  const [isDraggingPlayer, setIsDraggingPlayer] = useState(false);
+  const playerDragStartRef = useRef({ x: 0, y: 0 });
+  const floatingPlayerRef = useRef(null);
+
+  const handlePlayerMouseDown = (e) => {
+    if (e.button !== 0 || e.target.closest('.player-btn')) return;
+    setIsDraggingPlayer(true);
+    playerDragStartRef.current = {
+      x: e.clientX - playerPosition.x,
+      y: e.clientY - playerPosition.y
+    };
+    
+    const handleMouseMove = (moveEvent) => {
+      setPlayerPosition({
+        x: moveEvent.clientX - playerDragStartRef.current.x,
+        y: moveEvent.clientY - playerDragStartRef.current.y
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsDraggingPlayer(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handlePlayerTouchStart = (e) => {
+    if (e.target.closest('.player-btn')) return;
+    const touch = e.touches[0];
+    setIsDraggingPlayer(true);
+    playerDragStartRef.current = {
+      x: touch.clientX - playerPosition.x,
+      y: touch.clientY - playerPosition.y
+    };
+    
+    const handleTouchMove = (moveEvent) => {
+      const moveTouch = moveEvent.touches[0];
+      setPlayerPosition({
+        x: moveTouch.clientX - playerDragStartRef.current.x,
+        y: moveTouch.clientY - playerDragStartRef.current.y
+      });
+    };
+    
+    const handleTouchEnd = () => {
+      setIsDraggingPlayer(false);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+    
+    document.addEventListener('touchmove', handleTouchMove);
+    document.addEventListener('touchend', handleTouchEnd);
+  };
 
   const loadVocabulary = useCallback(async () => {
     if (!user) return;
@@ -88,7 +139,7 @@ function Workspace({
       return;
     }
     try {
-      const response = await fetch(`http://127.0.0.1:5001/api/vocabulary?story_id=${currentStoryId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary?story_id=${currentStoryId}`, {
         headers: { "X-Session-Token": user.token }
       });
       if (response.ok) {
@@ -104,29 +155,179 @@ function Workspace({
     loadVocabulary();
   }, [loadVocabulary]);
 
+  // Effect to load story parts when currentStoryId changes
   useEffect(() => {
-    const populateVoiceList = () => {
-      const availableVoices = window.speechSynthesis.getVoices();
-      const englishVoices = availableVoices.filter((v) => v.lang.startsWith("en-"));
-      setVoices(englishVoices);
-      if (!selectedVoiceURI && availableVoices.length > 0) {
-        setSelectedVoiceURI(getInitialVoiceURI(availableVoices));
+    if (!user || !currentStoryId) {
+      setStoryParts([]);
+      setActivePartIndex(-1);
+      setLoadedRootId(null);
+      return;
+    }
+    
+    if (loadedRootId) {
+      const existingIndex = storyParts.findIndex(p => p.id === currentStoryId);
+      if (existingIndex !== -1) {
+        setActivePartIndex(existingIndex);
+        return;
+      }
+    }
+    
+    const loadStoryParts = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/stories/${currentStoryId}/parts`, {
+          headers: { "X-Session-Token": user.token }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setStoryParts(data);
+          const rootId = data[0]?.id || currentStoryId;
+          setLoadedRootId(rootId);
+          
+          const index = data.findIndex(p => p.id === currentStoryId);
+          const activeIdx = index !== -1 ? index : 0;
+          setActivePartIndex(activeIdx);
+          
+          const activePart = data[activeIdx] || data[0];
+          if (activePart) {
+            setGeneratedText(activePart.text);
+            setCurrentStoryTitle(activePart.title);
+          }
+        }
+      } catch (err) {
+        console.error("Błąd ładowania części historii:", err);
+      } finally {
+        setIsLoading(false);
       }
     };
-    populateVoiceList();
-    window.speechSynthesis.onvoiceschanged = populateVoiceList;
-    return () => {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.onvoiceschanged = null;
-    };
-  }, [selectedVoiceURI]);
+    loadStoryParts();
+  }, [currentStoryId, user, loadedRootId, storyParts, setGeneratedText, setCurrentStoryTitle]);
+
+  const handleSelectPart = (index) => {
+    handleStop();
+    const part = storyParts[index];
+    if (part) {
+      setIsContinuing(false);
+      setActivePartIndex(index);
+      setGeneratedText(part.text);
+      setCurrentStoryTitle(part.title);
+      setCurrentStoryId(part.id);
+    }
+  };
+
+  const handleGenerateContinuation = async () => {
+    handleStop();
+    setIsLoading(true);
+    setIsContinuing(false);
+    
+    const rootStoryId = loadedRootId || currentStoryId;
+    
+    try {
+      let settings = {
+        language_level: "medium",
+        length: "medium",
+        is_factual: false,
+        protagonist: "",
+        genre: "adventure",
+        focus_area: "none"
+      };
+      
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/user-settings`, {
+          headers: { "X-Session-Token": user.token }
+        });
+        if (res.ok) {
+          settings = await res.json();
+        }
+      } catch (e) {
+        console.error("Błąd pobierania ustawień dla kontynuacji:", e);
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/generate`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+        body: JSON.stringify({ 
+          topics: selectedContinuationTopics, 
+          customDetails: continuationDetails, 
+          settings,
+          parent_id: rootStoryId
+        }),
+      });
+      const data = await response.json();
+      if (data && data[0] && data[0].generated_text) {
+        const newPart = {
+          id: data[0].story_id,
+          title: data[0].title || `Chapter ${storyParts.length + 1}`,
+          text: data[0].generated_text,
+          part_number: storyParts.length + 1
+        };
+        
+        const updatedParts = [...storyParts, newPart];
+        setStoryParts(updatedParts);
+        setActivePartIndex(updatedParts.length - 1);
+        
+        setGeneratedText(newPart.text);
+        setCurrentStoryTitle(newPart.title);
+        setCurrentStoryId(newPart.id);
+        
+        setContinuationDetails("");
+        setSelectedContinuationTopics([]);
+      }
+    } catch (error) {
+      console.error("Błąd generowania kontynuacji:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Premium neural voices are loaded statically and processed by backend edge-tts.
 
   useEffect(() => {
-    fetch("http://127.0.0.1:5001/api/get-topics")
+    fetch(`${API_BASE_URL}/api/get-topics`)
       .then((res) => res.json())
       .then((data) => Array.isArray(data) && setSuggestedTopics(data))
       .catch((err) => console.error("Błąd tematów:", err));
   }, []);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (menuVisible && contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
+        setMenuVisible(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, [menuVisible]);
+
+  useEffect(() => {
+    const now = Date.now();
+    if (prevExplanationWordRef.current && prevExplanationWordRef.current !== explanationWord) {
+      const duration = Math.round((now - explanationStartTimeRef.current) / 1000);
+      if (duration >= 1) {
+        setActivityLog(prev => [
+          ...prev,
+          {
+            type: "explain",
+            word_or_phrase: prevExplanationWordRef.current,
+            timestamp: now,
+            details: { duration_seconds: duration }
+          }
+        ]);
+      }
+    }
+    if (explanationWord) {
+      explanationStartTimeRef.current = now;
+    }
+    prevExplanationWordRef.current = explanationWord;
+  }, [explanationWord]);
 
   useEffect(() => {
     if (generatedText) {
@@ -147,10 +348,11 @@ function Workspace({
     }
   }, [generatedText]);
 
+
   const saveStoryToDb = async (title, text) => {
     if (!user) return null;
     try {
-      const response = await fetch("http://127.0.0.1:5001/api/stories", {
+      const response = await fetch(`${API_BASE_URL}/api/stories`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -173,8 +375,15 @@ function Workspace({
     setGeneratedText("");
     setCurrentStoryTitle("");
     setCurrentStoryId(null);
+    setStoryParts([]);
+    setActivePartIndex(-1);
+    setLoadedRootId(null);
+    setIsContinuing(false);
+    setContinuationDetails("");
+    setSelectedContinuationTopics([]);
+    
     try {
-      const response = await fetch("http://127.0.0.1:5001/api/generate", {
+      const response = await fetch(`${API_BASE_URL}/api/generate`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -190,6 +399,15 @@ function Workspace({
         // Automatycznie zapisz historię w bazie danych
         const savedStory = await saveStoryToDb(title, data[0].generated_text);
         if (savedStory && savedStory.id) {
+          const newPart = {
+            id: savedStory.id,
+            title: title,
+            text: data[0].generated_text,
+            part_number: 1
+          };
+          setStoryParts([newPart]);
+          setActivePartIndex(0);
+          setLoadedRootId(savedStory.id);
           setCurrentStoryId(savedStory.id);
         }
       }
@@ -200,46 +418,90 @@ function Workspace({
     }
   };
 
-  const speakChunk = (index, single = false) => {
+  const speakChunk = async (index, single = false) => {
     if (index >= textChunks.length) {
       handleStop();
       return;
     }
+
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+
     setCurrentChunkIndex(index);
-    const utterance = new SpeechSynthesisUtterance(textChunks[index] + " ");
-    const selectedVoice = voices.find((v) => v.voiceURI === selectedVoiceURI);
-    utterance.voice = selectedVoice;
-    utterance.rate = speechRate;
-    utterance.pitch = speechPitch;
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-      setIsPaused(false);
-      setPlaySingle(single);
-    };
-    utterance.onend = () => {
-      if (single) {
-        handleStop();
-      } else {
-        if (!isPaused) speakChunk(index + 1, false);
-        else setIsSpeaking(false);
+    setIsSpeaking(true);
+    setIsPaused(false);
+    setPlaySingle(single);
+
+    setActivityLog(prev => [
+      ...prev,
+      {
+        type: "listen_sentence",
+        sentence_index: index,
+        total_sentences: textChunks.length,
+        timestamp: Date.now()
       }
-    };
-    currentUtteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
+    ]);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: textChunks[index],
+          voice: selectedVoiceURI || "en-US-BrianNeural"
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to generate audio");
+      const data = await response.json();
+      if (!data.audio_base64) throw new Error("No audio data returned");
+
+      const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+      const audio = new Audio(audioUrl);
+      audio.playbackRate = speechRate;
+
+      audio.onended = () => {
+        if (single) {
+          handleStop();
+        } else {
+          speakChunk(index + 1, false);
+        }
+      };
+
+      audio.onerror = () => {
+        handleStop();
+      };
+
+      currentAudioRef.current = audio;
+      audio.play();
+    } catch (err) {
+      console.error("Error generating/playing speech:", err);
+      handleStop();
+    }
   };
 
   const handlePlayback = () => {
     if (!generatedText || textChunks.length === 0) return;
-    if (window.speechSynthesis.speaking) {
-      if (isPaused) { window.speechSynthesis.resume(); setIsPaused(false); }
-      else { window.speechSynthesis.pause(); setIsPaused(true); }
+    if (currentAudioRef.current) {
+      if (isPaused) {
+        currentAudioRef.current.play();
+        setIsPaused(false);
+      } else {
+        currentAudioRef.current.pause();
+        setIsPaused(true);
+      }
     } else {
       speakChunk(currentChunkIndex === -1 || currentChunkIndex >= textChunks.length ? 0 : currentChunkIndex, false);
     }
   };
 
   const handleStop = () => {
-    window.speechSynthesis.cancel();
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
     setIsSpeaking(false);
     setIsPaused(false);
     setCurrentChunkIndex(-1);
@@ -250,7 +512,7 @@ function Workspace({
     if (isSpeaking && currentChunkIndex === index && playSingle === single) {
       handlePlayback();
     } else {
-      window.speechSynthesis.cancel();
+      handleStop();
       speakChunk(index, single);
     }
   };
@@ -267,8 +529,16 @@ function Workspace({
 
   const handleTranslate = async () => {
     if (!selectedText) return;
+    setActivityLog(prev => [
+      ...prev,
+      {
+        type: "translate",
+        word_or_phrase: selectedText,
+        timestamp: Date.now()
+      }
+    ]);
     try {
-      const response = await fetch("http://127.0.0.1:5001/api/translate", {
+      const response = await fetch(`${API_BASE_URL}/api/translate`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -287,13 +557,30 @@ function Workspace({
 
   const handleSaveToNotebook = async () => {
     if (translationContent.original && translationContent.translated) {
+      setActivityLog(prev => [
+        ...prev,
+        {
+          type: "add_to_notebook",
+          word: translationContent.original,
+          translation: translationContent.translated,
+          timestamp: Date.now()
+        }
+      ]);
       const newEntry = { original: translationContent.original, translated: translationContent.translated };
       if (!notebookWords.some(e => e.original === newEntry.original)) {
-        setNotebookWords(prev => [...prev, newEntry]);
+        setNotebookWords(prev => [newEntry, ...prev]);
+
+        // Auto-scroll the sidebar to the top to ensure the newly added word is shown
+        setTimeout(() => {
+          const scrollArea = document.querySelector(".notebook-scroll-area");
+          if (scrollArea) {
+            scrollArea.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        }, 100);
       }
 
       try {
-        await fetch("http://127.0.0.1:5001/api/vocabulary", {
+        await fetch(`${API_BASE_URL}/api/vocabulary`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -310,6 +597,14 @@ function Workspace({
 
   const handleAddDirectly = async () => {
     if (!selectedText) return;
+    setActivityLog(prev => [
+      ...prev,
+      {
+        type: "translate",
+        word_or_phrase: selectedText,
+        timestamp: Date.now()
+      }
+    ]);
     const textToTranslate = selectedText;
     setMenuVisible(false);
 
@@ -317,13 +612,21 @@ function Workspace({
     const tempEntry = { original: textToTranslate, translated: "Tłumaczenie..." };
     setNotebookWords(prev => {
       if (!prev.some(e => e.original === tempEntry.original)) {
-        return [...prev, tempEntry];
+        return [tempEntry, ...prev];
       }
       return prev;
     });
 
+    // Auto-scroll the sidebar to the top to ensure the newly added word is shown
+    setTimeout(() => {
+      const scrollArea = document.querySelector(".notebook-scroll-area");
+      if (scrollArea) {
+        scrollArea.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }, 100);
+
     try {
-      const response = await fetch("http://127.0.0.1:5001/api/translate", {
+      const response = await fetch(`${API_BASE_URL}/api/translate`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -333,6 +636,15 @@ function Workspace({
       });
       const data = await response.json();
       if (data.translation) {
+        setActivityLog(prev => [
+          ...prev,
+          {
+            type: "add_to_notebook",
+            word: textToTranslate,
+            translation: data.translation,
+            timestamp: Date.now()
+          }
+        ]);
         setNotebookWords(prev =>
           prev.map(item =>
             item.original === textToTranslate
@@ -342,7 +654,7 @@ function Workspace({
         );
 
         // Zapisz słówko w bazie danych
-        await fetch("http://127.0.0.1:5001/api/vocabulary", {
+        await fetch(`${API_BASE_URL}/api/vocabulary`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -371,10 +683,66 @@ function Workspace({
     }
   };
 
+  const handleSpeakSelectedText = async () => {
+    if (!selectedText) return;
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    setActivityLog(prev => [
+      ...prev,
+      {
+        type: "listen_word_pronunciation",
+        word: selectedText,
+        timestamp: Date.now()
+      }
+    ]);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: selectedText,
+          voice: selectedVoiceURI || "en-US-BrianNeural"
+        })
+      });
+      const data = await response.json();
+      if (data.audio_base64) {
+        const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+        const audio = new Audio(audioUrl);
+        audio.playbackRate = speechRate;
+        currentAudioRef.current = audio;
+        audio.play();
+      }
+    } catch (err) {
+      console.error("Error speaking selected text:", err);
+    }
+    setMenuVisible(false);
+  };
+
+  const handlePracticeSelectedText = () => {
+    if (!selectedText) return;
+    setPracticeTargetText(selectedText);
+    setShowPracticeModal(true);
+    setMenuVisible(false);
+  };
+
+  const handleLogPronunciationError = (word, targetSentence) => {
+    setActivityLog(prev => [
+      ...prev,
+      {
+        type: "pronunciation_error",
+        word: word.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, ""),
+        sentence: targetSentence,
+        timestamp: Date.now()
+      }
+    ]);
+  };
+
   const handleDeleteWord = async (wordToDelete) => {
     setNotebookWords(prev => prev.filter(w => w.original !== wordToDelete));
     try {
-      const url = `http://127.0.0.1:5001/api/vocabulary/${encodeURIComponent(wordToDelete)}` + 
+      const url = `${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordToDelete)}` + 
         (currentStoryId ? `?story_id=${currentStoryId}` : "");
       await fetch(url, {
         method: "DELETE",
@@ -389,7 +757,7 @@ function Workspace({
 
   const handleSendEmail = async () => {
     try {
-      const response = await fetch("http://127.0.0.1:5001/api/send-notebook-email", {
+      const response = await fetch(`${API_BASE_URL}/api/send-notebook-email`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -404,12 +772,155 @@ function Workspace({
     } catch (err) { console.error("Błąd email:", err); }
   };
 
+  const handleOpenSummary = async () => {
+    if (activityLog.length === 0) {
+      alert("Brak zarejestrowanej aktywności w tej sesji. Aby wygenerować podsumowanie, odsłuchaj nagranie lub skorzystaj ze słownika.");
+      return;
+    }
+    setIsGeneratingSummary(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/generate-summary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+        body: JSON.stringify({
+          activity_log: activityLog,
+          notebook_words: notebookWords
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSummaryData(data);
+        setShowSummaryModal(true);
+      } else {
+        alert("Failed to generate session summary.");
+      }
+    } catch (err) {
+      console.error("Error generating session summary:", err);
+      alert("Failed to generate session summary.");
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
+  const handleSendSummaryEmail = async (email) => {
+    if (!summaryData) return false;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/send-summary-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+        body: JSON.stringify({
+          recipient_email: email,
+          summary: summaryData
+        })
+      });
+      return response.ok;
+    } catch (err) {
+      console.error("Error sending summary email:", err);
+      return false;
+    }
+  };
+
+  const handleAddWordFromSummary = async (word, translation) => {
+    setActivityLog(prev => [
+      ...prev,
+      {
+        type: "add_to_notebook",
+        word: word,
+        translation: translation,
+        timestamp: Date.now()
+      }
+    ]);
+
+    const newEntry = { original: word, translated: translation };
+    if (!notebookWords.some(e => e.original === newEntry.original)) {
+      setNotebookWords(prev => [newEntry, ...prev]);
+
+      setTimeout(() => {
+        const scrollArea = document.querySelector(".notebook-scroll-area");
+        if (scrollArea) {
+          scrollArea.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }, 100);
+    }
+
+    try {
+      await fetch(`${API_BASE_URL}/api/vocabulary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+        body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
+      });
+    } catch (err) {
+      console.error("Błąd podczas zapisywania słówka z podsumowania:", err);
+    }
+  };
+
   return (
     <div className="workspace-layout">
+      {generatedText && (
+        <div 
+          ref={floatingPlayerRef}
+          className={`apple-player-controls-floating ${isDraggingPlayer ? 'dragging' : ''}`}
+          style={{
+            transform: `translate(calc(-50% + ${playerPosition.x}px), ${playerPosition.y}px)`,
+            cursor: isDraggingPlayer ? 'grabbing' : 'grab'
+          }}
+          onMouseDown={handlePlayerMouseDown}
+          onTouchStart={handlePlayerTouchStart}
+        >
+          <div className="drag-handle" title="Przeciągnij odtwarzacz">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="9" cy="12" r="1" />
+              <circle cx="9" cy="5" r="1" />
+              <circle cx="9" cy="19" r="1" />
+              <circle cx="15" cy="12" r="1" />
+              <circle cx="15" cy="5" r="1" />
+              <circle cx="15" cy="19" r="1" />
+            </svg>
+          </div>
+          <button 
+            className={`player-btn play-pause-btn ${isSpeaking && !isPaused ? 'playing' : ''}`}
+            onClick={handlePlayback}
+            title={isSpeaking && !isPaused ? "Pauza" : "Odtwarzaj"}
+          >
+            {isSpeaking && !isPaused ? (
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+            )}
+          </button>
+          <button 
+            className="player-btn stop-btn"
+            onClick={handleStop}
+            disabled={!isSpeaking}
+            title="Zatrzymaj"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 6h12v12H6z"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
       {menuVisible && (
-        <div className="context-menu" style={{ top: menuPosition.top, left: menuPosition.left }}>
-          <button onClick={handleTranslate}>Translate</button>
-          <button onClick={handleAddDirectly}>Add directly</button>
+        <div ref={contextMenuRef} className="context-menu" style={{ top: menuPosition.top, left: menuPosition.left }}>
+          <button onClick={handleTranslate}>Tłumacz</button>
+          <button onClick={handleSpeakSelectedText}>Czytaj</button>
+          <button onClick={handleAddDirectly}>Dodaj bezpośrednio</button>
+          <div className="context-menu-divider"></div>
+          <button onClick={handlePracticeSelectedText} className="context-menu-practice-btn">Przećwicz wymowę 🎤</button>
         </div>
       )}
 
@@ -444,11 +955,146 @@ function Workspace({
 
       <main className="workspace-main">
         <header className="workspace-header">
-           <button onClick={onNavigateToDashboard} className="back-btn">← Back to Dashboard</button>
-           <h1>{currentStoryTitle || "English Buddy Workspace"}</h1>
+          <div className="header-left-group">
+            <button onClick={onNavigateToDashboard} className="back-btn-inline" title="Wróć do pulpitu">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+            </button>
+            <h1>{currentStoryTitle || "English Buddy Workspace"}</h1>
+            
+            {generatedText && (
+              <div className="header-actions-group">
+                <button 
+                  onClick={() => setShowPracticeMode(true)} 
+                  className="header-action-btn mastery-btn" 
+                  title="Mastery Path Training"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 19v4M8 23h8"/>
+                  </svg>
+                </button>
+                
+                <button 
+                  onClick={() => setShowVoiceControls(!showVoiceControls)} 
+                  className={`header-action-btn voice-btn ${showVoiceControls ? 'active' : ''}`} 
+                  title={showVoiceControls ? "Ukryj panel głosu" : "Pokaż panel głosu"}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="4" y1="21" x2="4" y2="14" />
+                    <line x1="4" y1="10" x2="4" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12" y2="3" />
+                    <line x1="20" y1="21" x2="20" y2="16" />
+                    <line x1="20" y1="12" x2="20" y2="3" />
+                    <line x1="1" y1="14" x2="7" y2="14" />
+                    <line x1="9" y1="8" x2="15" y2="8" />
+                    <line x1="17" y1="16" x2="23" y2="16" />
+                  </svg>
+                </button>
+
+                <button 
+                  onClick={() => {
+                    handleStop();
+                    setGeneratedText("");
+                    setCurrentStoryTitle("");
+                    setCurrentStoryId(null);
+                    setStoryParts([]);
+                    setActivePartIndex(-1);
+                    setLoadedRootId(null);
+                    setIsContinuing(false);
+                  }} 
+                  className="header-action-btn clear-btn" 
+                  title="Wyczyść obszar roboczy"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
         </header>
 
-        {!generatedText && !isLoading ? (
+        {storyParts.length > 0 && (
+          <div className="chapter-tabs">
+            {storyParts.map((part, index) => (
+              <button
+                key={part.id}
+                className={`chapter-tab ${activePartIndex === index ? "active" : ""}`}
+                onClick={() => handleSelectPart(index)}
+              >
+                Part {part.part_number || index + 1}
+              </button>
+            ))}
+            <button
+              className={`chapter-tab continue-tab ${isContinuing ? "active" : ""}`}
+              onClick={() => {
+                handleStop();
+                setIsContinuing(true);
+              }}
+            >
+              + Continue Story
+            </button>
+          </div>
+        )}
+
+        {isContinuing ? (
+          <div className="story-generator continuation-panel">
+            <div className="generator-header">
+              <h2>Continue Story</h2>
+              <p>Tell the AI what should happen next in Part {storyParts.length + 1} of this story.</p>
+            </div>
+            
+            <div className="topic-grid">
+              {suggestedTopics.map((topic) => (
+                <button
+                  key={topic}
+                  onClick={() => {
+                    setSelectedContinuationTopics(prev => 
+                      prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
+                    );
+                  }}
+                  className={`topic-chip ${selectedContinuationTopics.includes(topic) ? "selected" : ""}`}
+                  disabled={isLoading}
+                >
+                  {topic}
+                </button>
+              ))}
+            </div>
+
+            <div className="details-composer">
+              <textarea
+                value={continuationDetails}
+                onChange={(e) => setContinuationDetails(e.target.value)}
+                placeholder="Describe what happens next (e.g. Alex meets a new friend, finds a key, goes to the forest...)"
+                rows="4"
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className="continuation-actions">
+              <button
+                onClick={handleGenerateContinuation}
+                disabled={isLoading || (selectedContinuationTopics.length === 0 && !continuationDetails.trim())}
+                className="generate-story-btn"
+              >
+                {isLoading ? "Generating sequel..." : `Generate Part ${storyParts.length + 1}`}
+              </button>
+              <button
+                onClick={() => setIsContinuing(false)}
+                disabled={isLoading}
+                className="cancel-continuation-btn"
+                style={{ marginLeft: '12px', padding: '12px 24px', borderRadius: '8px', border: '1px solid var(--border)', fontFamily: 'var(--font-main)', fontWeight: '600', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : !generatedText && !isLoading ? (
           <StoryGenerator 
             onGenerate={generateStory} 
             isLoading={isLoading} 
@@ -474,28 +1120,52 @@ function Workspace({
             speechPitch={speechPitch}
             setSpeechPitch={setSpeechPitch}
             onTextSelection={handleTextSelection}
-            onStartMastery={() => setShowPracticeMode(true)}
-            onClearStory={() => {
-              handleStop();
-              setGeneratedText("");
-              setCurrentStoryTitle("");
-              setCurrentStoryId(null);
-            }}
+            showVoiceControls={showVoiceControls}
           />
         )}
       </main>
 
       <NotebookSidebar 
         notebookWords={notebookWords}
-        onSpeakWord={(text) => {
-          window.speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(text);
-          u.voice = voices.find(v => v.voiceURI === selectedVoiceURI);
-          window.speechSynthesis.speak(u);
+        onSpeakWord={async (text) => {
+          setActivityLog(prev => [
+            ...prev,
+            {
+              type: "listen_word_pronunciation",
+              word: text,
+              timestamp: Date.now()
+            }
+          ]);
+          if (currentAudioRef.current) {
+            currentAudioRef.current.pause();
+            currentAudioRef.current = null;
+          }
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/tts`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                text: text,
+                voice: selectedVoiceURI || "en-US-BrianNeural"
+              })
+            });
+            const data = await response.json();
+            if (data.audio_base64) {
+              const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+              const audio = new Audio(audioUrl);
+              currentAudioRef.current = audio;
+              audio.play();
+            }
+          } catch (err) {
+            console.error("Error speaking word:", err);
+          }
         }}
         onDeleteWord={handleDeleteWord}
         onOpenEmailModal={() => setShowSendEmailModal(true)}
         onOpenFlashcards={() => setShowFlashcards(true)}
+        onExplainWord={setExplanationWord}
+        activityLog={activityLog}
+        onOpenSummary={handleOpenSummary}
       />
 
       {showPracticeMode && (
@@ -505,6 +1175,7 @@ function Workspace({
           selectedVoiceURI={selectedVoiceURI}
           user={user}
           onExit={() => setShowPracticeMode(false)}
+          onLogActivity={(act) => setActivityLog(prev => [...prev, act])}
         />
       )}
 
@@ -514,6 +1185,43 @@ function Workspace({
             notebookWords={notebookWords} 
             onFinishExercises={() => setShowFlashcards(false)} 
           />
+        </div>
+      )}
+
+      {explanationWord && (
+        <WordExplanationModal 
+          wordOrPhrase={explanationWord}
+          user={user}
+          onClose={() => setExplanationWord(null)}
+        />
+      )}
+
+      {showSummaryModal && (
+        <SessionSummaryModal 
+          summary={summaryData}
+          user={user}
+          onClose={() => setShowSummaryModal(false)}
+          onSendEmail={handleSendSummaryEmail}
+          onAddWord={handleAddWordFromSummary}
+        />
+      )}
+
+      {showPracticeModal && (
+        <PronunciationPracticeModal 
+          targetText={practiceTargetText}
+          user={user}
+          onClose={() => setShowPracticeModal(false)}
+          onLogActivity={(activity) => setActivityLog(prev => [...prev, activity])}
+          onLogPronunciationError={handleLogPronunciationError}
+        />
+      )}
+
+      {isGeneratingSummary && (
+        <div className="practice-overlay">
+          <div className="practice-loader glass-panel">
+            <div className="spinner"></div>
+            <p>Analyzing session activity...</p>
+          </div>
         </div>
       )}
     </div>

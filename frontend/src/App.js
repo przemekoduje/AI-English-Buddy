@@ -7,6 +7,9 @@ import Dashboard from './components/Dashboard';
 import Workspace from './components/Workspace';
 import SavedStories from './components/Story/SavedStories';
 import Auth from './components/Auth/Auth';
+import VocabularyView from './components/Vocabulary/VocabularyView';
+import MediaBuddy from './components/Media/MediaBuddy';
+import { API_BASE_URL } from './config';
 
 function App() {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -27,7 +30,7 @@ function App() {
   const handleLogout = async () => {
     if (user && user.token) {
       try {
-        await fetch("http://127.0.0.1:5001/api/logout", {
+        await fetch(`${API_BASE_URL}/api/logout`, {
           method: "POST",
           headers: { "X-Session-Token": user.token }
         });
@@ -48,10 +51,11 @@ function App() {
 
   const getPageTitle = () => {
     switch (currentView) {
-      case 'dashboard': return 'Mission Control';
+      case 'dashboard': return 'Tutor Głosowy';
       case 'workspace': return 'Practice Room';
       case 'stories': return 'Saved Stories';
       case 'notebook': return 'My Vocabulary';
+      case 'media': return 'Media Buddy';
       default: return 'AI English Buddy';
     }
   };
@@ -65,10 +69,10 @@ function App() {
       <Sidebar currentView={currentView} onNavigate={handleNavigate} user={user} onLogout={handleLogout} />
       
       <main className="main-content">
-        <TopBar title={getPageTitle()} />
+        {currentView !== 'workspace' && <TopBar title={getPageTitle()} />}
         <div className="view-container">
           {currentView === 'dashboard' ? (
-            <Dashboard onNavigateToWorkspace={() => handleNavigate('workspace')} />
+            <Dashboard onNavigateToWorkspace={() => handleNavigate('workspace')} user={user} />
           ) : currentView === 'stories' ? (
             <SavedStories 
               user={user} 
@@ -78,6 +82,15 @@ function App() {
                 setCurrentStoryId(id);
                 handleNavigate('workspace');
               }}
+            />
+          ) : currentView === 'notebook' ? (
+            <VocabularyView 
+              user={user}
+              onNavigateToWorkspace={() => handleNavigate('workspace')}
+            />
+          ) : currentView === 'media' ? (
+            <MediaBuddy 
+              user={user}
             />
           ) : (
             <Workspace 

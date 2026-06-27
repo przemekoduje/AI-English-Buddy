@@ -270,6 +270,53 @@
   user-select: none;
 }
 
+/* Popular Science Section Styling */
+.popular-science-section {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.main-popular-science-switch {
+  margin-top: 0.5rem;
+}
+
+.popular-science-suboptions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-left: 1.5rem;
+  border-left: 2px solid var(--primary-200);
+  margin-top: 0.25rem;
+  animation: fade-in 0.3s ease-out;
+}
+
+.sub-checkbox-label {
+  margin-top: 0 !important;
+  font-size: 0.8rem;
+  color: var(--slate-600);
+}
+
+.sub-checkbox-label input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 @media (max-width: 768px) {
   .story-generator {
     padding: 1rem;

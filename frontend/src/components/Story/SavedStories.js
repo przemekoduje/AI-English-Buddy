@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { API_BASE_URL } from '../../config';
 import "./SavedStories.css";
 
 const SavedStories = ({ user, onSelectStory }) => {
@@ -28,7 +29,7 @@ const SavedStories = ({ user, onSelectStory }) => {
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:5001/api/stories/${storyId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/stories/${storyId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -58,7 +59,7 @@ const SavedStories = ({ user, onSelectStory }) => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("http://127.0.0.1:5001/api/stories", {
+      const response = await fetch(`${API_BASE_URL}/api/stories`, {
         headers: { "X-Session-Token": user.token }
       });
       if (response.ok) {
@@ -84,7 +85,7 @@ const SavedStories = ({ user, onSelectStory }) => {
     if (!window.confirm("Czy na pewno chcesz usunąć tę historię?")) return;
     
     try {
-      const response = await fetch(`http://127.0.0.1:5001/api/stories/${storyId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/stories/${storyId}`, {
         method: "DELETE",
         headers: { "X-Session-Token": user.token }
       });
@@ -100,6 +101,7 @@ const SavedStories = ({ user, onSelectStory }) => {
   };
 
   const filteredStories = stories.filter(story => {
+    if (story.parent_id) return false;
     const term = searchTerm.toLowerCase();
     return (
       story.title.toLowerCase().includes(term) ||

@@ -11,6 +11,8 @@
   box-shadow: var(--shadow-sm);
   position: sticky;
   top: 2rem;
+  align-self: flex-start; /* Prevents stretching to container height, allowing sticky positioning to function */
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .sidebar-header {
@@ -58,6 +60,17 @@
 
 .action-icon-btn.practice:hover:not(:disabled) {
   background: var(--primary-600);
+  color: white;
+}
+
+.action-icon-btn.summary {
+  background: #10b981; /* Premium Emerald */
+  color: white;
+  border: none;
+}
+
+.action-icon-btn.summary:hover:not(:disabled) {
+  background: #059669;
   color: white;
 }
 
@@ -132,32 +145,14 @@
   color: var(--slate-500);
 }
 
-.pronounce-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--border);
-  background: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: var(--transition-fast);
-  color: var(--slate-500);
-}
-
-.pronounce-btn:hover {
-  color: var(--primary-500);
-  border-color: var(--primary-500);
-}
-
 .card-actions {
   display: flex;
   gap: 0.35rem;
   align-items: center;
+  position: relative;
 }
 
-.delete-word-btn {
+.menu-trigger-btn {
   width: 28px;
   height: 28px;
   border-radius: var(--radius-full);
@@ -171,10 +166,66 @@
   color: var(--slate-500);
 }
 
-.delete-word-btn:hover {
-  color: #D93025; /* Google Red */
-  border-color: #D93025;
+.menu-trigger-btn:hover {
+  color: var(--primary-500);
+  border-color: var(--primary-500);
+  background: var(--slate-50);
+}
+
+.card-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-premium);
+  padding: 0.35rem 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  z-index: 1000;
+}
+
+.dropdown-item {
+  background: transparent;
+  border: none;
+  padding: 0.5rem 0.85rem;
+  text-align: left;
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--slate-700);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  transition: var(--transition-fast);
+}
+
+.dropdown-item:hover {
+  background: var(--slate-50);
+  color: var(--primary-600);
+}
+
+.dropdown-icon {
+  color: var(--slate-400);
+  flex-shrink: 0;
+  transition: var(--transition-fast);
+}
+
+.dropdown-item:hover .dropdown-icon {
+  color: inherit;
+}
+
+.dropdown-item.delete:hover {
   background: #FCE8E6;
+  color: #D93025;
+}
+
+.dropdown-item.delete:hover .dropdown-icon {
+  color: #D93025;
 }
 
 .empty-state {
