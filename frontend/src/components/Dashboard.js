@@ -465,7 +465,7 @@ function Dashboard({ user }) {
       
       {/* Title / Brand */}
       <h1 className="tutor-minimal-title">
-        Tutor <span className="blue-gradient-text">AI Voice</span>
+        Speakling
       </h1>
 
       {/* Main Action Stage (Can be centered or split row-wise on desktop) */}

@@ -47,8 +47,12 @@ const Auth = ({ onLoginSuccess }) => {
       
       <div className="auth-card glass-panel">
         <div className="auth-brand">
-          <div className="brand-logo">✨</div>
-          <h2>AI English Buddy</h2>
+          <div className="brand-logo" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '12px' }}>
+            <svg viewBox="0 0 100 100" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary-color, #1A73E8)' }}>
+              <path d="M65 30C65 20 55 15 45 15C30 15 30 35 50 45C70 55 70 75 55 85C45 90 35 85 35 75" />
+            </svg>
+          </div>
+          <h2>Speakling</h2>
           <p className="brand-subtitle">Your personal guide to English mastery</p>
         </div>
 

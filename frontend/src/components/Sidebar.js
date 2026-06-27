@@ -94,11 +94,11 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout }) => {
     <aside className={`mission-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-brand">
         <div className="brand-icon">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+          <svg viewBox="0 0 100 100" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M65 30C65 20 55 15 45 15C30 15 30 35 50 45C70 55 70 75 55 85C45 90 35 85 35 75" />
           </svg>
         </div>
-        <h1 className="brand-name">Buddy AI</h1>
+        <h1 className="brand-name">Speakling</h1>
       </div>
 
       <nav className="sidebar-nav">

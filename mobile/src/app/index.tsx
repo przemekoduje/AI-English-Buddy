@@ -23,6 +23,39 @@ import transcriptsData from '../constants/transcripts.json';
 
 const { width } = Dimensions.get('window');
 
+const Waveform = ({ isActive, isSpeaking, timeText }: { isActive: boolean; isSpeaking: boolean; timeText: string }) => {
+  const [heights, setHeights] = useState<number[]>([10, 15, 8, 20, 14, 18, 12, 16, 22, 10]);
+
+  useEffect(() => {
+    if (!isActive || !isSpeaking) {
+      setHeights([6, 8, 6, 10, 8, 6, 8, 10, 6, 8]);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setHeights(prev => prev.map(() => Math.floor(Math.random() * 20) + 6));
+    }, 120);
+
+    return () => clearInterval(interval);
+  }, [isActive, isSpeaking]);
+
+  return (
+    <View style={styles.waveformContainer}>
+      <View style={styles.waveSide}>
+        {heights.slice(0, 5).map((h, i) => (
+          <View key={`left-${i}`} style={[styles.waveBar, { height: h }]} />
+        ))}
+      </View>
+      <Text style={styles.waveformTime}>{timeText}</Text>
+      <View style={styles.waveSide}>
+        {heights.slice(5, 10).map((h, i) => (
+          <View key={`right-${i}`} style={[styles.waveBar, { height: h }]} />
+        ))}
+      </View>
+    </View>
+  );
+};
+
 const EDGE_TTS_VOICES = [
   { identifier: 'en-US-BrianNeural', name: 'Brian (US - Male) 🌟', language: 'en-US' },
   { identifier: 'en-US-AriaNeural', name: 'Aria (US - Female) 🌟', language: 'en-US' },
@@ -56,8 +89,8 @@ const CURATED_VIDEOS = [
 
 // Material outline SVG Icons mapped to simple components
 const HomeIcon = ({ color }: { color: string }) => (
-  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-    <Path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill={color} />
+  <Svg width={24} height={24} viewBox="0 0 100 100" fill="none">
+    <Path d="M65 30C65 20 55 15 45 15C30 15 30 35 50 45C70 55 70 75 55 85C45 90 35 85 35 75" stroke={color} strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
 
@@ -200,12 +233,39 @@ export default function HomeScreen() {
   const [isVoiceTutorGeneratingSummary, setIsVoiceTutorGeneratingSummary] = useState<boolean>(false);
   const [voiceTutorSavedWords, setVoiceTutorSavedWords] = useState<string[]>([]);
   const [voiceTutorEmail, setVoiceTutorEmail] = useState<string>('');
+  const [voiceSessionDuration, setVoiceSessionDuration] = useState<number>(0);
+  const voiceSessionTimerRef = useRef<any>(null);
 
   useEffect(() => {
     if (user && user.email) {
       setVoiceTutorEmail(user.email);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (isVoiceTutorActive) {
+      setVoiceSessionDuration(0);
+      voiceSessionTimerRef.current = setInterval(() => {
+        setVoiceSessionDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (voiceSessionTimerRef.current) {
+        clearInterval(voiceSessionTimerRef.current);
+        voiceSessionTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (voiceSessionTimerRef.current) {
+        clearInterval(voiceSessionTimerRef.current);
+      }
+    };
+  }, [isVoiceTutorActive]);
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Refs for VAD loops & state sync
   const voiceTutorRecordingRef = useRef<Audio.Recording | null>(null);
@@ -1704,17 +1764,30 @@ export default function HomeScreen() {
       {/* Header — schowany gdy workspace z historią */}
       {!(currentView === 'workspace' && generatedText) && (
         <View style={styles.appHeader}>
-          <Text style={styles.appTitle}>
-            {currentView === 'dashboard' && 'Tutor Głosowy'}
-            {currentView === 'workspace' && 'Practice Room'}
-            {currentView === 'stories' && 'Saved Stories'}
-            {currentView === 'notebook' && 'Vocabulary'}
-            {currentView === 'media' && 'Media Buddy'}
-            {currentView === 'settings' && 'Settings'}
-          </Text>
-          <Text style={styles.userEmail} numberOfLines={1}>
-            {user.email}
-          </Text>
+          {currentView === 'dashboard' ? (
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ width: 32, alignItems: 'flex-start' }}>
+                <Svg width={28} height={28} viewBox="0 0 100 100" fill="none">
+                  <Path d="M65 30C65 20 55 15 45 15C30 15 30 35 50 45C70 55 70 75 55 85C45 90 35 85 35 75" stroke="#111827" strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
+              <Text style={[styles.appTitle, { textAlign: 'center', flex: 1 }]}>Speakling</Text>
+              <View style={{ width: 32 }} />
+            </View>
+          ) : (
+            <>
+              <Text style={styles.appTitle}>
+                {currentView === 'workspace' && 'Practice Room'}
+                {currentView === 'stories' && 'Saved Stories'}
+                {currentView === 'notebook' && 'Vocabulary'}
+                {currentView === 'media' && 'Media Buddy'}
+                {currentView === 'settings' && 'Settings'}
+              </Text>
+              <Text style={styles.userEmail} numberOfLines={1}>
+                {user?.email}
+              </Text>
+            </>
+          )}
         </View>
       )}
 
@@ -1774,86 +1847,59 @@ export default function HomeScreen() {
           }
 
           // Scale value based on volume metering level
-          const scaleValue = orbStatus === "user-speaking" ? 1 + voiceTutorRmsVolume * 0.4 : 1;
+          const lastUserMessage = [...voiceTutorMessages].reverse().find(msg => msg.sender === 'user');
+          const transcriptionText = lastUserMessage ? `"${lastUserMessage.text}"` : '...';
 
           return (
             <View style={styles.voiceTutorContainer}>
               
-              {/* Title / Brand */}
-              <Text style={styles.voiceTutorHeader}>
-                Tutor <Text style={styles.blueGradientText}>AI Voice</Text>
-              </Text>
-
               {/* Main Stage */}
               <View style={styles.voiceTutorStage}>
                 
-                {/* Orb Section */}
-                <View style={styles.orbWrapper}>
-                  {/* Outer pulse rings for premium visual style */}
-                  {isVoiceTutorActive && (
-                    <>
-                      <View style={[styles.orbPulseRing, styles.orbPulseRing1, orbStatus === 'user-speaking' && styles.ringGreen, orbStatus === 'thinking' && styles.ringBlue]} />
-                      <View style={[styles.orbPulseRing, styles.orbPulseRing2, orbStatus === 'user-speaking' && styles.ringGreen, orbStatus === 'thinking' && styles.ringBlue]} />
-                    </>
-                  )}
-                  
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={[
-                      styles.voiceOrbButton,
-                      orbStatus === "inactive" && styles.orbInactive,
-                      orbStatus === "speaking" && styles.orbSpeaking,
-                      orbStatus === "listening" && styles.orbListening,
-                      orbStatus === "user-speaking" && styles.orbUserSpeaking,
-                      orbStatus === "thinking" && styles.orbThinking,
-                      { transform: [{ scale: scaleValue }] }
-                    ]}
-                    onPress={isVoiceTutorActive ? handleEndVoiceTutorSession : handleStartVoiceTutorSession}
-                  >
-                    <View style={styles.orbCore}>
-                      {orbStatus === "inactive" && (
-                        <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
-                          <Path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" fill="#FFFFFF" />
-                          <Path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" fill="#FFFFFF" />
-                        </Svg>
-                      )}
-                      {orbStatus === "speaking" && (
-                        <View style={styles.orbWaveContainer}>
-                          <View style={[styles.orbWaveBar, { height: 16 }]} />
-                          <View style={[styles.orbWaveBar, { height: 28 }]} />
-                          <View style={[styles.orbWaveBar, { height: 16 }]} />
-                        </View>
-                      )}
-                      {orbStatus === "listening" && (
-                        <View style={styles.orbPulseDot} />
-                      )}
-                      {orbStatus === "user-speaking" && (
-                        <View style={styles.orbWaveContainer}>
-                          <View style={[styles.orbWaveBar, styles.orbWaveBarGreen, { height: 16 }]} />
-                          <View style={[styles.orbWaveBar, styles.orbWaveBarGreen, { height: 32 }]} />
-                          <View style={[styles.orbWaveBar, styles.orbWaveBarGreen, { height: 16 }]} />
-                        </View>
-                      )}
-                      {orbStatus === "thinking" && (
-                        <ActivityIndicator size="large" color="#FFFFFF" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                </View>
+                {/* Outlined Microphone Button */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={styles.voiceOrbButton}
+                  onPress={isVoiceTutorActive ? handleEndVoiceTutorSession : handleStartVoiceTutorSession}
+                >
+                  <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
+                    <Path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M19 10v1a7 7 0 0 1-14 0v-1" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M12 18v3" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M9 21h6" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                </TouchableOpacity>
 
-                {/* Status label */}
-                <Text style={styles.voiceTutorStatusText}>
-                  {orbStatus === "inactive" && "Naciśnij orb, aby rozpocząć rozmowę"}
-                  {orbStatus === "speaking" && "Lektor mówi (zacznij mówić, aby wtrącić)"}
-                  {orbStatus === "listening" && "Słucham... powiedz coś"}
-                  {orbStatus === "user-speaking" && "Mówisz..."}
-                  {orbStatus === "thinking" && "Lektor myśli..."}
+                {/* Status label (large, light sans-serif) */}
+                <Text style={{ fontSize: 28, fontWeight: '300', color: '#1F2937', marginTop: 32, textAlign: 'center' }}>
+                  {!isVoiceTutorActive && "Tap to Start"}
+                  {isVoiceTutorActive && orbStatus === "inactive" && "Connecting..."}
+                  {isVoiceTutorActive && orbStatus === "speaking" && "Speaking"}
+                  {isVoiceTutorActive && orbStatus === "listening" && "Listening"}
+                  {isVoiceTutorActive && orbStatus === "user-speaking" && "Listening"}
+                  {isVoiceTutorActive && orbStatus === "thinking" && "Thinking..."}
                 </Text>
+
+                {/* Waveform component with session timer in the middle */}
+                {isVoiceTutorActive && (
+                  <Waveform 
+                    isActive={isVoiceTutorActive} 
+                    isSpeaking={orbStatus === "speaking" || orbStatus === "user-speaking"} 
+                    timeText={formatDuration(voiceSessionDuration)} 
+                  />
+                )}
+
+                {/* User transcription */}
+                {isVoiceTutorActive && (
+                  <Text style={styles.transcriptText}>
+                    {transcriptionText}
+                  </Text>
+                )}
 
                 {/* Toggle Transcript button */}
                 {isVoiceTutorActive && voiceTutorMessages.length > 0 && (
                   <TouchableOpacity
-                    style={[styles.transcriptToggleBtn, voiceTutorShowTranscript ? styles.transcriptToggleBtnActive : null]}
+                    style={[styles.transcriptToggleBtn, { marginTop: 24 }, voiceTutorShowTranscript ? styles.transcriptToggleBtnActive : null]}
                     onPress={() => setVoiceTutorShowTranscript(!voiceTutorShowTranscript)}
                   >
                     <Text style={[styles.transcriptToggleBtnText, voiceTutorShowTranscript ? styles.transcriptToggleBtnTextActive : null]}>
@@ -2709,7 +2755,7 @@ export default function HomeScreen() {
         >
           <HomeIcon color={currentView === 'dashboard' ? '#1A73E8' : '#5F6368'} />
           <Text style={[styles.navText, currentView === 'dashboard' ? styles.navTextActive : null]}>
-            Tutor
+            Speakling
           </Text>
         </TouchableOpacity>
 
@@ -2980,6 +3026,40 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  waveformContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 24,
+    gap: 16,
+    width: '100%',
+  },
+  waveSide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    width: 60,
+    justifyContent: 'center',
+  },
+  waveBar: {
+    width: 3,
+    backgroundColor: '#9CA3AF',
+    borderRadius: 1.5,
+  },
+  waveformTime: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  transcriptText: {
+    fontSize: 15,
+    fontStyle: 'italic',
+    color: '#6B7280',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    marginTop: 10,
+    lineHeight: 22,
   },
   voiceTutorHeader: {
     fontSize: 24,

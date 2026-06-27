@@ -51,12 +51,12 @@ function App() {
 
   const getPageTitle = () => {
     switch (currentView) {
-      case 'dashboard': return 'Tutor Głosowy';
+      case 'dashboard': return 'Speakling';
       case 'workspace': return 'Practice Room';
       case 'stories': return 'Saved Stories';
       case 'notebook': return 'My Vocabulary';
       case 'media': return 'Media Buddy';
-      default: return 'AI English Buddy';
+      default: return 'Speakling';
     }
   };
 
