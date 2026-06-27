@@ -1335,43 +1335,34 @@ def debug_youtube_transcript():
     
     debug_info = {}
     
-    # 1. Test pytubefix
-    try:
-        from pytubefix import YouTube
-        url = f"https://youtube.com/watch?v={video_id}"
-        yt = YouTube(url, client='WEB')
-        debug_info["pytubefix_title"] = yt.title
-        debug_info["pytubefix_captions"] = [str(c) for c in yt.captions]
-        
-        caption = yt.captions.get('en') or yt.captions.get('a.en')
-        if not caption:
-            for c_code in yt.captions:
-                if c_code.startswith('en') or c_code.endswith('.en'):
-                    caption = yt.captions[c_code]
-                    break
-        if caption:
-            debug_info["pytubefix_caption_code"] = caption.code
-            srt_data = caption.generate_srt_captions()
-            debug_info["pytubefix_srt_preview"] = srt_data[:200]
-            debug_info["pytubefix_parsed_len"] = len(parse_srt(srt_data))
-        else:
-            debug_info["pytubefix_caption_code"] = "None found"
-    except Exception as e:
-        import traceback
-        debug_info["pytubefix_error"] = str(e)
-        debug_info["pytubefix_traceback"] = traceback.format_exc()
-
-    # 2. Test youtube-transcript-api
-    try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-        api = YouTubeTranscriptApi()
-        transcript = api.fetch(video_id, languages=['en'])
-        debug_info["youtube_transcript_api_len"] = len(transcript)
-    except Exception as e:
-        import traceback
-        debug_info["youtube_transcript_api_error"] = str(e)
-        debug_info["youtube_transcript_api_traceback"] = traceback.format_exc()
-
+    # Check if node is available in the environment
+    import shutil
+    debug_info["has_node"] = shutil.which("node") is not None
+    debug_info["has_nodejs"] = shutil.which("nodejs") is not None
+    
+    # Test different pytubefix clients
+    from pytubefix import YouTube
+    clients_to_test = ['WEB', 'MWEB', 'ANDROID', 'ANDROID_MOBILE', 'ANDROID_MUSIC', 'IOS', 'TV', 'WEB_EMBED']
+    client_results = {}
+    
+    for cl in clients_to_test:
+        try:
+            url = f"https://youtube.com/watch?v={video_id}"
+            yt = YouTube(url, client=cl)
+            title = yt.title
+            captions_list = list(yt.captions.keys())
+            client_results[cl] = {
+                "success": True,
+                "title": title,
+                "captions": [str(k) for k in captions_list]
+            }
+        except Exception as e:
+            client_results[cl] = {
+                "success": False,
+                "error": str(e)
+            }
+    debug_info["client_results"] = client_results
+    
     return jsonify(debug_info)
 
 def parse_story_response(generated_content):
