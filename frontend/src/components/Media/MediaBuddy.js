@@ -607,11 +607,13 @@ function MediaBuddy({ user }) {
           <div className="manual-paste-section">
             <div className="manual-paste-info">
               💡 <strong>YouTube zablokował automatyczne pobieranie na serwerze:</strong>
+              <p style={{ margin: '0.5rem 0', fontSize: '0.92rem' }}>
+                Aby to obejść, możesz wkleić napisy ręcznie. Użyj darmowego narzędzia zewnętrznego:
+              </p>
               <ol>
-                <li>Otwórz ten film bezpośrednio na YouTube w przeglądarce.</li>
-                <li>Kliknij przycisk <strong>„Pokaż transkrypcję” (Show transcript)</strong> pod filmem.</li>
+                <li>Kliknij tutaj: <a href={`https://youtubetranscript.com/?v=${manualVideoId}`} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 'bold', color: 'var(--primary-500)', textDecoration: 'underline' }}>Otwórz transkrypcję filmu na YouTubeTranscript</a> (otworzy się w nowej karcie).</li>
                 <li>Zaznacz i skopiuj całą treść transkrypcji (wraz ze znacznikami czasu, np. 0:03).</li>
-                <li>Wklej skopiowany tekst poniżej i zatwierdź.</li>
+                <li>Wklej skopiowany tekst w pole poniżej i kliknij przycisk „Zapisz napisy i załaduj wideo”.</li>
               </ol>
             </div>
             <form onSubmit={handleSaveManualTranscript} className="manual-paste-form">
