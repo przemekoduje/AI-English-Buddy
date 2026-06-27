@@ -1325,6 +1325,55 @@ def get_youtube_transcript():
             "transcript": formatted
         })
 
+@app.route("/api/media/transcript/debug", methods=['GET'])
+def debug_youtube_transcript():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    video_id = request.args.get("video_id", "iJOb9xHggS4")
+    
+    debug_info = {}
+    
+    # 1. Test pytubefix
+    try:
+        from pytubefix import YouTube
+        url = f"https://youtube.com/watch?v={video_id}"
+        yt = YouTube(url)
+        debug_info["pytubefix_title"] = yt.title
+        debug_info["pytubefix_captions"] = [str(c) for c in yt.captions]
+        
+        caption = yt.captions.get('en') or yt.captions.get('a.en')
+        if not caption:
+            for c_code in yt.captions:
+                if c_code.startswith('en') or c_code.endswith('.en'):
+                    caption = yt.captions[c_code]
+                    break
+        if caption:
+            debug_info["pytubefix_caption_code"] = caption.code
+            srt_data = caption.generate_srt_captions()
+            debug_info["pytubefix_srt_preview"] = srt_data[:200]
+            debug_info["pytubefix_parsed_len"] = len(parse_srt(srt_data))
+        else:
+            debug_info["pytubefix_caption_code"] = "None found"
+    except Exception as e:
+        import traceback
+        debug_info["pytubefix_error"] = str(e)
+        debug_info["pytubefix_traceback"] = traceback.format_exc()
+
+    # 2. Test youtube-transcript-api
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+        api = YouTubeTranscriptApi()
+        transcript = api.fetch(video_id, languages=['en'])
+        debug_info["youtube_transcript_api_len"] = len(transcript)
+    except Exception as e:
+        import traceback
+        debug_info["youtube_transcript_api_error"] = str(e)
+        debug_info["youtube_transcript_api_traceback"] = traceback.format_exc()
+
+    return jsonify(debug_info)
+
 def parse_story_response(generated_content):
     content = generated_content.strip()
     # Remove markdown code blocks if present
