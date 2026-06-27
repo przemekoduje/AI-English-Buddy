@@ -1258,7 +1258,7 @@ def get_youtube_transcript():
         print(f"Attempting to fetch transcript using pytubefix for video {video_id}...", flush=True)
         from pytubefix import YouTube
         url = f"https://youtube.com/watch?v={video_id}"
-        yt = YouTube(url)
+        yt = YouTube(url, client='WEB')
         
         if video_title == f"Wideo YouTube ({video_id})":
             try:
@@ -1339,7 +1339,7 @@ def debug_youtube_transcript():
     try:
         from pytubefix import YouTube
         url = f"https://youtube.com/watch?v={video_id}"
-        yt = YouTube(url)
+        yt = YouTube(url, client='WEB')
         debug_info["pytubefix_title"] = yt.title
         debug_info["pytubefix_captions"] = [str(c) for c in yt.captions]
         
