@@ -37,3 +37,6 @@ frontend/build/
 
 # Ignore codebase dump containing secrets
 codebase_dump.txt
+
+# Firebase cache
+.firebase/
