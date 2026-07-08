@@ -1135,34 +1135,31 @@ def semantic_group_transcript(entries):
     indexed_entries = [{"id": i, "text": entry["text"], "start": entry["start"], "end": entry["end"]} for i, entry in enumerate(entries)]
     
     chunk_size = 60
-    grouped_results = []
+    chunks = [indexed_entries[i:i+chunk_size] for i in range(0, len(indexed_entries), chunk_size)]
     
-    for i in range(0, len(indexed_entries), chunk_size):
-        chunk = indexed_entries[i:i+chunk_size]
-        
-        system_prompt = (
-            "You are an expert audio transcription editor. Your job is to take a list of sequential transcript segments "
-            "(each with an 'id' and 'text') and group them strictly into single, complete sentences (from period to period).\n"
-            "CRITICAL RULES:\n"
-            "1. Each merged group MUST represent exactly ONE complete sentence. Every group MUST end with a final sentence punctuation mark ('.', '?', or '!').\n"
-            "2. NEVER combine multiple complete sentences into a single group. Each sentence must have its own separate card.\n"
-            "3. NEVER split a single sentence in half or into smaller parts. A sentence must always be kept 100% whole on a single card (from its beginning capital letter to its ending period/question/exclamation mark).\n"
-            "4. Ensure proper punctuation and capitalization are added to the merged text.\n"
-            "5. The IDs in each group must be consecutive and include all segments.\n"
-            "Respond ONLY with a JSON array of objects, each containing:\n"
-            "- 'ids': a list of integers representing the consecutive segment IDs merged to form this single sentence.\n"
-            "- 'text': the punctuated and capitalized text for the sentence.\n"
-            "Example:\n"
-            "[\n"
-            "  {\"ids\": [0, 1], \"text\": \"Hello, my name is John.\"},\n"
-            "  {\"ids\": [2, 3], \"text\": \"How are you doing today?\"},\n"
-            "  {\"ids\": [4], \"text\": \"I am doing great!\"}\n"
-            "]\n"
-            "Do not include any explanation or markdown formatting other than raw JSON."
-        )
-        
+    system_prompt = (
+        "You are an expert audio transcription editor. Your job is to take a list of sequential transcript segments "
+        "(each with an 'id' and 'text') and group them strictly into single, complete sentences (from period to period).\n"
+        "CRITICAL RULES:\n"
+        "1. Each merged group MUST represent exactly ONE complete sentence. Every group MUST end with a final sentence punctuation mark ('.', '?', or '!').\n"
+        "2. NEVER combine multiple complete sentences into a single group. Each sentence must have its own separate card.\n"
+        "3. NEVER split a single sentence in half or into smaller parts. A sentence must always be kept 100% whole on a single card (from its beginning capital letter to its ending period/question/exclamation mark).\n"
+        "4. Ensure proper punctuation and capitalization are added to the merged text.\n"
+        "5. The IDs in each group must be consecutive and include all segments.\n"
+        "Respond ONLY with a JSON array of objects, each containing:\n"
+        "- 'ids': a list of integers representing the consecutive segment IDs merged to form this single sentence.\n"
+        "- 'text': the punctuated and capitalized text for the sentence.\n"
+        "Example:\n"
+        "[\n"
+        "  {\"ids\": [0, 1], \"text\": \"Hello, my name is John.\"},\n"
+        "  {\"ids\": [2, 3], \"text\": \"How are you doing today?\"},\n"
+        "  {\"ids\": [4], \"text\": \"I am doing great!\"}\n"
+        "]\n"
+        "Do not include any explanation or markdown formatting other than raw JSON."
+    )
+
+    def process_chunk(chunk, chunk_index):
         user_prompt = json.dumps([{"id": e["id"], "text": e["text"]} for e in chunk], ensure_ascii=False)
-        
         try:
             response_data = query_deepseek_with_system(system_prompt, user_prompt)
             content = response_data["choices"][0]["message"]["content"].strip()
@@ -1182,6 +1179,7 @@ def semantic_group_transcript(entries):
             
             chunk_groups = json.loads(content)
             
+            chunk_results = []
             for group in chunk_groups:
                 g_ids = group.get("ids", [])
                 g_text = group.get("text", "")
@@ -1194,18 +1192,31 @@ def semantic_group_transcript(entries):
                     
                 group_entries.sort(key=lambda x: x["start"])
                 
-                grouped_results.append({
+                chunk_results.append({
                     "start": group_entries[0]["start"],
                     "end": group_entries[-1]["end"],
                     "text": g_text
                 })
-                
+            return chunk_results
         except Exception as e:
-            print(f"Błąd podczas semantycznego grupowania chunk {i}: {e}. Używam domyślnej agregacji dla tego fragmentu.")
-            chunk_raw_entries = [entries[idx] for idx in range(i, min(i+chunk_size, len(entries)))]
-            grouped_results.extend(aggregate_transcript(chunk_raw_entries))
-            
+            print(f"Błąd podczas semantycznego grupowania chunk {chunk_index}: {e}. Używam domyślnej agregacji dla tego fragmentu.")
+            chunk_raw_entries = [{"text": e["text"], "start": e["start"], "end": e["end"]} for e in chunk]
+            return aggregate_transcript(chunk_raw_entries)
+
+    from concurrent.futures import ThreadPoolExecutor
+    grouped_results = []
+    
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(process_chunk, chunk, idx) for idx, chunk in enumerate(chunks)]
+        for idx, future in enumerate(futures):
+            try:
+                chunk_results = future.result()
+                grouped_results.extend(chunk_results)
+            except Exception as fut_err:
+                print(f"Błąd krytyczny wątku w chunk {idx}: {fut_err}")
+                
     return grouped_results
+
 
 def parse_srt(srt_text):
     import re

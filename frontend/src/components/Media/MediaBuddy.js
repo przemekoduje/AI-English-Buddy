@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { API_BASE_URL } from '../../config';
 import "./MediaBuddy.css";
 import PronunciationPracticeModal from "../Notebook/PronunciationPracticeModal";
@@ -26,6 +26,82 @@ const CURATED_VIDEOS = [
   }
 ];
 
+const CURATED_SOURCES = [
+  {
+    id: "dry_bar_comedy",
+    name: "🎭 Dry Bar Comedy (Humor, stand-up)",
+    videos: [
+      {
+        youtubeId: "cqjhCC4sP4Q",
+        title: "Jeff Allen - I'm Not Married to a Woman, I'm Married to a Logic",
+        description: "Klasyczny, świetny stand-up o małżeństwie, idealne napisy."
+      }
+    ]
+  },
+  {
+    id: "ted_talks",
+    name: "💡 TED Talks (Inspirujące przemówienia)",
+    videos: [
+      {
+        youtubeId: "5MgBikgcWnY",
+        title: "Tim Urban - Inside the mind of a master procrastinator",
+        description: "Jeden z najpopularniejszych i najzabawniejszych wykładów TED."
+      },
+      {
+        youtubeId: "iCvmsMzlF7o",
+        title: "Amy Cuddy - Your body language may shape who you are",
+        description: "Poruszający wykład o mowie ciała i pewności siebie."
+      },
+      {
+        youtubeId: "w-HYZv6HzAs",
+        title: "Simon Sinek - How great leaders inspire action",
+        description: "Klasyczna prezentacja o złotej zasadzie przywództwa."
+      }
+    ]
+  },
+  {
+    id: "tech_fireship",
+    name: "💻 Fireship (Technologie, szybkie tempo)",
+    videos: [
+      {
+        youtubeId: "Sxxw3qtb3_g",
+        title: "What is Git? (in 100 Seconds)",
+        description: "Bardzo dynamiczny, techniczny angielski z bezbłędnymi napisami."
+      },
+      {
+        youtubeId: "erEgovG9WBs",
+        title: "100+ Web Development Terms you need to know",
+        description: "Szybki angielski, masa żartów, świetne napisy automatyczne."
+      }
+    ]
+  },
+  {
+    id: "james_veitch",
+    name: "✉️ James Veitch (Rozrywka, e-maile)",
+    videos: [
+      {
+        youtubeId: "_QdPW8JrYzQ",
+        title: "This is what happens when you reply to spam email",
+        description: "Niezwykle zabawna historia korespondencji ze spamerem."
+      },
+      {
+        youtubeId: "Dceyy0cX6J4",
+        title: "The agony of trying to unsubscribe",
+        description: "Komiczna walka z próbą wypisania się z newslettera supermarketu."
+      }
+    ]
+  }
+];
+
+const shuffleAndSlice = (array, count = 3) => {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.slice(0, count);
+};
+
 function MediaBuddy({ user }) {
   const [currentVideo, setCurrentVideo] = useState(CURATED_VIDEOS[0]);
   const [currentTime, setCurrentTime] = useState(0);
@@ -50,6 +126,13 @@ function MediaBuddy({ user }) {
   const [showManualPaste, setShowManualPaste] = useState(false);
   const [manualText, setManualText] = useState("");
   const [manualVideoId, setManualVideoId] = useState("");
+  const [selectedSourceId, setSelectedSourceId] = useState("");
+  const randomizedSources = useMemo(() => {
+    return CURATED_SOURCES.map(source => ({
+      ...source,
+      videos: shuffleAndSlice(source.videos, 3)
+    }));
+  }, []);
   const [customVideos, setCustomVideos] = useState(() => {
     try {
       const saved = localStorage.getItem("media_buddy_custom_videos");
@@ -78,10 +161,7 @@ function MediaBuddy({ user }) {
     }
   };
 
-  // AI Joke Explanation states
-  const [selectedJokeText, setSelectedJokeText] = useState("");
-  const [jokeExplanation, setJokeExplanation] = useState(null);
-  const [isExplaining, setIsExplaining] = useState(false);
+
 
   // Pronunciation Practice modal states
   const [showPracticeModal, setShowPracticeModal] = useState(false);
@@ -93,9 +173,10 @@ function MediaBuddy({ user }) {
   // Refs for YouTube Player and interval
   const playerRef = useRef(null);
   const timerRef = useRef(null);
+  const isInitialMount = useRef(true);
 
   // Helper to create or recreate YouTube Player instance with a specific videoId
-  const createPlayer = (videoId) => {
+  const createPlayer = (videoId, autoPlay = true) => {
     // If a player already exists, destroy it to restore original placeholder div
     if (playerRef.current) {
       try {
@@ -112,7 +193,7 @@ function MediaBuddy({ user }) {
         width: "100%",
         videoId: videoId,
         playerVars: {
-          autoplay: 1,
+          autoplay: autoPlay ? 1 : 0,
           origin: window.location.origin,
           enablejsapi: 1,
           modestbranding: 1
@@ -142,10 +223,10 @@ function MediaBuddy({ user }) {
 
       // Define callback
       window.onYouTubeIframeAPIReady = () => {
-        createPlayer(currentVideo.youtubeId);
+        createPlayer(currentVideo.youtubeId, false);
       };
     } else {
-      createPlayer(currentVideo.youtubeId);
+      createPlayer(currentVideo.youtubeId, false);
     }
 
     return () => {
@@ -189,8 +270,9 @@ function MediaBuddy({ user }) {
   // Switch video and recreate player when currentVideo changes
   useEffect(() => {
     if (window.YT && window.YT.Player) {
-      createPlayer(currentVideo.youtubeId);
+      createPlayer(currentVideo.youtubeId, !isInitialMount.current);
     }
+    isInitialMount.current = false;
     // Reset states
     setCurrentTime(0);
     setActiveSegmentIndex(-1);
@@ -199,8 +281,6 @@ function MediaBuddy({ user }) {
     setWordTranslation("");
     setSegmentTranslation("");
     setIsSegmentSaved(false);
-    setSelectedJokeText("");
-    setJokeExplanation(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentVideo]);
 
@@ -218,8 +298,10 @@ function MediaBuddy({ user }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, activeSegmentIndex]);
 
-  // Synchronize active segment and trigger auto-scrolling
+  // Synchronize active segment and trigger auto-scrolling (only when playing)
   useEffect(() => {
+    if (!isPlaying) return;
+
     // Add a 0.4s anticipation bias to compensate for rendering/scroll latency and highlight early
     const checkTime = currentTime + 0.4;
     const idx = currentVideo.transcript.findIndex(
@@ -241,19 +323,10 @@ function MediaBuddy({ user }) {
         setActiveSegmentIndex(-1);
       }
     }
-  }, [currentTime, currentVideo, activeSegmentIndex]);
+  }, [currentTime, currentVideo, activeSegmentIndex, isPlaying]);
 
-  // Click card body: seek to segment start and pause video (for study)
+  // Click card body: seek to segment start and pause video (for study) / toggle play state if active
   const handleCardClick = (seg, index) => {
-    if (playerRef.current && typeof playerRef.current.seekTo === "function") {
-      playerRef.current.seekTo(seg.start, true);
-      playerRef.current.pauseVideo();
-    }
-  };
-
-  // Toggle play/pause using the dedicated button on the card
-  const handlePlayPauseToggle = (e, seg, index) => {
-    e.stopPropagation(); // Avoid triggering card click
     if (playerRef.current && typeof playerRef.current.getPlayerState === "function") {
       const state = playerRef.current.getPlayerState();
       if (activeSegmentIndex === index) {
@@ -263,8 +336,21 @@ function MediaBuddy({ user }) {
           playerRef.current.playVideo();
         }
       } else {
-        playerRef.current.seekTo(seg.start, true);
-        playerRef.current.playVideo();
+        if (typeof playerRef.current.seekTo === "function") {
+          playerRef.current.seekTo(seg.start, true);
+        }
+        playerRef.current.pauseVideo();
+        setCurrentTime(seg.start);
+        setActiveSegmentIndex(index);
+      }
+    } else {
+      // Fallback if player API is not ready
+      if (activeSegmentIndex === index) {
+        setIsPlaying(!isPlaying);
+      } else {
+        setCurrentTime(seg.start);
+        setActiveSegmentIndex(index);
+        setIsPlaying(false);
       }
     }
   };
@@ -387,65 +473,6 @@ function MediaBuddy({ user }) {
     }
   };
 
-  // Click Explain Joke: pause video and fetch AI explanation with surrounding context
-  const handleExplainJoke = async (text, index) => {
-    if (!text) return;
-    if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
-      playerRef.current.pauseVideo();
-    }
-
-    // Compute surrounding context (e.g., 3 segments before and 2 segments after)
-    const transcript = currentVideo.transcript;
-    const startIdx = Math.max(0, index - 3);
-    const endIdx = Math.min(transcript.length - 1, index + 2);
-    
-    const contextBeforeArr = [];
-    for (let i = startIdx; i < index; i++) {
-      contextBeforeArr.push(transcript[i].text);
-    }
-    const contextBefore = contextBeforeArr.join(" ");
-
-    const contextAfterArr = [];
-    for (let i = index + 1; i <= endIdx; i++) {
-      contextAfterArr.push(transcript[i].text);
-    }
-    const contextAfter = contextAfterArr.join(" ");
-
-    setSelectedJokeText(text);
-    setJokeExplanation(null);
-    setIsExplaining(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/media/explain-joke`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-Token": user.token
-        },
-        body: JSON.stringify({
-          text,
-          context_before: contextBefore,
-          context_after: contextAfter,
-          video_title: currentVideo.title
-        })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setJokeExplanation(data);
-      } else {
-        setJokeExplanation({
-          error: "Nie udało się pobrać wyjaśnienia od AI."
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      setJokeExplanation({
-        error: "Błąd połączenia z serwerem."
-      });
-    } finally {
-      setIsExplaining(false);
-    }
-  };
 
   // Click Practice Pronunciation: pause video and open modal
   const handlePracticePronunciation = (text) => {
@@ -485,16 +512,9 @@ function MediaBuddy({ user }) {
     return (match && match[2].length === 11) ? match[2] : url.trim();
   };
 
-  const handleLoadCustomVideo = async (e) => {
-    e.preventDefault();
+  const fetchAndLoadVideo = async (videoId) => {
     setCustomError("");
     setShowManualPaste(false);
-    const videoId = extractVideoId(customUrl);
-    if (!videoId || videoId.length !== 11) {
-      setCustomError("Nieprawidłowy adres URL lub ID wideo. Upewnij się, że ID ma 11 znaków.");
-      return;
-    }
-
     setIsLoadingCustom(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/media/transcript?video_id=${videoId}`, {
@@ -535,6 +555,16 @@ function MediaBuddy({ user }) {
     } finally {
       setIsLoadingCustom(false);
     }
+  };
+
+  const handleLoadCustomVideo = async (e) => {
+    e.preventDefault();
+    const videoId = extractVideoId(customUrl);
+    if (!videoId || videoId.length !== 11) {
+      setCustomError("Nieprawidłowy adres URL lub ID wideo. Upewnij się, że ID ma 11 znaków.");
+      return;
+    }
+    await fetchAndLoadVideo(videoId);
   };
 
   const handleSaveManualTranscript = async (e) => {
@@ -586,6 +616,14 @@ function MediaBuddy({ user }) {
 
   return (
     <div className="mediabuddy-container">
+      {isLoadingCustom && (
+        <div className="media-loading-overlay">
+          <div className="media-loading-card glass-panel animate-fade-in">
+            <div className="media-spinner"></div>
+            <p className="media-loading-text">Pobieranie transkrypcji i przygotowywanie wideo...</p>
+          </div>
+        </div>
+      )}
       {/* Custom Video URL Loader */}
       <div className="custom-video-loader glass-panel">
         <h3 className="loader-title">🔗 Dodaj własne wideo z YouTube</h3>
@@ -631,6 +669,56 @@ function MediaBuddy({ user }) {
             </form>
           </div>
         )}
+        {/* Curated Channels & Suggestion Box */}
+        <div className="curated-suggestions-section">
+          <h4 className="suggestions-title">💡 Rekomendowane kanały z gotowymi napisami</h4>
+          <div className="suggestions-controls">
+            <select 
+              className="suggestions-select"
+              value={selectedSourceId}
+              onChange={(e) => setSelectedSourceId(e.target.value)}
+            >
+              <option value="">-- Wybierz kategorię / kanał --</option>
+              {randomizedSources.map(source => (
+                <option key={source.id} value={source.id}>
+                  {source.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {(() => {
+            const selectedSource = randomizedSources.find(s => s.id === selectedSourceId);
+            if (!selectedSource) return null;
+            return (
+              <div className="suggestions-grid animate-fade-in">
+                {selectedSource.videos.map(video => (
+                  <div key={video.youtubeId} className="suggestion-item-card">
+                    <div className="suggestion-thumbnail-wrapper">
+                      <img 
+                        src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`}
+                        alt={video.title}
+                        className="suggestion-thumbnail"
+                      />
+                    </div>
+                    <div className="suggestion-info">
+                      <h5 className="suggestion-video-title">{video.title}</h5>
+                      <p className="suggestion-video-desc">{video.description}</p>
+                      <button 
+                        type="button" 
+                        className="suggestion-load-btn"
+                        onClick={() => fetchAndLoadVideo(video.youtubeId)}
+                        disabled={isLoadingCustom}
+                      >
+                        Załaduj wideo 🚀
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
       </div>
 
       {/* Video Selector Row */}
@@ -770,21 +858,6 @@ function MediaBuddy({ user }) {
                   onClick={() => handleCardClick(seg, idx)}
                 >
                   <div className="segment-left-col">
-                    <button
-                      className="segment-play-btn"
-                      onClick={(e) => handlePlayPauseToggle(e, seg, idx)}
-                      title={activeSegmentIndex === idx && isPlaying ? "Pauza" : "Odtwórz ten fragment"}
-                    >
-                      {activeSegmentIndex === idx && isPlaying ? (
-                        <svg className="play-pause-icon" viewBox="0 0 24 24">
-                          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                        </svg>
-                      ) : (
-                        <svg className="play-pause-icon" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z"/>
-                        </svg>
-                      )}
-                    </button>
                     <span className="segment-time-badge">
                       {Math.floor(seg.start / 60)}:{(Math.floor(seg.start) % 60).toString().padStart(2, "0")}
                     </span>
@@ -792,16 +865,6 @@ function MediaBuddy({ user }) {
                   <div className="segment-content">
                     <p className="segment-text-line">{renderInteractiveText(seg.text)}</p>
                     <div className="segment-actions">
-                      <button
-                        className="segment-action-btn explain"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleExplainJoke(seg.text, idx);
-                        }}
-                        title="Wyjaśnij humor, slang i kulturę tego żartu przez AI"
-                      >
-                        Wyjaśnij żart 💡
-                      </button>
                       <button
                         className="segment-action-btn practice"
                         onClick={(e) => {
@@ -818,64 +881,6 @@ function MediaBuddy({ user }) {
               ))}
             </div>
           </div>
-
-          {/* AI Explanation Panel */}
-          <div className="ai-explanation-panel glass-panel">
-            <h3 className="panel-header">💡 Wyjaśnienie AI (Joke Interpreter)</h3>
-            {isExplaining ? (
-              <div className="explanation-loading animate-pulse">
-                <div className="explanation-spinner"></div>
-                <p>AI analizuje humor i podtekst kulturowy żartu...</p>
-              </div>
-            ) : jokeExplanation ? (
-              <div className="explanation-results animate-slide-up">
-                {jokeExplanation.error ? (
-                  <p className="error-text">{jokeExplanation.error}</p>
-                ) : (
-                  <div className="explanation-layout">
-                    <div className="selected-joke-quote">
-                      <svg className="quote-icon" viewBox="0 0 24 24">
-                        <path d="M11.192 15.757c0-.754-.186-1.413-.557-1.974-.371-.56-.891-.976-1.562-1.246V12.4c1.196-.453 2.126-1.267 2.792-2.441.666-1.173.999-2.585.999-4.238h-2.932c0 2.213-.67 3.844-2.012 4.894-.852.665-1.939 1.055-3.261 1.17v6.868c1.321-.115 2.408-.505 3.26-1.17 1.343-1.05 2.013-2.68 2.013-4.894H12c0 1.653-.333 3.065-.999 4.238-.666 1.174-1.596 1.988-2.792 2.441v.137c.671.27 1.191.686 1.562 1.246.371.56.557 1.22.557 1.974h2.866zm10.808 0c0-.754-.186-1.413-.557-1.974-.371-.56-.891-.976-1.562-1.246V12.4c1.196-.453 2.126-1.267 2.792-2.441.666-1.173.999-2.585.999-4.238H20.29c0 2.213-.67 3.844-2.012 4.894-.852.665-1.939 1.055-3.261 1.17v6.868c1.321-.115 2.408-.505 3.26-1.17 1.343-1.05 2.013-2.68 2.013-4.894H21.1c0 1.653-.333 3.065-.999 4.238-.666 1.174-1.596 1.988-2.792 2.441v.137c.671.27 1.191.686 1.562 1.246.371.56.557 1.22.557 1.974h2.866z" />
-                      </svg>
-                      <p>"{selectedJokeText}"</p>
-                    </div>
-
-                    <div className="explanation-section literal-sec">
-                      <h4>Dosłowne znaczenie</h4>
-                      <p>{jokeExplanation.literal_meaning}</p>
-                    </div>
-
-                    <div className="explanation-section context-sec">
-                      <h4>Kontekst kulturowy</h4>
-                      <p>{jokeExplanation.cultural_context}</p>
-                    </div>
-
-                    {jokeExplanation.wordplay && jokeExplanation.wordplay !== "Brak gry słów" && (
-                      <div className="explanation-section wordplay-sec">
-                        <h4>Gra słów i humor</h4>
-                        <p>{jokeExplanation.wordplay}</p>
-                      </div>
-                    )}
-
-                    <div className="explanation-section sarcasm-sec">
-                      <h4>Sarkazm i ton</h4>
-                      <p>{jokeExplanation.sarcasm}</p>
-                    </div>
-
-                    <div className="explanation-section summary-sec">
-                      <h4>Komentarz AI</h4>
-                      <p>{jokeExplanation.explanation}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="explanation-placeholder">
-                Kliknij przycisk "Wyjaśnij żart 💡" obok dowolnego segmentu transkrypcji, aby otrzymać szczegółową analizę humoru i kontekstu od AI.
-              </p>
-            )}
-          </div>
-
         </div>
 
       </div>
