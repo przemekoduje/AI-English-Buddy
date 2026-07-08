@@ -26,6 +26,11 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   // TTS State
   const [playingWord, setPlayingWord] = useState(null);
 
+  // Mnemonic Accordion State
+  const [expandedMnemonicIds, setExpandedMnemonicIds] = useState({});
+  const [loadingMnemonicIds, setLoadingMnemonicIds] = useState({});
+  const [mnemonicErrors, setMnemonicErrors] = useState({});
+
   // Fetch vocabulary
   const fetchVocabulary = useCallback(async () => {
     setLoading(true);
@@ -102,6 +107,56 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
     } catch (err) {
       console.error("Error playing TTS:", err);
       setPlayingWord(null);
+    }
+  };
+
+  // Handle Mnemonic Accordion Toggle (Lazy Loading)
+  const handleToggleMnemonic = async (item) => {
+    const wordId = item.id || item.original;
+    const isExpanded = expandedMnemonicIds[wordId];
+
+    // Toggle expanded state
+    setExpandedMnemonicIds(prev => ({
+      ...prev,
+      [wordId]: !isExpanded
+    }));
+
+    // If expanding and mnemonic not present, fetch from API
+    if (!isExpanded && !item.mnemonic) {
+      setLoadingMnemonicIds(prev => ({ ...prev, [wordId]: true }));
+      setMnemonicErrors(prev => ({ ...prev, [wordId]: "" }));
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(item.id)}/mnemonic`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || "",
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error("Nie udało się pobrać haka pamięciowego.");
+        }
+
+        const mnemonicData = await response.json();
+        
+        // Update words state to include the new mnemonic
+        setWords(prev => prev.map(w => {
+          if (w.id === item.id) {
+            return { ...w, mnemonic: mnemonicData };
+          }
+          return w;
+        }));
+      } catch (err) {
+        console.error(err);
+        setMnemonicErrors(prev => ({
+          ...prev,
+          [wordId]: err.message || "Błąd generowania mnemotechniki."
+        }));
+      } finally {
+        setLoadingMnemonicIds(prev => ({ ...prev, [wordId]: false }));
+      }
     }
   };
 
@@ -195,6 +250,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         </div>
 
         <div className="vocab-header-actions">
+
           <button 
             className="action-premium-btn flashcards-btn"
             onClick={() => setShowFlashcards(true)}
@@ -325,7 +381,55 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
               <div className="word-display-area">
                 <h3 className="original-text">{item.original}</h3>
                 <p className="translated-text">{item.translated}</p>
+                {item.original.trim().split(/\s+/).length === 1 && (
+                  <button 
+                    className={`mnemonic-trigger-btn ${expandedMnemonicIds[item.id || item.original] ? 'active' : ''}`}
+                    onClick={() => handleToggleMnemonic(item)}
+                    title="Pokaż skojarzenie ułatwiające zapamiętanie"
+                  >
+                    <span>Mnemotechnika</span>
+                    <span className="bulb-icon">💡</span>
+                  </button>
+                )}
               </div>
+
+              {expandedMnemonicIds[item.id || item.original] && (
+                <div className="mnemonic-accordion-content">
+                  {loadingMnemonicIds[item.id || item.original] ? (
+                    <div className="mnemonic-loading">
+                      <div className="spinner-mini"></div>
+                      <span>Tworzenie haka pamięciowego...</span>
+                    </div>
+                  ) : mnemonicErrors[item.id || item.original] ? (
+                    <div className="mnemonic-error">
+                      <span>⚠️ {mnemonicErrors[item.id || item.original]}</span>
+                    </div>
+                  ) : item.mnemonic ? (
+                    <div className="mnemonic-data animate-slide-down">
+                      <div className="mnemonic-section audio-anchor-section">
+                        <span className="mnemonic-label">Skojarzenie dźwiękowe:</span>
+                        <strong className="mnemonic-val anchor-val">{item.mnemonic.audio_anchor}</strong>
+                      </div>
+                      <div className="mnemonic-section">
+                        <span className="mnemonic-label">Abstrakcyjny obraz:</span>
+                        <p className="mnemonic-val">{item.mnemonic.abstract_image}</p>
+                      </div>
+                      <div className="mnemonic-section">
+                        <span className="mnemonic-label">Dynamiczna scena:</span>
+                        <p className="mnemonic-val scene-val">
+                          {item.mnemonic.dynamic_scene.split(/(\s+)/).map((word, idx) => {
+                            const isAllCapitals = /^[A-ZĘÓĄŚŁŻŹĆŃ\s\W\d_]{2,}$/.test(word.trim());
+                            if (isAllCapitals && word.trim().length > 1) {
+                              return <strong key={idx} className="bold-uppercase-term">{word}</strong>;
+                            }
+                            return word;
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
 
               <div className="card-actions-bar">
                 <button 
@@ -471,6 +575,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
           </form>
         </div>
       )}
+
     </div>
   );
 };

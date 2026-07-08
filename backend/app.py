@@ -2106,6 +2106,127 @@ def delete_vocabulary(original_word):
         return jsonify({"error": f"Błąd podczas usuwania ze słownika: {e}"}), 500
 
 
+@app.route("/api/vocabulary/<string:word_id>/mnemonic", methods=['POST'])
+def generate_mnemonic(word_id):
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    try:
+        doc_ref = db.collection('vocabulary').document(word_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            return jsonify({"error": "Słowo nie istnieje"}), 404
+        
+        word_data = doc.to_dict()
+        if word_data.get('user_email') != user_email:
+            return jsonify({"error": "Brak dostępu do tego słowa"}), 403
+
+        # Sprawdź cache
+        if 'mnemonic' in word_data and word_data['mnemonic']:
+            return jsonify(word_data['mnemonic']), 200
+
+        original = word_data.get('original', '')
+        translated = word_data.get('translated', '')
+        pronunciation = word_data.get('pronunciation_hint', '')
+
+        system_prompt = (
+            "Jesteś zaawansowanym silnikiem mnemotechnicznym (Metoda Słów Haczyków / Fonetyczna).\n"
+            "Twoim zadaniem jest stworzyć absurdalne skojarzenie łączące angielskie słowo z językiem polskim wyłącznie na podstawie jego rzeczywistego BRZMIENIA (wymowy fonetycznej).\n\n"
+            "CRITICAL RULES (Strict Enforcement):\n"
+            "1. Określ rzeczywistą wymowę angielskiego słowa (np. 'bury' brzmi jak [beri], 'pork' brzmi jak [pok], 'chicken' brzmi jak [czikin]).\n"
+            "2. KATEGORYCZNIE ZABRANIA SIĘ używania angielskiego słowa jako skojarzenia dźwiękowego ('audio_anchor').\n"
+            "3. 'audio_anchor' MUSI być PRAWDZIWYM, istniejącym w języku polskim słowem lub powszechnie znaną frazą o jasnym znaczeniu. \n"
+            "   BEZWARUNKOWY ZAKAZ wymyślania sztucznych słów (np. 'czikin', 'bif') lub tworzenia bezsensownych rymów bazujących na pisowni (np. bury -> 'buracz').\n"
+            "4. Skojarzenie dźwiękowe ('audio_anchor') musi brzmieć jak najdokładniejszy odpowiednik wymowy angielskiej słyszanej przez ucho.\n"
+            "5. Dynamiczna scena ('dynamic_scene') musi być zabawną, absurdalną historią, w której występują:\n"
+            "   - Skojarzenie dźwiękowe ('audio_anchor')\n"
+            "   - Polskie znaczenie tego słowa ('translation')\n"
+            "   Oba te słowa kluczowe (oraz ich odmiany gramatyczne) MUSZĄ być zapisane WIELKIMI LITERAMI (ALL CAPS) w opisie sceny.\n"
+            "6. WARUNEK AWARYJNY (FALLBACK): Jeśli kategorycznie nie potrafisz znaleźć żadnego prawdziwego, istniejącego w języku polskim słowa lub zwrotu zbliżonego fonetycznie do wymowy angielskiego słowa, pod żadnym pozorem nie wymyślaj sztucznego słowa. Zamiast tego zwróć dokładnie:\n"
+            "   {\n"
+            "     \"audio_anchor\": \"Brak dopasowania\",\n"
+            "     \"abstract_image\": \"\",\n"
+            "     \"dynamic_scene\": \"Nie udało się odnaleźć poprawnego polskiego słowa-klucza o podobnym brzmieniu.\"\n"
+            "   }\n\n"
+            "PRZYKŁADY POPRAWNEGO PROCESU MYŚLENIA:\n"
+            "--- Przykład 1 ---\n"
+            "Słowo: 'chicken' -> Wymowa: [czikin]\n"
+            "Szukam prawdziwych polskich słów brzmiących jak [czikin] -> np. 'CZYŻYK W KINIE' (czy-żyk w ki-nie) lub 'CZYJ KIN'.\n"
+            "Znaczenie: 'kurczak'\n"
+            "Wyjście JSON:\n"
+            "{\n"
+            "  \"audio_anchor\": \"CZYŻYK W KINIE\",\n"
+            "  \"abstract_image\": \"Mały ptaszek czyżyk siedzi w ciemnej sali kinowej z ogromnym kubełkiem popcornu.\",\n"
+            "  \"dynamic_scene\": \"Nagle na ekranie zamiast filmu pojawia się wielki, pieczony KURCZAK. Wściekły CZYŻYK W KINIE rzuca popcornem w ekran i krzyczy: Kto włączył ten film z KURCZAKIEM?!\"\n"
+            "}\n\n"
+            "--- Przykład 2 ---\n"
+            "Słowo: 'bury' -> Wymowa: [beri]\n"
+            "Szukam prawdziwych polskich słów brzmiących jak [beri] -> np. 'BERET'. (NIGDY 'bury' czy 'buracz'!).\n"
+            "Znaczenie: 'zakopoć'\n"
+            "Wyjście JSON:\n"
+            "{\n"
+            "  \"audio_anchor\": \"BERET\",\n"
+            "  \"abstract_image\": \"Ogromny, czerwony beret z antenką leży porzucony na środku trawnika.\",\n"
+            "  \"dynamic_scene\": \"Podbiegasz do trawnika z łopatą i zaczynasz gorączkowo ZAKOPYWAĆ ten wielki BERET w ziemi, bo prezes zabronił nosić BERETÓW. Kiedy kończysz go ZAKOPYWAĆ, z ziemi wyrasta flaga.\"\n"
+            "}\n\n"
+            "--- Przykład 3 ---\n"
+            "Słowo: 'pork' -> Wymowa: [pok]\n"
+            "Szukam prawdziwych polskich słów brzmiących jak [pok] -> np. 'PORT' lub 'PORY' (warzywo).\n"
+            "Znaczenie: 'wieprzowina'\n"
+            "Wyjście JSON:\n"
+            "{\n"
+            "  \"audio_anchor\": \"PORT\",\n"
+            "  \"abstract_image\": \"Wielki port morski z gigantycznymi statkami kontenerowymi cumującymi przy nabrzeżu.\",\n"
+            "  \"dynamic_scene\": \"Wchodzisz do wielkiego PORTU, a zamiast wody w basenach portowych pływa płynny tłuszcz, w którym unoszą się gigantyczne kotlety schabowe. Kapitan krzyczy: Cała WIEPRZOWINA musi natychmiast opuścić PORT!\"\n"
+            "}\n\n"
+            "Zwróć strukturę w formacie JSON z kluczami: 'audio_anchor', 'abstract_image', 'dynamic_scene'.\n"
+            "Odpowiedz wyłącznie poprawnym kodem JSON bez dodatkowych komentarzy czy formatowania markdown."
+        )
+
+        input_data = {
+            "word": original,
+            "translation": translated,
+            "pronunciation": pronunciation
+        }
+
+        user_prompt = json.dumps(input_data, ensure_ascii=False)
+        print(f"=== OPENAI INPUT FOR {word_id} ===")
+        print(f"Word: {original} | Trans: {translated}")
+        print(f"User Prompt: {user_prompt}")
+
+        ai_response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"}
+        )
+
+        content = ai_response.choices[0].message.content.strip()
+        print(f"=== OPENAI OUTPUT FOR {word_id} ===")
+        print(content)
+        
+        if content.startswith("```"):
+            lines = content.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            content = "\n".join(lines).strip()
+
+        mnemonic_json = json.loads(content)
+        
+        # Zapisz w cache
+        doc_ref.update({'mnemonic': mnemonic_json})
+
+        return jsonify(mnemonic_json), 200
+    except Exception as e:
+        print(f"Error generating mnemonic: {e}")
+        return jsonify({"error": f"Błąd generowania mnemotechniki: {str(e)}"}), 500
+
+
 # ### NOWY ENDPOINT: WYSYŁANIE SŁÓW Z NOTATNIKA NA E-MAIL ###
 @app.route("/api/send-notebook-email", methods=['POST'])
 def send_notebook_email():

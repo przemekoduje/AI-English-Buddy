@@ -645,3 +645,140 @@
     width: 100%;
   }
 }
+
+/* Card Mnemonic & Memory Palace trigger */
+.mnemonic-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  background: rgba(139, 92, 246, 0.05);
+  color: #6d28d9;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.mnemonic-trigger-btn:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+.mnemonic-trigger-btn.active {
+  background: #6d28d9;
+  color: white;
+  border-color: #6d28d9;
+}
+
+/* Mnemonic Section Styling */
+.mnemonic-accordion-content {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  padding-top: 0.85rem;
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+.mnemonic-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--slate-500, #64748b);
+  font-size: 0.85rem;
+  padding: 0.5rem 0;
+}
+
+.spinner-mini {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(139, 92, 246, 0.1);
+  border-top-color: #6d28d9;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.mnemonic-error {
+  color: #d93025;
+  font-size: 0.85rem;
+  padding: 0.5rem 0;
+}
+
+.mnemonic-data {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.mnemonic-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.mnemonic-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--slate-400, #94a3b8);
+}
+
+.mnemonic-val {
+  font-size: 0.9rem;
+  line-height: 1.4;
+  margin: 0;
+  color: var(--slate-700, #334155);
+}
+
+.audio-anchor-section {
+  background: rgba(139, 92, 246, 0.04);
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border-left: 3px solid #6d28d9;
+}
+
+.anchor-val {
+  color: #6d28d9;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.scene-val {
+  font-style: italic;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.bold-uppercase-term {
+  color: #6d28d9;
+  font-weight: 800;
+  background: rgba(139, 92, 246, 0.08);
+  padding: 0.05rem 0.2rem;
+  border-radius: 4px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
