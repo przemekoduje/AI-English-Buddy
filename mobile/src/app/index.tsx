@@ -1368,7 +1368,7 @@ export default function HomeScreen() {
     }
   };
 
-  const handleWordClick = async (word: string) => {
+  const handleWordClick = async (word: string, sentenceContext?: string) => {
     setVideoIsPlaying(false); // Pause wideo
     const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "").trim();
     if (!cleanWord) return;
@@ -1382,7 +1382,7 @@ export default function HomeScreen() {
       const response = await customFetch(`${backendUrl}/api/translate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: cleanWord })
+        body: JSON.stringify({ text: cleanWord, context: sentenceContext })
       });
       if (response.ok) {
         const data = await response.json();
@@ -2747,7 +2747,7 @@ export default function HomeScreen() {
                           {words.map((w: string, wIdx: number) => (
                             <TouchableOpacity 
                               key={wIdx} 
-                              onPress={() => handleWordClick(w)}
+                              onPress={() => handleWordClick(w, seg.text)}
                               style={styles.wordTouch}
                             >
                               <Text style={styles.wordText}>{w}</Text>

@@ -493,6 +493,7 @@ input[type="range"] {
   line-height: 1.4;
   margin-bottom: 4px;
   word-wrap: break-word;
+  white-space: pre-line;
 }
 
 .word-translation-tooltip .tooltip-actions {

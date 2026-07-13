@@ -72,6 +72,8 @@ function Workspace({
   
   const currentAudioRef = useRef(null);
   const contextMenuRef = useRef(null);
+  const activeSelectionRangeRef = useRef(null);
+  const activeSelectionTextRef = useRef(null);
   
   // Telemetry & summary states
   const [activityLog, setActivityLog] = useState([]);
@@ -313,6 +315,121 @@ function Workspace({
       document.removeEventListener("touchstart", handleOutsideClick);
     };
   }, [menuVisible]);
+
+  const triggerSelectionTranslation = async (text, range) => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+
+    const rect = range.getBoundingClientRect();
+
+    const layoutEl = document.querySelector('.workspace-layout');
+    const layoutRect = layoutEl ? layoutEl.getBoundingClientRect() : { top: 0, left: 0 };
+
+    const top = rect.top - layoutRect.top;
+    const left = rect.left - layoutRect.left;
+    const width = rect.width;
+    const height = rect.height;
+
+    setActiveWordId(null);
+    setActiveWordHighlight({
+      word: text,
+      id: null,
+      rect: { top, left, width, height }
+    });
+
+    setWordTooltipLoading(true);
+    setShowWordTooltip(true);
+
+    try {
+      let sentenceContext = undefined;
+      let node = range.startContainer;
+      while (node && node !== document.body) {
+        if (node.classList && node.classList.contains('story-sentence')) {
+          sentenceContext = node.textContent;
+          break;
+        }
+        node = node.parentNode;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/translate`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+        body: JSON.stringify({ text: text, context: sentenceContext }),
+      });
+      const data = await response.json();
+      if (data.translation) {
+        setWordTooltipTranslation(data.translation);
+      } else {
+        setWordTooltipTranslation("Brak tłumaczenia");
+      }
+    } catch (err) {
+      console.error("Błąd tłumaczenia zaznaczenia:", err);
+      setWordTooltipTranslation("Błąd połączenia");
+    } finally {
+      setWordTooltipLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleGlobalMouseDown = (e) => {
+      if (activeSelectionRangeRef.current) {
+        const rect = activeSelectionRangeRef.current.getBoundingClientRect();
+        const { clientX, clientY } = e;
+        const pad = 5;
+        const isInside = (
+          clientX >= rect.left - pad &&
+          clientX <= rect.right + pad &&
+          clientY >= rect.top - pad &&
+          clientY <= rect.bottom + pad
+        );
+        if (!isInside) {
+          activeSelectionRangeRef.current = null;
+          activeSelectionTextRef.current = null;
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleGlobalMouseDown, true);
+    return () => {
+      document.removeEventListener("mousedown", handleGlobalMouseDown, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalMouseMove = (e) => {
+      if (activeSelectionRangeRef.current && !showWordTooltip) {
+        const rect = activeSelectionRangeRef.current.getBoundingClientRect();
+        const { clientX, clientY } = e;
+        
+        const pad = 5;
+        const isInside = (
+          clientX >= rect.left - pad &&
+          clientX <= rect.right + pad &&
+          clientY >= rect.top - pad &&
+          clientY <= rect.bottom + pad
+        );
+        
+        if (isInside) {
+          const text = activeSelectionTextRef.current;
+          const range = activeSelectionRangeRef.current;
+          
+          activeSelectionRangeRef.current = null;
+          activeSelectionTextRef.current = null;
+          
+          triggerSelectionTranslation(text, range);
+        }
+      }
+    };
+    
+    document.addEventListener("mousemove", handleGlobalMouseMove, true);
+    return () => {
+      document.removeEventListener("mousemove", handleGlobalMouseMove, true);
+    };
+  }, [showWordTooltip]);
 
   useEffect(() => {
     const now = Date.now();
@@ -590,12 +707,14 @@ function Workspace({
   };
 
   const handleTextSelection = () => {
-    const text = window.getSelection().toString().trim();
-    if (text) {
-      const rect = window.getSelection().getRangeAt(0).getBoundingClientRect();
-      setSelectedText(text);
-      setMenuPosition({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX + rect.width / 2 });
-      setMenuVisible(true);
+    const selection = window.getSelection();
+    const text = selection.toString().trim();
+    if (text && selection.rangeCount > 0) {
+      activeSelectionRangeRef.current = selection.getRangeAt(0).cloneRange();
+      activeSelectionTextRef.current = text;
+    } else {
+      activeSelectionRangeRef.current = null;
+      activeSelectionTextRef.current = null;
     }
   };
 
@@ -662,7 +781,7 @@ function Workspace({
     handleCloseWordTooltip();
   };
 
-  const handleWordClick = async (word, wordId, element) => {
+  const handleWordClick = async (word, wordId, element, sentenceContext) => {
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
@@ -693,7 +812,7 @@ function Workspace({
           "Content-Type": "application/json",
           "X-Session-Token": user.token
         },
-        body: JSON.stringify({ text: word }),
+        body: JSON.stringify({ text: word, context: sentenceContext }),
       });
       const data = await response.json();
       if (data.translation) {

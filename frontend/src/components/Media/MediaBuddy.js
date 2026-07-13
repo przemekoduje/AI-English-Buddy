@@ -416,7 +416,7 @@ function MediaBuddy({ user }) {
   };
 
   // Click word: pause video and fetch translation
-  const handleWordClick = async (word) => {
+  const handleWordClick = async (word, sentenceContext) => {
     if (!word) return;
     if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
       playerRef.current.pauseVideo();
@@ -433,7 +433,7 @@ function MediaBuddy({ user }) {
           "Content-Type": "application/json",
           "X-Session-Token": user.token
         },
-        body: JSON.stringify({ text: word })
+        body: JSON.stringify({ text: word, context: sentenceContext })
       });
       if (response.ok) {
         const data = await response.json();
@@ -496,7 +496,7 @@ function MediaBuddy({ user }) {
           className="media-interactive-word"
           onClick={(e) => {
             e.stopPropagation();
-            handleWordClick(cleanWord);
+            handleWordClick(cleanWord, text);
           }}
         >
           {token}

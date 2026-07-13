@@ -146,7 +146,7 @@ const Reader = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         if (onWordClick) {
-                          onWordClick(token, wordId, e.currentTarget);
+                          onWordClick(token, wordId, e.currentTarget, chunk);
                         }
                       }}
                     >

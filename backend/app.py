@@ -851,29 +851,50 @@ def get_topics():
 def translate_text():
     data = request.get_json()
     text_to_translate = data.get("text")
+    context_sentence = data.get("context")
     if not text_to_translate:
         return jsonify({"error": "Brak tekstu do tłumaczenia"}), 400
 
-    translation_prompt = (
-        f"Translate the English word or phrase '{text_to_translate}' into Polish. "
-        f"Provide only the most common, direct, and concise translation, "
-        f"without any additional explanations, examples, synonyms, or context. "
-        f"Respond ONLY with the translated word or phrase."
-    )
+    if context_sentence:
+        translation_prompt = (
+            f"You are a precise English-to-Polish translator and lexicographer.\n"
+            f"Translate the English word or phrase '{text_to_translate}' into Polish, "
+            f"ensuring it perfectly fits the grammatical form and meaning in the context of this sentence:\n"
+            f"\"{context_sentence}\"\n\n"
+            f"Provide the exact contextual translation first on the first line. Do not prefix it with any label.\n"
+            f"If the word or phrase has other common, distinct meanings in Polish, list them on the second line separated only by commas, like:\n"
+            f"meaning1, meaning2\n"
+            f"Do not include any prefix like 'Inne znaczenia' or 'Other meanings'. Just the comma-separated meanings.\n"
+            f"If there are no other common meanings, do not include the second line.\n"
+            f"Respond ONLY with the translation text, without any markdown formatting, code blocks, or extra text."
+        )
+    else:
+        translation_prompt = (
+            f"Translate the English word or phrase '{text_to_translate}' into Polish.\n"
+            f"Provide the most common translation first on the first line. Do not prefix it with any label.\n"
+            f"If the word or phrase has other common, distinct meanings in Polish, list them on the second line separated only by commas, like:\n"
+            f"meaning1, meaning2\n"
+            f"Do not include any prefix like 'Inne znaczenia' or 'Other meanings'. Just the comma-separated meanings.\n"
+            f"If there are no other common meanings, do not include the second line.\n"
+            f"Respond ONLY with the translation text, without any markdown formatting, code blocks, or extra text."
+        )
     
     try:
         output_data = query_deepseek(translation_prompt)
         translated_text = output_data['choices'][0]['message']['content']
         
         translated_text = translated_text.strip()
-        if translated_text.lower().startswith("translation:"):
-            translated_text = translated_text[len("translation:"):].strip()
-        if translated_text.lower().startswith("polish:"):
-            translated_text = translated_text[len("polish:"):].strip()
-        
-        translated_text = translated_text.split('\n')[0].strip()
-        # Strip trailing punctuation, quotes, and whitespace without splitting on dots in the middle (e.g., "77.")
-        translated_text = translated_text.strip('\'" \t\n\r.?!')
+        lines = [line.strip() for line in translated_text.split('\n') if line.strip()]
+        cleaned_lines = []
+        for line in lines:
+            if line.lower().startswith("translation:"):
+                line = line[len("translation:"):].strip()
+            if line.lower().startswith("polish:"):
+                line = line[len("polish:"):].strip()
+            line = line.strip('\'" \t\n\r.?!')
+            if line:
+                cleaned_lines.append(line)
+        translated_text = "\n".join(cleaned_lines)
 
         return jsonify({"translation": translated_text})
     except (KeyError, IndexError) as e:
