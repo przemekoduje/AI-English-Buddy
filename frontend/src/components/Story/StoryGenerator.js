@@ -1,8 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL } from '../../config';
 import "./StoryGenerator.css";
 
-const StoryGenerator = ({ onGenerate, isLoading, suggestedTopics, user }) => {
+const GENERATION_PHASES = [
+  { label: "Analizuję temat...",        targetPct: 12, durationMs: 1800  },
+  { label: "Tworzę strukturę lekcji...", targetPct: 28, durationMs: 2800  },
+  { label: "Generuję treść...",          targetPct: 55, durationMs: 6000  },
+  { label: "Opracowuję tłumaczenia...",  targetPct: 72, durationMs: 5000  },
+  { label: "Finalizuję sekcje...",       targetPct: 88, durationMs: 5000  },
+  { label: "Prawie gotowe...",           targetPct: 95, durationMs: 4000  },
+];
+
+const StoryGenerator = ({ onGenerate, onGenerateDefault, isLoading, suggestedTopics, user }) => {
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [customDetails, setCustomDetails] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -18,6 +27,46 @@ const StoryGenerator = ({ onGenerate, isLoading, suggestedTopics, user }) => {
     scientific_communication: false,
     scientific_language_link: false
   });
+
+  // Progress bar state
+  const [genProgress, setGenProgress] = useState(0);
+  const [genPhaseLabel, setGenPhaseLabel] = useState("");
+  const progressTimersRef = useRef([]);
+
+  const clearProgressTimers = useCallback(() => {
+    progressTimersRef.current.forEach(t => clearTimeout(t));
+    progressTimersRef.current = [];
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) {
+      setGenProgress(0);
+      setGenPhaseLabel(GENERATION_PHASES[0].label);
+      clearProgressTimers();
+
+      let elapsed = 0;
+      GENERATION_PHASES.forEach((phase, idx) => {
+        const t = setTimeout(() => {
+          setGenProgress(phase.targetPct);
+          setGenPhaseLabel(phase.label);
+        }, elapsed);
+        progressTimersRef.current.push(t);
+        elapsed += phase.durationMs;
+      });
+    } else {
+      // Generation done — snap to 100 then reset
+      setGenProgress(100);
+      const t = setTimeout(() => {
+        setGenProgress(0);
+        setGenPhaseLabel("");
+        clearProgressTimers();
+      }, 500);
+      progressTimersRef.current.push(t);
+    }
+    return () => clearProgressTimers();
+  }, [isLoading, clearProgressTimers]);
+
+
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -69,6 +118,36 @@ const StoryGenerator = ({ onGenerate, isLoading, suggestedTopics, user }) => {
 
   return (
     <div className="story-generator">
+      {isLoading && (
+        <div className="generation-progress-overlay">
+          <div className="gen-progress-card">
+            <div className="gen-progress-ring-wrapper">
+              <svg className="gen-progress-ring" viewBox="0 0 120 120">
+                <circle
+                  className="gen-progress-ring-track"
+                  cx="60" cy="60" r="50"
+                  fill="none" strokeWidth="8"
+                />
+                <circle
+                  className="gen-progress-ring-fill"
+                  cx="60" cy="60" r="50"
+                  fill="none" strokeWidth="8"
+                  strokeDasharray={`${2 * Math.PI * 50}`}
+                  strokeDashoffset={`${2 * Math.PI * 50 * (1 - genProgress / 100)}`}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="gen-progress-pct">{Math.round(genProgress)}%</div>
+            </div>
+            <div className="gen-progress-label">{genPhaseLabel}</div>
+            <div className="gen-progress-title">Tworzę Twoją lekcję</div>
+            <div className="gen-progress-subtitle">To może potrwać do 30 sekund...</div>
+          </div>
+        </div>
+      )}
+
+      {!isLoading && (
+      <>
       <div className="generator-header">
         <h2>Generate Your Story</h2>
         <p>Choose topics and add details to create a unique learning experience.</p>
@@ -251,24 +330,50 @@ const StoryGenerator = ({ onGenerate, isLoading, suggestedTopics, user }) => {
         />
       </div>
 
-      <button
-        onClick={handleGenerateStory}
-        disabled={isLoading || (selectedTopics.length === 0 && !customDetails.trim())}
-        className="generate-story-btn"
-      >
-        {isLoading ? (
-          <span className="loader-inner">Developing Story...</span>
-        ) : (
-          <>
-            <span>Craft My Story</span>
-            <span className="btn-icon">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-              </svg>
-            </span>
-          </>
-        )}
-      </button>
+      <div className="generator-actions">
+        <button
+          onClick={handleGenerateStory}
+          disabled={isLoading || (selectedTopics.length === 0 && !customDetails.trim())}
+          className="generate-story-btn"
+        >
+          {isLoading ? (
+            <span className="loader-inner">Developing Story...</span>
+          ) : (
+            <>
+              <span>Craft My Story</span>
+              <span className="btn-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                </svg>
+              </span>
+            </>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={onGenerateDefault}
+          disabled={isLoading}
+          className="generate-default-btn"
+        >
+          {isLoading ? (
+            <span className="loader-inner">Developing Lesson...</span>
+          ) : (
+            <>
+              <span>Generuj lekcję domyślną</span>
+              <span className="btn-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" />
+                </svg>
+              </span>
+            </>
+          )}
+        </button>
+      </div>
+      </>
+      )}
     </div>
   );
 };

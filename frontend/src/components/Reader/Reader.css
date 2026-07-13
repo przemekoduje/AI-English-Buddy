@@ -189,6 +189,7 @@ input[type="range"] {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   box-shadow: none;
+  white-space: pre-wrap;
 }
 
 .story-sentence {
@@ -399,4 +400,190 @@ input[type="range"] {
     line-height: 1.6;
     border-radius: var(--radius-md);
   }
+}
+
+/* Word level interactive styling */
+.reader-word {
+  cursor: pointer;
+  position: relative;
+  border-radius: var(--radius-sm, 4px);
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease, transform 0.2s ease;
+  padding: 1px 3px;
+  margin: -1px -3px;
+  display: inline-block;
+}
+
+.reader-word:hover {
+  background-color: rgba(251, 140, 0, 0.15); /* warm orange hover */
+}
+
+.reader-word.active-highlight {
+  background-color: #FB8C00 !important; /* Material Orange 600 */
+  color: #ffffff !important;
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(251, 140, 0, 0.4);
+  transform: scale(1.05);
+  z-index: 5;
+}
+
+/* Word Translation Tooltip Speech Bubble */
+.word-translation-tooltip {
+  position: absolute;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #DADCE0);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 12px 16px;
+  z-index: 10000;
+  width: 300px;
+  font-family: var(--font-main);
+  animation: tooltip-fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+}
+
+@keyframes tooltip-fade-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -90%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+}
+
+.word-translation-tooltip .tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.word-translation-tooltip .tooltip-loading-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.word-translation-tooltip .tooltip-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(251, 140, 0, 0.2);
+  border-top-color: #FB8C00;
+  border-radius: 50%;
+  animation: tooltip-spinner 0.6s linear infinite;
+}
+
+@keyframes tooltip-spinner {
+  to { transform: rotate(360deg); }
+}
+
+.word-translation-tooltip .tooltip-original {
+  font-size: 0.75rem;
+  color: var(--slate-500, #5F6368);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.word-translation-tooltip .tooltip-translation {
+  font-size: 1.05rem;
+  color: var(--slate-800, #202124);
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 4px;
+  word-wrap: break-word;
+}
+
+.word-translation-tooltip .tooltip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px solid var(--border, #DADCE0);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.word-translation-tooltip .tooltip-btn {
+  flex: 1;
+  min-width: calc(50% - 4px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms);
+  border: none;
+  white-space: nowrap;
+}
+
+.word-translation-tooltip .tooltip-btn.read-btn {
+  background-color: rgba(251, 140, 0, 0.1);
+  color: #E65100; /* Darker orange for text contrast */
+}
+
+.word-translation-tooltip .tooltip-btn.read-btn:hover {
+  background-color: rgba(251, 140, 0, 0.2);
+}
+
+.word-translation-tooltip .tooltip-btn.read-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.word-translation-tooltip .tooltip-btn.close-btn {
+  background-color: var(--slate-100, #F1F3F4);
+  color: var(--slate-700, #3C4043);
+  flex: 0 0 100%;
+}
+
+.word-translation-tooltip .tooltip-btn.close-btn:hover {
+  background-color: var(--slate-200, #E8EAED);
+}
+
+.word-translation-tooltip .tooltip-btn.vocab-btn {
+  background-color: rgba(25, 135, 84, 0.1);
+  color: #198754;
+}
+
+.word-translation-tooltip .tooltip-btn.vocab-btn:hover {
+  background-color: rgba(25, 135, 84, 0.2);
+}
+
+.word-translation-tooltip .tooltip-btn.vocab-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Tooltip Arrow */
+.word-translation-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 8px 8px 0;
+  border-style: solid;
+  border-color: var(--surface, #ffffff) transparent transparent transparent;
+  display: block;
+  width: 0;
+  z-index: 2;
+}
+
+.word-translation-tooltip::before {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 9px 9px 0;
+  border-style: solid;
+  border-color: var(--border, #DADCE0) transparent transparent transparent;
+  display: block;
+  width: 0;
+  z-index: 1;
 }

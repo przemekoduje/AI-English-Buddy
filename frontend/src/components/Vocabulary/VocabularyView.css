@@ -132,6 +132,29 @@
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.07);
 }
 
+.vocab-stat-card.clickable {
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.vocab-stat-card.clickable:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(26, 115, 232, 0.15);
+  border-color: rgba(26, 115, 232, 0.3);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.vocab-stat-card.active-filter {
+  background: rgba(26, 115, 232, 0.04);
+  border-color: rgba(26, 115, 232, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(26, 115, 232, 0.1), 0 8px 32px rgba(26, 115, 232, 0.05);
+}
+
+.vocab-stat-card.active-filter::before {
+  background: linear-gradient(90deg, #1a73e8, #34a853);
+  height: 5px;
+}
+
 .stat-icon {
   font-size: 2.25rem;
   background: rgba(26, 115, 232, 0.08);

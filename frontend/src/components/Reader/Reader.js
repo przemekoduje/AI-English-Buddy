@@ -20,6 +20,8 @@ const Reader = ({
   setSpeechPitch,
   onTextSelection,
   showVoiceControls,
+  onWordClick,
+  activeWordId,
 }) => {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const hoverTimerRef = useRef(null);
@@ -121,6 +123,10 @@ const Reader = ({
       <div className="story-typography" onMouseUp={handleTextSelectionWrapper}>
         {textChunks.map((chunk, index) => {
           const isCurrentReading = index === currentChunkIndex;
+          
+          // Tokenize the sentence chunk into words and other characters
+          const tokens = chunk.split(/([\w\u00C0-\u017F'-]+)/g);
+
           return (
             <span
               key={index}
@@ -128,7 +134,29 @@ const Reader = ({
               onMouseEnter={() => handleMouseEnter(index)}
               onMouseLeave={handleMouseLeave}
             >
-              {chunk}
+              {tokens.map((token, tIdx) => {
+                const isWord = /[\w\u00C0-\u017F'-]+/.test(token);
+                if (isWord) {
+                  const wordId = `chunk-${index}-token-${tIdx}`;
+                  const isHighlighted = activeWordId === wordId;
+                  return (
+                    <span
+                      key={tIdx}
+                      className={`reader-word ${isHighlighted ? "active-highlight" : ""}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onWordClick) {
+                          onWordClick(token, wordId, e.currentTarget);
+                        }
+                      }}
+                    >
+                      {token}
+                    </span>
+                  );
+                } else {
+                  return <span key={tIdx}>{token}</span>;
+                }
+              })}
               {hoveredIndex === index && (
                 <span 
                   className="sentence-hover-popup-wrapper" 

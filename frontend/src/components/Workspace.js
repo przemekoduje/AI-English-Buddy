@@ -63,6 +63,13 @@ function Workspace({
   const [selectedContinuationTopics, setSelectedContinuationTopics] = useState([]);
   const [loadedRootId, setLoadedRootId] = useState(null);
   
+  // States for word translation tooltip
+  const [activeWordId, setActiveWordId] = useState(null);
+  const [activeWordHighlight, setActiveWordHighlight] = useState(null);
+  const [wordTooltipTranslation, setWordTooltipTranslation] = useState("");
+  const [wordTooltipLoading, setWordTooltipLoading] = useState(false);
+  const [showWordTooltip, setShowWordTooltip] = useState(false);
+  
   const currentAudioRef = useRef(null);
   const contextMenuRef = useRef(null);
   
@@ -158,9 +165,9 @@ function Workspace({
   // Effect to load story parts when currentStoryId changes
   useEffect(() => {
     if (!user || !currentStoryId) {
-      setStoryParts([]);
-      setActivePartIndex(-1);
-      setLoadedRootId(null);
+      if (storyParts.length > 0) setStoryParts([]);
+      if (activePartIndex !== -1) setActivePartIndex(-1);
+      if (loadedRootId !== null) setLoadedRootId(null);
       return;
     }
     
@@ -201,7 +208,7 @@ function Workspace({
       }
     };
     loadStoryParts();
-  }, [currentStoryId, user, loadedRootId, storyParts, setGeneratedText, setCurrentStoryTitle]);
+  }, [currentStoryId, user, loadedRootId, storyParts, activePartIndex, setGeneratedText, setCurrentStoryTitle]);
 
   const handleSelectPart = (index) => {
     handleStop();
@@ -332,13 +339,15 @@ function Workspace({
   useEffect(() => {
     if (generatedText) {
       const abbreviations = /\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Co|Corp|Inc|Ltd|e\.g|i\.e|vs|a\.m|p\.m)\.$/i;
-      const markedText = generatedText.replace(/([.?!]["')\]]*)\s+/g, (match, p1, offset, string) => {
+      let markedText = generatedText.replace(/([.?!]["')\]]*)\s+/g, (match, p1, offset, string) => {
         const beforeText = string.substring(0, offset + 1);
         if (abbreviations.test(beforeText)) {
           return match;
         }
-        return p1 + "\u0000";
+        const newlines = match.substring(p1.length).replace(/[^\n]/g, "");
+        return p1 + "\u0000" + newlines;
       });
+      markedText = markedText.replace(/(?<!\u0000)(\n+)/g, "\u0000$1");
       const sentences = markedText.split("\u0000").filter((s) => s.trim() !== "");
       setTextChunks(sentences);
       setCurrentChunkIndex(-1);
@@ -415,6 +424,69 @@ function Workspace({
       console.error("Błąd generowania:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const generateDefaultText = async () => {
+    handleStop();
+    setIsLoading(true);
+    setGeneratedText("");
+    setCurrentStoryTitle("");
+    setCurrentStoryId(null);
+    setStoryParts([]);
+    setActivePartIndex(-1);
+    setLoadedRootId(null);
+    setIsContinuing(false);
+    setContinuationDetails("");
+    setSelectedContinuationTopics([]);
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/generate-default`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+      });
+      const data = await response.json();
+      if (data && data[0] && data[0].generated_text) {
+        setGeneratedText(data[0].generated_text);
+        const title = data[0].title || "Default Lesson";
+        setCurrentStoryTitle(title);
+        // Automatycznie zapisz historię w bazie danych
+        const savedStory = await saveStoryToDb(title, data[0].generated_text);
+        if (savedStory && savedStory.id) {
+          const newPart = {
+            id: savedStory.id,
+            title: title,
+            text: data[0].generated_text,
+            part_number: 1
+          };
+          setStoryParts([newPart]);
+          setActivePartIndex(0);
+          setLoadedRootId(savedStory.id);
+          setCurrentStoryId(savedStory.id);
+        }
+      }
+    } catch (error) {
+      console.error("Błąd generowania lekcji domyślnej:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBackButtonClick = () => {
+    if (generatedText) {
+      handleStop();
+      setGeneratedText("");
+      setCurrentStoryTitle("");
+      setCurrentStoryId(null);
+      setStoryParts([]);
+      setActivePartIndex(-1);
+      setLoadedRootId(null);
+      setIsContinuing(false);
+    } else {
+      onNavigateToDashboard();
     }
   };
 
@@ -554,6 +626,133 @@ function Workspace({
     } catch (err) { console.error("Błąd tłumaczenia:", err); }
     setMenuVisible(false);
   };
+
+  const handleCloseWordTooltip = useCallback(() => {
+    setShowWordTooltip(false);
+    setActiveWordHighlight(null);
+    setActiveWordId(null);
+    setWordTooltipTranslation("");
+  }, []);
+
+  const handleSaveWordFromTooltip = async () => {
+    if (!activeWordHighlight || !wordTooltipTranslation) return;
+    const word = activeWordHighlight.word;
+    const translation = wordTooltipTranslation;
+    setActivityLog(prev => [
+      ...prev,
+      { type: "add_to_notebook", word, translation, timestamp: Date.now() }
+    ]);
+    const newEntry = { original: word, translated: translation };
+    if (!notebookWords.some(e => e.original === newEntry.original)) {
+      setNotebookWords(prev => [newEntry, ...prev]);
+      setTimeout(() => {
+        const scrollArea = document.querySelector(".notebook-scroll-area");
+        if (scrollArea) scrollArea.scrollTo({ top: 0, behavior: "smooth" });
+      }, 100);
+      try {
+        await fetch(`${API_BASE_URL}/api/vocabulary`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+          body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
+        });
+      } catch (err) {
+        console.error("Błąd zapisywania słówka:", err);
+      }
+    }
+    handleCloseWordTooltip();
+  };
+
+  const handleWordClick = async (word, wordId, element) => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+
+    const layoutEl = document.querySelector('.workspace-layout');
+    const layoutRect = layoutEl ? layoutEl.getBoundingClientRect() : { top: 0, left: 0 };
+
+    const rect = element.getBoundingClientRect();
+    const top = rect.top - layoutRect.top;
+    const left = rect.left - layoutRect.left;
+    const width = rect.width;
+    const height = rect.height;
+
+    setActiveWordId(wordId);
+    setActiveWordHighlight({
+      word: word,
+      id: wordId,
+      rect: { top, left, width, height }
+    });
+    setWordTooltipLoading(true);
+    setShowWordTooltip(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/translate`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+        body: JSON.stringify({ text: word }),
+      });
+      const data = await response.json();
+      if (data.translation) {
+        setWordTooltipTranslation(data.translation);
+      } else {
+        setWordTooltipTranslation("Brak tłumaczenia");
+      }
+    } catch (err) {
+      console.error("Błąd tłumaczenia słowa:", err);
+      setWordTooltipTranslation("Błąd połączenia");
+    } finally {
+      setWordTooltipLoading(false);
+    }
+  };
+
+  const handleSpeakWord = async (word) => {
+    if (!word) return;
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: word,
+          voice: selectedVoiceURI || "en-US-BrianNeural"
+        })
+      });
+      if (!response.ok) throw new Error("Failed to generate audio");
+      const data = await response.json();
+      if (data.audio_base64) {
+        const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+        const audio = new Audio(audioUrl);
+        currentAudioRef.current = audio;
+        audio.play();
+      }
+    } catch (err) {
+      console.error("Błąd TTS dla wyrazu:", err);
+    }
+  };
+
+  useEffect(() => {
+    const handleGlobalClick = (e) => {
+      if (
+        !e.target.closest('.reader-word') && 
+        !e.target.closest('.word-translation-tooltip')
+      ) {
+        handleCloseWordTooltip();
+      }
+    };
+    if (showWordTooltip) {
+      document.addEventListener('click', handleGlobalClick);
+    }
+    return () => {
+      document.removeEventListener('click', handleGlobalClick);
+    };
+  }, [showWordTooltip, handleCloseWordTooltip]);
 
   const handleSaveToNotebook = async () => {
     if (translationContent.original && translationContent.translated) {
@@ -916,11 +1115,41 @@ function Workspace({
 
       {menuVisible && (
         <div ref={contextMenuRef} className="context-menu" style={{ top: menuPosition.top, left: menuPosition.left }}>
-          <button onClick={handleTranslate}>Tłumacz</button>
-          <button onClick={handleSpeakSelectedText}>Czytaj</button>
-          <button onClick={handleAddDirectly}>Dodaj bezpośrednio</button>
-          <div className="context-menu-divider"></div>
-          <button onClick={handlePracticeSelectedText} className="context-menu-practice-btn">Przećwicz wymowę 🎤</button>
+          <div className="context-menu-actions">
+            <button className="ctx-translate-btn" onClick={handleTranslate}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 8l6 6"/>
+                <path d="M4 6h7M2 12h4"/>
+                <path d="M12 4l-2 8"/>
+                <rect x="12" y="12" width="10" height="8" rx="1"/>
+                <path d="M15 16h4M17 14v4"/>
+              </svg>
+              Tłumacz
+            </button>
+            <button className="ctx-speak-btn" onClick={handleSpeakSelectedText}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              </svg>
+              Czytaj
+            </button>
+            <button className="ctx-vocab-btn" onClick={handleAddDirectly}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                <line x1="12" y1="9" x2="12" y2="15"/>
+                <line x1="9" y1="12" x2="15" y2="12"/>
+              </svg>
+              Słownik
+            </button>
+            <button className="ctx-practice-btn" onClick={handlePracticeSelectedText}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/>
+              </svg>
+              Przećwicz wymowę
+            </button>
+          </div>
         </div>
       )}
 
@@ -956,7 +1185,7 @@ function Workspace({
       <main className="workspace-main">
         <header className="workspace-header">
           <div className="header-left-group">
-            <button onClick={onNavigateToDashboard} className="back-btn-inline" title="Wróć do pulpitu">
+            <button onClick={handleBackButtonClick} className="back-btn-inline" title={generatedText ? "Wróć do filtrów" : "Wróć do pulpitu"}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="19" y1="12" x2="5" y2="12"></line>
                 <polyline points="12 19 5 12 12 5"></polyline>
@@ -1006,13 +1235,14 @@ function Workspace({
                     setLoadedRootId(null);
                     setIsContinuing(false);
                   }} 
-                  className="header-action-btn clear-btn" 
-                  title="Wyczyść obszar roboczy"
+                  className="header-action-text-btn new-lesson-btn" 
+                  title="Wróć do filtrów i stwórz nową lekcję"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6"></polyline>
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                   </svg>
+                  <span>Nowa lekcja (Filtry)</span>
                 </button>
               </div>
             )}
@@ -1094,9 +1324,10 @@ function Workspace({
               </button>
             </div>
           </div>
-        ) : !generatedText && !isLoading ? (
+        ) : !generatedText ? (
           <StoryGenerator 
             onGenerate={generateStory} 
+            onGenerateDefault={generateDefaultText}
             isLoading={isLoading} 
             suggestedTopics={suggestedTopics} 
             user={user}
@@ -1121,6 +1352,8 @@ function Workspace({
             setSpeechPitch={setSpeechPitch}
             onTextSelection={handleTextSelection}
             showVoiceControls={showVoiceControls}
+            onWordClick={handleWordClick}
+            activeWordId={activeWordId}
           />
         )}
       </main>
@@ -1221,6 +1454,52 @@ function Workspace({
           <div className="practice-loader glass-panel">
             <div className="spinner"></div>
             <p>Analyzing session activity...</p>
+          </div>
+        </div>
+      )}
+      {showWordTooltip && activeWordHighlight && (
+        <div 
+          className="word-translation-tooltip"
+          style={{
+            position: 'absolute',
+            top: `${activeWordHighlight.rect.top - 10}px`,
+            left: `${activeWordHighlight.rect.left + activeWordHighlight.rect.width / 2}px`,
+            transform: 'translate(-50%, -100%)',
+            zIndex: 10000
+          }}
+        >
+          <div className="tooltip-content">
+            {wordTooltipLoading ? (
+              <div className="tooltip-loading-wrapper">
+                <span className="tooltip-loading-spinner" />
+              </div>
+            ) : (
+              <>
+                <div className="tooltip-original">{activeWordHighlight.word}</div>
+                <div className="tooltip-translation">{wordTooltipTranslation}</div>
+                <div className="tooltip-actions">
+                  <button className="tooltip-btn read-btn" onClick={() => handleSpeakWord(activeWordHighlight.word)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                    Czytaj
+                  </button>
+                  <button className="tooltip-btn vocab-btn" onClick={handleSaveWordFromTooltip}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                      <line x1="12" y1="9" x2="12" y2="15"></line>
+                      <line x1="9" y1="12" x2="15" y2="12"></line>
+                    </svg>
+                    Słownik
+                  </button>
+                  <button className="tooltip-btn close-btn" onClick={handleCloseWordTooltip}>
+                    Zamknij
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

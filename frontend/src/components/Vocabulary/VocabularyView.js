@@ -13,6 +13,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   // UI state
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("all"); // all, words, phrases
+  const [timeFilter, setTimeFilter] = useState("all"); // all, today, week
   const [sortBy, setSortBy] = useState("newest"); // newest, oldest, az, za
 
   // Modals state
@@ -223,6 +224,20 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
       if (filterType === "words" && isExpression) return false;
       if (filterType === "phrases" && !isExpression) return false;
 
+      // Time Filter
+      if (timeFilter === "today") {
+        if (!w.timestamp) return false;
+        const addedDate = new Date(w.timestamp).toDateString();
+        const today = new Date().toDateString();
+        if (addedDate !== today) return false;
+      } else if (timeFilter === "week") {
+        if (!w.timestamp) return false;
+        const addedDate = new Date(w.timestamp);
+        const now = new Date();
+        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        if (addedDate < oneWeekAgo) return false;
+      }
+
       return true;
     })
     .sort((a, b) => {
@@ -273,7 +288,11 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
 
       {/* Stats Section */}
       <div className="vocab-stats-grid">
-        <div className="vocab-stat-card glass-panel animate-fade-in">
+        <div 
+          className={`vocab-stat-card glass-panel animate-fade-in clickable ${timeFilter === "all" ? "active-filter" : ""}`}
+          onClick={() => setTimeFilter("all")}
+          title="Kliknij, aby pokazać wszystkie zwroty"
+        >
           <div className="stat-icon">📚</div>
           <div className="stat-content">
             <span className="stat-value">{totalCount}</span>
@@ -284,14 +303,18 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
           </div>
         </div>
 
-        <div className="vocab-stat-card glass-panel animate-fade-in delay-1">
+        <div 
+          className={`vocab-stat-card glass-panel animate-fade-in delay-1 clickable ${timeFilter === "today" ? "active-filter" : ""}`}
+          onClick={() => setTimeFilter(prev => prev === "today" ? "all" : "today")}
+          title="Kliknij, aby filtrować słówka dodane dzisiaj"
+        >
           <div className="stat-icon">📅</div>
           <div className="stat-content">
             <span className="stat-value">{todayCount}</span>
             <span className="stat-label">Dodane dzisiaj</span>
           </div>
           <div className="stat-sub">
-            <span>Świetne tempo!</span>
+            <span>{timeFilter === "today" ? "Filtrowanie aktywne (kliknij by odznaczyć)" : "Kliknij, by filtrować"}</span>
           </div>
         </div>
 
@@ -325,6 +348,19 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         </div>
 
         <div className="filters-group">
+          <div className="select-wrapper">
+            <label htmlFor="filter-time">Czas:</label>
+            <select 
+              id="filter-time"
+              value={timeFilter} 
+              onChange={(e) => setTimeFilter(e.target.value)}
+            >
+              <option value="all">Wszystko</option>
+              <option value="today">Dzisiaj</option>
+              <option value="week">Ostatnie 7 dni</option>
+            </select>
+          </div>
+
           <div className="select-wrapper">
             <label htmlFor="filter-type">Typ:</label>
             <select 

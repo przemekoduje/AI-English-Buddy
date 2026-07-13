@@ -3,6 +3,7 @@
   height: 100%;
   gap: 2rem;
   animation: view-enter 0.5s var(--transition-soft);
+  position: relative;
 }
 
 @media (max-width: 768px) {
@@ -20,8 +21,13 @@
 }
 
 .workspace-header {
+  position: sticky;
+  top: 0;
+  background-color: var(--bg-main);
+  z-index: 100;
   margin-bottom: 1.25rem;
   border-bottom: 1px solid var(--border);
+  padding-top: 0.75rem;
   padding-bottom: 0.75rem;
 }
 
@@ -43,7 +49,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-left: 1.5rem;
+  margin-left: auto; /* Push actions to the right */
 }
 
 .header-action-btn {
@@ -80,6 +86,43 @@
 }
 
 .header-action-btn.clear-btn:hover {
+  color: var(--red-600);
+  border-color: var(--red-200);
+  background: var(--red-50);
+}
+
+.header-action-text-btn {
+  background: var(--slate-50);
+  border: 1px solid var(--border);
+  height: 32px;
+  padding: 0 1rem;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slate-600);
+  font-family: var(--font-main);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.header-action-text-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.header-action-text-btn:hover {
+  background: var(--slate-100);
+  color: var(--primary-600);
+  border-color: var(--primary-200);
+  transform: scale(1.02);
+}
+
+.header-action-text-btn.new-lesson-btn:hover {
   color: var(--red-600);
   border-color: var(--red-200);
   background: var(--red-50);
@@ -248,31 +291,94 @@
 /* Context Menu */
 .context-menu {
   position: absolute;
-  padding: 0.5rem;
-  background: white;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #DADCE0);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 12px 16px;
+  z-index: 10000;
+  width: 300px;
+  font-family: var(--font-main);
+  animation: context-menu-fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+}
+
+@keyframes context-menu-fade-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.context-menu-actions {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  z-index: 2000;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .context-menu button {
-  padding: 0.75rem 1.5rem;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: transparent;
-  text-align: left;
-  font-weight: 600;
-  color: var(--slate-700);
+  flex: 1;
+  min-width: calc(50% - 4px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 4px);
   cursor: pointer;
+  transition: all var(--transition-fast, 150ms);
+  border: none;
+  white-space: nowrap;
+  background-color: var(--slate-100, #F1F3F4);
+  color: var(--slate-700, #3C4043);
 }
 
 .context-menu button:hover {
-  background: var(--slate-100);
-  color: var(--primary-600);
+  background-color: var(--slate-200, #E8EAED);
+  color: var(--slate-900, #202124);
+}
+
+.context-menu button.ctx-translate-btn {
+  background-color: rgba(26, 115, 232, 0.1);
+  color: #1a73e8;
+}
+
+.context-menu button.ctx-translate-btn:hover {
+  background-color: rgba(26, 115, 232, 0.2);
+}
+
+.context-menu button.ctx-speak-btn {
+  background-color: rgba(251, 140, 0, 0.1);
+  color: #E65100;
+}
+
+.context-menu button.ctx-speak-btn:hover {
+  background-color: rgba(251, 140, 0, 0.2);
+}
+
+.context-menu button.ctx-vocab-btn {
+  background-color: rgba(25, 135, 84, 0.1);
+  color: #198754;
+}
+
+.context-menu button.ctx-vocab-btn:hover {
+  background-color: rgba(25, 135, 84, 0.2);
+}
+
+.context-menu button.ctx-practice-btn {
+  flex: 0 0 100%;
+  background-color: rgba(124, 58, 237, 0.1);
+  color: var(--primary-600, #7C3AED);
+}
+
+.context-menu button.ctx-practice-btn:hover {
+  background-color: rgba(124, 58, 237, 0.2);
+}
+
+.context-menu button svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 
 /* Saved Stories History Section */
@@ -475,19 +581,4 @@
   color: var(--slate-900);
   border-color: var(--slate-400);
 }
-
-/* Context Menu Divider & Practice Button Styles */
-.context-menu-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 0.25rem 0;
-}
-
-.context-menu button.context-menu-practice-btn {
-  color: var(--primary-500);
-}
-
-.context-menu button.context-menu-practice-btn:hover {
-  background: rgba(26, 115, 232, 0.05);
-  color: var(--primary-600);
-}
+

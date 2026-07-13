@@ -1757,6 +1757,74 @@ def generate_text():
         return jsonify({"error": f"Błąd połączenia z DeepSeek API: {str(e)}"}), 500
 
 
+@app.route("/api/generate-default", methods=['POST'])
+def generate_default_text():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    system_prompt = (
+        "You are an expert English teacher writing custom educational texts for learners of English. "
+        "Your response MUST be in JSON format with exactly two keys: 'title' and 'story'. "
+        "Do NOT write any text before or after the JSON structure. Respond ONLY with valid JSON.\n\n"
+        "Example format:\n"
+        "{\n"
+        "  \"title\": \"The Art of Focus: Deep Work in a Distracted World\",\n"
+        "  \"story\": \"Section 1\\nFirst paragraph of English text...\\n\\nSecond paragraph of English text...\\n\\nPolish Translation\\nFirst paragraph of Polish translation...\\n\\nSecond paragraph of Polish translation...\\n\\nSection 2\\nParagraph 1\\nPolish phrase with English equivalent in parentheses, next Polish phrase with English equivalent in parentheses...\\n\\nParagraph 2\\nPolish phrase with English equivalent in parentheses, next Polish phrase with English equivalent in parentheses...\"\n"
+        "}"
+    )
+
+    user_prompt = (
+        "Pick a random interesting topic related to productivity, career development, personal growth, psychology, cognitive science, technology, communication, or healthy workspace habits. "
+        "Write a high-quality educational bilingual reading lesson on this topic. "
+        "Follow these formatting rules strictly in the 'story' string:\n"
+        "1. Start with the header 'Section 1' followed by exactly 2 engaging, professional, rich paragraphs in English (B2-C1 level) explaining the topic and its importance.\n"
+        "2. Next, write the header 'Polish Translation' followed by the full Polish translation of those 2 paragraphs, matching them paragraph-for-paragraph.\n"
+        "3. Next, write the header 'Section 2' followed by details for Paragraph 1 and Paragraph 2:\n"
+        "   - Write 'Paragraph 1' on its own line.\n"
+        "   - Immediately follow with a clause-by-clause or phrase-by-phrase bilingual breakdown of Paragraph 1, translating longer and meaningful phrases/clauses (do NOT translate word-by-word). Each Polish phrase/clause must be followed by its exact English translation in parentheses, like: Polish phrase (English translation), next Polish phrase (English translation).\n"
+        "   - Write 'Paragraph 2' on its own line.\n"
+        "   - Immediately follow with a clause-by-clause or phrase-by-phrase bilingual breakdown of Paragraph 2, using the same format with longer and meaningful phrases/clauses: Polish phrase (English translation), next Polish phrase (English translation).\n"
+        "4. Do NOT include any repeated sections like 'English Version (For Listening Reinforcement)' at the end.\n"
+        "Ensure all section headers ('Section 1', 'Polish Translation', 'Section 2', 'Paragraph 1', 'Paragraph 2') are clearly separated by double newlines (\\n\\n) and are on their own lines without any other text. Do NOT use markdown bold/italic formatting or bullet points in the headers."
+    )
+
+    try:
+        output_data = query_deepseek_with_system(system_prompt, user_prompt)
+        generated_content = output_data['choices'][0]['message']['content'].strip()
+
+        title, story_text = parse_story_response(generated_content)
+
+        # Zapisz wygenerowaną historię do Firestore
+        text_hash = hashlib.sha256(story_text.encode('utf-8')).hexdigest()
+        stories_ref = db.collection('stories')
+        
+        # Sprawdź czy identyczna historia już istnieje
+        existing_stories = stories_ref.where('user_email', '==', user_email).where('text_hash', '==', text_hash).limit(1).get()
+        story_id = None
+        for doc in existing_stories:
+            story_id = doc.id
+            
+        if not story_id:
+            new_story_data = {
+                'user_email': user_email,
+                'title': title,
+                'text': story_text,
+                'text_hash': text_hash,
+                'timestamp': firestore.SERVER_TIMESTAMP,
+                'part_number': 1
+            }
+
+            doc_ref = stories_ref.add(new_story_data)
+            story_id = doc_ref[1].id
+
+        return jsonify([{"generated_text": story_text, "title": title, "story_id": story_id}])
+    except (KeyError, IndexError) as e:
+        return jsonify({"error": "Nie udało się sparsować odpowiedzi z DeepSeek", "details": str(e)}), 500
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Błąd połączenia z DeepSeek API: {str(e)}"}), 500
+
+
 @app.route("/api/user-settings", methods=['GET'])
 def get_user_settings():
     user_email = get_user_from_request()
@@ -2783,18 +2851,41 @@ def split_text_by_language(text):
     chunks = re.findall(pattern, text_converted)
     
     segments = []
+    
+    def add_segment(text_val, lang_val):
+        text_stripped = text_val.strip()
+        if not text_stripped:
+            return
+        if segments and segments[-1][1] == lang_val:
+            segments[-1] = (segments[-1][0] + " " + text_stripped, lang_val)
+        else:
+            segments.append((text_stripped, lang_val))
+
     for chunk in chunks:
         chunk_stripped = chunk.strip()
         if not chunk_stripped:
             continue
-        is_pl = is_polish(chunk_stripped)
-        lang = "pl" if is_pl else "en"
-        
-        # If the last segment had the same language, merge them to avoid separate TTS calls
-        if segments and segments[-1][1] == lang:
-            segments[-1] = (segments[-1][0] + " " + chunk_stripped, lang)
+            
+        if '(' in chunk_stripped and ')' in chunk_stripped:
+            sub_chunks = re.split(r'(\([^)]+\))', chunk_stripped)
+            for sub_chunk in sub_chunks:
+                sub_stripped = sub_chunk.strip()
+                if not sub_stripped:
+                    continue
+                if sub_stripped.startswith('(') and sub_stripped.endswith(')'):
+                    inner_text = sub_stripped[1:-1].strip()
+                    is_sub_pl = is_polish(inner_text)
+                    sub_lang = "pl" if is_sub_pl else "en"
+                    add_segment(inner_text, sub_lang)
+                else:
+                    is_sub_pl = is_polish(sub_stripped)
+                    sub_lang = "pl" if is_sub_pl else "en"
+                    add_segment(sub_stripped, sub_lang)
         else:
-            segments.append((chunk_stripped, lang))
+            is_pl = is_polish(chunk_stripped)
+            lang = "pl" if is_pl else "en"
+            add_segment(chunk_stripped, lang)
+            
     return segments
 
 def split_text_by_tags(text):
