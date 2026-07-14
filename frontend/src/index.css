@@ -1,15 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
+/* Inter — closest publicly available font to SF Pro and Perplexity's UI */
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap');
 @import './DesignTokens.css';
 
 body {
   margin: 0;
   font-family: var(--font-main);
+  font-size: var(--text-body-lg);        /* 16px — MD3 Body Large */
+  font-weight: 400;
+  line-height: var(--lh-body);           /* 1.5  */
+  letter-spacing: var(--ls-body);        /* 0.015em */
   background-color: var(--bg-main);
-  color: var(--text-main);
+  color: var(--slate-800);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.6;
   transition: background-color var(--transition-base), color var(--transition-base);
 }
 
@@ -17,19 +20,43 @@ body {
   box-sizing: border-box;
 }
 
-h1, h2, h3, h4 {
+/* Headings — Plus Jakarta Sans, Google-style tight tracking */
+h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-headline-lg);    /* 32px */
   font-weight: 700;
-  letter-spacing: -0.02em;
+  line-height: var(--lh-headline);
+  letter-spacing: var(--ls-headline);
 }
 
-button {
-  cursor: pointer;
-  font-family: var(--font-main);
-  transition: transform var(--transition-fast), filter var(--transition-fast), background var(--transition-fast);
+h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-headline-md);    /* 28px */
+  font-weight: 600;
+  line-height: var(--lh-headline);
+  letter-spacing: var(--ls-headline);
 }
 
-button:active {
-  transform: scale(0.96);
+h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-headline-sm);    /* 24px */
+  font-weight: 600;
+  line-height: var(--lh-headline);
+  letter-spacing: var(--ls-headline);
+}
+
+h4, h5, h6 {
+  font-family: var(--font-display);
+  font-size: var(--text-title-lg);       /* 22px */
+  font-weight: 500;
+  line-height: var(--lh-title);
+  letter-spacing: var(--ls-title);
+}
+
+button, input, select, textarea {
+  font-family: var(--font-display);      /* Plus Jakarta Sans for UI controls */
+  font-size: var(--text-label-lg);       /* 14px — MD3 Label Large */
+  letter-spacing: var(--ls-label);
 }
 
 ::selection {

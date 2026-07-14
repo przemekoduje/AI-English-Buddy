@@ -1,7 +1,7 @@
 .mission-layout {
   display: flex;
   min-height: 100vh;
-  background-color: var(--bg-main);
+  background-color: var(--surface);
 }
 
 .main-content {
@@ -11,14 +11,15 @@
   position: relative;
   z-index: 101;
   min-width: 0;
+  background: var(--surface);
 }
 
 .view-container {
-  padding: 0 2rem 2rem 2rem;
+  padding: 0 1.5rem 2rem 1.5rem;
   flex: 1;
 }
 
-/* Responsive adjustments */
+/* Responsive */
 @media (max-width: 768px) {
   .mission-layout {
     flex-direction: column;
@@ -28,13 +29,19 @@
   }
 }
 
-/* Global Transitions for views */
+/* Global view transitions */
 .view-enter {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(6px);
 }
 .view-enter-active {
   opacity: 1;
   transform: translateY(0);
-  transition: opacity 300ms, transform 300ms;
+  transition: opacity 200ms, transform 200ms;
+}
+
+/* Text selection — Perplexity teal */
+::selection {
+  background-color: var(--accent-mid);
+  color: var(--gray-900);
 }

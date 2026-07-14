@@ -133,24 +133,156 @@
   color: var(--slate-700);
 }
 
+/* ── Practice Complete Results ──────────────────────────────── */
 .flashcards-results {
-  padding: 3rem;
-  text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
+  gap: 2rem;
+  padding: 3rem 2rem 2.5rem;
+  max-width: 400px;
+  margin: 3rem auto;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
 }
 
-.score-circle {
-  width: 120px; height: 120px;
-  border-radius: 50%;
-  background: var(--primary-100);
+.results-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.results-emoji {
+  font-size: 2.25rem;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.results-title {
+  font-family: var(--font-display);
+  font-size: var(--text-title-lg);
+  font-weight: 700;
+  color: var(--gray-900);
+  letter-spacing: var(--ls-headline);
+  margin: 0;
+}
+
+.results-subtitle {
+  font-size: var(--text-body-md);
+  color: var(--gray-500);
+  line-height: var(--lh-body);
+  max-width: 280px;
+  margin: 0;
+}
+
+/* ── Animated SVG ring ── */
+.results-score-ring {
+  position: relative;
+  width: 128px;
+  height: 128px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
 }
 
-.score-num { font-size: 3rem; font-weight: 800; color: var(--primary-700); }
-.score-total { font-size: 1.2rem; color: var(--primary-500); margin-top: 10px; }
+.score-ring-svg {
+  width: 128px;
+  height: 128px;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.score-ring-label {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  z-index: 1;
+}
+
+.score-ring-num {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--gray-900);
+  font-family: var(--font-display);
+  line-height: 1;
+}
+
+.score-ring-total {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--gray-400);
+  line-height: 1;
+}
+
+/* ── Stat row ── */
+.results-stats {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--gray-50);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.5rem;
+  width: 100%;
+}
+
+.results-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.results-stat-val {
+  font-size: var(--text-title-lg);
+  font-weight: 700;
+  color: var(--gray-900);
+  font-family: var(--font-display);
+  line-height: 1.1;
+}
+
+.results-stat-lbl {
+  font-size: var(--text-label-sm);
+  font-weight: 500;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.results-stat-divider {
+  width: 1px;
+  height: 36px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+/* ── Actions ── */
+.results-actions {
+  width: 100%;
+}
+
+.results-btn-primary {
+  width: 100%;
+  padding: 0.75rem 1.5rem;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-full);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: var(--text-label-lg);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  letter-spacing: 0;
+}
+
+.results-btn-primary:hover {
+  background: var(--accent-hover);
+}
