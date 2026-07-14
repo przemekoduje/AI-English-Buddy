@@ -127,6 +127,71 @@ const Reader = ({
           // Tokenize the sentence chunk into words and other characters
           const tokens = chunk.split(/([\w\u00C0-\u017F'-]+)/g);
 
+          // Find the index of the first word/token where we want to render the popup
+          const firstWordIdx = tokens.findIndex(token => /[\w\u00C0-\u017F'-]+/.test(token));
+          const popupTokenIdx = firstWordIdx !== -1 ? firstWordIdx : 0;
+
+          const renderHoverPopup = () => (
+            <span 
+              className="sentence-hover-popup-wrapper" 
+              onClick={(e) => e.stopPropagation()}
+              onMouseUp={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <span className="sentence-hover-popup">
+                <button
+                  className={`sentence-hover-btn play-btn ${
+                    isSpeaking && !isPaused && isCurrentReading && playSingle ? "active" : ""
+                  }`}
+                  onClick={() => onPlaySentence(index, true)}
+                  title="Play only this sentence"
+                >
+                  {isSpeaking && !isPaused && isCurrentReading && playSingle ? (
+                    <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                    </svg>
+                  ) : (
+                    <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                  )}
+                  <span className="btn-text">Only Sentence</span>
+                </button>
+                
+                <button
+                  className={`sentence-hover-btn play-all-btn ${
+                    isSpeaking && !isPaused && isCurrentReading && !playSingle ? "active" : ""
+                  }`}
+                  onClick={() => onPlaySentence(index, false)}
+                  title="Play from this sentence onwards"
+                >
+                  {isSpeaking && !isPaused && isCurrentReading && !playSingle ? (
+                    <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                    </svg>
+                  ) : (
+                    <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M5 13h11.86l-5.43 5.43 1.42 1.42L21.14 12l-8.29-8.29-1.42 1.42 5.43 5.43H5v2z"/>
+                    </svg>
+                  )}
+                  <span className="btn-text">From Here</span>
+                </button>
+                
+                <button
+                  className="sentence-hover-btn stop-btn"
+                  onClick={onStop}
+                  disabled={!(isSpeaking && isCurrentReading)}
+                  title="Stop playback"
+                >
+                  <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 6h12v12H6z"/>
+                  </svg>
+                  <span className="btn-text">Stop</span>
+                </button>
+              </span>
+            </span>
+          );
+
           return (
             <span
               key={index}
@@ -136,6 +201,8 @@ const Reader = ({
             >
               {tokens.map((token, tIdx) => {
                 const isWord = /[\w\u00C0-\u017F'-]+/.test(token);
+                const isPopupTarget = hoveredIndex === index && tIdx === popupTokenIdx;
+
                 if (isWord) {
                   const wordId = `chunk-${index}-token-${tIdx}`;
                   const isHighlighted = activeWordId === wordId;
@@ -151,72 +218,21 @@ const Reader = ({
                       }}
                     >
                       {token}
+                      {isPopupTarget && renderHoverPopup()}
                     </span>
                   );
                 } else {
-                  return <span key={tIdx}>{token}</span>;
+                  return (
+                    <span 
+                      key={tIdx}
+                      style={isPopupTarget ? { position: "relative", display: "inline-block" } : undefined}
+                    >
+                      {token}
+                      {isPopupTarget && renderHoverPopup()}
+                    </span>
+                  );
                 }
               })}
-              {hoveredIndex === index && (
-                <span 
-                  className="sentence-hover-popup-wrapper" 
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseUp={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  <span className="sentence-hover-popup">
-                    <button
-                      className={`sentence-hover-btn play-btn ${
-                        isSpeaking && !isPaused && isCurrentReading && playSingle ? "active" : ""
-                      }`}
-                      onClick={() => onPlaySentence(index, true)}
-                      title="Play only this sentence"
-                    >
-                      {isSpeaking && !isPaused && isCurrentReading && playSingle ? (
-                        <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                        </svg>
-                      ) : (
-                        <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M8 5v14l11-7z"/>
-                        </svg>
-                      )}
-                      <span className="btn-text">Only Sentence</span>
-                    </button>
-                    
-                    <button
-                      className={`sentence-hover-btn play-all-btn ${
-                        isSpeaking && !isPaused && isCurrentReading && !playSingle ? "active" : ""
-                      }`}
-                      onClick={() => onPlaySentence(index, false)}
-                      title="Play from this sentence onwards"
-                    >
-                      {isSpeaking && !isPaused && isCurrentReading && !playSingle ? (
-                        <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                        </svg>
-                      ) : (
-                        <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M5 13h11.86l-5.43 5.43 1.42 1.42L21.14 12l-8.29-8.29-1.42 1.42 5.43 5.43H5v2z"/>
-                        </svg>
-                      )}
-                      <span className="btn-text">From Here</span>
-                    </button>
-                    
-                    <button
-                      className="sentence-hover-btn stop-btn"
-                      onClick={onStop}
-                      disabled={!(isSpeaking && isCurrentReading)}
-                      title="Stop playback"
-                    >
-                      <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M6 6h12v12H6z"/>
-                      </svg>
-                      <span className="btn-text">Stop</span>
-                    </button>
-                  </span>
-                </span>
-              )}
               {index < textChunks.length - 1 ? " " : ""}
             </span>
           );

@@ -11,6 +11,15 @@ import WordExplanationModal from "./Notebook/WordExplanationModal";
 import SessionSummaryModal from "./Notebook/SessionSummaryModal";
 import PronunciationPracticeModal from "./Notebook/PronunciationPracticeModal";
 
+const GENERATION_PHASES = [
+  { label: "Analizuję temat...",        targetPct: 12, durationMs: 1800  },
+  { label: "Tworzę strukturę lekcji...", targetPct: 28, durationMs: 2800  },
+  { label: "Generuję treść...",          targetPct: 55, durationMs: 6000  },
+  { label: "Opracowuję tłumaczenia...",  targetPct: 72, durationMs: 5000  },
+  { label: "Finalizuję sekcje...",       targetPct: 88, durationMs: 5000  },
+  { label: "Prawie gotowe...",           targetPct: 95, durationMs: 4000  },
+];
+
 const PREMIUM_VOICES = [
   { voiceURI: 'en-US-BrianNeural', name: 'Brian (US - Male) 🌟', lang: 'en-US' },
   { voiceURI: 'en-US-AriaNeural', name: 'Aria (US - Female) 🌟', lang: 'en-US' },
@@ -62,6 +71,10 @@ function Workspace({
   const [continuationDetails, setContinuationDetails] = useState("");
   const [selectedContinuationTopics, setSelectedContinuationTopics] = useState([]);
   const [loadedRootId, setLoadedRootId] = useState(null);
+  
+  const [genProgress, setGenProgress] = useState(0);
+  const [genPhaseLabel, setGenPhaseLabel] = useState("");
+  const progressTimersRef = useRef([]);
   
   // States for word translation tooltip
   const [activeWordId, setActiveWordId] = useState(null);
@@ -210,7 +223,8 @@ function Workspace({
       }
     };
     loadStoryParts();
-  }, [currentStoryId, user, loadedRootId, storyParts, activePartIndex, setGeneratedText, setCurrentStoryTitle]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStoryId, user, setGeneratedText, setCurrentStoryTitle]);
 
   const handleSelectPart = (index) => {
     handleStop();
@@ -227,7 +241,6 @@ function Workspace({
   const handleGenerateContinuation = async () => {
     handleStop();
     setIsLoading(true);
-    setIsContinuing(false);
     
     const rootStoryId = loadedRootId || currentStoryId;
     
@@ -284,6 +297,7 @@ function Workspace({
         
         setContinuationDetails("");
         setSelectedContinuationTopics([]);
+        setIsContinuing(false);
       }
     } catch (error) {
       console.error("Błąd generowania kontynuacji:", error);
@@ -300,6 +314,39 @@ function Workspace({
       .then((data) => Array.isArray(data) && setSuggestedTopics(data))
       .catch((err) => console.error("Błąd tematów:", err));
   }, []);
+
+  const clearProgressTimers = useCallback(() => {
+    progressTimersRef.current.forEach(t => clearTimeout(t));
+    progressTimersRef.current = [];
+  }, []);
+
+  useEffect(() => {
+    if (isLoading && isContinuing) {
+      setGenProgress(0);
+      setGenPhaseLabel(GENERATION_PHASES[0].label);
+      clearProgressTimers();
+
+      let elapsed = 0;
+      GENERATION_PHASES.forEach((phase, idx) => {
+        const t = setTimeout(() => {
+          setGenProgress(phase.targetPct);
+          setGenPhaseLabel(phase.label);
+        }, elapsed);
+        progressTimersRef.current.push(t);
+        elapsed += phase.durationMs;
+      });
+    } else {
+      // Generation done — snap to 100 then reset
+      setGenProgress(100);
+      const t = setTimeout(() => {
+        setGenProgress(0);
+        setGenPhaseLabel("");
+        clearProgressTimers();
+      }, 500);
+      progressTimersRef.current.push(t);
+    }
+    return () => clearProgressTimers();
+  }, [isLoading, isContinuing, clearProgressTimers]);
 
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -1220,7 +1267,7 @@ function Workspace({
             )}
           </button>
           <button 
-            className="player-btn stop-btn"
+            className="player-btn player-stop-btn"
             onClick={handleStop}
             disabled={!isSpeaking}
             title="Zatrzymaj"
@@ -1373,7 +1420,7 @@ function Workspace({
             {storyParts.map((part, index) => (
               <button
                 key={part.id}
-                className={`chapter-tab ${activePartIndex === index ? "active" : ""}`}
+                className={`chapter-tab ${!isContinuing && activePartIndex === index ? "active" : ""}`}
                 onClick={() => handleSelectPart(index)}
               >
                 Part {part.part_number || index + 1}
@@ -1393,55 +1440,85 @@ function Workspace({
 
         {isContinuing ? (
           <div className="story-generator continuation-panel">
-            <div className="generator-header">
-              <h2>Continue Story</h2>
-              <p>Tell the AI what should happen next in Part {storyParts.length + 1} of this story.</p>
-            </div>
-            
-            <div className="topic-grid">
-              {suggestedTopics.map((topic) => (
-                <button
-                  key={topic}
-                  onClick={() => {
-                    setSelectedContinuationTopics(prev => 
-                      prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
-                    );
-                  }}
-                  className={`topic-chip ${selectedContinuationTopics.includes(topic) ? "selected" : ""}`}
-                  disabled={isLoading}
-                >
-                  {topic}
-                </button>
-              ))}
-            </div>
+            {isLoading ? (
+              <div className="generation-progress-overlay">
+                <div className="gen-progress-card">
+                  <div className="gen-progress-ring-wrapper">
+                    <svg className="gen-progress-ring" viewBox="0 0 120 120">
+                      <circle
+                        className="gen-progress-ring-track"
+                        cx="60" cy="60" r="50"
+                        fill="none" strokeWidth="8"
+                      />
+                      <circle
+                        className="gen-progress-ring-fill"
+                        cx="60" cy="60" r="50"
+                        fill="none" strokeWidth="8"
+                        strokeDasharray={`${2 * Math.PI * 50}`}
+                        strokeDashoffset={`${2 * Math.PI * 50 * (1 - genProgress / 100)}`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div className="gen-progress-pct">{Math.round(genProgress)}%</div>
+                  </div>
+                  <div className="gen-progress-label">{genPhaseLabel}</div>
+                  <div className="gen-progress-title">Tworzę kontynuację Twojej opowieści</div>
+                  <div className="gen-progress-subtitle">To może potrwać do 30 sekund...</div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="generator-header">
+                  <h2>Continue Story</h2>
+                  <p>Tell the AI what should happen next in Part {storyParts.length + 1} of this story.</p>
+                </div>
+                
+                <div className="topic-grid">
+                  {suggestedTopics.map((topic) => (
+                    <button
+                      key={topic}
+                      onClick={() => {
+                        setSelectedContinuationTopics(prev => 
+                          prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
+                        );
+                      }}
+                      className={`topic-chip ${selectedContinuationTopics.includes(topic) ? "selected" : ""}`}
+                      disabled={isLoading}
+                    >
+                      {topic}
+                    </button>
+                  ))}
+                </div>
 
-            <div className="details-composer">
-              <textarea
-                value={continuationDetails}
-                onChange={(e) => setContinuationDetails(e.target.value)}
-                placeholder="Describe what happens next (e.g. Alex meets a new friend, finds a key, goes to the forest...)"
-                rows="4"
-                disabled={isLoading}
-              />
-            </div>
+                <div className="details-composer">
+                  <textarea
+                    value={continuationDetails}
+                    onChange={(e) => setContinuationDetails(e.target.value)}
+                    placeholder="Describe what happens next (e.g. Alex meets a new friend, finds a key, goes to the forest...)"
+                    rows="4"
+                    disabled={isLoading}
+                  />
+                </div>
 
-            <div className="continuation-actions">
-              <button
-                onClick={handleGenerateContinuation}
-                disabled={isLoading || (selectedContinuationTopics.length === 0 && !continuationDetails.trim())}
-                className="generate-story-btn"
-              >
-                {isLoading ? "Generating sequel..." : `Generate Part ${storyParts.length + 1}`}
-              </button>
-              <button
-                onClick={() => setIsContinuing(false)}
-                disabled={isLoading}
-                className="cancel-continuation-btn"
-                style={{ marginLeft: '12px', padding: '12px 24px', borderRadius: '8px', border: '1px solid var(--border)', fontFamily: 'var(--font-main)', fontWeight: '600', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-            </div>
+                <div className="continuation-actions">
+                  <button
+                    onClick={handleGenerateContinuation}
+                    disabled={isLoading || (selectedContinuationTopics.length === 0 && !continuationDetails.trim())}
+                    className="generate-story-btn"
+                  >
+                    {isLoading ? "Generating sequel..." : `Generate Part ${storyParts.length + 1}`}
+                  </button>
+                  <button
+                    onClick={() => setIsContinuing(false)}
+                    disabled={isLoading}
+                    className="cancel-continuation-btn"
+                    style={{ marginLeft: '12px', padding: '12px 24px', borderRadius: '8px', border: '1px solid var(--border)', fontFamily: 'var(--font-main)', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : !generatedText ? (
           <StoryGenerator 

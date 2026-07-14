@@ -2866,10 +2866,50 @@ def convert_quotes_to_asterisks(text):
     pattern = r'(\s|^)\'([^\'\n]+)\'(?=\s|$|[,.:;?!])'
     return re.sub(pattern, r'\1*\2*', text)
 
+def detect_primary_language(text):
+    # Check if the text is predominantly English or Polish based on common word list
+    common_pl = {'jest', 'na', 'to', 'się', 'w', 'z', 'o', 'i', 'po', 'jak', 'tak', 'nie', 'dla', 'do', 'od', 'za', 'ze', 'co', 'tym', 'też', 'proszę', 'przetłumacz', 'napisz', 'powtórz', 'zdanie', 'słowo', 'dobrze', 'źle', 'poprawnie', 'polsku', 'angielsku', 'języku'}
+    common_en = {'is', 'the', 'a', 'an', 'and', 'to', 'in', 'on', 'of', 'for', 'with', 'you', 'your', 'i', 'me', 'my', 'that', 'this', 'it', 'was', 'were', 'have', 'has', 'had', 'english', 'translate', 'sentence', 'word', 'say', 'how'}
+    
+    words = re.findall(r'\b\w+\b', text.lower())
+    if not words:
+        if re.search(r'[ęćłńóśźżĄĆĘŁŃÓŚŹŻ]', text):
+            return "pl"
+        return "en"
+        
+    pl_count = sum(1 for w in words if w in common_pl)
+    en_count = sum(1 for w in words if w in common_en)
+    
+    pl_chars = len(re.findall(r'[ęćłńóśźżĄĆĘŁŃÓŚŹŻ]', text))
+    
+    if en_count > pl_count:
+        return "en"
+    elif pl_count > en_count:
+        return "pl"
+    else:
+        # Tie-breaker: presence of Polish diacritics
+        if pl_chars > 0:
+            return "pl"
+        return "en"
+
 def split_text_by_language(text):
     text_converted = convert_quotes_to_asterisks(text)
-    pattern = r'("[^"]+"|\*[^*]+\*|\_[^_]+\_|[^\.\?\!\n\"\*\_]+[\.\?\!\n]?)'
-    chunks = re.findall(pattern, text_converted)
+    
+    # A sentence boundary is a punctuation mark (. ! ?) not preceded by a common abbreviation,
+    # followed by space or newline or end of string.
+    abbreviations = r'\b(Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Co|Corp|Inc|Ltd|e\.g|i\.e|vs|a\.m|p\.m)\.'
+    
+    marked_text = text_converted
+    def replace_boundary(match):
+        before = match.group(1)
+        punct = match.group(2)
+        after = match.group(3)
+        if re.search(abbreviations, before):
+            return match.group(0)
+        return before + punct + "\u0000" + after
+
+    marked_text = re.sub(r'(\S+)([\.\?\!])(\s+|$)', replace_boundary, marked_text)
+    sentences = [s.strip() for s in marked_text.split("\u0000") if s.strip()]
     
     segments = []
     
@@ -2882,31 +2922,33 @@ def split_text_by_language(text):
         else:
             segments.append((text_stripped, lang_val))
 
-    for chunk in chunks:
-        chunk_stripped = chunk.strip()
-        if not chunk_stripped:
-            continue
+    for sentence in sentences:
+        sentence_lang = detect_primary_language(sentence)
+        
+        # Split by quotes, asterisks, underscores, and parentheses
+        pattern = r'("[^"]+"|\*[^*]+\*|\_[^_]+\_|\([^)]+\)|[^\(\)"\*\_]+)'
+        chunks = re.findall(pattern, sentence)
+        
+        for chunk in chunks:
+            chunk_stripped = chunk.strip()
+            if not chunk_stripped:
+                continue
+                
+            is_parentheses = chunk_stripped.startswith('(') and chunk_stripped.endswith(')')
+            is_quotes = chunk_stripped.startswith('"') and chunk_stripped.endswith('"')
+            is_asterisks = chunk_stripped.startswith('*') and chunk_stripped.endswith('*')
+            is_underscores = chunk_stripped.startswith('_') and chunk_stripped.endswith('_')
             
-        if '(' in chunk_stripped and ')' in chunk_stripped:
-            sub_chunks = re.split(r'(\([^)]+\))', chunk_stripped)
-            for sub_chunk in sub_chunks:
-                sub_stripped = sub_chunk.strip()
-                if not sub_stripped:
+            if is_parentheses or is_quotes or is_asterisks or is_underscores:
+                inner_content = chunk_stripped[1:-1].strip()
+                if not inner_content:
                     continue
-                if sub_stripped.startswith('(') and sub_stripped.endswith(')'):
-                    inner_text = sub_stripped[1:-1].strip()
-                    is_sub_pl = is_polish(inner_text)
-                    sub_lang = "pl" if is_sub_pl else "en"
-                    add_segment(inner_text, sub_lang)
-                else:
-                    is_sub_pl = is_polish(sub_stripped)
-                    sub_lang = "pl" if is_sub_pl else "en"
-                    add_segment(sub_stripped, sub_lang)
-        else:
-            is_pl = is_polish(chunk_stripped)
-            lang = "pl" if is_pl else "en"
-            add_segment(chunk_stripped, lang)
-            
+                is_pl = is_polish(inner_content)
+                insert_lang = "pl" if is_pl else "en"
+                add_segment(inner_content, insert_lang)
+            else:
+                add_segment(chunk_stripped, sentence_lang)
+                
     return segments
 
 def split_text_by_tags(text):
