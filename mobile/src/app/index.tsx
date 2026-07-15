@@ -126,7 +126,7 @@ const getInitialBackendUrl = () => {
       return 'https://ai-english-buddy-backend.onrender.com';
     }
   }
-  return 'http://192.168.100.31:5001';
+  return 'http://192.168.100.24:5001';
 };
 
 export default function HomeScreen() {
@@ -134,6 +134,19 @@ export default function HomeScreen() {
   const [user, setUser] = useState<{ token: string; email: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<'dashboard' | 'workspace' | 'stories' | 'notebook' | 'settings' | 'media'>('dashboard');
+
+  const [aiMode, setAiMode] = useState<'free' | 'openai_full' | 'hybrid'>('free');
+  const [autoSendEnabled, setAutoSendEnabled] = useState<boolean>(true);
+
+  const handleSelectAiMode = async (mode: 'free' | 'openai_full' | 'hybrid') => {
+    setAiMode(mode);
+    await AsyncStorage.setItem('buddy_ai_mode', mode);
+  };
+
+  const handleToggleAutoSend = async (val: boolean) => {
+    setAutoSendEnabled(val);
+    await AsyncStorage.setItem('buddy_auto_send', val ? 'true' : 'false');
+  };
 
   const customFetch = async (url: string, options: any = {}) => {
     const headers = {
@@ -230,7 +243,7 @@ export default function HomeScreen() {
   // --- Voice Tutor (Tutor Głosowy) Constants & States ---
   const VOICE_DB_THRESHOLD = -42;
   const INTERRUPTION_DB_THRESHOLD = -35;
-  const VOICE_SILENCE_DURATION = 800;
+  const VOICE_SILENCE_DURATION = 2500;
 
   const [isVoiceTutorActive, setIsVoiceTutorActive] = useState<boolean>(false);
   const [voiceTutorMessages, setVoiceTutorMessages] = useState<any[]>([]);
@@ -246,6 +259,7 @@ export default function HomeScreen() {
   const [voiceTutorEmail, setVoiceTutorEmail] = useState<string>('');
   const [voiceSessionDuration, setVoiceSessionDuration] = useState<number>(0);
   const voiceSessionTimerRef = useRef<any>(null);
+  const [isVoiceTutorPreSending, setIsVoiceTutorPreSending] = useState<boolean>(false);
 
   useEffect(() => {
     if (user && user.email) {
@@ -285,10 +299,13 @@ export default function HomeScreen() {
   const voiceTutorIsUserSpeakingRef = useRef<boolean>(false);
   const voiceTutorInterruptionCounterRef = useRef<number>(0);
   const voiceTutorMaxDurationTimerRef = useRef<any>(null);
+  const voiceTutorPreSendTimerRef = useRef<any>(null);
+  const voiceTutorIsPreSendingRef = useRef<boolean>(false);
 
   const voiceTutorIsBotSpeakingRef = useRef<boolean>(false);
   const voiceTutorIsRecordingRef = useRef<boolean>(false);
   const voiceTutorIsProcessingRef = useRef<boolean>(false);
+  const voiceTutorIsActiveRef = useRef<boolean>(false);
 
   // Web-specific audio/recording refs
   const webStreamRef = useRef<any>(null);
@@ -308,6 +325,10 @@ export default function HomeScreen() {
   useEffect(() => {
     voiceTutorIsProcessingRef.current = isVoiceTutorProcessing;
   }, [isVoiceTutorProcessing]);
+
+  useEffect(() => {
+    voiceTutorIsActiveRef.current = isVoiceTutorActive;
+  }, [isVoiceTutorActive]);
 
   // Clean up Voice Tutor on unmount
   useEffect(() => {
@@ -386,17 +407,24 @@ export default function HomeScreen() {
       clearTimeout(voiceTutorSilenceTimerRef.current);
       voiceTutorSilenceTimerRef.current = null;
     }
+    if (voiceTutorPreSendTimerRef.current) {
+      clearTimeout(voiceTutorPreSendTimerRef.current);
+      voiceTutorPreSendTimerRef.current = null;
+    }
     if (voiceTutorMaxDurationTimerRef.current) {
       clearTimeout(voiceTutorMaxDurationTimerRef.current);
       voiceTutorMaxDurationTimerRef.current = null;
     }
     voiceTutorIsUserSpeakingRef.current = false;
     setVoiceTutorUserIsSpeaking(false);
+    voiceTutorIsPreSendingRef.current = false;
+    setIsVoiceTutorPreSending(false);
     voiceTutorInterruptionCounterRef.current = 0;
     setVoiceTutorRmsVolume(0);
   };
 
   const startVoiceTutorRecording = async () => {
+    if (!voiceTutorIsActiveRef.current) return;
     if (voiceTutorIsProcessingRef.current) return;
 
     // Reset VAD state
@@ -465,20 +493,36 @@ export default function HomeScreen() {
                   voiceTutorIsUserSpeakingRef.current = true;
                   setVoiceTutorUserIsSpeaking(true);
                 }
+                if (voiceTutorPreSendTimerRef.current) {
+                  clearTimeout(voiceTutorPreSendTimerRef.current);
+                  voiceTutorPreSendTimerRef.current = null;
+                  setIsVoiceTutorPreSending(false);
+                  voiceTutorIsPreSendingRef.current = false;
+                  console.log("Web VAD: Speech resumed during grace period. Cancelling send.");
+                }
                 if (voiceTutorSilenceTimerRef.current) {
                   clearTimeout(voiceTutorSilenceTimerRef.current);
                   voiceTutorSilenceTimerRef.current = null;
                 }
               } else { // User is silent
-                if (voiceTutorIsUserSpeakingRef.current && !voiceTutorSilenceTimerRef.current) {
+                if (autoSendEnabled && voiceTutorIsUserSpeakingRef.current && !voiceTutorSilenceTimerRef.current && !voiceTutorIsPreSendingRef.current) {
                   voiceTutorSilenceTimerRef.current = setTimeout(async () => {
-                    console.log("Web silence detected: ending turn.");
-                    voiceTutorIsUserSpeakingRef.current = false;
-                    setVoiceTutorUserIsSpeaking(false);
+                    console.log("Web silence detected: starting grace period.");
+                    setIsVoiceTutorPreSending(true);
+                    voiceTutorIsPreSendingRef.current = true;
                     voiceTutorSilenceTimerRef.current = null;
                     
-                    await stopVoiceTutorRecordingAndSend();
-                  }, 800); // 800ms ciszy dla szybszego przepływu rozmowy
+                    voiceTutorPreSendTimerRef.current = setTimeout(async () => {
+                      console.log("Web grace period finished: sending audio.");
+                      voiceTutorIsUserSpeakingRef.current = false;
+                      setVoiceTutorUserIsSpeaking(false);
+                      setIsVoiceTutorPreSending(false);
+                      voiceTutorIsPreSendingRef.current = false;
+                      voiceTutorPreSendTimerRef.current = null;
+                      
+                      await stopVoiceTutorRecordingAndSend();
+                    }, 1500);
+                  }, VOICE_SILENCE_DURATION);
                 }
               }
             }
@@ -518,11 +562,11 @@ export default function HomeScreen() {
         mediaRecorder.start();
         setIsVoiceTutorRecording(true);
 
-        // Max 12-second recording safety net
+        // Max 60-second recording safety net
         voiceTutorMaxDurationTimerRef.current = setTimeout(async () => {
-          console.log("Web max recording duration reached (12s). Force sending...");
+          console.log("Web max recording duration reached (60s). Force sending...");
           await stopVoiceTutorRecordingAndSend();
-        }, 12000);
+        }, 60000);
       } else {
         // 1. Request microphone permission
         const permission = await Audio.requestPermissionsAsync();
@@ -582,20 +626,35 @@ export default function HomeScreen() {
                   voiceTutorIsUserSpeakingRef.current = true;
                   setVoiceTutorUserIsSpeaking(true);
                 }
+                if (voiceTutorPreSendTimerRef.current) {
+                  clearTimeout(voiceTutorPreSendTimerRef.current);
+                  voiceTutorPreSendTimerRef.current = null;
+                  setIsVoiceTutorPreSending(false);
+                  voiceTutorIsPreSendingRef.current = false;
+                  console.log("Mobile VAD: Speech resumed during grace period. Cancelling send.");
+                }
                 if (voiceTutorSilenceTimerRef.current) {
                   clearTimeout(voiceTutorSilenceTimerRef.current);
                   voiceTutorSilenceTimerRef.current = null;
                 }
               } else {
-                if (voiceTutorIsUserSpeakingRef.current && !voiceTutorSilenceTimerRef.current) {
+                if (autoSendEnabled && voiceTutorIsUserSpeakingRef.current && !voiceTutorSilenceTimerRef.current && !voiceTutorIsPreSendingRef.current) {
                   voiceTutorSilenceTimerRef.current = setTimeout(async () => {
-                    console.log("Mobile silence detected: ending turn.");
-                    voiceTutorIsUserSpeakingRef.current = false;
-                    setVoiceTutorUserIsSpeaking(false);
+                    console.log("Mobile silence detected: starting grace period.");
+                    setIsVoiceTutorPreSending(true);
+                    voiceTutorIsPreSendingRef.current = true;
                     voiceTutorSilenceTimerRef.current = null;
                     
-                    // Stop recording and send audio
-                    await stopVoiceTutorRecordingAndSend();
+                    voiceTutorPreSendTimerRef.current = setTimeout(async () => {
+                      console.log("Mobile grace period finished: sending audio.");
+                      voiceTutorIsUserSpeakingRef.current = false;
+                      setVoiceTutorUserIsSpeaking(false);
+                      setIsVoiceTutorPreSending(false);
+                      voiceTutorIsPreSendingRef.current = false;
+                      voiceTutorPreSendTimerRef.current = null;
+                      
+                      await stopVoiceTutorRecordingAndSend();
+                    }, 1500);
                   }, VOICE_SILENCE_DURATION);
                 }
               }
@@ -614,11 +673,11 @@ export default function HomeScreen() {
         voiceTutorRecordingRef.current = recording;
         setIsVoiceTutorRecording(true);
 
-        // Max 12-second recording safety net
+        // Max 60-second recording safety net
         voiceTutorMaxDurationTimerRef.current = setTimeout(async () => {
-          console.log("Native max recording duration reached (12s). Force sending...");
+          console.log("Native max recording duration reached (60s). Force sending...");
           await stopVoiceTutorRecordingAndSend();
-        }, 12000);
+        }, 60000);
       }
     } catch (err: any) {
       console.error('Failed to start voice tutor recording:', err);
@@ -683,6 +742,7 @@ export default function HomeScreen() {
 
   const handleSendVoiceTutor = async (uri: string) => {
     if (!user) return;
+    if (!voiceTutorIsActiveRef.current) return;
     setIsVoiceTutorProcessing(true);
 
     try {
@@ -719,6 +779,7 @@ export default function HomeScreen() {
       
       formData.append("history", JSON.stringify(historyForApi));
       formData.append("voice", selectedVoice || "en-US-BrianNeural");
+      formData.append("ai_mode", aiMode);
 
       const response = await fetch(`${backendUrl}/api/chat-free`, {
         method: "POST",
@@ -728,6 +789,13 @@ export default function HomeScreen() {
         },
         body: formData,
       });
+
+      if (!voiceTutorIsActiveRef.current) {
+        console.log("Session deactivated while waiting for API response. Aborting.");
+        setIsVoiceTutorProcessing(false);
+        voiceTutorIsProcessingRef.current = false;
+        return;
+      }
 
       if (!response.ok) throw new Error("API connection error");
       const result = await response.json();
@@ -767,6 +835,7 @@ export default function HomeScreen() {
   };
 
   const playVoiceTutorAudio = async (text: string, cachedBase64?: string) => {
+    if (!voiceTutorIsActiveRef.current) return;
     await stopVoiceTutorAudio();
     setIsVoiceTutorBotSpeaking(true);
 
@@ -852,7 +921,9 @@ export default function HomeScreen() {
           voiceTutorIsUserSpeakingRef.current = false;
           setVoiceTutorUserIsSpeaking(false);
           voiceTutorInterruptionCounterRef.current = 0;
-          await startVoiceTutorRecording();
+          if (voiceTutorIsActiveRef.current) {
+            await startVoiceTutorRecording();
+          }
         };
       } else {
         await Audio.setAudioModeAsync({
@@ -880,7 +951,9 @@ export default function HomeScreen() {
             setVoiceTutorUserIsSpeaking(false);
             voiceTutorInterruptionCounterRef.current = 0;
             // Start voice recording when tutor finishes speaking
-            await startVoiceTutorRecording();
+            if (voiceTutorIsActiveRef.current) {
+              await startVoiceTutorRecording();
+            }
           }
         });
       }
@@ -904,12 +977,16 @@ export default function HomeScreen() {
           utterance.onend = async () => {
             setIsVoiceTutorBotSpeaking(false);
             voiceTutorIsBotSpeakingRef.current = false;
-            await startVoiceTutorRecording();
+            if (voiceTutorIsActiveRef.current) {
+              await startVoiceTutorRecording();
+            }
           };
           utterance.onerror = async () => {
             setIsVoiceTutorBotSpeaking(false);
             voiceTutorIsBotSpeakingRef.current = false;
-            await startVoiceTutorRecording();
+            if (voiceTutorIsActiveRef.current) {
+              await startVoiceTutorRecording();
+            }
           };
           
           window.speechSynthesis.speak(utterance);
@@ -944,6 +1021,7 @@ export default function HomeScreen() {
 
     cleanupVoiceTutorVAD();
     setIsVoiceTutorActive(true);
+    voiceTutorIsActiveRef.current = true;
     setVoiceTutorMessages([]);
     setVoiceTutorSummary(null);
     setVoiceTutorSavedWords([]);
@@ -954,10 +1032,11 @@ export default function HomeScreen() {
   };
 
   const handleEndVoiceTutorSession = async () => {
+    setIsVoiceTutorActive(false);
+    voiceTutorIsActiveRef.current = false;
     await stopVoiceTutorAudio();
     await stopVoiceTutorRecordingLocally();
     cleanupVoiceTutorVAD();
-    setIsVoiceTutorActive(false);
     setVoiceTutorShowTranscript(false);
 
     if (voiceTutorMessages.length > 0) {
@@ -1077,8 +1156,8 @@ export default function HomeScreen() {
       try {
         const storedUser = await AsyncStorage.getItem('buddy_user');
         let storedIP = await AsyncStorage.getItem('buddy_backend_url');
-        if (storedIP && storedIP.includes('192.168.100.27')) {
-          storedIP = 'http://192.168.100.31:5001';
+        if (storedIP && storedIP.startsWith('http://192.168.') && !storedIP.includes('192.168.100.24')) {
+          storedIP = 'http://192.168.100.24:5001';
           await AsyncStorage.setItem('buddy_backend_url', storedIP);
         }
 
@@ -1112,6 +1191,14 @@ export default function HomeScreen() {
         }
         if (storedCustomVideos) {
           setCustomVideos(JSON.parse(storedCustomVideos));
+        }
+        const storedAiMode = await AsyncStorage.getItem('buddy_ai_mode');
+        if (storedAiMode && ['free', 'openai_full', 'hybrid'].includes(storedAiMode)) {
+          setAiMode(storedAiMode as any);
+        }
+        const storedAutoSend = await AsyncStorage.getItem('buddy_auto_send');
+        if (storedAutoSend !== null) {
+          setAutoSendEnabled(storedAutoSend === 'true');
         }
 
         // Configure Audio session for playback
@@ -2190,6 +2277,8 @@ export default function HomeScreen() {
           if (isVoiceTutorActive) {
             if (isVoiceTutorProcessing) {
               orbStatus = "thinking";
+            } else if (isVoiceTutorPreSending) {
+              orbStatus = "presending";
             } else if (isVoiceTutorBotSpeaking) {
               orbStatus = "speaking";
             } else if (isVoiceTutorRecording) {
@@ -2228,8 +2317,57 @@ export default function HomeScreen() {
                   {isVoiceTutorActive && orbStatus === "speaking" && "Speaking"}
                   {isVoiceTutorActive && orbStatus === "listening" && "Listening"}
                   {isVoiceTutorActive && orbStatus === "user-speaking" && "Listening"}
+                  {isVoiceTutorActive && orbStatus === "presending" && "Czy to wszystko?..."}
                   {isVoiceTutorActive && orbStatus === "thinking" && "Thinking..."}
                 </Text>
+
+                {/* Mode Selector Buttons */}
+                {!isVoiceTutorActive && (
+                  <>
+                    <View style={styles.modeSelectorContainer}>
+                      <TouchableOpacity
+                        style={[styles.modeSelectorBtn, aiMode === 'free' && styles.modeSelectorBtnActive]}
+                        onPress={() => handleSelectAiMode('free')}
+                      >
+                        <Text style={[styles.modeSelectorBtnText, aiMode === 'free' && styles.modeSelectorBtnTextActive]}>
+                          Free (DeepSeek)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.modeSelectorBtn, aiMode === 'hybrid' && styles.modeSelectorBtnActive]}
+                        onPress={() => handleSelectAiMode('hybrid')}
+                      >
+                        <Text style={[styles.modeSelectorBtnText, aiMode === 'hybrid' && styles.modeSelectorBtnTextActive]}>
+                          Hybrid (Fast)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.modeSelectorBtn, aiMode === 'openai_full' && styles.modeSelectorBtnActive]}
+                        onPress={() => handleSelectAiMode('openai_full')}
+                      >
+                        <Text style={[styles.modeSelectorBtnText, aiMode === 'openai_full' && styles.modeSelectorBtnTextActive]}>
+                          Full OpenAI
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.modeSelectorDesc}>
+                      {aiMode === 'free' && "🆓 Wariant 1: Darmowa transkrypcja i mowa (DeepSeek). Namysł ok. 7-15s."}
+                      {aiMode === 'hybrid' && "⚡ Wariant 3 (Zalecany): Szybki Whisper + GPT-4o-mini + darmowa mowa. Namysł ok. 2-3s."}
+                      {aiMode === 'openai_full' && "💎 Wariant 2: Pełny OpenAI (Whisper + GPT + OpenAI TTS). Najszybszy (~2s) i najlepszy głos."}
+                    </Text>
+
+                    {/* Auto-send Toggle */}
+                    <TouchableOpacity
+                      style={styles.toggleContainer}
+                      onPress={() => handleToggleAutoSend(!autoSendEnabled)}
+                    >
+                      <View style={[styles.toggleCheckbox, autoSendEnabled && styles.toggleCheckboxActive]}>
+                        {autoSendEnabled && <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>✓</Text>}
+                      </View>
+                      <Text style={styles.toggleText}>Automatyczne wysyłanie (VAD)</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
 
                 {/* Waveform component with session timer in the middle */}
                 {isVoiceTutorActive && (
@@ -2238,6 +2376,32 @@ export default function HomeScreen() {
                     isSpeaking={orbStatus === "speaking" || orbStatus === "user-speaking"} 
                     timeText={formatDuration(voiceSessionDuration)} 
                   />
+                )}
+
+                {/* Send Now Button */}
+                {isVoiceTutorActive && !isVoiceTutorProcessing && !isVoiceTutorBotSpeaking && (
+                  <TouchableOpacity
+                    style={styles.sendNowBtn}
+                    onPress={async () => {
+                      console.log("Manual send pressed: ending turn.");
+                      if (voiceTutorSilenceTimerRef.current) {
+                        clearTimeout(voiceTutorSilenceTimerRef.current);
+                        voiceTutorSilenceTimerRef.current = null;
+                      }
+                      if (voiceTutorPreSendTimerRef.current) {
+                        clearTimeout(voiceTutorPreSendTimerRef.current);
+                        voiceTutorPreSendTimerRef.current = null;
+                      }
+                      voiceTutorIsUserSpeakingRef.current = false;
+                      setVoiceTutorUserIsSpeaking(false);
+                      setIsVoiceTutorPreSending(false);
+                      voiceTutorIsPreSendingRef.current = false;
+                      
+                      await stopVoiceTutorRecordingAndSend();
+                    }}
+                  >
+                    <Text style={styles.sendNowBtnText}>Wyślij teraz ➔</Text>
+                  </TouchableOpacity>
                 )}
 
                 {/* User transcription */}
@@ -2310,7 +2474,7 @@ export default function HomeScreen() {
                             {!isBot && msg.evaluation && (
                               <View style={styles.mobileBubbleEval}>
                                 <Text style={styles.mobileBubbleEvalScore}>
-                                  🏆 Ocena: <strong>{msg.evaluation.score}/100</strong>
+                                  🏆 Ocena: <Text style={{ fontWeight: 'bold' }}>{msg.evaluation.score}/100</Text>
                                 </Text>
                                 {msg.evaluation.feedback && (
                                   <Text style={styles.mobileBubbleEvalFeedback}>
@@ -3377,6 +3541,88 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  modeSelectorContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginTop: 20,
+    gap: 8,
+  },
+  modeSelectorBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  modeSelectorBtnActive: {
+    borderColor: '#1A73E8',
+    backgroundColor: '#E6F4FE',
+  },
+  modeSelectorBtnText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#4B5563',
+    textAlign: 'center',
+  },
+  modeSelectorBtnTextActive: {
+    color: '#1A73E8',
+    fontWeight: '700',
+  },
+  modeSelectorDesc: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 12,
+    paddingHorizontal: 16,
+    lineHeight: 18,
+  },
+  sendNowBtn: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: '#1A73E8',
+    elevation: 2,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendNowBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    justifyContent: 'center',
+    gap: 8,
+  },
+  toggleCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#1A73E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleCheckboxActive: {
+    backgroundColor: '#1A73E8',
+  },
+  toggleText: {
+    fontSize: 13,
+    color: '#4B5563',
+    fontWeight: '500',
   },
   waveformContainer: {
     flexDirection: 'row',

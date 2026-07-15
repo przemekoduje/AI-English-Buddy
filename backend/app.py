@@ -625,20 +625,30 @@ class MockOpenAIClient:
 
 # Klient OpenAI / DeepSeek
 client = None
+openai_client = None
+deepseek_client = None
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 if OPENAI_API_KEY:
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    print("Klient OpenAI (wewnętrzny) zainicjalizowany.")
+
+if DEEPSEEK_API_KEY:
+    deepseek_client = OpenAI(
+        api_key=DEEPSEEK_API_KEY,
+        base_url="https://api.deepseek.com"
+    )
+    print("Klient DeepSeek (wewnętrzny) zainicjalizowany.")
+
+if OPENAI_API_KEY:
+    client = openai_client
     print("Klient OpenAI zainicjalizowany.")
     MODEL_NAME = "gpt-4o-mini"
     API_URL = "https://api.openai.com/v1/chat/completions"
     API_TOKEN = OPENAI_API_KEY
 elif DEEPSEEK_API_KEY:
-    client = OpenAI(
-        api_key=DEEPSEEK_API_KEY,
-        base_url="https://api.deepseek.com"
-    )
+    client = deepseek_client
     print("Klient DeepSeek zainicjalizowany.")
     MODEL_NAME = "deepseek-chat"
     API_URL = "https://api.deepseek.com/chat/completions"
@@ -2992,9 +3002,31 @@ def get_voice_pair(selected_voice):
             
     return en_voice, pl_voice
 
-def generate_tts_base64(text, voice="en-US-BrianNeural"):
+def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
     if "Neural" not in voice:
         voice = "en-US-BrianNeural"
+        
+    # Use OpenAI TTS API if available
+    if ai_mode == "openai_full" and openai_client:
+        # If the text is purely English (no [PL] tags and no Polish specific characters), synthesize in a single request.
+        if "[PL]" not in text and not re.search(r'[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]', text):
+            print(f"DEBUG TTS: Synthesizing entire text as English using OpenAI TTS with voice '{voice}'", flush=True)
+            try:
+                openai_voice = "alloy"
+                if "Brian" in voice or "Marek" in voice:
+                    openai_voice = "onyx"
+                elif "Jenny" in voice or "Emma" in voice or "Aria" in voice:
+                    openai_voice = "nova"
+                    
+                response = openai_client.audio.speech.create(
+                    model="tts-1",
+                    voice=openai_voice,
+                    input=text
+                )
+                audio_data = response.read()
+                return base64.b64encode(audio_data).decode('utf-8')
+            except Exception as e:
+                print(f"OpenAI TTS error, falling back to Edge TTS: {e}", flush=True)
     
     # If the text is purely English (no [PL] tags and no Polish specific characters), synthesize in a single request.
     if "[PL]" not in text and not re.search(r'[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]', text):
@@ -3025,6 +3057,23 @@ def generate_tts_base64(text, voice="en-US-BrianNeural"):
         
     async def get_segment_audio(segment_text, segment_voice):
         print(f"DEBUG TTS: Synthesizing '{segment_text}' with voice '{segment_voice}'", flush=True)
+        if ai_mode == "openai_full" and openai_client:
+            try:
+                openai_voice = "alloy"
+                if "Brian" in segment_voice or "Marek" in segment_voice:
+                    openai_voice = "onyx"
+                elif "Jenny" in segment_voice or "Emma" in segment_voice or "Aria" in segment_voice:
+                    openai_voice = "nova"
+                
+                response = openai_client.audio.speech.create(
+                    model="tts-1",
+                    voice=openai_voice,
+                    input=segment_text
+                )
+                return response.read()
+            except Exception as e:
+                print(f"OpenAI TTS segment error: {e}, falling back to Edge TTS...", flush=True)
+                
         communicate = edge_tts.Communicate(segment_text, segment_voice)
         audio_data = b""
         async for chunk in communicate.stream():
@@ -3439,42 +3488,66 @@ def chat_free():
     history_str = request.form.get('history', '[]').strip()
     transcription = request.form.get('transcription', '').strip()
     voice = request.form.get('voice', 'en-US-BrianNeural').strip()
+    ai_mode = request.form.get('ai_mode', 'free').strip()
 
     try:
         history = json.loads(history_str)
     except Exception as e:
         return jsonify({"error": "Błędny format historii czatu."}), 400
 
-    print(f"DEBUG chat-free: files={list(request.files.keys())}, form={list(request.form.keys())}, transcription='{transcription}', voice='{voice}'", flush=True)
+    print(f"DEBUG chat-free: files={list(request.files.keys())}, form={list(request.form.keys())}, transcription='{transcription}', voice='{voice}', ai_mode='{ai_mode}'", flush=True)
 
     if not transcription and 'audio' in request.files:
         audio_file = request.files['audio']
         print("DEBUG chat-free: Found 'audio' in request.files", flush=True)
-        HF_TOKEN = os.getenv("HF_API_TOKEN")
-        API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-
-        try:
-            audio_data = audio_file.read()
-            print(f"DEBUG chat-free: Read {len(audio_data)} bytes of audio data", flush=True)
-            asr_headers = headers.copy()
-            asr_headers["Content-Type"] = get_audio_content_type(audio_file)
-            
-            response = requests.post(API_URL, headers=asr_headers, data=audio_data, timeout=30)
-            print(f"DEBUG chat-free: Whisper API response code = {response.status_code}", flush=True)
-            if response.status_code == 200:
-                transcription_result = response.json()
-                transcription = transcription_result.get("text", "").strip()
-                print(f"DEBUG chat-free: Transcription = '{transcription}'", flush=True)
+        
+        # Use OpenAI Whisper API if available and requested
+        if ai_mode in ['openai_full', 'hybrid']:
+            if openai_client:
+                print("DEBUG chat-free: Using OpenAI Whisper API for transcription...", flush=True)
+                try:
+                    audio_file.seek(0)
+                    transcription_response = openai_client.audio.transcriptions.create(
+                        model="whisper-1",
+                        file=(audio_file.filename or "user_speech.m4a", audio_file.stream, audio_file.content_type or "audio/m4a"),
+                        language="en"
+                    )
+                    transcription = transcription_response.text.strip()
+                    print(f"DEBUG chat-free: OpenAI Transcription = '{transcription}'", flush=True)
+                except Exception as e:
+                    print(f"OpenAI Whisper error in chat-free: {e}", flush=True)
             else:
-                print(f"Whisper error in chat-free: {response.status_code} - {response.text}", flush=True)
-        except Exception as e:
-            print(f"Whisper error in chat-free: {e}", flush=True)
+                print("DEBUG chat-free: OpenAI Whisper requested but openai_client is not configured.", flush=True)
+                
+        # Fallback to Hugging Face
+        if not transcription:
+            print("DEBUG chat-free: Using Hugging Face Whisper API for transcription...", flush=True)
+            HF_TOKEN = os.getenv("HF_API_TOKEN")
+            API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
+            headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+
+            try:
+                audio_file.seek(0)
+                audio_data = audio_file.read()
+                print(f"DEBUG chat-free: Read {len(audio_data)} bytes of audio data", flush=True)
+                asr_headers = headers.copy()
+                asr_headers["Content-Type"] = get_audio_content_type(audio_file)
+                
+                response = requests.post(API_URL, headers=asr_headers, data=audio_data, timeout=30)
+                print(f"DEBUG chat-free: Whisper API response code = {response.status_code}", flush=True)
+                if response.status_code == 200:
+                    transcription_result = response.json()
+                    transcription = transcription_result.get("text", "").strip()
+                    print(f"DEBUG chat-free: Transcription = '{transcription}'", flush=True)
+                else:
+                    print(f"Whisper error in chat-free: {response.status_code} - {response.text}", flush=True)
+            except Exception as e:
+                print(f"Whisper error in chat-free: {e}", flush=True)
 
     if 'audio' in request.files and not transcription:
         bot_response = "I didn't quite catch that, but don't worry! I'm here and ready to help you practice your English whenever you're ready. Feel free to speak when you are ready."
         print(f"DEBUG chat-free: Pre-generating TTS base64 for fallback voice '{voice}'...", flush=True)
-        audio_base64 = generate_tts_base64(bot_response, voice=voice)
+        audio_base64 = generate_tts_base64(bot_response, voice=voice, ai_mode=ai_mode)
         return jsonify({
             "user_evaluation": None,
             "bot_response": bot_response,
@@ -3548,12 +3621,29 @@ def chat_free():
     else:
         user_prompt += "Latest Student's Answer: (None, this is the start)\n"
 
-    if not client:
+    # Determine client and model based on ai_mode
+    active_client = client
+    active_model = MODEL_NAME
+    
+    if ai_mode in ['openai_full', 'hybrid']:
+        if not openai_client:
+            return jsonify({"error": "Wybrany tryb płatny wymaga klucza OPENAI_API_KEY w pliku .env"}), 400
+        active_client = openai_client
+        active_model = "gpt-4o-mini"
+    else: # free
+        if deepseek_client:
+            active_client = deepseek_client
+            active_model = "deepseek-chat"
+        else:
+            active_client = client
+            active_model = MODEL_NAME
+
+    if not active_client:
         return jsonify({"error": "AI client is currently unavailable."}), 500
 
     try:
-        ai_response = client.chat.completions.create(
-            model=MODEL_NAME,
+        ai_response = active_client.chat.completions.create(
+            model=active_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -3640,8 +3730,8 @@ def chat_free():
         # Generate TTS audio on the backend to reduce latency
         bot_reply_text = result.get("bot_response", "")
         if bot_reply_text:
-            print(f"DEBUG chat-free: Pre-generating TTS base64 for voice '{voice}'...", flush=True)
-            result["audio_base64"] = generate_tts_base64(bot_reply_text, voice=voice)
+            print(f"DEBUG chat-free: Pre-generating TTS base64 for voice '{voice}' and mode '{ai_mode}'...", flush=True)
+            result["audio_base64"] = generate_tts_base64(bot_reply_text, voice=voice, ai_mode=ai_mode)
             # Clean up the tags for the UI display
             cleaned_reply_text = bot_reply_text.replace("[PL]", "").replace("[EN]", "")
             # Merge any double spaces resulting from tag removal
