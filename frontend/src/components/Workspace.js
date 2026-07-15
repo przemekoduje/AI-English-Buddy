@@ -91,6 +91,7 @@ function Workspace({
   const wasPlayingBeforeTooltipRef = useRef(false);
   // Tracks the chunk index at pause-for-tooltip moment
   const pausedChunkIndexRef = useRef(-1);
+  const speakChunkRef = useRef(null);
   
   // Telemetry & summary states
   const [activityLog, setActivityLog] = useState([]);
@@ -367,16 +368,40 @@ function Workspace({
     };
   }, [menuVisible]);
 
-  const triggerSelectionTranslation = async (text, range) => {
-    // Pause story audio without destroying it so we can resume later
-    if (currentAudioRef.current && !currentAudioRef.current.paused) {
+  const pauseAudioForTooltip = useCallback(() => {
+    if ((currentAudioRef.current && !currentAudioRef.current.paused) || (isSpeaking && !isPaused)) {
       wasPlayingBeforeTooltipRef.current = true;
       pausedChunkIndexRef.current = currentChunkIndex;
-      currentAudioRef.current.pause();
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+      }
       setIsPaused(true);
+    }
+  }, [currentChunkIndex, isSpeaking, isPaused]);
+
+  const resumeAudioAfterTooltip = useCallback(() => {
+    if (wasPlayingBeforeTooltipRef.current) {
+      const chunkToReplay = pausedChunkIndexRef.current;
+      wasPlayingBeforeTooltipRef.current = false;
+      pausedChunkIndexRef.current = -1;
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+      if (chunkToReplay >= 0) {
+        setTimeout(() => {
+          if (speakChunkRef.current) {
+            speakChunkRef.current(chunkToReplay, false);
+          }
+        }, 60);
+      }
     } else {
       wasPlayingBeforeTooltipRef.current = false;
     }
+  }, []);
+
+  const triggerSelectionTranslation = async (text, range) => {
+    pauseAudioForTooltip();
 
     const rect = range.getBoundingClientRect();
 
@@ -726,6 +751,7 @@ function Workspace({
       handleStop();
     }
   };
+  speakChunkRef.current = speakChunk;
 
   const handlePlayback = () => {
     if (!generatedText || textChunks.length === 0) return;
@@ -776,12 +802,7 @@ function Workspace({
 
   const handleTranslate = async () => {
     if (!selectedText) return;
-    // Pause story audio so user can read the translation
-    if (currentAudioRef.current && !currentAudioRef.current.paused) {
-      wasPlayingBeforeTooltipRef.current = true;
-      currentAudioRef.current.pause();
-      setIsPaused(true);
-    }
+    pauseAudioForTooltip();
     setActivityLog(prev => [
       ...prev,
       {
@@ -813,24 +834,8 @@ function Workspace({
     setActiveWordHighlight(null);
     setActiveWordId(null);
     setWordTooltipTranslation("");
-    // Restart playback from the beginning of the paused sentence
-    if (wasPlayingBeforeTooltipRef.current) {
-      const chunkToReplay = pausedChunkIndexRef.current;
-      wasPlayingBeforeTooltipRef.current = false;
-      pausedChunkIndexRef.current = -1;
-      // Stop current (paused) audio so speakChunk starts fresh
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current = null;
-      }
-      if (chunkToReplay >= 0) {
-        speakChunk(chunkToReplay, false);
-      }
-    } else {
-      wasPlayingBeforeTooltipRef.current = false;
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    resumeAudioAfterTooltip();
+  }, [resumeAudioAfterTooltip]);
 
   const handleSaveWordFromTooltip = async () => {
     if (!activeWordHighlight || !wordTooltipTranslation) return;
@@ -861,15 +866,7 @@ function Workspace({
   };
 
   const handleWordClick = async (word, wordId, element, sentenceContext) => {
-    // Pause story audio without destroying it so we can resume after closing tooltip
-    if (currentAudioRef.current && !currentAudioRef.current.paused) {
-      wasPlayingBeforeTooltipRef.current = true;
-      pausedChunkIndexRef.current = currentChunkIndex;
-      currentAudioRef.current.pause();
-      setIsPaused(true);
-    } else {
-      wasPlayingBeforeTooltipRef.current = false;
-    }
+    pauseAudioForTooltip();
 
     const layoutEl = document.querySelector('.workspace-layout');
     const layoutRect = layoutEl ? layoutEl.getBoundingClientRect() : { top: 0, left: 0 };
@@ -1002,21 +999,7 @@ function Workspace({
       }
     }
     setShowTranslationModal(false);
-    // Restart playback from the beginning of the paused sentence
-    if (wasPlayingBeforeTooltipRef.current) {
-      const chunkToReplay = pausedChunkIndexRef.current;
-      wasPlayingBeforeTooltipRef.current = false;
-      pausedChunkIndexRef.current = -1;
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current = null;
-      }
-      if (chunkToReplay >= 0) {
-        speakChunk(chunkToReplay, false);
-      }
-    } else {
-      wasPlayingBeforeTooltipRef.current = false;
-    }
+    resumeAudioAfterTooltip();
   };
 
   const handleAddDirectly = async () => {
@@ -1398,18 +1381,7 @@ function Workspace({
             <button onClick={handleSaveToNotebook} className="btn-primary">Save to Notebook</button>
             <button onClick={() => {
               setShowTranslationModal(false);
-              if (wasPlayingBeforeTooltipRef.current) {
-                const chunkToReplay = pausedChunkIndexRef.current;
-                wasPlayingBeforeTooltipRef.current = false;
-                pausedChunkIndexRef.current = -1;
-                if (currentAudioRef.current) {
-                  currentAudioRef.current.pause();
-                  currentAudioRef.current = null;
-                }
-                if (chunkToReplay >= 0) speakChunk(chunkToReplay, false);
-              } else {
-                wasPlayingBeforeTooltipRef.current = false;
-              }
+              resumeAudioAfterTooltip();
             }} className="btn-secondary">Close</button>
           </div>
         </div>
@@ -1656,7 +1628,10 @@ function Workspace({
         onDeleteWord={handleDeleteWord}
         onOpenEmailModal={() => setShowSendEmailModal(true)}
         onOpenFlashcards={() => setShowFlashcards(true)}
-        onExplainWord={setExplanationWord}
+        onExplainWord={(word) => {
+          pauseAudioForTooltip();
+          setExplanationWord(word);
+        }}
         activityLog={activityLog}
         onOpenSummary={handleOpenSummary}
       />
@@ -1685,7 +1660,10 @@ function Workspace({
         <WordExplanationModal 
           wordOrPhrase={explanationWord}
           user={user}
-          onClose={() => setExplanationWord(null)}
+          onClose={() => {
+            setExplanationWord(null);
+            resumeAudioAfterTooltip();
+          }}
         />
       )}
 
