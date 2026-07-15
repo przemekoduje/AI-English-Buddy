@@ -87,6 +87,10 @@ function Workspace({
   const contextMenuRef = useRef(null);
   const activeSelectionRangeRef = useRef(null);
   const activeSelectionTextRef = useRef(null);
+  // Tracks whether story playback was active when a word tooltip was opened
+  const wasPlayingBeforeTooltipRef = useRef(false);
+  // Tracks the chunk index at pause-for-tooltip moment
+  const pausedChunkIndexRef = useRef(-1);
   
   // Telemetry & summary states
   const [activityLog, setActivityLog] = useState([]);
@@ -364,9 +368,14 @@ function Workspace({
   }, [menuVisible]);
 
   const triggerSelectionTranslation = async (text, range) => {
-    if (currentAudioRef.current) {
+    // Pause story audio without destroying it so we can resume later
+    if (currentAudioRef.current && !currentAudioRef.current.paused) {
+      wasPlayingBeforeTooltipRef.current = true;
+      pausedChunkIndexRef.current = currentChunkIndex;
       currentAudioRef.current.pause();
-      currentAudioRef.current = null;
+      setIsPaused(true);
+    } else {
+      wasPlayingBeforeTooltipRef.current = false;
     }
 
     const rect = range.getBoundingClientRect();
@@ -767,6 +776,12 @@ function Workspace({
 
   const handleTranslate = async () => {
     if (!selectedText) return;
+    // Pause story audio so user can read the translation
+    if (currentAudioRef.current && !currentAudioRef.current.paused) {
+      wasPlayingBeforeTooltipRef.current = true;
+      currentAudioRef.current.pause();
+      setIsPaused(true);
+    }
     setActivityLog(prev => [
       ...prev,
       {
@@ -798,6 +813,23 @@ function Workspace({
     setActiveWordHighlight(null);
     setActiveWordId(null);
     setWordTooltipTranslation("");
+    // Restart playback from the beginning of the paused sentence
+    if (wasPlayingBeforeTooltipRef.current) {
+      const chunkToReplay = pausedChunkIndexRef.current;
+      wasPlayingBeforeTooltipRef.current = false;
+      pausedChunkIndexRef.current = -1;
+      // Stop current (paused) audio so speakChunk starts fresh
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+      if (chunkToReplay >= 0) {
+        speakChunk(chunkToReplay, false);
+      }
+    } else {
+      wasPlayingBeforeTooltipRef.current = false;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSaveWordFromTooltip = async () => {
@@ -829,9 +861,14 @@ function Workspace({
   };
 
   const handleWordClick = async (word, wordId, element, sentenceContext) => {
-    if (currentAudioRef.current) {
+    // Pause story audio without destroying it so we can resume after closing tooltip
+    if (currentAudioRef.current && !currentAudioRef.current.paused) {
+      wasPlayingBeforeTooltipRef.current = true;
+      pausedChunkIndexRef.current = currentChunkIndex;
       currentAudioRef.current.pause();
-      currentAudioRef.current = null;
+      setIsPaused(true);
+    } else {
+      wasPlayingBeforeTooltipRef.current = false;
     }
 
     const layoutEl = document.querySelector('.workspace-layout');
@@ -877,10 +914,9 @@ function Workspace({
 
   const handleSpeakWord = async (word) => {
     if (!word) return;
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current = null;
-    }
+    // Keep a reference to the paused story audio so we can restore it after word TTS finishes
+    const storyAudio = currentAudioRef.current;
+    const storyWasPaused = storyAudio ? storyAudio.paused : true;
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
         method: "POST",
@@ -894,9 +930,17 @@ function Workspace({
       const data = await response.json();
       if (data.audio_base64) {
         const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
-        const audio = new Audio(audioUrl);
-        currentAudioRef.current = audio;
-        audio.play();
+        const wordAudio = new Audio(audioUrl);
+        // Temporarily swap so we can play the word pronunciation
+        if (storyAudio && !storyWasPaused) storyAudio.pause();
+        wordAudio.play();
+        // After word pronunciation ends, restore story audio ref (do NOT auto-resume — user controls that)
+        wordAudio.onended = () => {
+          // Restore story audio reference so play/pause buttons still work
+          currentAudioRef.current = storyAudio;
+        };
+        // Temporarily point ref at word audio; don't lose story audio
+        // We store word audio separately and keep story audio ref intact
       }
     } catch (err) {
       console.error("Błąd TTS dla wyrazu:", err);
@@ -958,6 +1002,21 @@ function Workspace({
       }
     }
     setShowTranslationModal(false);
+    // Restart playback from the beginning of the paused sentence
+    if (wasPlayingBeforeTooltipRef.current) {
+      const chunkToReplay = pausedChunkIndexRef.current;
+      wasPlayingBeforeTooltipRef.current = false;
+      pausedChunkIndexRef.current = -1;
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+      if (chunkToReplay >= 0) {
+        speakChunk(chunkToReplay, false);
+      }
+    } else {
+      wasPlayingBeforeTooltipRef.current = false;
+    }
   };
 
   const handleAddDirectly = async () => {
@@ -1126,15 +1185,21 @@ function Workspace({
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "X-Session-Token": user.token
+          "X-Session-Token": user?.token || ""
         },
         body: JSON.stringify({ recipient_email: recipientEmail, notebook_words: notebookWords }),
       });
       if (response.ok) {
         alert("Email sent!");
         setShowSendEmailModal(false);
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        alert(errData.error || "Wystąpił błąd podczas wysyłania e-maila.");
       }
-    } catch (err) { console.error("Błąd email:", err); }
+    } catch (err) {
+      console.error("Błąd email:", err);
+      alert("Błąd połączenia z serwerem przy wysyłaniu e-maila.");
+    }
   };
 
   const handleOpenSummary = async () => {
@@ -1171,23 +1236,28 @@ function Workspace({
   };
 
   const handleSendSummaryEmail = async (email) => {
-    if (!summaryData) return false;
+    if (!summaryData) return { success: false, error: "Brak danych podsumowania." };
     try {
       const response = await fetch(`${API_BASE_URL}/api/send-summary-email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Session-Token": user.token
+          "X-Session-Token": user?.token || ""
         },
         body: JSON.stringify({
           recipient_email: email,
           summary: summaryData
         })
       });
-      return response.ok;
+      if (response.ok) {
+        return { success: true };
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        return { success: false, error: errData.error || "Nie udało się wysłać e-maila." };
+      }
     } catch (err) {
       console.error("Error sending summary email:", err);
-      return false;
+      return { success: false, error: "Błąd połączenia z serwerem przy wysyłaniu e-maila." };
     }
   };
 
@@ -1326,7 +1396,21 @@ function Workspace({
             <p><strong>{translationContent.original}</strong></p>
             <p>{translationContent.translated}</p>
             <button onClick={handleSaveToNotebook} className="btn-primary">Save to Notebook</button>
-            <button onClick={() => setShowTranslationModal(false)} className="btn-secondary">Close</button>
+            <button onClick={() => {
+              setShowTranslationModal(false);
+              if (wasPlayingBeforeTooltipRef.current) {
+                const chunkToReplay = pausedChunkIndexRef.current;
+                wasPlayingBeforeTooltipRef.current = false;
+                pausedChunkIndexRef.current = -1;
+                if (currentAudioRef.current) {
+                  currentAudioRef.current.pause();
+                  currentAudioRef.current = null;
+                }
+                if (chunkToReplay >= 0) speakChunk(chunkToReplay, false);
+              } else {
+                wasPlayingBeforeTooltipRef.current = false;
+              }
+            }} className="btn-secondary">Close</button>
           </div>
         </div>
       )}

@@ -13,10 +13,13 @@ const SessionSummaryModal = ({ summary, user, onClose, onSendEmail, onAddWord })
     setIsSending(true);
     setEmailStatus(null);
     try {
-      const success = await onSendEmail(email);
-      if (success) {
+      const result = await onSendEmail(email);
+      const isSuccess = typeof result === 'object' && result !== null ? result.success : Boolean(result);
+      const errorMsg = typeof result === 'object' && result !== null ? result.error : null;
+      if (isSuccess) {
         setEmailStatus("success");
       } else {
+        if (errorMsg) alert(errorMsg);
         setEmailStatus("error");
       }
     } catch (err) {

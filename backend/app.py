@@ -2330,7 +2330,7 @@ def generate_mnemonic(word_id):
 # ### NOWY ENDPOINT: WYSYŁANIE SŁÓW Z NOTATNIKA NA E-MAIL ###
 @app.route("/api/send-notebook-email", methods=['POST'])
 def send_notebook_email():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     recipient_email = data.get('recipient_email')
     notebook_words = data.get('notebook_words') # To będzie lista obiektów {original, translated}
 
@@ -2338,7 +2338,7 @@ def send_notebook_email():
         return jsonify({"error": "Adres e-mail odbiorcy i słowa z notatnika są wymagane."}), 400
     
     if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
-        return jsonify({"error": "Konfiguracja serwera pocztowego jest niekompletna. Skontaktuj się z administratorem."}), 500
+        return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Dodaj zmienne w panelu Render."}), 400
 
     email_body = "Oto Twoje słowa z notatnika AI English Buddy:\n\n"
     for entry in notebook_words:
@@ -2351,17 +2351,17 @@ def send_notebook_email():
     msg['To'] = recipient_email
 
     try:
-        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
+        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=15) as server:
             server.starttls() # Użyj TLS
             server.login(EMAIL_USERNAME, EMAIL_PASSWORD)
             server.send_message(msg)
         return jsonify({"message": "Słówka wysłane pomyślnie na e-mail."}), 200
     except smtplib.SMTPAuthenticationError as e:
         print(f"Błąd uwierzytelniania SMTP: {e}")
-        return jsonify({"error": "Błąd uwierzytelniania serwera pocztowego. Sprawdź login/hasło."}), 500
+        return jsonify({"error": "Błąd logowania do poczty. Dla konta Gmail musisz użyć Hasła Aplikacji (App Password) zamiast zwykłego hasła."}), 400
     except Exception as e:
         print(f"Błąd podczas wysyłania e-maila: {e}")
-        return jsonify({"error": f"Nie udało się wysłać e-maila: {e}"}), 500
+        return jsonify({"error": f"Nie udało się wysłać e-maila: {str(e)}"}), 500
 
 
 @app.route("/api/generate-summary", methods=['POST'])
@@ -2449,7 +2449,7 @@ def generate_summary():
 
 @app.route("/api/send-summary-email", methods=['POST'])
 def send_summary_email():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     recipient_email = data.get('recipient_email')
     summary = data.get('summary')
 
@@ -2457,7 +2457,7 @@ def send_summary_email():
         return jsonify({"error": "Adres e-mail odbiorcy i podsumowanie są wymagane."}), 400
     
     if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
-        return jsonify({"error": "Konfiguracja serwera pocztowego jest niekompletna. Skontaktuj się z administratorem."}), 500
+        return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Dodaj zmienne w panelu Render."}), 400
 
     listening_data = summary.get("listening_analysis", {})
     engagement_data = summary.get("engagement_analysis", {})
@@ -2545,17 +2545,17 @@ def send_summary_email():
     msg['To'] = recipient_email
 
     try:
-        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
+        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=15) as server:
             server.starttls()
             server.login(EMAIL_USERNAME, EMAIL_PASSWORD)
             server.send_message(msg)
         return jsonify({"message": "Podsumowanie wysłane pomyślnie na e-mail."}), 200
     except smtplib.SMTPAuthenticationError as e:
         print(f"Błąd uwierzytelniania SMTP: {e}")
-        return jsonify({"error": "Błąd uwierzytelniania serwera pocztowego. Sprawdź login/hasło."}), 500
+        return jsonify({"error": "Błąd logowania do poczty. Dla konta Gmail musisz użyć Hasła Aplikacji (App Password) zamiast zwykłego hasła."}), 400
     except Exception as e:
         print(f"Błąd wysyłania e-maila: {e}")
-        return jsonify({"error": f"Nie udało się wysłać e-maila: {e}"}), 500
+        return jsonify({"error": f"Nie udało się wysłać e-maila: {str(e)}"}), 500
 
 
 @app.route("/api/analyze-grammar", methods=['POST'])
@@ -3732,11 +3732,7 @@ def generate_chat_summary():
 
 @app.route("/api/send-chat-summary-email", methods=['POST'])
 def send_chat_summary_email():
-    user_email = get_user_from_request()
-    if not user_email:
-        return jsonify({"error": "Brak autoryzacji"}), 401
-
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
     recipient_email = data.get('recipient_email')
     summary = data.get('summary', {})
 
@@ -3744,7 +3740,7 @@ def send_chat_summary_email():
         return jsonify({"error": "Adres e-mail odbiorcy i podsumowanie są wymagane."}), 400
     
     if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
-        return jsonify({"error": "Konfiguracja serwera pocztowego jest niekompletna. Skontaktuj się z administratorem."}), 500
+        return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Dodaj zmienne w panelu Render."}), 400
 
     issues = summary.get("issues", [])
     vocabulary = summary.get("vocabulary", [])
@@ -3802,21 +3798,23 @@ def send_chat_summary_email():
     """
 
     try:
-        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-        server.starttls()
-        server.login(EMAIL_USERNAME, EMAIL_PASSWORD)
+        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=15) as server:
+            server.starttls()
+            server.login(EMAIL_USERNAME, EMAIL_PASSWORD)
 
-        msg = MIMEText(email_html, 'html', 'utf-8')
-        msg['Subject'] = f"Podsumowanie Lekcji Głosowej AI - {avg_score}/100"
-        msg['From'] = EMAIL_USERNAME
-        msg['To'] = recipient_email
+            msg = MIMEText(email_html, 'html', 'utf-8')
+            msg['Subject'] = f"Podsumowanie Lekcji Głosowej AI - {avg_score}/100"
+            msg['From'] = EMAIL_USERNAME
+            msg['To'] = recipient_email
 
-        server.sendmail(EMAIL_USERNAME, [recipient_email], msg.as_string())
-        server.quit()
+            server.sendmail(EMAIL_USERNAME, [recipient_email], msg.as_string())
         return jsonify({"message": "Wiadomość e-mail została wysłana."}), 200
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"Błąd uwierzytelniania SMTP: {e}")
+        return jsonify({"error": "Błąd logowania do poczty. Dla konta Gmail musisz użyć Hasła Aplikacji (App Password) zamiast zwykłego hasła."}), 400
     except Exception as e:
         print(f"Error sending chat summary email: {e}")
-        return jsonify({"error": f"Nie udało się wysłać e-maila: {e}"}), 500
+        return jsonify({"error": f"Nie udało się wysłać e-maila: {str(e)}"}), 500
 
 if __name__ == "__main__":
     # db.create_all() # Nie potrzebne dla Firestore, Firebase zarządza strukturą dokumentów

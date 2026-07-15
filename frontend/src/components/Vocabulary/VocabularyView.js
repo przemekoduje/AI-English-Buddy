@@ -187,10 +187,13 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
           setEmailStatus("");
         }, 2000);
       } else {
+        const errData = await response.json().catch(() => ({}));
+        if (errData.error) alert(errData.error);
         setEmailStatus("error");
       }
     } catch (err) {
       console.error(err);
+      alert("Błąd połączenia z serwerem przy wysyłaniu e-maila.");
       setEmailStatus("error");
     }
   };

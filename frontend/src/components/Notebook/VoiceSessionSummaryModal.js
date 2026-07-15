@@ -28,10 +28,13 @@ const VoiceSessionSummaryModal = ({ summary, user, onClose, onAddWord }) => {
       if (response.ok) {
         setEmailStatus("success");
       } else {
+        const errData = await response.json().catch(() => ({}));
+        if (errData.error) alert(errData.error);
         setEmailStatus("error");
       }
     } catch (err) {
       console.error("Error sending summary email:", err);
+      alert("Błąd połączenia z serwerem przy wysyłaniu e-maila.");
       setEmailStatus("error");
     } finally {
       setIsSending(false);
