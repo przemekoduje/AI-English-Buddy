@@ -1049,7 +1049,8 @@ export default function HomeScreen() {
         Alert.alert("Sukces", "E-mail z podsumowaniem został wysłany!");
         return true;
       } else {
-        Alert.alert("Błąd", "Nie udało się wysłać e-maila.");
+        const errData = await response.json().catch(() => ({}));
+        Alert.alert("Błąd", errData.error || "Nie udało się wysłać e-maila.");
       }
     } catch (err) {
       console.error("Error sending email:", err);
