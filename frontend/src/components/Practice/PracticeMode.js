@@ -24,6 +24,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const recognitionRef = useRef(null);
   const speechTranscriptRef = useRef("");
   const handleTogglePlayPauseRef = useRef(null);
+  const isPausedRef = useRef(false);
 
   useEffect(() => {
     prepareContent();
@@ -79,6 +80,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     setProgress(0);
     setIsPaused(false);
+    isPausedRef.current = false;
 
     if (index < 0 || index >= masteryData.length) {
       setIsSpeaking(false);
@@ -115,6 +117,10 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       if (!response.ok) throw new Error("TTS generation failed");
       const data = await response.json();
       if (!data.audio_base64) throw new Error("No audio data returned");
+
+      if (isPausedRef.current) {
+        return;
+      }
 
       const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
       const audio = new Audio(audioUrl);
@@ -286,11 +292,20 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     if (currentAudioRef.current) {
       if (isPaused || currentAudioRef.current.paused) {
         currentAudioRef.current.play();
+        setIsPaused(false);
+        setIsSpeaking(true);
       } else {
         currentAudioRef.current.pause();
+        setIsPaused(true);
+        isPausedRef.current = true;
       }
+    } else if (isSpeaking) {
+      setIsPaused(true);
+      isPausedRef.current = true;
+      setIsSpeaking(false);
     } else {
-      speakSentence(currentIndex === -1 ? 0 : currentIndex, currentLang, currentSegmentIndex);
+      const targetSegment = phase === 2 ? (currentSegmentIndex === -1 ? 0 : currentSegmentIndex) : -1;
+      speakSentence(currentIndex === -1 ? 0 : currentIndex, currentLang, targetSegment);
     }
   };
   handleTogglePlayPauseRef.current = handleTogglePlayPause;

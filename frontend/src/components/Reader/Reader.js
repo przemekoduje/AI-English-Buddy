@@ -24,7 +24,9 @@ const Reader = ({
   activeWordId,
 }) => {
   const [hoveredIndex, setHoveredIndex] = useState(null);
+  const [hoveredTokenIndex, setHoveredTokenIndex] = useState(null);
   const hoverTimerRef = useRef(null);
+  const hoveredTokenIndexRef = useRef(null);
 
   // Auto-scroll currently read sentence into view
   React.useEffect(() => {
@@ -37,7 +39,6 @@ const Reader = ({
   }, [currentChunkIndex]);
 
   const handleMouseEnter = (index) => {
-    // Only trigger hover controls on desktop pointer devices
     const isDesktop = window.matchMedia("(hover: hover)").matches;
     if (!isDesktop) return;
 
@@ -49,7 +50,30 @@ const Reader = ({
 
     hoverTimerRef.current = setTimeout(() => {
       setHoveredIndex(index);
-    }, 2000); // 2 seconds delay
+    }, 600); // 600ms responsive delay
+  };
+
+  const handleTokenHover = (index, tIdx) => {
+    const isDesktop = window.matchMedia("(hover: hover)").matches;
+    if (!isDesktop) return;
+
+    setHoveredTokenIndex(tIdx);
+    hoveredTokenIndexRef.current = tIdx;
+
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+    }
+
+    if (hoveredIndex === index) {
+      return;
+    }
+
+    hoverTimerRef.current = setTimeout(() => {
+      setHoveredIndex(index);
+      if (hoveredTokenIndexRef.current !== null) {
+        setHoveredTokenIndex(hoveredTokenIndexRef.current);
+      }
+    }, 600);
   };
 
   const handleMouseLeave = () => {
@@ -58,6 +82,8 @@ const Reader = ({
     }
     hoverTimerRef.current = setTimeout(() => {
       setHoveredIndex(null);
+      setHoveredTokenIndex(null);
+      hoveredTokenIndexRef.current = null;
     }, 300); // 300ms debounce
   };
 
@@ -127,9 +153,32 @@ const Reader = ({
           // Tokenize the sentence chunk into words and other characters
           const tokens = chunk.split(/([\w\u00C0-\u017F'-]+)/g);
 
-          // Find the index of the first word/token where we want to render the popup
+          // Find if there is an active highlighted word belonging to this sentence
+          let activeTokenIdx = -1;
+          if (activeWordId && activeWordId.startsWith(`chunk-${index}-token-`)) {
+            const parts = activeWordId.split('-token-');
+            if (parts.length === 2) {
+              activeTokenIdx = parseInt(parts[1], 10);
+            }
+          }
+
+          // Find the index of the first word/token as fallback
           const firstWordIdx = tokens.findIndex(token => /[\w\u00C0-\u017F'-]+/.test(token));
-          const popupTokenIdx = firstWordIdx !== -1 ? firstWordIdx : 0;
+          let popupTokenIdx = firstWordIdx !== -1 ? firstWordIdx : 0;
+
+          if (hoveredIndex === index && hoveredTokenIndex !== null && hoveredTokenIndex < tokens.length) {
+            let targetIdx = hoveredTokenIndex;
+            if (!/[\w\u00C0-\u017F'-]+/.test(tokens[targetIdx])) {
+              if (targetIdx > 0 && /[\w\u00C0-\u017F'-]+/.test(tokens[targetIdx - 1])) {
+                targetIdx = targetIdx - 1;
+              } else if (targetIdx + 1 < tokens.length && /[\w\u00C0-\u017F'-]+/.test(tokens[targetIdx + 1])) {
+                targetIdx = targetIdx + 1;
+              }
+            }
+            popupTokenIdx = targetIdx;
+          } else if (activeTokenIdx !== -1 && activeTokenIdx < tokens.length) {
+            popupTokenIdx = activeTokenIdx;
+          }
 
           const renderHoverPopup = () => (
             <span 
@@ -210,6 +259,7 @@ const Reader = ({
                     <span
                       key={tIdx}
                       className={`reader-word ${isHighlighted ? "active-highlight" : ""}`}
+                      onMouseEnter={() => handleTokenHover(index, tIdx)}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (onWordClick) {
@@ -226,6 +276,7 @@ const Reader = ({
                     <span 
                       key={tIdx}
                       style={isPopupTarget ? { position: "relative", display: "inline-block" } : undefined}
+                      onMouseEnter={() => handleTokenHover(index, tIdx)}
                     >
                       {token}
                       {isPopupTarget && renderHoverPopup()}

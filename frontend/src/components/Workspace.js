@@ -92,6 +92,9 @@ function Workspace({
   // Tracks the chunk index at pause-for-tooltip moment
   const pausedChunkIndexRef = useRef(-1);
   const speakChunkRef = useRef(null);
+  const isSpeakingRef = useRef(false);
+  const isPausedRef = useRef(false);
+  const currentChunkIndexRef = useRef(-1);
   
   // Telemetry & summary states
   const [activityLog, setActivityLog] = useState([]);
@@ -100,6 +103,7 @@ function Workspace({
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const explanationStartTimeRef = useRef(null);
   const prevExplanationWordRef = useRef(null);
+  const handlePlaybackRef = useRef(null);
 
   // Floating player dragging state & event handlers
   const [playerPosition, setPlayerPosition] = useState({ x: 0, y: 0 });
@@ -368,22 +372,43 @@ function Workspace({
     };
   }, [menuVisible]);
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) return;
+      if (e.key.toLowerCase() === 'p') {
+        if (showPracticeMode || showPracticeModal || showTranslationModal || explanationWord || showWordTooltip || showFlashcards || showSummaryModal) {
+          return;
+        }
+        e.preventDefault();
+        if (handlePlaybackRef.current) {
+          handlePlaybackRef.current();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showPracticeMode, showPracticeModal, showTranslationModal, explanationWord, showWordTooltip, showFlashcards, showSummaryModal]);
+
   const pauseAudioForTooltip = useCallback(() => {
-    if ((currentAudioRef.current && !currentAudioRef.current.paused) || (isSpeaking && !isPaused)) {
+    const audio = currentAudioRef.current;
+    if ((audio && !audio.paused) || (isSpeakingRef.current && !isPausedRef.current)) {
       wasPlayingBeforeTooltipRef.current = true;
-      pausedChunkIndexRef.current = currentChunkIndex;
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
+      pausedChunkIndexRef.current = currentChunkIndexRef.current >= 0 ? currentChunkIndexRef.current : 0;
+      if (audio) {
+        audio.pause();
       }
       setIsPaused(true);
+      isPausedRef.current = true;
     }
-  }, [currentChunkIndex, isSpeaking, isPaused]);
+  }, []);
 
   const resumeAudioAfterTooltip = useCallback(() => {
     if (wasPlayingBeforeTooltipRef.current) {
       const chunkToReplay = pausedChunkIndexRef.current;
       wasPlayingBeforeTooltipRef.current = false;
       pausedChunkIndexRef.current = -1;
+      isPausedRef.current = false;
+      setIsPaused(false);
       if (currentAudioRef.current) {
         currentAudioRef.current.pause();
         currentAudioRef.current = null;
@@ -700,8 +725,11 @@ function Workspace({
     }
 
     setCurrentChunkIndex(index);
+    currentChunkIndexRef.current = index;
     setIsSpeaking(true);
+    isSpeakingRef.current = true;
     setIsPaused(false);
+    isPausedRef.current = false;
     setPlaySingle(single);
 
     setActivityLog(prev => [
@@ -727,6 +755,10 @@ function Workspace({
       if (!response.ok) throw new Error("Failed to generate audio");
       const data = await response.json();
       if (!data.audio_base64) throw new Error("No audio data returned");
+
+      if (wasPlayingBeforeTooltipRef.current || isPausedRef.current) {
+        return;
+      }
 
       const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
       const audio = new Audio(audioUrl);
@@ -756,17 +788,26 @@ function Workspace({
   const handlePlayback = () => {
     if (!generatedText || textChunks.length === 0) return;
     if (currentAudioRef.current) {
-      if (isPaused) {
+      if (isPausedRef.current || currentAudioRef.current.paused) {
         currentAudioRef.current.play();
         setIsPaused(false);
+        isPausedRef.current = false;
       } else {
         currentAudioRef.current.pause();
         setIsPaused(true);
+        isPausedRef.current = true;
       }
+    } else if (isSpeakingRef.current) {
+      setIsPaused(true);
+      isPausedRef.current = true;
+      setIsSpeaking(false);
+      isSpeakingRef.current = false;
     } else {
-      speakChunk(currentChunkIndex === -1 || currentChunkIndex >= textChunks.length ? 0 : currentChunkIndex, false);
+      const idx = currentChunkIndexRef.current === -1 || currentChunkIndexRef.current >= textChunks.length ? 0 : currentChunkIndexRef.current;
+      speakChunk(idx, false);
     }
   };
+  handlePlaybackRef.current = handlePlayback;
 
   const handleStop = () => {
     if (currentAudioRef.current) {
@@ -774,8 +815,11 @@ function Workspace({
       currentAudioRef.current = null;
     }
     setIsSpeaking(false);
+    isSpeakingRef.current = false;
     setIsPaused(false);
+    isPausedRef.current = false;
     setCurrentChunkIndex(-1);
+    currentChunkIndexRef.current = -1;
     setPlaySingle(false);
   };
 
@@ -1307,7 +1351,7 @@ function Workspace({
           <button 
             className={`player-btn play-pause-btn ${isSpeaking && !isPaused ? 'playing' : ''}`}
             onClick={handlePlayback}
-            title={isSpeaking && !isPaused ? "Pauza" : "Odtwarzaj"}
+            title={isSpeaking && !isPaused ? "Pauza (Skrót: P)" : "Odtwarzaj (Skrót: P)"}
           >
             {isSpeaking && !isPaused ? (
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -1418,7 +1462,10 @@ function Workspace({
             {generatedText && (
               <div className="header-actions-group">
                 <button 
-                  onClick={() => setShowPracticeMode(true)} 
+                  onClick={() => {
+                    handleStop();
+                    setShowPracticeMode(true);
+                  }} 
                   className="header-action-text-btn mastery-btn" 
                   title="Mastery Path Training — ćwicz słownictwo z tej historii"
                 >
@@ -1681,7 +1728,10 @@ function Workspace({
         <PronunciationPracticeModal 
           targetText={practiceTargetText}
           user={user}
-          onClose={() => setShowPracticeModal(false)}
+          onClose={() => {
+            setShowPracticeModal(false);
+            resumeAudioAfterTooltip();
+          }}
           onLogActivity={(activity) => setActivityLog(prev => [...prev, activity])}
           onLogPronunciationError={handleLogPronunciationError}
         />
