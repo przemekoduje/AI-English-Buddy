@@ -10,6 +10,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(-1);
   const [isPreparing, setIsPreparing] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [currentLang, setCurrentLang] = useState("en");
   const [progress, setProgress] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
@@ -22,6 +23,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const audioChunksRef = useRef([]);
   const recognitionRef = useRef(null);
   const speechTranscriptRef = useRef("");
+  const handleTogglePlayPauseRef = useRef(null);
 
   useEffect(() => {
     prepareContent();
@@ -76,9 +78,11 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     }
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     setProgress(0);
+    setIsPaused(false);
 
     if (index < 0 || index >= masteryData.length) {
       setIsSpeaking(false);
+      setIsPaused(false);
       return;
     }
 
@@ -118,21 +122,32 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
       audio.onplay = () => {
         setIsSpeaking(true);
-        const startTime = Date.now();
+        setIsPaused(false);
+        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         
-        audio.addEventListener('loadedmetadata', () => {
-          const durationMs = (audio.duration || (textToSpeak.length * 0.085)) * 1000;
-          progressIntervalRef.current = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            const newProgress = Math.min((elapsed / durationMs) * 100, 100);
+        const updateProgress = () => {
+          if (!currentAudioRef.current || currentAudioRef.current.paused) return;
+          const duration = currentAudioRef.current.duration || (textToSpeak.length * 0.085);
+          if (duration > 0) {
+            const newProgress = Math.min((currentAudioRef.current.currentTime / duration) * 100, 100);
             setProgress(newProgress);
-            if (newProgress >= 100) clearInterval(progressIntervalRef.current);
-          }, 50);
-        });
+            if (newProgress >= 100) {
+              if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+            }
+          }
+        };
+
+        progressIntervalRef.current = setInterval(updateProgress, 50);
+      };
+
+      audio.onpause = () => {
+        setIsPaused(true);
+        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       };
 
       audio.onended = () => {
         setIsSpeaking(false);
+        setIsPaused(false);
         setProgress(100);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         currentAudioRef.current = null;
@@ -140,6 +155,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
       audio.onerror = () => {
         setIsSpeaking(false);
+        setIsPaused(false);
         setProgress(0);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         currentAudioRef.current = null;
@@ -266,12 +282,42 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     if (currentIndex !== -1) speakSentence(currentIndex, currentLang, currentSegmentIndex);
   };
 
+  const handleTogglePlayPause = () => {
+    if (currentAudioRef.current) {
+      if (isPaused || currentAudioRef.current.paused) {
+        currentAudioRef.current.play();
+      } else {
+        currentAudioRef.current.pause();
+      }
+    } else {
+      speakSentence(currentIndex === -1 ? 0 : currentIndex, currentLang, currentSegmentIndex);
+    }
+  };
+  handleTogglePlayPauseRef.current = handleTogglePlayPause;
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) return;
+      if (e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        if (handleTogglePlayPauseRef.current) {
+          handleTogglePlayPauseRef.current();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   const changePhase = (newPhase) => {
     setPhase(newPhase);
     setSubPhase(1);
     setCurrentIndex(0);
     setCurrentSegmentIndex(newPhase === 2 ? 0 : -1);
     setIsSpeaking(false);
+    setIsPaused(false);
     setEvaluation(null);
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
@@ -384,11 +430,25 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                     )}
                   </button>
                 ) : (
-                  <button className="ctrl-btn repeat" onClick={handleRepeat}>
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                    </svg>
-                  </button>
+                  <>
+                    <button className="ctrl-btn play-pause" onClick={handleTogglePlayPause} title="Odtwarzaj / Pauza (Skrót klawiaturowy: P)">
+                      {isSpeaking && !isPaused ? (
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                          <rect x="6" y="4" width="4" height="16" rx="1" />
+                          <rect x="14" y="4" width="4" height="16" rx="1" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                      )}
+                    </button>
+                    <button className="ctrl-btn repeat" onClick={handleRepeat} title="Powtórz">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                      </svg>
+                    </button>
+                  </>
                 )}
                 <button className="ctrl-btn next-main" onClick={handleNext} disabled={currentIndex === masteryData.length - 1 && (phase !== 2 || currentSegmentIndex === masteryData[currentIndex].segments?.length - 1)}>
                   Dalej
