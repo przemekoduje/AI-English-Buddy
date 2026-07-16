@@ -11,6 +11,21 @@ import WordExplanationModal from "./Notebook/WordExplanationModal";
 import SessionSummaryModal from "./Notebook/SessionSummaryModal";
 import PronunciationPracticeModal from "./Notebook/PronunciationPracticeModal";
 
+const getTopicIcon = (topicName) => {
+  if (!topicName) return "✨";
+  const t = topicName.toLowerCase();
+  if (t.includes("business")) return "💼";
+  if (t.includes("discovery")) return "🚀";
+  if (t.includes("ai") || t.includes("tech")) return "🤖";
+  if (t.includes("nature") || t.includes("environment")) return "🌿";
+  if (t.includes("history") || t.includes("past")) return "🏛️";
+  if (t.includes("science")) return "🔬";
+  if (t.includes("travel")) return "✈️";
+  if (t.includes("culture") || t.includes("art")) return "🎨";
+  if (t.includes("health") || t.includes("sport")) return "💪";
+  return "✨";
+};
+
 const GENERATION_PHASES = [
   { label: "Analizuję temat...",        targetPct: 12, durationMs: 1800  },
   { label: "Tworzę strukturę lekcji...", targetPct: 28, durationMs: 2800  },
@@ -693,6 +708,44 @@ function Workspace({
       }
     } catch (error) {
       console.error("Błąd generowania lekcji domyślnej:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const pasteStory = async (pastedText, customTitle = "") => {
+    handleStop();
+    setIsLoading(true);
+    setGeneratedText("");
+    setCurrentStoryTitle("");
+    setCurrentStoryId(null);
+    setStoryParts([]);
+    setActivePartIndex(-1);
+    setLoadedRootId(null);
+    setIsContinuing(false);
+    setContinuationDetails("");
+    setSelectedContinuationTopics([]);
+
+    try {
+      const title = customTitle.trim() || "Imported Practice Text";
+      setGeneratedText(pastedText);
+      setCurrentStoryTitle(title);
+      // Automatycznie zapisz wklejony tekst w bazie danych na serwerze (identycznie jak AI)
+      const savedStory = await saveStoryToDb(title, pastedText);
+      if (savedStory && savedStory.id) {
+        const newPart = {
+          id: savedStory.id,
+          title: title,
+          text: pastedText,
+          part_number: 1
+        };
+        setStoryParts([newPart]);
+        setActivePartIndex(0);
+        setLoadedRootId(savedStory.id);
+        setCurrentStoryId(savedStory.id);
+      }
+    } catch (error) {
+      console.error("Błąd podczas zapisywania wklejonego tekstu:", error);
     } finally {
       setIsLoading(false);
     }
@@ -1557,20 +1610,25 @@ function Workspace({
                 </div>
                 
                 <div className="topic-grid">
-                  {suggestedTopics.map((topic) => (
-                    <button
-                      key={topic}
-                      onClick={() => {
-                        setSelectedContinuationTopics(prev => 
-                          prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
-                        );
-                      }}
-                      className={`topic-chip ${selectedContinuationTopics.includes(topic) ? "selected" : ""}`}
-                      disabled={isLoading}
-                    >
-                      {topic}
-                    </button>
-                  ))}
+                  {suggestedTopics.map((topic) => {
+                    const isSelected = selectedContinuationTopics.includes(topic);
+                    return (
+                      <button
+                        key={topic}
+                        onClick={() => {
+                          setSelectedContinuationTopics(prev => 
+                            prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
+                          );
+                        }}
+                        className={`topic-chip ${isSelected ? "selected" : ""}`}
+                        disabled={isLoading}
+                      >
+                        <span className="topic-chip-icon">{getTopicIcon(topic)}</span>
+                        <span className="topic-chip-text">{topic}</span>
+                        {isSelected && <span className="topic-chip-check">✓</span>}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div className="details-composer">
@@ -1607,6 +1665,7 @@ function Workspace({
           <StoryGenerator 
             onGenerate={generateStory} 
             onGenerateDefault={generateDefaultText}
+            onPasteText={pasteStory}
             isLoading={isLoading} 
             suggestedTopics={suggestedTopics} 
             user={user}
@@ -1633,6 +1692,7 @@ function Workspace({
             showVoiceControls={showVoiceControls}
             onWordClick={handleWordClick}
             activeWordId={activeWordId}
+            user={user}
           />
         )}
       </main>

@@ -11,7 +11,25 @@ const GENERATION_PHASES = [
   { label: "Prawie gotowe...",           targetPct: 95, durationMs: 4000  },
 ];
 
-const StoryGenerator = ({ onGenerate, onGenerateDefault, isLoading, suggestedTopics, user }) => {
+const getTopicIcon = (topicName) => {
+  if (!topicName) return "✨";
+  const t = topicName.toLowerCase();
+  if (t.includes("business")) return "💼";
+  if (t.includes("discovery")) return "🚀";
+  if (t.includes("ai") || t.includes("tech")) return "🤖";
+  if (t.includes("nature") || t.includes("environment")) return "🌿";
+  if (t.includes("history") || t.includes("past")) return "🏛️";
+  if (t.includes("science")) return "🔬";
+  if (t.includes("travel")) return "✈️";
+  if (t.includes("culture") || t.includes("art")) return "🎨";
+  if (t.includes("health") || t.includes("sport")) return "💪";
+  return "✨";
+};
+
+const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading, suggestedTopics, user }) => {
+  const [activeTab, setActiveTab] = useState("ai");
+  const [pastedTitle, setPastedTitle] = useState("");
+  const [pastedText, setPastedText] = useState("");
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [customDetails, setCustomDetails] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -148,22 +166,49 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, isLoading, suggestedTop
 
       {!isLoading && (
       <>
+      <div className="generator-top-tabs">
+        <button
+          type="button"
+          className={`gen-tab-btn ${activeTab === "ai" ? "active" : ""}`}
+          onClick={() => setActiveTab("ai")}
+        >
+          <span className="gen-tab-icon">✨</span>
+          <span>AI Lesson Generator</span>
+        </button>
+        <button
+          type="button"
+          className={`gen-tab-btn ${activeTab === "paste" ? "active" : ""}`}
+          onClick={() => setActiveTab("paste")}
+        >
+          <span className="gen-tab-icon">📋</span>
+          <span>...or Paste External Text</span>
+          <span className="gen-tab-badge">Instant Practice</span>
+        </button>
+      </div>
+
+      {activeTab === "ai" ? (
+      <>
       <div className="generator-header">
         <h2>Generate Your Story</h2>
         <p>Choose topics and add details to create a unique learning experience.</p>
       </div>
 
       <div className="topic-grid">
-        {suggestedTopics.map((topic) => (
-          <button
-            key={topic}
-            onClick={() => handleTopicToggle(topic)}
-            className={`topic-chip ${selectedTopics.includes(topic) ? "selected" : ""}`}
-            disabled={isLoading}
-          >
-            {topic}
-          </button>
-        ))}
+        {suggestedTopics.map((topic) => {
+          const isSelected = selectedTopics.includes(topic);
+          return (
+            <button
+              key={topic}
+              onClick={() => handleTopicToggle(topic)}
+              className={`topic-chip ${isSelected ? "selected" : ""}`}
+              disabled={isLoading}
+            >
+              <span className="topic-chip-icon">{getTopicIcon(topic)}</span>
+              <span className="topic-chip-text">{topic}</span>
+              {isSelected && <span className="topic-chip-check">✓</span>}
+            </button>
+          );
+        })}
       </div>
 
       <div className="settings-toggle-container">
@@ -372,6 +417,89 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, isLoading, suggestedTop
           )}
         </button>
       </div>
+
+      <div className="paste-quick-trigger-banner" onClick={() => setActiveTab("paste")}>
+        <div className="trigger-content">
+          <span className="trigger-icon">📋</span>
+          <div>
+            <strong>...or paste text</strong> from external sources (articles, emails, books)
+            <p>Click here to import your own text with full interactive vocabulary & TTS →</p>
+          </div>
+        </div>
+      </div>
+      </>
+      ) : (
+      <div className="paste-mode-panel glass-panel">
+        <div className="paste-header">
+          <h3>📋 ...or paste text (Import External Content)</h3>
+          <p>Got an article from BBC News, a business report, or a story excerpt? Paste it below! We will save it to your server library and give you instant access to interactive word definitions, neural TTS pronunciation, grammar checks, and flashcards—just like an AI-generated lesson.</p>
+        </div>
+
+        <div className="paste-form-group">
+          <label htmlFor="pasted-title-input">Story or Article Title (Optional)</label>
+          <input
+            id="pasted-title-input"
+            type="text"
+            className="premium-text-input"
+            placeholder="e.g. BBC News: Deep Ocean Biology, My English Essay..."
+            value={pastedTitle}
+            onChange={(e) => setPastedTitle(e.target.value)}
+            disabled={isLoading}
+          />
+        </div>
+
+        <div className="paste-form-group">
+          <label htmlFor="pasted-text-textarea" className="paste-textarea-label">
+            <span>Paste English Content Here:</span>
+            {pastedText && (
+              <span className="paste-counter-badge">
+                {pastedText.trim().split(/\s+/).filter(Boolean).length} words | {pastedText.length} chars
+              </span>
+            )}
+          </label>
+          <textarea
+            id="pasted-text-textarea"
+            className="paste-textarea"
+            value={pastedText}
+            onChange={(e) => setPastedText(e.target.value)}
+            placeholder="Paste your ready-made external text right here... Any word you click while reading will be explained and automatically saved to your notebook!"
+            rows="12"
+            disabled={isLoading}
+          />
+        </div>
+
+        <div className="paste-actions">
+          <button
+            type="button"
+            className="load-pasted-btn"
+            onClick={() => {
+              if (!pastedText.trim()) {
+                alert("Please paste some text before starting practice mode.");
+                return;
+              }
+              if (onPasteText) {
+                onPasteText(pastedText, pastedTitle);
+              }
+            }}
+            disabled={isLoading || !pastedText.trim()}
+          >
+            <span className="btn-icon">🚀</span>
+            <span>Save to Server & Start Practicing</span>
+          </button>
+          <button
+            type="button"
+            className="paste-clear-btn"
+            onClick={() => {
+              setPastedText("");
+              setPastedTitle("");
+            }}
+            disabled={isLoading || (!pastedText && !pastedTitle)}
+          >
+            Clear Text
+          </button>
+        </div>
+      </div>
+      )}
       </>
       )}
     </div>

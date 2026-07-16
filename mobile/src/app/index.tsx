@@ -126,7 +126,7 @@ const getInitialBackendUrl = () => {
       return 'https://ai-english-buddy-backend.onrender.com';
     }
   }
-  return 'http://192.168.100.24:5001';
+  return 'https://full-walls-think.loca.lt'; // Tunel LocalTunnel
 };
 
 export default function HomeScreen() {
@@ -1156,8 +1156,8 @@ export default function HomeScreen() {
       try {
         const storedUser = await AsyncStorage.getItem('buddy_user');
         let storedIP = await AsyncStorage.getItem('buddy_backend_url');
-        if (storedIP && storedIP.startsWith('http://192.168.') && !storedIP.includes('192.168.100.24')) {
-          storedIP = 'http://192.168.100.24:5001';
+        if (storedIP && storedIP.startsWith('http://192.168.')) {
+          storedIP = 'https://full-walls-think.loca.lt';
           await AsyncStorage.setItem('buddy_backend_url', storedIP);
         }
 

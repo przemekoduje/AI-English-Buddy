@@ -571,6 +571,26 @@ def generate_mock_ai_content(user_prompt, system_prompt=""):
         
     # 8. Generate Story (default)
     else:
+        if "bilingual reading lesson" in user_prompt_lower or "section 1" in system_prompt.lower() or "mindfulness" in user_prompt_lower:
+            title = "Mindfulness in the Workplace: Focus and Well-being"
+            story = (
+                "Section 1\n"
+                "Mindfulness is more than just a buzzword; it is a powerful tool that can significantly enhance productivity and well-being in the workplace. By adopting mindfulness practices, individuals can improve their focus, reduce stress, and foster a more collaborative environment. Mindfulness encourages employees to stay present in their tasks, which helps to minimize distractions and increases overall efficiency. As workplaces become more demanding and fast-paced, the integration of mindfulness can serve as a necessary counterbalance to the chaos of modern job demands.\n\n"
+                "In addition to personal benefits, cultivating a culture of mindfulness can positively impact team dynamics and organizational health. When employees practice mindfulness, they develop greater emotional intelligence and empathy, leading to improved communication and stronger relationships among colleagues. This heightened awareness not only enhances individual performance but also paves the way for a more cohesive and innovative team. Therefore, incorporating mindfulness into workplace routines is an essential strategy for fostering a thriving and resilient workforce.\n\n"
+                "Polish Translation\n"
+                "Mindfulness to coś więcej niż modne hasło; to potężne narzędzie, które może znacznie poprawić produktywność i dobrostan w miejscu pracy. Przyjmując praktyki uważności, osoby mogą poprawić swoją koncentrację, zredukować stres i sprzyjać bardziej współpracującemu środowisku. Uważność zachęca pracowników do pozostawania obecnymi w swoich zadaniach, co pomaga zminimalizować rozproszenia i zwiększa ogólną wydajność. W miarę jak miejsca pracy stają się coraz bardziej wymagające i szybkie, integracja mindfulness może być koniecznym przeciwwagą dla chaosu nowoczesnych wymagań zawodowych.\n\n"
+                "Oprócz korzyści indywidualnych, kultywowanie kultury uważności może pozytywnie wpływać na dynamikę zespołu i zdrowie organizacyjne. Kiedy pracownicy praktykują mindfulness, rozwijają większą inteligencję emocjonalną i empatię, co prowadzi do lepszej komunikacji i silniejszych relacji wśród kolegów. Ta podwyższona świadomość nie tylko poprawia indywidualną wydajność, ale także toruje drogę do bardziej spójnego i innowacyjnego zespołu. Dlatego włączenie mindfulness do codziennych rutyn w miejscu pracy jest kluczową strategią wspierania kwitnącej i odpornej siły roboczej.\n\n"
+                "Section 2\n"
+                "Paragraph 1\n"
+                "Mindfulness to coś więcej niż modne hasło (Mindfulness is more than just a buzzword); to potężne narzędzie (it is a powerful tool), które może znacznie poprawić produktywność i dobrostan w miejscu pracy (that can significantly enhance productivity and well-being in the workplace). Przyjmując praktyki uważności (By adopting mindfulness practices), osoby mogą poprawić swoją koncentrację (individuals can improve their focus), zredukować stres (reduce stress), i sprzyjać bardziej współpracującemu środowisku (and foster a more collaborative environment). Uważność zachęca pracowników do pozostawania obecnymi w swoich zadaniach (Mindfulness encourages employees to stay present in their tasks), co pomaga zminimalizować rozproszenia i zwiększa ogólną wydajność (which helps to minimize distractions and increases overall efficiency). W miarę jak miejsca pracy stają się coraz bardziej wymagające i szybkie (As workplaces become more demanding and fast-paced), integracja mindfulness może być koniecznym przeciwwagą (the integration of mindfulness can serve as a necessary counterbalance) dla chaosu nowoczesnych wymagań zawodowych (to the chaos of modern job demands).\n\n"
+                "Paragraph 2\n"
+                "Oprócz korzyści indywidualnych (In addition to personal benefits), kultywowanie kultury uważności (cultivating a culture of mindfulness) może pozytywnie wpływać na dynamikę zespołu i zdrowie organizacyjne (can positively impact team dynamics and organizational health). Kiedy pracownicy praktykują mindfulness (When employees practice mindfulness), rozwijają większą inteligencję emocjonalną i empatię (they develop greater emotional intelligence and empathy), co prowadzi do lepszej komunikacji i silniejszych relacji wśród kolegów (leading to improved communication and stronger relationships among colleagues). Ta podwyższona świadomość (This heightened awareness) nie tylko poprawia indywidualną wydajność (not only enhances individual performance), ale także toruje drogę do bardziej spójnego i innowacyjnego zespołu (but also paves the way for a more cohesive and innovative team). Dlatego włączenie mindfulness do codziennych rutyn w miejscu pracy (Therefore, incorporating mindfulness into workplace routines) jest kluczową strategią (is an essential strategy) wspierania kwitnącej i odpornej siły roboczej (for fostering a thriving and resilient workforce)."
+            )
+            return json.dumps({
+                "title": title,
+                "story": story
+            }, ensure_ascii=False)
+
         topics = []
         for t in PREDEFINED_TOPICS:
             if t.lower() in user_prompt_lower:
@@ -1798,10 +1818,14 @@ def generate_default_text():
         "You are an expert English teacher writing custom educational texts for learners of English. "
         "Your response MUST be in JSON format with exactly two keys: 'title' and 'story'. "
         "Do NOT write any text before or after the JSON structure. Respond ONLY with valid JSON.\n\n"
+        "CRITICAL AND MANDATORY RULE FOR SECTION 2:\n"
+        "In Section 2, you MUST NOT summarize, shorten, simplify, or write new sentences. "
+        "The English phrases inside parentheses in Section 2 Paragraph 1 MUST be taken word-for-word from the exact sentences of Section 1 Paragraph 1, without skipping or changing any words. "
+        "And the English phrases inside parentheses in Section 2 Paragraph 2 MUST be taken word-for-word from the exact sentences of Section 1 Paragraph 2, without skipping or changing any words.\n\n"
         "Example format:\n"
         "{\n"
-        "  \"title\": \"The Art of Focus: Deep Work in a Distracted World\",\n"
-        "  \"story\": \"Section 1\\nFirst paragraph of English text...\\n\\nSecond paragraph of English text...\\n\\nPolish Translation\\nFirst paragraph of Polish translation...\\n\\nSecond paragraph of Polish translation...\\n\\nSection 2\\nParagraph 1\\nPolish phrase with English equivalent in parentheses, next Polish phrase with English equivalent in parentheses...\\n\\nParagraph 2\\nPolish phrase with English equivalent in parentheses, next Polish phrase with English equivalent in parentheses...\"\n"
+        "  \"title\": \"Mindfulness in the Workplace: Focus and Well-being\",\n"
+        "  \"story\": \"Section 1\\nMindfulness is more than just a buzzword; it is a powerful tool that can significantly enhance productivity and well-being in the workplace. By adopting mindfulness practices, individuals can improve their focus, reduce stress, and foster a more collaborative environment.\\n\\nIn addition to personal benefits, cultivating a culture of mindfulness can positively impact team dynamics and organizational health. When employees practice mindfulness, they develop greater emotional intelligence and empathy, leading to improved communication.\\n\\nPolish Translation\\nMindfulness to coś więcej niż modne hasło; to potężne narzędzie, które może znacznie poprawić produktywność i dobrostan w miejscu pracy. Przyjmując praktyki uważności, osoby mogą poprawić swoją koncentrację, zredukować stres i sprzyjać bardziej współpracującemu środowisku.\\n\\nOprócz korzyści indywidualnych, kultywowanie kultury uważności może pozytywnie wpływać na dynamikę zespołu i zdrowie organizacyjne. Kiedy pracownicy praktykują mindfulness, rozwijają większą inteligencję emocjonalną i empatię, co prowadzi do lepszej komunikacji.\\n\\nSection 2\\nParagraph 1\\nMindfulness to coś więcej niż modne hasło (Mindfulness is more than just a buzzword); to potężne narzędzie (it is a powerful tool), które może znacznie poprawić produktywność i dobrostan w miejscu pracy (that can significantly enhance productivity and well-being in the workplace). Przyjmując praktyki uważności (By adopting mindfulness practices), osoby mogą poprawić swoją koncentrację (individuals can improve their focus), zredukować stres (reduce stress), i sprzyjać bardziej współpracującemu środowisku (and foster a more collaborative environment).\\n\\nParagraph 2\\nOprócz korzyści indywidualnych (In addition to personal benefits), kultywowanie kultury uważności (cultivating a culture of mindfulness) może pozytywnie wpływać na dynamikę zespołu i zdrowie organizacyjne (can positively impact team dynamics and organizational health). Kiedy pracownicy praktykują mindfulness (When employees practice mindfulness), rozwijają większą inteligencję emocjonalną i empatię (they develop greater emotional intelligence and empathy), co prowadzi do lepszej komunikacji (leading to improved communication).\"\n"
         "}"
     )
 
@@ -1813,9 +1837,9 @@ def generate_default_text():
         "2. Next, write the header 'Polish Translation' followed by the full Polish translation of those 2 paragraphs, matching them paragraph-for-paragraph.\n"
         "3. Next, write the header 'Section 2' followed by details for Paragraph 1 and Paragraph 2:\n"
         "   - Write 'Paragraph 1' on its own line.\n"
-        "   - Immediately follow with a clause-by-clause or phrase-by-phrase bilingual breakdown of Paragraph 1, translating longer and meaningful phrases/clauses (do NOT translate word-by-word). Each Polish phrase/clause must be followed by its exact English translation in parentheses, like: Polish phrase (English translation), next Polish phrase (English translation).\n"
+        "   - CRITICAL REQUIREMENT FOR PARAGRAPH 1: You MUST take the EXACT SAME English sentences from Section 1 Paragraph 1 word-for-word. Do NOT summarize, shorten, simplify, or rewrite anything! Break down every single sentence from Section 1 Paragraph 1 into logical phrase/clause pairs in this exact format: Polish phrase (English phrase), next Polish phrase (next English phrase). When all English phrases in Section 2 Paragraph 1 are read together sequentially, they MUST form the exact original text of Section 1 Paragraph 1 without skipping a single word.\n"
         "   - Write 'Paragraph 2' on its own line.\n"
-        "   - Immediately follow with a clause-by-clause or phrase-by-phrase bilingual breakdown of Paragraph 2, using the same format with longer and meaningful phrases/clauses: Polish phrase (English translation), next Polish phrase (English translation).\n"
+        "   - CRITICAL REQUIREMENT FOR PARAGRAPH 2: You MUST take the EXACT SAME English sentences from Section 1 Paragraph 2 word-for-word. Do NOT summarize, shorten, simplify, or rewrite anything! Break down every single sentence from Section 1 Paragraph 2 into logical phrase/clause pairs in this exact format: Polish phrase (English phrase), next Polish phrase (next English phrase). When all English phrases in Section 2 Paragraph 2 are read together sequentially, they MUST form the exact original text of Section 1 Paragraph 2 without skipping a single word.\n"
         "4. Do NOT include any repeated sections like 'English Version (For Listening Reinforcement)' at the end.\n"
         "Ensure all section headers ('Section 1', 'Polish Translation', 'Section 2', 'Paragraph 1', 'Paragraph 2') are clearly separated by double newlines (\\n\\n) and are on their own lines without any other text. Do NOT use markdown bold/italic formatting or bullet points in the headers."
     )
@@ -2650,6 +2674,20 @@ def prepare_mastery_content():
     if not text:
         return jsonify({"error": "Tekst jest wymagany."}), 400
 
+    if "Section 1" in text and ("Polish Translation" in text or "Section 2" in text):
+        s1_idx = text.find("Section 1")
+        start = s1_idx + len("Section 1") if s1_idx != -1 else 0
+        pt_idx = text.find("Polish Translation", start)
+        s2_idx = text.find("Section 2", start)
+        end = len(text)
+        if pt_idx != -1:
+            end = pt_idx
+        elif s2_idx != -1:
+            end = s2_idx
+        clean_en = text[start:end].strip()
+        if clean_en:
+            text = clean_en
+
     try:
         # Prompt prosi AI o podział tekstu na zdania i tłumaczenie każdego z nich.
         mastery_prompt = f"""
@@ -2849,121 +2887,134 @@ def evaluate_mastery():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+def clean_tts_text(text):
+    if not text:
+        return ""
+    # Strip markdown bold/italics symbols
+    cleaned = re.sub(r'\*+', '', text)
+    cleaned = re.sub(r'\_+', '', text)
+    # Strip outer or leftover parens / brackets if they surround the segment
+    cleaned = re.sub(r'^[\(\[\{]+|[\)\]\}]+$', '', cleaned.strip())
+    # Clean multiple whitespace
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
 def is_polish(text):
-    # If it contains Polish specific characters, it's almost certainly Polish:
-    if re.search(r'[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]', text):
-        return True
+    if not text or not text.strip():
+        return False
+        
+    common_pl = {
+        'jest', 'na', 'to', 'się', 'w', 'z', 'o', 'i', 'po', 'jak', 'tak', 'nie', 'dla', 'do', 'od', 'za', 'ze', 'co', 'tym', 'też', 'proszę', 'przetłumacz', 'napisz', 'powtórz', 'zdanie', 'słowo', 'dobrze', 'źle', 'poprawnie', 'polsku', 'angielsku', 'języku',
+        'gdy', 'rozpoczyna', 'druga', 'połowa', 'lipca', 'poświęcenie', 'czasu', 'planowanie', 'finansów', 'osobistych', 'wysoce', 'skutecznym', 'sposobem', 'zredukowanie', 'stresu', 'zbudowanie', 'długoterminowego', 'bezpieczeństwa',
+        'ale', 'albo', 'lub', 'czy', 'że', 'aby', 'żeby', 'jeśli', 'jeżeli', 'ponieważ', 'dlatego', 'kiedy', 'gdzie', 'dlaczego', 'jaki', 'jaka', 'jakie', 'który', 'która', 'które', 'jego', 'jej', 'ich', 'może', 'móc', 'musieć', 'chcieć',
+        'ja', 'ty', 'on', 'ona', 'ono', 'my', 'wy', 'oni', 'one', 'mnie', 'mi', 'cię', 'ci', 'go', 'mu', 'nam', 'wam', 'im', 'ten', 'ta', 'te', 'tam', 'tu', 'tutaj', 'wtedy', 'teraz', 'dzisiaj', 'jutro', 'wczoraj', 'zawsze', 'nigdy', 'często', 'rzadko', 'bardzo', 'dużo', 'mało', 'wszystko', 'nic', 'każdy', 'żaden',
+        'lekcja', 'ćwiczenie', 'pytanie', 'odpowiedź', 'przykład', 'rozmowa', 'lektor', 'język', 'słownik', 'gramatyka', 'wymowa', 'tekst', 'artykuł', 'opowiadanie', 'historia', 'temat', 'poziom', 'słowa', 'zwróć', 'uwagę', 'pamiętaj', 'warto', 'należy', 'trzeba', 'można', 'podczas', 'oraz', 'albo', 'lub', 'czyli', 'więc'
+    }
+    common_en = {
+        'is', 'the', 'a', 'an', 'and', 'to', 'in', 'on', 'of', 'for', 'with', 'you', 'your', 'i', 'me', 'my', 'that', 'this', 'it', 'was', 'were', 'have', 'has', 'had', 'english', 'translate', 'sentence', 'word', 'say', 'how',
+        'as', 'second', 'half', 'july', 'begins', 'dedicating', 'time', 'planning', 'personal', 'finances', 'highly', 'effective', 'way', 'reduce', 'stress', 'build', 'long', 'term', 'security',
+        'but', 'or', 'if', 'when', 'where', 'why', 'what', 'who', 'whom', 'whose', 'which', 'because', 'so', 'then', 'than', 'while', 'although', 'though', 'until', 'unless', 'since', 'about', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'from', 'up', 'down', 'out', 'off', 'over', 'under', 'again', 'further',
+        'he', 'she', 'we', 'they', 'him', 'her', 'us', 'them', 'his', 'hers', 'ours', 'theirs', 'its', 'these', 'those', 'here', 'there', 'now', 'today', 'tomorrow', 'yesterday', 'always', 'never', 'often', 'rarely', 'very', 'much', 'many', 'more', 'most', 'some', 'any', 'no', 'all', 'both', 'each', 'few', 'other', 'another',
+        'can', 'could', 'will', 'would', 'shall', 'should', 'may', 'might', 'must', 'do', 'does', 'did', 'done', 'am', 'are', 'been', 'being', 'get', 'got', 'make', 'made', 'take', 'took', 'see', 'saw', 'come', 'came', 'go', 'went', 'know', 'knew', 'think', 'thought', 'look', 'want', 'give', 'use', 'find', 'tell', 'ask', 'work', 'seem', 'feel', 'try', 'leave', 'call', 'visited', 'professor', 'city', 'country', 'world', 'famous', 'during', 'who', 'which', 'what', 'where'
+    }
     
-    # Check words
-    common_pl = {'jest', 'na', 'to', 'się', 'w', 'z', 'o', 'i', 'po', 'jak', 'tak', 'nie', 'dla', 'do', 'od', 'za', 'ze', 'co', 'tym', 'też', 'proszę', 'przetłumacz', 'napisz', 'powtórz', 'zdanie', 'słowo', 'dobrze', 'źle', 'poprawnie', 'polsku', 'angielsku', 'języku'}
-    common_en = {'is', 'the', 'a', 'an', 'and', 'to', 'in', 'on', 'of', 'for', 'with', 'you', 'your', 'i', 'me', 'my', 'that', 'this', 'it', 'was', 'were', 'have', 'has', 'had', 'english', 'translate', 'sentence', 'word', 'say', 'how'}
-    
-    words = re.findall(r'\b\w+\b', text.lower())
+    words = re.findall(r'\b[a-zA-ZżźćńółęąśŻŹĆŃÓŁĘĄŚ]+\b', text.lower())
     if not words:
         return False
         
     pl_count = sum(1 for w in words if w in common_pl)
     en_count = sum(1 for w in words if w in common_en)
     
+    # 1. If we have English function words and zero/less Polish function words, it is definitely English (even if there are Polish surnames/diacritics!)
     if en_count > pl_count:
         return False
     if pl_count > en_count:
         return True
         
-    return False
+    # 2. If function word counts are equal (e.g. both 0 or both 1), check diacritics and morphological patterns
+    has_pl_diacritics = bool(re.search(r'[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]', text))
+    if has_pl_diacritics and en_count == 0:
+        return True
+        
+    pl_patterns = r'(sz|cz|dz|rz|ch|ów|ymi|ach|ami|ego|emu|ych|ie|ka|ek|cy|ny|na|ne|gi|ski|ska)\b'
+    en_patterns = r'(th|sh|ing|ed|ly|tion|sion|ous|ful|ment|ight|ould|there|where|er|est)\b'
+    
+    pl_score = len(re.findall(pl_patterns, text.lower()))
+    en_score = len(re.findall(en_patterns, text.lower()))
+    
+    return pl_score > en_score
 
 def convert_quotes_to_asterisks(text):
     pattern = r'(\s|^)\'([^\'\n]+)\'(?=\s|$|[,.:;?!])'
     return re.sub(pattern, r'\1*\2*', text)
 
 def detect_primary_language(text):
-    # Check if the text is predominantly English or Polish based on common word list
-    common_pl = {'jest', 'na', 'to', 'się', 'w', 'z', 'o', 'i', 'po', 'jak', 'tak', 'nie', 'dla', 'do', 'od', 'za', 'ze', 'co', 'tym', 'też', 'proszę', 'przetłumacz', 'napisz', 'powtórz', 'zdanie', 'słowo', 'dobrze', 'źle', 'poprawnie', 'polsku', 'angielsku', 'języku'}
-    common_en = {'is', 'the', 'a', 'an', 'and', 'to', 'in', 'on', 'of', 'for', 'with', 'you', 'your', 'i', 'me', 'my', 'that', 'this', 'it', 'was', 'were', 'have', 'has', 'had', 'english', 'translate', 'sentence', 'word', 'say', 'how'}
-    
-    words = re.findall(r'\b\w+\b', text.lower())
-    if not words:
-        if re.search(r'[ęćłńóśźżĄĆĘŁŃÓŚŹŻ]', text):
-            return "pl"
+    if not text or not text.strip():
         return "en"
-        
-    pl_count = sum(1 for w in words if w in common_pl)
-    en_count = sum(1 for w in words if w in common_en)
-    
-    pl_chars = len(re.findall(r'[ęćłńóśźżĄĆĘŁŃÓŚŹŻ]', text))
-    
-    if en_count > pl_count:
-        return "en"
-    elif pl_count > en_count:
-        return "pl"
-    else:
-        # Tie-breaker: presence of Polish diacritics
-        if pl_chars > 0:
-            return "pl"
-        return "en"
+    return "pl" if is_polish(text) else "en"
 
 def split_text_by_language(text):
-    text_converted = convert_quotes_to_asterisks(text)
-    
-    # A sentence boundary is a punctuation mark (. ! ?) not preceded by a common abbreviation,
-    # followed by space or newline or end of string.
-    abbreviations = r'\b(Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Co|Corp|Inc|Ltd|e\.g|i\.e|vs|a\.m|p\.m)\.'
-    
-    marked_text = text_converted
-    def replace_boundary(match):
-        before = match.group(1)
-        punct = match.group(2)
-        after = match.group(3)
-        if re.search(abbreviations, before):
-            return match.group(0)
-        return before + punct + "\u0000" + after
-
-    marked_text = re.sub(r'(\S+)([\.\?\!])(\s+|$)', replace_boundary, marked_text)
-    sentences = [s.strip() for s in marked_text.split("\u0000") if s.strip()]
+    if not text or not text.strip():
+        return []
+        
+    # First, determine the overall primary language of the entire sentence/text
+    overall_lang = detect_primary_language(text)
     
     segments = []
-    
     def add_segment(text_val, lang_val):
-        text_stripped = text_val.strip()
-        if not text_stripped:
+        clean_val = clean_tts_text(text_val)
+        if not clean_val or not re.search(r'\w', clean_val):
+            if segments and clean_val:
+                segments[-1] = (segments[-1][0] + " " + clean_val, segments[-1][1])
             return
-        if segments and segments[-1][1] == lang_val:
-            segments[-1] = (segments[-1][0] + " " + text_stripped, lang_val)
-        else:
-            segments.append((text_stripped, lang_val))
-
-    for sentence in sentences:
-        sentence_lang = detect_primary_language(sentence)
-        
-        # Split by quotes, asterisks, underscores, and parentheses
-        pattern = r'("[^"]+"|\*[^*]+\*|\_[^_]+\_|\([^)]+\)|[^\(\)"\*\_]+)'
-        chunks = re.findall(pattern, sentence)
-        
-        for chunk in chunks:
-            chunk_stripped = chunk.strip()
-            if not chunk_stripped:
-                continue
-                
-            is_parentheses = chunk_stripped.startswith('(') and chunk_stripped.endswith(')')
-            is_quotes = chunk_stripped.startswith('"') and chunk_stripped.endswith('"')
-            is_asterisks = chunk_stripped.startswith('*') and chunk_stripped.endswith('*')
-            is_underscores = chunk_stripped.startswith('_') and chunk_stripped.endswith('_')
             
-            if is_parentheses or is_quotes or is_asterisks or is_underscores:
-                inner_content = chunk_stripped[1:-1].strip()
-                if not inner_content:
-                    continue
-                is_pl = is_polish(inner_content)
-                insert_lang = "pl" if is_pl else "en"
-                add_segment(inner_content, insert_lang)
-            else:
-                add_segment(chunk_stripped, sentence_lang)
-                
+        if segments and segments[-1][1] == lang_val:
+            segments[-1] = (segments[-1][0] + " " + clean_val, lang_val)
+        else:
+            segments.append((clean_val, lang_val))
+
+    # Check if this looks like a vocabulary item: e.g. "buzzword - modne hasło" (short text with a dash where left & right have different languages)
+    if (" - " in text or " — " in text or " – " in text) and len(text.split()) <= 15:
+        parts = re.split(r'\s+[\-\—\–]\s+', text, maxsplit=1)
+        if len(parts) == 2:
+            left_lang = detect_primary_language(parts[0])
+            right_lang = detect_primary_language(parts[1])
+            if left_lang != right_lang:
+                add_segment(parts[0], left_lang)
+                add_segment(parts[1], right_lang)
+                return segments
+
+    # Check for parentheses/brackets (e.g., Section 2 "Polish phrase (English phrase)")
+    pattern = r'(\([^\)]+\)|\[[^\]]+\]|[^\(\)\[\]]+)'
+    raw_chunks = re.findall(pattern, text)
+    
+    for chunk in raw_chunks:
+        if not chunk or not chunk.strip():
+            continue
+            
+        chunk_stripped = chunk.strip()
+        is_wrapper = (
+            (chunk_stripped.startswith('(') and chunk_stripped.endswith(')')) or
+            (chunk_stripped.startswith('[') and chunk_stripped.endswith(']'))
+        )
+        
+        if is_wrapper:
+            inner_text = re.sub(r'^[\(\[]+|[\)\]]+$', '', chunk_stripped).strip()
+            if inner_text:
+                inner_lang = detect_primary_language(inner_text)
+                # Only switch voice if inner_text has at least 2 words AND its language differs from overall_lang
+                if inner_lang != overall_lang and len(inner_text.split()) >= 2:
+                    add_segment(inner_text, inner_lang)
+                else:
+                    add_segment(inner_text, overall_lang)
+        else:
+            # For non-parenthetical text, keep it strictly in overall_lang so names/inserts inside sentences do not cause voice changes!
+            add_segment(chunk, overall_lang)
+            
     return segments
 
 def split_text_by_tags(text):
     if "[PL]" not in text and "[EN]" not in text:
-        # Fallback split
         return split_text_by_language(text)
         
     parts = re.split(r'(\[PL\]|\[EN\])', text)
@@ -2976,9 +3027,12 @@ def split_text_by_tags(text):
         elif part == "[EN]":
             current_lang = "en"
         else:
-            part_stripped = part.strip()
-            if part_stripped:
-                segments.append((part_stripped, current_lang))
+            cleaned = clean_tts_text(part)
+            if cleaned:
+                if segments and segments[-1][1] == current_lang:
+                    segments[-1] = (segments[-1][0] + " " + cleaned, current_lang)
+                else:
+                    segments.append((cleaned, current_lang))
                 
     return segments
 
@@ -3006,45 +3060,6 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
     if "Neural" not in voice:
         voice = "en-US-BrianNeural"
         
-    # Use OpenAI TTS API if available
-    if ai_mode == "openai_full" and openai_client:
-        # If the text is purely English (no [PL] tags and no Polish specific characters), synthesize in a single request.
-        if "[PL]" not in text and not re.search(r'[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]', text):
-            print(f"DEBUG TTS: Synthesizing entire text as English using OpenAI TTS with voice '{voice}'", flush=True)
-            try:
-                openai_voice = "alloy"
-                if "Brian" in voice or "Marek" in voice:
-                    openai_voice = "onyx"
-                elif "Jenny" in voice or "Emma" in voice or "Aria" in voice:
-                    openai_voice = "nova"
-                    
-                response = openai_client.audio.speech.create(
-                    model="tts-1",
-                    voice=openai_voice,
-                    input=text
-                )
-                audio_data = response.read()
-                return base64.b64encode(audio_data).decode('utf-8')
-            except Exception as e:
-                print(f"OpenAI TTS error, falling back to Edge TTS: {e}", flush=True)
-    
-    # If the text is purely English (no [PL] tags and no Polish specific characters), synthesize in a single request.
-    if "[PL]" not in text and not re.search(r'[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]', text):
-        print(f"DEBUG TTS: Synthesizing entire text as English with voice '{voice}'", flush=True)
-        async def get_audio():
-            communicate = edge_tts.Communicate(text, voice)
-            audio_data = b""
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_data += chunk["data"]
-            return audio_data
-        try:
-            data = asyncio.run(get_audio())
-            return base64.b64encode(data).decode('utf-8')
-        except Exception as e:
-            print(f"Error generating TTS in helper: {e}", flush=True)
-            return ""
-
     en_voice, pl_voice = get_voice_pair(voice)
     segments = split_text_by_tags(text)
     
@@ -3055,9 +3070,51 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
     if not segments:
         return ""
         
+    # If all segments turn out to be single language (either purely 'en' or purely 'pl'),
+    # synthesize in one go with the appropriate voice.
+    unique_langs = set(lang for _, lang in segments)
+    if len(unique_langs) == 1:
+        single_lang = segments[0][1]
+        target_voice = pl_voice if single_lang == "pl" else en_voice
+        full_clean_text = " ".join(seg for seg, _ in segments)
+        print(f"DEBUG TTS: Synthesizing single-language ({single_lang}) text with voice '{target_voice}'", flush=True)
+        
+        if ai_mode == "openai_full" and openai_client and single_lang == "en":
+            try:
+                openai_voice = "alloy"
+                if "Brian" in voice or "Marek" in voice:
+                    openai_voice = "onyx"
+                elif "Jenny" in voice or "Emma" in voice or "Aria" in voice:
+                    openai_voice = "nova"
+                    
+                response = openai_client.audio.speech.create(
+                    model="tts-1",
+                    voice=openai_voice,
+                    input=full_clean_text
+                )
+                audio_data = response.read()
+                return base64.b64encode(audio_data).decode('utf-8')
+            except Exception as e:
+                print(f"OpenAI TTS error, falling back to Edge TTS: {e}", flush=True)
+                
+        async def get_single_audio():
+            communicate = edge_tts.Communicate(full_clean_text, target_voice)
+            audio_data = b""
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_data += chunk["data"]
+            return audio_data
+        try:
+            data = asyncio.run(get_single_audio())
+            return base64.b64encode(data).decode('utf-8')
+        except Exception as e:
+            print(f"Error generating TTS in single helper: {e}", flush=True)
+            return ""
+
+    # Multi-language bilingual synthesis! Synthesize each segment with its exact native voice.
     async def get_segment_audio(segment_text, segment_voice):
-        print(f"DEBUG TTS: Synthesizing '{segment_text}' with voice '{segment_voice}'", flush=True)
-        if ai_mode == "openai_full" and openai_client:
+        print(f"DEBUG TTS: Synthesizing segment '{segment_text}' with voice '{segment_voice}'", flush=True)
+        if ai_mode == "openai_full" and openai_client and "en-US" in segment_voice:
             try:
                 openai_voice = "alloy"
                 if "Brian" in segment_voice or "Marek" in segment_voice:
@@ -3093,7 +3150,7 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
         data = asyncio.run(get_all_audio())
         return base64.b64encode(data).decode('utf-8')
     except Exception as e:
-        print(f"Error generating TTS in helper: {e}", flush=True)
+        print(f"Error generating TTS in bilingual helper: {e}", flush=True)
         return ""
 
 @app.route("/api/tts", methods=['GET', 'POST'])
