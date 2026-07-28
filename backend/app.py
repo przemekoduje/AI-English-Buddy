@@ -2374,12 +2374,46 @@ def send_notebook_email():
     if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
         return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Dodaj zmienne w panelu Render."}), 400
 
-    email_body = "Oto Twoje słowa z notatnika AI English Buddy:\n\n"
+    # Pobieranie przykładowych zdań od AI
+    words_list = [entry.get('original', entry.get('word', '')) for entry in notebook_words]
+    words_list = [w for w in words_list if w]
+    
+    examples_dict = {}
+    if words_list:
+        system_prompt = (
+            "You are a helpful English tutor. For the given list of vocabulary words, "
+            "provide exactly 2 example sentences for each word demonstrating its correct usage. "
+            "Return the result STRICTLY as a JSON object where the keys are the original words and the values are lists of 2 strings (the sentences)."
+            "\n\nExample Output:\n{\n  \"apple\": [\"I ate a red apple.\", \"She bought some apples at the store.\"]\n}"
+        )
+        user_prompt = "Words: " + ", ".join(words_list)
+        try:
+            output_data = query_deepseek_with_system(system_prompt, user_prompt)
+            content = output_data['choices'][0]['message']['content'].strip()
+            if content.startswith("```json"):
+                content = content.split("```json", 1)[1]
+            if content.endswith("```"):
+                content = content.rsplit("```", 1)[0]
+            content = content.strip()
+            examples_dict = json.loads(content)
+        except Exception as e:
+            print(f"Error generating examples for email: {e}")
+
+    email_body = "Oto Twoje słowa z notatnika AI English Buddy wraz z przykładami użycia:\n\n"
     for entry in notebook_words:
         original = entry.get('original', entry.get('word', 'Brak słowa'))
         translated = entry.get('translated', entry.get('translation', 'Brak tłumaczenia'))
-        email_body += f"- {original} - {translated}\n"
-    email_body += "\nPowodzenia w nauce!"
+        
+        email_body += f"• {original} - {translated}\n"
+        
+        # Dodawanie wygenerowanych przykładów
+        examples = examples_dict.get(original)
+        if examples and isinstance(examples, list):
+            for idx, ex in enumerate(examples, 1):
+                email_body += f"   Przykład {idx}: {ex}\n"
+        email_body += "\n"
+        
+    email_body += "Powodzenia w nauce!"
 
     msg = MIMEText(email_body, 'plain', 'utf-8')
     msg['Subject'] = "Twoje słówka z notatnika AI English Buddy"
