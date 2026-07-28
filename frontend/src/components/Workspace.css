@@ -126,7 +126,7 @@
 .header-action-text-btn.mastery-btn {
   background: var(--accent);
   border-color: var(--accent);
-  color: #ffffff;
+  color: var(--gray-900);
   font-weight: 600;
   padding: 0 1.125rem;
   height: 36px;
@@ -141,7 +141,7 @@
 .header-action-text-btn.mastery-btn:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
-  color: #ffffff;
+  color: var(--gray-900);
   transform: none;
 }
 
@@ -385,12 +385,13 @@
 
 .context-menu button.ctx-practice-btn {
   flex: 0 0 100%;
-  background-color: rgba(124, 58, 237, 0.1);
-  color: var(--primary-600, #7C3AED);
+  background-color: var(--accent-light);
+  color: var(--gray-700);
+  border: 1px solid rgba(251, 188, 4, 0.25);
 }
 
 .context-menu button.ctx-practice-btn:hover {
-  background-color: rgba(124, 58, 237, 0.2);
+  background-color: var(--accent-mid);
 }
 
 .context-menu button svg {

@@ -40,8 +40,8 @@
   transition: opacity 200ms, transform 200ms;
 }
 
-/* Text selection — Perplexity teal */
+/* Text selection — Google Keep yellow */
 ::selection {
-  background-color: var(--accent-mid);
+  background-color: var(--accent-light);
   color: var(--gray-900);
 }

@@ -64,7 +64,7 @@
 .action-premium-btn.flashcards-btn {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--gray-900);
   font-weight: 600;
 }
 
@@ -649,7 +649,7 @@
 
 .mnemonic-trigger-btn.active {
   background: var(--accent);
-  color: white;
+  color: var(--gray-900);
   border-color: var(--accent);
 }
 

@@ -54,23 +54,24 @@
 
 .action-icon-btn.practice {
   background: var(--primary-500);
-  color: white;
-  border: none;
+  color: var(--gray-900);
+  border: 1px solid var(--primary-500);
 }
 
 .action-icon-btn.practice:hover:not(:disabled) {
   background: var(--primary-600);
-  color: white;
+  color: var(--gray-900);
+  border-color: var(--primary-600);
 }
 
 .action-icon-btn.summary {
-  background: #10b981; /* Premium Emerald */
+  background: #e65100; /* Warm Amber/Orange */
   color: white;
   border: none;
 }
 
 .action-icon-btn.summary:hover:not(:disabled) {
-  background: #059669;
+  background: #bf360c;
   color: white;
 }
 

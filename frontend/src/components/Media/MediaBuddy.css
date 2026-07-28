@@ -88,7 +88,7 @@
   top: 0.5rem;
   left: 0.5rem;
   background: var(--grad-premium);
-  color: #ffffff;
+  color: var(--gray-900);
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.2rem 0.5rem;
@@ -344,7 +344,7 @@
 
 .segment-action-btn.explain:hover {
   background: var(--primary-500);
-  color: #ffffff;
+  color: var(--gray-900);
 }
 
 .segment-action-btn.practice {
@@ -354,7 +354,7 @@
 
 .segment-action-btn.practice:hover {
   background: var(--secondary-500);
-  color: #ffffff;
+  color: var(--gray-900);
 }
 
 /* Quick Dictionary Panel */
@@ -405,7 +405,7 @@
 
 .word-details-btn:hover {
   background: var(--primary-500);
-  color: #ffffff;
+  color: var(--gray-900);
 }
 
 .translated-text {
@@ -428,7 +428,7 @@
   cursor: pointer;
   border: 1px solid var(--primary-500);
   background: var(--primary-500);
-  color: #ffffff;
+  color: var(--gray-900);
   transition: var(--transition-soft);
   box-shadow: var(--shadow-sm);
 }
@@ -436,6 +436,7 @@
 .btn-save-vocabulary:hover {
   background: var(--primary-600);
   border-color: var(--primary-600);
+  color: var(--gray-900);
 }
 
 .btn-save-vocabulary.saved {
@@ -570,7 +571,7 @@
   border-radius: var(--radius-md);
   border: none;
   background: var(--grad-premium);
-  color: #ffffff;
+  color: var(--gray-900);
   font-family: var(--font-main);
   font-size: 0.9rem;
   font-weight: 700;
@@ -795,7 +796,7 @@
   border-radius: var(--radius-sm);
   border: none;
   background: var(--primary-500);
-  color: #ffffff;
+  color: var(--gray-900);
   cursor: pointer;
   font-family: var(--font-main);
   transition: var(--transition-fast);
@@ -803,6 +804,7 @@
 
 .suggestion-load-btn:hover {
   background: var(--primary-600);
+  color: var(--gray-900);
   transform: translateY(-0.5px);
 }
 

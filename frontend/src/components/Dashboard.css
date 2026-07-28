@@ -7,8 +7,7 @@
   justify-content: space-between;
   min-height: calc(100vh - 120px);
   padding: 3rem 2rem;
-  background: radial-gradient(circle at 50% 50%, rgba(26, 115, 232, 0.04) 0%, transparent 70%),
-              radial-gradient(circle at 10% 10%, rgba(155, 114, 248, 0.03) 0%, transparent 45%);
+  background: var(--bg-main);
   animation: view-enter 0.5s var(--transition-soft);
   font-family: var(--font-main);
   box-sizing: border-box;
@@ -24,7 +23,7 @@
 }
 
 .blue-gradient-text {
-  background: linear-gradient(135deg, var(--primary-500), #8D5CF6);
+  background: linear-gradient(135deg, var(--accent), #ff8f00);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -368,8 +367,9 @@
 }
 
 .user .bubble-text {
-  background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
-  color: white;
+  background: var(--accent-light);
+  color: var(--gray-900);
+  border: 1px solid rgba(251, 188, 4, 0.35);
   border-top-right-radius: 4px;
 }
 

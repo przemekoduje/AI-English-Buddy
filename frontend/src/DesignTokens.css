@@ -1,27 +1,27 @@
 :root {
-  /* ── Accent — Perplexity Teal ──────────────────────────────────────────── */
-  --accent:        #20808D;
-  --accent-hover:  #1a6b77;
-  --accent-light:  rgba(32, 128, 141, 0.08);
-  --accent-mid:    rgba(32, 128, 141, 0.15);
+  /* ── Accent — Google Keep Yellow ───────────────────────────────────────── */
+  --accent:        #fbbc04;          /* Keep classic yellow */
+  --accent-hover:  #f2a600;          /* slightly darker yellow */
+  --accent-light:  #feefc3;          /* soft cream yellow active state bg */
+  --accent-mid:    rgba(251, 188, 4, 0.25);
 
   /* Keep alias for backwards compat with older components */
   --primary-500: var(--accent);
   --primary-600: var(--accent-hover);
-  --primary-700: #155f6a;
+  --primary-700: #d49a00;
   --secondary-500: var(--accent);
   --secondary-600: var(--accent-hover);
 
-  /* ── Neutral Surface Scale ─────────────────────────────────────────────── */
-  --gray-0:    #ffffff;          /* pure white  */
-  --gray-50:   #fafafa;          /* app bg      */
-  --gray-100:  #f5f5f5;          /* sidebar bg  */
-  --gray-200:  #ebebeb;          /* hover fill  */
-  --gray-300:  #e0e0e0;          /* border      */
-  --gray-400:  #c2c2c2;          /* placeholder */
-  --gray-500:  #8a8a8a;          /* secondary text */
-  --gray-700:  #404040;          /* body text   */
-  --gray-900:  #171717;          /* primary text*/
+  /* ── Neutral Surface Scale — Google Keep Light Scheme ──────────────────── */
+  --gray-0:    #ffffff;          /* pure white (cards background) */
+  --gray-50:   #ffffff;          /* Keep app bg (clean white) */
+  --gray-100:  #f1f3f4;          /* sidebar hover / search bar bg */
+  --gray-200:  #e8eaed;          /* secondary hover fill */
+  --gray-300:  #e0e0e0;          /* thin border color */
+  --gray-400:  #dadce0;          /* input borders / placeholders */
+  --gray-500:  #5f6368;          /* secondary text (gray icons) */
+  --gray-700:  #3c4043;          /* body/reading text */
+  --gray-900:  #202124;          /* primary text (titles, bold) */
 
   /* Backwards compat aliases */
   --slate-50:  var(--gray-50);
@@ -38,24 +38,24 @@
   --surface:       var(--gray-0);
   --surface-hover: var(--gray-100);
   --sidebar-bg:    var(--gray-0);
-  --topbar-bg:     rgba(255, 255, 255, 0.85);
+  --topbar-bg:     rgba(255, 255, 255, 0.95);
   --border:        var(--gray-300);
-  --border-subtle: rgba(0, 0, 0, 0.07);
+  --border-subtle: rgba(0, 0, 0, 0.05);
 
   /* Legacy */
   --grad-primary:  var(--accent);
-  --grad-premium:  linear-gradient(135deg, var(--accent), #2da8b8);
+  --grad-premium:  linear-gradient(135deg, var(--accent), #ffca28);
   --grad-subtle:   var(--gray-100);
-  --glass-bg:      rgba(255, 255, 255, 0.8);
-  --glass-border:  rgba(0, 0, 0, 0.08);
-  --glass-blur:    blur(16px);
+  --glass-bg:      rgba(255, 255, 255, 0.9);
+  --glass-border:  rgba(0, 0, 0, 0.05);
+  --glass-blur:    blur(8px);
 
   /* ── Typography ──────────────────────────────────────────────────────────
-     Inter ≈ SF Pro (Apple-like, also close to Perplexity's UI font)
-     Roboto for body/reading text
+     Outfit for geometric headings (feels like Product Sans / Google Sans)
+     Roboto for clean, readable body text
      ──────────────────────────────────────────────────────────────────────── */
-  --font-display:  'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-main:     'Inter', system-ui, -apple-system, sans-serif;
+  --font-display:  'Outfit', 'Google Sans', 'Roboto', sans-serif;
+  --font-main:     'Roboto', system-ui, -apple-system, sans-serif;
   --font-serif:    'Georgia', 'Times New Roman', serif;
   --font-mono:     'Roboto Mono', ui-monospace, 'Courier New', monospace;
 
@@ -69,7 +69,7 @@
   --text-title-lg:     1.375rem;
   --text-title-md:     1.0625rem;
   --text-title-sm:     0.9375rem;
-  --text-body-lg:      0.9375rem;   /* 15px — Perplexity default body */
+  --text-body-lg:      0.9375rem;   /* 15px */
   --text-body-md:      0.875rem;
   --text-body-sm:      0.8125rem;
   --text-label-lg:     0.875rem;
@@ -88,19 +88,19 @@
   --ls-body:       0;
   --ls-label:      0;
 
-  /* ── Elevation — ultra-subtle (Perplexity / Apple style) ─────────────── */
-  --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md:      0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --shadow-xl:      0 20px 48px rgba(0, 0, 0, 0.10), 0 4px 12px rgba(0, 0, 0, 0.05);
-  --shadow-premium: 0 4px 16px rgba(32, 128, 141, 0.15);
+  /* ── Elevation — Google / Material Design style ──────────────────────── */
+  --shadow-sm:      0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:      0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+  --shadow-lg:      0 4px 10px 0 rgba(60,64,67,0.3), 0 8px 16px 6px rgba(60,64,67,0.15);
+  --shadow-xl:      0 8px 16px 0 rgba(60,64,67,0.3), 0 16px 24px 8px rgba(60,64,67,0.15);
+  --shadow-premium: 0 2px 6px 0 rgba(60,64,67,0.15);
 
-  /* ── Radius — Apple-like (slightly tighter than MD3) ─────────────────── */
+  /* ── Radius — Keep style (8px / standard boxy) ────────────────────────── */
   --radius-sm:   4px;
   --radius-md:   8px;
-  --radius-lg:   12px;
-  --radius-xl:   16px;
-  --radius-2xl:  24px;
+  --radius-lg:   8px;
+  --radius-xl:   12px;
+  --radius-2xl:  16px;
   --radius-full: 9999px;
 
   /* ── Transitions ─────────────────────────────────────────────────────── */
