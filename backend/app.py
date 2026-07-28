@@ -2376,7 +2376,9 @@ def send_notebook_email():
 
     email_body = "Oto Twoje słowa z notatnika AI English Buddy:\n\n"
     for entry in notebook_words:
-        email_body += f"- {entry['original']} - {entry['translated']}\n"
+        original = entry.get('original', entry.get('word', 'Brak słowa'))
+        translated = entry.get('translated', entry.get('translation', 'Brak tłumaczenia'))
+        email_body += f"- {original} - {translated}\n"
     email_body += "\nPowodzenia w nauce!"
 
     msg = MIMEText(email_body, 'plain', 'utf-8')
