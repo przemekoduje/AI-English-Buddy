@@ -143,6 +143,134 @@ function MediaBuddy({ user }) {
     }
   });
 
+  const [videoProgress, setVideoProgress] = useState(() => {
+    try {
+      const saved = localStorage.getItem("media_buddy_video_progress");
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      console.error("Failed to load video progress from localStorage", e);
+      return {};
+    }
+  });
+
+  const [recentSortOrder, setRecentSortOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem("media_buddy_recent_sort_order");
+      return saved === "oldest" ? "oldest" : "newest";
+    } catch (e) {
+      return "newest";
+    }
+  });
+
+  const [unwatchedSortOrder, setUnwatchedSortOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem("media_buddy_unwatched_sort_order");
+      return saved === "oldest" ? "oldest" : "newest";
+    } catch (e) {
+      return "newest";
+    }
+  });
+
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(() => {
+    try {
+      const saved = localStorage.getItem("media_buddy_autoscroll_enabled");
+      return saved === "false" ? false : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  // Sync autoScrollEnabled to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("media_buddy_autoscroll_enabled", autoScrollEnabled.toString());
+      console.log("Autoscroll persisted to localStorage:", autoScrollEnabled);
+    } catch (e) {
+      console.error("Failed to save autoScrollEnabled to localStorage", e);
+    }
+  }, [autoScrollEnabled]);
+
+  const [useWhisper, setUseWhisper] = useState(() => {
+    try {
+      const saved = localStorage.getItem("media_buddy_use_whisper");
+      return saved === "false" ? false : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  // Sync useWhisper to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("media_buddy_use_whisper", useWhisper.toString());
+      console.log("useWhisper persisted to localStorage:", useWhisper);
+    } catch (e) {
+      console.error("Failed to save useWhisper to localStorage", e);
+    }
+  }, [useWhisper]);
+
+  // Sync recentSortOrder to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("media_buddy_recent_sort_order", recentSortOrder);
+    } catch (e) {
+      console.error("Failed to save recentSortOrder to localStorage", e);
+    }
+  }, [recentSortOrder]);
+
+  // Sync unwatchedSortOrder to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("media_buddy_unwatched_sort_order", unwatchedSortOrder);
+    } catch (e) {
+      console.error("Failed to save unwatchedSortOrder to localStorage", e);
+    }
+  }, [unwatchedSortOrder]);
+
+  const allVideos = useMemo(() => {
+    return [...CURATED_VIDEOS, ...customVideos];
+  }, [customVideos]);
+
+  const recentVideos = useMemo(() => {
+    const watched = allVideos.filter(v => videoProgress[v.id]);
+    watched.sort((a, b) => {
+      const timeA = videoProgress[a.id]?.lastWatched || 0;
+      const timeB = videoProgress[b.id]?.lastWatched || 0;
+      return recentSortOrder === "newest" ? timeB - timeA : timeA - timeB;
+    });
+    
+    if (watched.length < 10) {
+      const unwatched = allVideos.filter(v => !videoProgress[v.id]);
+      const padded = recentSortOrder === "newest" ? unwatched : [...unwatched].reverse();
+      return [...watched, ...padded].slice(0, 10);
+    }
+    return watched.slice(0, 10);
+  }, [allVideos, videoProgress, recentSortOrder]);
+
+  const unwatchedVideos = useMemo(() => {
+    const list = allVideos.filter(v => {
+      const prog = videoProgress[v.id];
+      return !prog || prog.progressPercent < 25;
+    });
+    list.sort((a, b) => {
+      const progA = videoProgress[a.id];
+      const progB = videoProgress[b.id];
+      const timeA = progA?.lastWatched || 0;
+      const timeB = progB?.lastWatched || 0;
+      
+      if (timeA && timeB) {
+        return unwatchedSortOrder === "newest" ? timeB - timeA : timeA - timeB;
+      }
+      if (timeA) return unwatchedSortOrder === "newest" ? -1 : 1;
+      if (timeB) return unwatchedSortOrder === "newest" ? 1 : -1;
+      
+      const idxA = allVideos.indexOf(a);
+      const idxB = allVideos.indexOf(b);
+      return unwatchedSortOrder === "newest" ? idxB - idxA : idxA - idxB;
+    });
+    return list;
+  }, [allVideos, videoProgress, unwatchedSortOrder]);
+
   // Sync customVideos to localStorage
   useEffect(() => {
     try {
@@ -174,6 +302,22 @@ function MediaBuddy({ user }) {
   const playerRef = useRef(null);
   const timerRef = useRef(null);
   const isInitialMount = useRef(true);
+  const latestWordRef = useRef("");
+  const latestSegmentIndexRef = useRef(-1);
+  const lastSavedSecondRef = useRef(-1);
+  const currentVideoRef = useRef(currentVideo);
+  const recentScrollRef = useRef(null);
+  const unwatchedScrollRef = useRef(null);
+
+  const scrollRow = (ref, direction) => {
+    if (ref.current) {
+      const scrollAmount = 480; // Scroll by two video tiles
+      ref.current.scrollBy({
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth"
+      });
+    }
+  };
 
   // Helper to create or recreate YouTube Player instance with a specific videoId
   const createPlayer = (videoId, autoPlay = true) => {
@@ -252,6 +396,32 @@ function MediaBuddy({ user }) {
         if (playerRef.current && typeof playerRef.current.getCurrentTime === "function") {
           const time = playerRef.current.getCurrentTime();
           setCurrentTime(time);
+          
+          const currentSecond = Math.floor(time);
+          if (currentSecond !== lastSavedSecondRef.current && typeof playerRef.current.getDuration === "function") {
+            lastSavedSecondRef.current = currentSecond;
+            const duration = playerRef.current.getDuration();
+            const activeVid = currentVideoRef.current;
+            if (duration > 0 && activeVid) {
+              setVideoProgress(prev => {
+                const nextProgress = {
+                  ...prev,
+                  [activeVid.id]: {
+                    lastWatched: Date.now(),
+                    currentTime: time,
+                    duration: duration,
+                    progressPercent: (time / duration) * 100
+                  }
+                };
+                try {
+                  localStorage.setItem("media_buddy_video_progress", JSON.stringify(nextProgress));
+                } catch (e) {
+                  console.error("Failed to save progress", e);
+                }
+                return nextProgress;
+              });
+            }
+          }
         }
       }, 100);
     } else {
@@ -269,6 +439,7 @@ function MediaBuddy({ user }) {
 
   // Switch video and recreate player when currentVideo changes
   useEffect(() => {
+    currentVideoRef.current = currentVideo;
     if (window.YT && window.YT.Player) {
       createPlayer(currentVideo.youtubeId, !isInitialMount.current);
     }
@@ -281,6 +452,7 @@ function MediaBuddy({ user }) {
     setWordTranslation("");
     setSegmentTranslation("");
     setIsSegmentSaved(false);
+    lastSavedSecondRef.current = -1; // Reset last saved second
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentVideo]);
 
@@ -298,32 +470,42 @@ function MediaBuddy({ user }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, activeSegmentIndex]);
 
-  // Synchronize active segment and trigger auto-scrolling (only when playing)
+  // Synchronize active segment and trigger auto-scrolling
   useEffect(() => {
-    if (!isPlaying) return;
+    // Add a 0.4s anticipation bias when playing to compensate for rendering/scroll latency.
+    // When paused, use exact currentTime.
+    const checkTime = isPlaying ? currentTime + 0.4 : currentTime;
 
-    // Add a 0.4s anticipation bias to compensate for rendering/scroll latency and highlight early
-    const checkTime = currentTime + 0.4;
-    const idx = currentVideo.transcript.findIndex(
-      (seg) => checkTime >= seg.start && checkTime <= seg.end
-    );
+    // Search from the end to prefer newer overlapping segments
+    let idx = -1;
+    for (let i = currentVideo.transcript.length - 1; i >= 0; i--) {
+      const seg = currentVideo.transcript[i];
+      if (checkTime >= seg.start && checkTime <= seg.end) {
+        idx = i;
+        break;
+      }
+    }
+
     if (idx !== -1) {
       if (idx !== activeSegmentIndex) {
         setActiveSegmentIndex(idx);
-        // Auto-scroll transcript container to make active card visible
-        const activeCard = document.querySelector(`.transcript-segment-card[data-index="${idx}"]`);
-        if (activeCard) {
-          activeCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        // Auto-scroll transcript container to make active card visible (only when playing and enabled)
+        if (isPlaying && autoScrollEnabled) {
+          const activeCard = document.querySelector(`.transcript-segment-card[data-index="${idx}"]`);
+          if (activeCard) {
+            activeCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
         }
       }
     } else {
-      // Clear active segment highlight if we are outside the segment boundary (with a tight 0.2s tolerance using checkTime)
+      // Clear active segment highlight if we are outside the segment boundary (with a tight tolerance when playing)
       const lastSeg = currentVideo.transcript[activeSegmentIndex];
-      if (lastSeg && (checkTime < lastSeg.start - 0.2 || checkTime > lastSeg.end + 0.2)) {
+      const tolerance = isPlaying ? 0.2 : 0.0;
+      if (lastSeg && (checkTime < lastSeg.start - tolerance || checkTime > lastSeg.end + tolerance)) {
         setActiveSegmentIndex(-1);
       }
     }
-  }, [currentTime, currentVideo, activeSegmentIndex, isPlaying]);
+  }, [currentTime, currentVideo, activeSegmentIndex, isPlaying, autoScrollEnabled]);
 
   // Click card body: seek to segment start and pause video (for study) / toggle play state if active
   const handleCardClick = (seg, index) => {
@@ -360,11 +542,15 @@ function MediaBuddy({ user }) {
     const segment = currentVideo.transcript[index];
     if (!segment || !segment.text) return;
 
-    // Avoid translating if already translating or already translated
-    if (isTranslatingSegment || segmentTranslation) return;
+    // If we are already translating the SAME segment, or already have its translation, skip
+    if (latestSegmentIndexRef.current === index && (isTranslatingSegment || segmentTranslation)) {
+      return;
+    }
 
+    latestSegmentIndexRef.current = index;
     setIsTranslatingSegment(true);
     setIsSegmentSaved(false);
+    setSegmentTranslation(""); // Clear previous translation to show loader
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/translate`, {
@@ -375,6 +561,7 @@ function MediaBuddy({ user }) {
         },
         body: JSON.stringify({ text: segment.text })
       });
+      if (latestSegmentIndexRef.current !== index) return;
       if (response.ok) {
         const data = await response.json();
         setSegmentTranslation(data.translation || "Brak tłumaczenia");
@@ -382,10 +569,13 @@ function MediaBuddy({ user }) {
         setSegmentTranslation("Błąd tłumaczenia");
       }
     } catch (err) {
+      if (latestSegmentIndexRef.current !== index) return;
       console.error(err);
       setSegmentTranslation("Błąd połączenia");
     } finally {
-      setIsTranslatingSegment(false);
+      if (latestSegmentIndexRef.current === index) {
+        setIsTranslatingSegment(false);
+      }
     }
   };
 
@@ -421,6 +611,7 @@ function MediaBuddy({ user }) {
     if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
       playerRef.current.pauseVideo();
     }
+    latestWordRef.current = word;
     setSelectedWord(word);
     setWordTranslation("");
     setIsTranslating(true);
@@ -435,6 +626,7 @@ function MediaBuddy({ user }) {
         },
         body: JSON.stringify({ text: word, context: sentenceContext })
       });
+      if (latestWordRef.current !== word) return;
       if (response.ok) {
         const data = await response.json();
         setWordTranslation(data.translation || "Brak tłumaczenia");
@@ -442,10 +634,13 @@ function MediaBuddy({ user }) {
         setWordTranslation("Błąd tłumaczenia");
       }
     } catch (err) {
+      if (latestWordRef.current !== word) return;
       console.error(err);
       setWordTranslation("Błąd połączenia");
     } finally {
-      setIsTranslating(false);
+      if (latestWordRef.current === word) {
+        setIsTranslating(false);
+      }
     }
   };
 
@@ -483,7 +678,7 @@ function MediaBuddy({ user }) {
     setShowPracticeModal(true);
   };
 
-  const renderInteractiveText = (text) => {
+  const renderInteractiveText = (text, segmentIndex) => {
     const tokens = text.split(/(\s+)/);
     return tokens.map((token, idx) => {
       if (/^\s+$/.test(token)) {
@@ -496,6 +691,9 @@ function MediaBuddy({ user }) {
           className="media-interactive-word"
           onClick={(e) => {
             e.stopPropagation();
+            if (segmentIndex !== undefined && segmentIndex !== -1) {
+              setActiveSegmentIndex(segmentIndex);
+            }
             handleWordClick(cleanWord, text);
           }}
         >
@@ -517,7 +715,7 @@ function MediaBuddy({ user }) {
     setShowManualPaste(false);
     setIsLoadingCustom(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/media/transcript?video_id=${videoId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=${useWhisper}`, {
         headers: {
           "X-Session-Token": user.token
         }
@@ -639,6 +837,29 @@ function MediaBuddy({ user }) {
             {isLoadingCustom ? "Pobieranie transkrypcji..." : "Załaduj wideo 🚀"}
           </button>
         </form>
+        
+        <div className="transcript-mode-toggle-container">
+          <span className="toggle-label-text">Tryb pobierania transkrypcji:</span>
+          <div className="toggle-switch-wrapper">
+            <button
+              type="button"
+              className={`toggle-option-btn ${!useWhisper ? "active" : ""}`}
+              onClick={() => setUseWhisper(false)}
+              title="Darmowe automatyczne napisy z YouTube (brak interpunkcji)"
+            >
+              🌱 Darmowy (Nap. automatyczne)
+            </button>
+            <button
+              type="button"
+              className={`toggle-option-btn ${useWhisper ? "active" : ""}`}
+              onClick={() => setUseWhisper(true)}
+              title="Płatna transkrypcja AI przez Whisper (świetna interpunkcja i wielkie litery)"
+            >
+              ✨ Premium AI (Whisper)
+            </button>
+          </div>
+        </div>
+
         {customError && <p className="loader-error">{customError}</p>}
 
         {showManualPaste && (
@@ -724,39 +945,187 @@ function MediaBuddy({ user }) {
       {/* Video Selector Row */}
       <div className="media-selector-bar glass-panel">
         <h2 className="media-selector-title">Wybierz klip:</h2>
-        <div className="media-selector-grid">
-          {[...CURATED_VIDEOS, ...customVideos].map((vid) => {
-            const isCustom = vid.id.startsWith("custom_");
-            const isActive = currentVideo.id === vid.id;
-            return (
-              <div
-                key={vid.id}
-                className={`video-tile ${isActive ? "active" : ""}`}
-                onClick={() => setCurrentVideo(vid)}
+        
+        {/* Row 1: Ostatnio oglądane */}
+        <div className="media-selector-row">
+          <div className="media-selector-row-header">
+            <div className="media-selector-row-title">
+              <span>🕒 Ostatnio oglądane</span>
+            </div>
+            <div className="media-selector-sort-controls">
+              <span className="sort-label">Sortowanie:</span>
+              <button 
+                type="button" 
+                className={`sort-toggle-btn ${recentSortOrder === "newest" ? "active" : ""}`}
+                onClick={() => setRecentSortOrder("newest")}
+                title="Sortuj od najnowszych"
               >
-                <div className="video-tile-thumbnail-wrapper">
-                  <img
-                    src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
-                    alt={vid.title}
-                    className="video-tile-thumbnail"
-                  />
-                  {isActive && <div className="video-tile-active-badge">Aktualny</div>}
-                  {isCustom && (
-                    <button
-                      className="video-tile-delete-btn"
-                      onClick={(e) => handleDeleteCustomVideo(e, vid.id)}
-                      title="Usuń z historii"
+                Od najnowszych
+              </button>
+              <button 
+                type="button" 
+                className={`sort-toggle-btn ${recentSortOrder === "oldest" ? "active" : ""}`}
+                onClick={() => setRecentSortOrder("oldest")}
+                title="Sortuj od najstarszych"
+              >
+                Od najstarszych
+              </button>
+            </div>
+          </div>
+          <div className="media-selector-scroll-wrapper">
+            <button 
+              type="button" 
+              className="scroll-btn left" 
+              onClick={() => scrollRow(recentScrollRef, "left")}
+              title="Przewiń w lewo"
+            >
+              ‹
+            </button>
+            <div className="media-selector-scroll" ref={recentScrollRef}>
+              {recentVideos.map((vid) => {
+                const isCustom = vid.id.startsWith("custom_");
+                const isActive = currentVideo.id === vid.id;
+                const prog = videoProgress[vid.id];
+                return (
+                  <div
+                    key={vid.id}
+                    className={`video-tile ${isActive ? "active" : ""}`}
+                    onClick={() => setCurrentVideo(vid)}
+                  >
+                    <div className="video-tile-thumbnail-wrapper">
+                      <img
+                        src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
+                        alt={vid.title}
+                        className="video-tile-thumbnail"
+                      />
+                      {isActive && <div className="video-tile-active-badge">Aktualny</div>}
+                      {isCustom && (
+                        <button
+                          className="video-tile-delete-btn"
+                          onClick={(e) => handleDeleteCustomVideo(e, vid.id)}
+                          title="Usuń z historii"
+                        >
+                          ✕
+                        </button>
+                      )}
+                      {prog && prog.progressPercent > 0 && (
+                        <div className="video-tile-progress-bar-wrapper">
+                          <div 
+                            className="video-tile-progress-bar" 
+                            style={{ width: `${Math.min(100, prog.progressPercent)}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div className="video-tile-info">
+                      <h4 className="video-tile-title">{vid.title}</h4>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <button 
+              type="button" 
+              className="scroll-btn right" 
+              onClick={() => scrollRow(recentScrollRef, "right")}
+              title="Przewiń w prawo"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Nieoglądane */}
+        <div className="media-selector-row">
+          <div className="media-selector-row-header">
+            <div className="media-selector-row-title">
+              <span>📺 Nieoglądane</span>
+            </div>
+            <div className="media-selector-sort-controls">
+              <span className="sort-label">Sortowanie:</span>
+              <button 
+                type="button" 
+                className={`sort-toggle-btn ${unwatchedSortOrder === "newest" ? "active" : ""}`}
+                onClick={() => setUnwatchedSortOrder("newest")}
+                title="Sortuj od najnowszych"
+              >
+                Od najnowszych
+              </button>
+              <button 
+                type="button" 
+                className={`sort-toggle-btn ${unwatchedSortOrder === "oldest" ? "active" : ""}`}
+                onClick={() => setUnwatchedSortOrder("oldest")}
+                title="Sortuj od najstarszych"
+              >
+                Od najstarszych
+              </button>
+            </div>
+          </div>
+          {unwatchedVideos.length === 0 ? (
+            <div className="media-selector-empty-text">Wszystkie wideo zostały obejrzane! 🎉</div>
+          ) : (
+            <div className="media-selector-scroll-wrapper">
+              <button 
+                type="button" 
+                className="scroll-btn left" 
+                onClick={() => scrollRow(unwatchedScrollRef, "left")}
+                title="Przewiń w lewo"
+              >
+                ‹
+              </button>
+              <div className="media-selector-scroll" ref={unwatchedScrollRef}>
+                {unwatchedVideos.map((vid) => {
+                  const isCustom = vid.id.startsWith("custom_");
+                  const isActive = currentVideo.id === vid.id;
+                  const prog = videoProgress[vid.id];
+                  return (
+                    <div
+                      key={vid.id}
+                      className={`video-tile ${isActive ? "active" : ""}`}
+                      onClick={() => setCurrentVideo(vid)}
                     >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                <div className="video-tile-info">
-                  <h4 className="video-tile-title">{vid.title}</h4>
-                </div>
+                      <div className="video-tile-thumbnail-wrapper">
+                        <img
+                          src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
+                          alt={vid.title}
+                          className="video-tile-thumbnail"
+                        />
+                        {isActive && <div className="video-tile-active-badge">Aktualny</div>}
+                        {isCustom && (
+                          <button
+                            className="video-tile-delete-btn"
+                            onClick={(e) => handleDeleteCustomVideo(e, vid.id)}
+                            title="Usuń z historii"
+                          >
+                            ✕
+                          </button>
+                        )}
+                        {prog && prog.progressPercent > 0 && (
+                          <div className="video-tile-progress-bar-wrapper">
+                            <div 
+                              className="video-tile-progress-bar" 
+                              style={{ width: `${Math.min(100, prog.progressPercent)}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="video-tile-info">
+                        <h4 className="video-tile-title">{vid.title}</h4>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+              <button 
+                type="button" 
+                className="scroll-btn right" 
+                onClick={() => scrollRow(unwatchedScrollRef, "right")}
+                title="Przewiń w prawo"
+              >
+                ›
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -848,7 +1217,21 @@ function MediaBuddy({ user }) {
           
           {/* Transcript Panel */}
           <div className="transcript-panel glass-panel">
-            <h3 className="panel-header">🗣️ Transkrypcja stand-upu</h3>
+            <div className="panel-header">
+              <span>🗣️ Transkrypcja stand-upu</span>
+              <button
+                type="button"
+                className={`autoscroll-toggle-btn ${autoScrollEnabled ? "active" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  console.log("Autoscroll toggle button clicked! Current state:", autoScrollEnabled, " -> Toggling to:", !autoScrollEnabled);
+                  setAutoScrollEnabled(!autoScrollEnabled);
+                }}
+                title={autoScrollEnabled ? "Wyłącz automatyczne przewijanie napisów" : "Włącz automatyczne przewijanie napisów"}
+              >
+                {autoScrollEnabled ? "🔄 Autoscroll: WŁ" : "🛑 Autoscroll: WYŁ"}
+              </button>
+            </div>
             <div className="transcript-list">
               {currentVideo.transcript.map((seg, idx) => (
                 <div
@@ -863,7 +1246,7 @@ function MediaBuddy({ user }) {
                     </span>
                   </div>
                   <div className="segment-content">
-                    <p className="segment-text-line">{renderInteractiveText(seg.text)}</p>
+                    <p className="segment-text-line">{renderInteractiveText(seg.text, idx)}</p>
                     <div className="segment-actions">
                       <button
                         className="segment-action-btn practice"

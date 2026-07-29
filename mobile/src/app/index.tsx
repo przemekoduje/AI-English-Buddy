@@ -223,6 +223,9 @@ export default function HomeScreen() {
   const playerRef = useRef<any>(null);
   const timerRef = useRef<any>(null);
   const transcriptScrollRef = useRef<ScrollView>(null);
+  const latestWordRef = useRef("");
+  const latestSegmentIndexRef = useRef(-1);
+  const latestReadingSentenceIndexRef = useRef(-1);
 
   // Voice Chatbot States
   const [chatMessages, setChatMessages] = useState<any[]>([]);
@@ -1312,29 +1315,38 @@ export default function HomeScreen() {
     };
   }, [videoIsPlaying, currentView]);
 
-  // Synchronize active segment index based on currentTime + 0.4s early offset
+  // Synchronize active segment index based on currentTime
   useEffect(() => {
     if (currentView !== 'media') return;
-    const checkTime = videoCurrentTime + 0.4;
-    const idx = currentVideo.transcript.findIndex(
-      (seg: any) => checkTime >= seg.start && checkTime <= seg.end
-    );
+    const checkTime = videoIsPlaying ? videoCurrentTime + 0.4 : videoCurrentTime;
+    
+    // Search from the end to prefer newer overlapping segments
+    let idx = -1;
+    for (let i = currentVideo.transcript.length - 1; i >= 0; i--) {
+      const seg = currentVideo.transcript[i];
+      if (checkTime >= seg.start && checkTime <= seg.end) {
+        idx = i;
+        break;
+      }
+    }
+
     if (idx !== -1) {
       if (idx !== videoActiveSegmentIdx) {
         setVideoActiveSegmentIdx(idx);
-        // Scroll active card into view
-        if (transcriptScrollRef.current) {
+        // Scroll active card into view (only when playing)
+        if (videoIsPlaying && transcriptScrollRef.current) {
           transcriptScrollRef.current.scrollTo({ y: idx * 95, animated: true });
         }
       }
     } else {
-      // Clear active segment highlight if we are outside the segment boundary (with a tight 0.2s tolerance using checkTime)
+      // Clear active segment highlight if we are outside the segment boundary
       const lastSeg = currentVideo.transcript[videoActiveSegmentIdx];
-      if (lastSeg && (checkTime < lastSeg.start - 0.2 || checkTime > lastSeg.end + 0.2)) {
+      const tolerance = videoIsPlaying ? 0.2 : 0.0;
+      if (lastSeg && (checkTime < lastSeg.start - tolerance || checkTime > lastSeg.end + tolerance)) {
         setVideoActiveSegmentIdx(-1);
       }
     }
-  }, [videoCurrentTime, currentVideo, videoActiveSegmentIdx, currentView]);
+  }, [videoCurrentTime, currentVideo, videoActiveSegmentIdx, currentView, videoIsPlaying]);
 
   // Auto-translate active segment when video is paused
   useEffect(() => {
@@ -1342,27 +1354,45 @@ export default function HomeScreen() {
     if (!videoIsPlaying && videoActiveSegmentIdx !== -1) {
       const activeSeg = currentVideo.transcript[videoActiveSegmentIdx];
       if (activeSeg) {
+        const index = videoActiveSegmentIdx;
+        
+        // Skip if we already have the translation or are translating the same segment
+        if (latestSegmentIndexRef.current === index && (videoIsTranslatingSegment || videoSegmentTranslation)) {
+          return;
+        }
+        
+        latestSegmentIndexRef.current = index;
         const text = activeSeg.text;
         setVideoIsTranslatingSegment(true);
         setVideoIsSegmentSaved(false);
+        setVideoSegmentTranslation(''); // Clear previous to show loading state
+        
         customFetch(`${backendUrl}/api/translate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text })
         })
-          .then(res => res.json())
+          .then(res => {
+            if (latestSegmentIndexRef.current !== index) return null;
+            return res.json();
+          })
           .then(data => {
+            if (!data) return;
+            if (latestSegmentIndexRef.current !== index) return;
             if (data.translation) {
-              setVideoSegmentTranslation(data.translation);
+               setVideoSegmentTranslation(data.translation);
             } else {
-              setVideoSegmentTranslation("(Błąd tłumaczenia)");
+               setVideoSegmentTranslation("(Błąd tłumaczenia)");
             }
           })
           .catch(() => {
+            if (latestSegmentIndexRef.current !== index) return;
             setVideoSegmentTranslation("(Błąd połączenia)");
           })
           .finally(() => {
-            setVideoIsTranslatingSegment(false);
+            if (latestSegmentIndexRef.current === index) {
+              setVideoIsTranslatingSegment(false);
+            }
           });
       }
     } else {
@@ -1456,11 +1486,16 @@ export default function HomeScreen() {
     }
   };
 
-  const handleWordClick = async (word: string, sentenceContext?: string) => {
+  const handleWordClick = async (word: string, sentenceContext?: string, segmentIndex?: number) => {
     setVideoIsPlaying(false); // Pause wideo
     const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "").trim();
     if (!cleanWord) return;
     
+    if (segmentIndex !== undefined && segmentIndex !== -1) {
+      setVideoActiveSegmentIdx(segmentIndex);
+    }
+    
+    latestWordRef.current = cleanWord;
     setVideoSelectedWord(cleanWord);
     setVideoWordTranslation('');
     setVideoIsTranslatingWord(true);
@@ -1472,6 +1507,7 @@ export default function HomeScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: cleanWord, context: sentenceContext })
       });
+      if (latestWordRef.current !== cleanWord) return;
       if (response.ok) {
         const data = await response.json();
         setVideoWordTranslation(data.translation || "(Brak tłumaczenia)");
@@ -1479,9 +1515,12 @@ export default function HomeScreen() {
         setVideoWordTranslation("(Błąd serwera)");
       }
     } catch (e) {
+      if (latestWordRef.current !== cleanWord) return;
       setVideoWordTranslation("(Błąd połączenia)");
     } finally {
-      setVideoIsTranslatingWord(false);
+      if (latestWordRef.current === cleanWord) {
+        setVideoIsTranslatingWord(false);
+      }
     }
   };
 
@@ -1881,6 +1920,7 @@ export default function HomeScreen() {
       return;
     }
     
+    latestReadingSentenceIndexRef.current = index;
     setIsTranslating(true);
     setTranslatedSentenceIdx(index);
     setTranslationText('Tłumaczenie...');
@@ -1891,6 +1931,7 @@ export default function HomeScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: sentences[index] }),
       });
+      if (latestReadingSentenceIndexRef.current !== index) return;
       const data = await response.json();
       if (response.ok && data.translation) {
         setTranslationText(data.translation);
@@ -1898,9 +1939,12 @@ export default function HomeScreen() {
         setTranslationText('Błąd tłumaczenia');
       }
     } catch (err) {
+      if (latestReadingSentenceIndexRef.current !== index) return;
       setTranslationText('Błąd połączenia');
     } finally {
-      setIsTranslating(false);
+      if (latestReadingSentenceIndexRef.current === index) {
+        setIsTranslating(false);
+      }
     }
   };
 
@@ -2912,7 +2956,7 @@ export default function HomeScreen() {
                           {words.map((w: string, wIdx: number) => (
                             <TouchableOpacity 
                               key={wIdx} 
-                              onPress={() => handleWordClick(w, seg.text)}
+                              onPress={() => handleWordClick(w, seg.text, idx)}
                               style={styles.wordTouch}
                             >
                               <Text style={styles.wordText}>{w}</Text>
