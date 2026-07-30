@@ -7,6 +7,7 @@ import Workspace from './components/Workspace';
 import SavedStories from './components/Story/SavedStories';
 import Auth from './components/Auth/Auth';
 import VocabularyView from './components/Vocabulary/VocabularyView';
+import VocabularyDrawer from './components/Vocabulary/VocabularyDrawer';
 import MediaBuddy from './components/Media/MediaBuddy';
 import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
@@ -22,6 +23,18 @@ function App() {
   const [currentStoryTitle, setCurrentStoryTitle] = useState("");
   const [currentStoryId, setCurrentStoryId] = useState(null);
   const [externalFlashcardsWords, setExternalFlashcardsWords] = useState([]);
+
+  const [customAlert, setCustomAlert] = useState(null);
+
+  useEffect(() => {
+    const originalAlert = window.alert;
+    window.alert = (message) => {
+      setCustomAlert(message);
+    };
+    return () => {
+      window.alert = originalAlert;
+    };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -130,14 +143,28 @@ function App() {
           )}
         </div>
       </main>
-
       {externalFlashcardsWords.length > 0 && (
         <div className="flashcards-fullpage-overlay">
           <div className="flashcards-wrapper-modal glass-panel">
             <Flashcards 
               notebookWords={externalFlashcardsWords} 
               onFinishExercises={() => setExternalFlashcardsWords([])} 
+              user={user}
             />
+          </div>
+        </div>
+      )}
+
+      {currentView !== 'notebook' && <VocabularyDrawer user={user} />}
+
+      {customAlert && (
+        <div className="modal-overlay" style={{ zIndex: 10000 }}>
+          <div className="modal-content">
+            <h3>Notification</h3>
+            <p>{customAlert}</p>
+            <div className="modal-actions">
+              <button onClick={() => setCustomAlert(null)} className="btn-primary">OK</button>
+            </div>
           </div>
         </div>
       )}

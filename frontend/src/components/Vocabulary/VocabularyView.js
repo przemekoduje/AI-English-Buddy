@@ -57,6 +57,14 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
 
   useEffect(() => {
     fetchVocabulary();
+
+    const handleUpdate = () => {
+      fetchVocabulary();
+    };
+    window.addEventListener("vocabulary-updated", handleUpdate);
+    return () => {
+      window.removeEventListener("vocabulary-updated", handleUpdate);
+    };
   }, [fetchVocabulary]);
 
   // Handle Delete
@@ -72,6 +80,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
       });
       if (response.ok) {
         setWords(prev => prev.filter(w => w.original !== originalWord));
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } else {
         alert("Błąd podczas usuwania słówka.");
       }
@@ -275,7 +284,11 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
             onClick={() => setShowFlashcards(true)}
             disabled={totalCount === 0}
           >
-            <span className="btn-icon">⚡</span>
+            <span className="btn-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            </span>
             <span>Uruchom Fiszki</span>
           </button>
           
@@ -284,7 +297,12 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
             onClick={() => setShowEmailModal(true)}
             disabled={totalCount === 0}
           >
-            <span className="btn-icon">✉️</span>
+            <span className="btn-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+            </span>
             <span>Eksportuj na E-mail</span>
           </button>
         </div>
@@ -297,7 +315,12 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
           onClick={() => setTimeFilter("all")}
           title="Kliknij, aby pokazać wszystkie zwroty"
         >
-          <div className="stat-icon">📚</div>
+          <div className="stat-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+          </div>
           <div className="stat-content">
             <span className="stat-value">{totalCount}</span>
             <span className="stat-label">Wszystkie zwroty</span>
@@ -312,7 +335,14 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
           onClick={() => setTimeFilter(prev => prev === "today" ? "all" : "today")}
           title="Kliknij, aby filtrować słówka dodane dzisiaj"
         >
-          <div className="stat-icon">📅</div>
+          <div className="stat-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+          </div>
           <div className="stat-content">
             <span className="stat-value">{todayCount}</span>
             <span className="stat-label">Dodane dzisiaj</span>
@@ -323,7 +353,15 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         </div>
 
         <div className="vocab-stat-card glass-panel animate-fade-in delay-2">
-          <div className="stat-icon">🏆</div>
+          <div className="stat-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+              <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+              <path d="M4 22h16" />
+              <path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34" />
+              <path d="M12 2a6 6 0 0 1 6 6v3c0 3.3-2.7 6-6 6s-6-2.7-6-6V8c0-3.3 2.7-6 6-6z" />
+            </svg>
+          </div>
           <div className="stat-content">
             <span className="stat-value">
               {totalCount >= 20 ? "Złoty" : totalCount >= 10 ? "Srebrny" : "Brązowy"}
@@ -571,10 +609,9 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         />
       )}
 
-      {/* 4. Export Email Modal */}
       {showEmailModal && (
-        <div className="vocab-modal-overlay">
-          <form className="vocab-modal-card glass-panel" onSubmit={handleSendEmail}>
+        <div className="modal-overlay">
+          <form className="modal-content" onSubmit={handleSendEmail}>
             <h3>Eksportuj słownik na e-mail</h3>
             <p className="modal-description">Wprowadź swój adres e-mail. Wyślemy listę Twoich zapisanych słów wraz z tłumaczeniami.</p>
             
@@ -583,26 +620,30 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
               placeholder="Twój adres email..." 
               value={recipientEmail} 
               onChange={e => setRecipientEmail(e.target.value)}
-              className="premium-modal-input"
+              className="premium-input"
               required
               disabled={emailStatus === "sending"}
             />
 
-            {emailStatus === "sending" && <div className="email-status-text loading">Trwa wysyłanie...</div>}
-            {emailStatus === "success" && <div className="email-status-text success">✓ Słówka zostały wysłane!</div>}
-            {emailStatus === "error" && <div className="email-status-text error">✕ Wystąpił błąd. Spróbuj ponownie.</div>}
+            {emailStatus === "success" && <div className="email-status-text success" style={{ marginBottom: "1rem" }}>✓ Słówka zostały wysłane!</div>}
+            {emailStatus === "error" && <div className="email-status-text error" style={{ marginBottom: "1rem" }}>✕ Wystąpił błąd. Spróbuj ponownie.</div>}
 
             <div className="modal-actions">
               <button 
                 type="submit" 
-                className="action-premium-btn" 
-                disabled={emailStatus === "sending"}
+                className="btn-primary" 
+                disabled={emailStatus === "sending" || !recipientEmail}
               >
-                Wyślij
+                {emailStatus === "sending" ? (
+                  <>
+                    <span className="spinner-inline"></span>
+                    Wysyłanie...
+                  </>
+                ) : "Wyślij"}
               </button>
               <button 
                 type="button" 
-                className="action-premium-btn secondary-btn"
+                className="btn-secondary"
                 onClick={() => {
                   setShowEmailModal(false);
                   setEmailStatus("");

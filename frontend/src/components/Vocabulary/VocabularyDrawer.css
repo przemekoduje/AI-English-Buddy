@@ -1,0 +1,512 @@
+/* ============================================================
+   VocabularyDrawer.css — Slide-out Sidebar & Floating Tab
+   ============================================================ */
+
+/* ── Floating Pull-out Button ──────────────────────────────── */
+.vocabulary-drawer-trigger {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 990;
+  background: var(--accent);
+  color: var(--gray-900);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  padding: 0.85rem 0.6rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all var(--transition-fast);
+}
+
+.vocabulary-drawer-trigger:hover {
+  background: var(--accent-hover);
+  padding-right: 0.85rem;
+  box-shadow: var(--shadow-lg);
+}
+
+.vocabulary-drawer-trigger .trigger-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vocabulary-drawer-trigger .trigger-badge {
+  background: var(--gray-900);
+  color: var(--gray-0);
+  font-size: var(--text-label-sm);
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-full);
+  min-width: 1.5rem;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.vocabulary-drawer-trigger .trigger-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-family: var(--font-display);
+  font-size: var(--text-label-sm);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gray-900);
+  margin-top: 0.2rem;
+}
+
+/* ── Backdrop Overlay ─────────────────────────────────────── */
+.vocabulary-drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-soft);
+}
+
+.vocabulary-drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Sliding Panel ────────────────────────────────────────── */
+.vocabulary-drawer-panel {
+  position: fixed;
+  top: 0;
+  right: -420px;
+  width: min(420px, 100vw);
+  height: 100vh;
+  background: var(--surface);
+  box-shadow: var(--shadow-xl);
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  transition: right var(--transition-soft);
+  border-left: 1px solid var(--border);
+  font-family: var(--font-main);
+  color: var(--gray-900);
+}
+
+.vocabulary-drawer-panel.open {
+  right: 0;
+}
+
+/* ── Drawer Header ────────────────────────────────────────── */
+.drawer-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--gray-50);
+}
+
+.drawer-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drawer-title-row h2 {
+  font-size: var(--text-title-lg);
+  font-weight: 700;
+  font-family: var(--font-display);
+  color: var(--gray-900);
+  margin: 0;
+}
+
+.drawer-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--gray-500);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.drawer-close-btn:hover {
+  background: var(--gray-200);
+  color: var(--gray-900);
+}
+
+.drawer-quick-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.drawer-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--gray-700);
+  font-family: var(--font-display);
+  font-size: var(--text-label-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.drawer-action-btn:hover:not(:disabled) {
+  background: var(--gray-100);
+  color: var(--gray-900);
+}
+
+.drawer-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.drawer-action-btn.accent-action {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--gray-900);
+  font-weight: 600;
+}
+
+.drawer-action-btn.accent-action:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+/* ── Filters & Search ─────────────────────────────────────── */
+.drawer-filter-bar {
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--surface);
+}
+
+.drawer-search-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.drawer-search-input {
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-body-md);
+  background: var(--gray-50);
+  color: var(--gray-900);
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.drawer-search-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--accent-mid);
+}
+
+.drawer-search-clear {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--gray-500);
+  cursor: pointer;
+  padding: 0.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+}
+
+.drawer-search-clear:hover {
+  background: var(--gray-200);
+  color: var(--gray-900);
+}
+
+.drawer-type-tabs {
+  display: flex;
+  gap: 0.25rem;
+  background: var(--gray-100);
+  padding: 0.2rem;
+  border-radius: var(--radius-md);
+}
+
+.drawer-type-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 0.35rem;
+  font-size: var(--text-label-sm);
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  color: var(--gray-500);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.drawer-type-tab.active {
+  background: var(--surface);
+  color: var(--gray-900);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  font-weight: 600;
+}
+
+/* ── Content & Scroll Area ────────────────────────────────── */
+.drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ── Word Cards ───────────────────────────────────────────── */
+.drawer-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+  position: relative;
+  transition: all var(--transition-fast);
+}
+
+.drawer-card:hover {
+  border-color: var(--border);
+  box-shadow: var(--shadow-premium);
+  background: var(--gray-50);
+}
+
+.drawer-card.expanded {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.drawer-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.drawer-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.drawer-word-original {
+  font-size: var(--text-title-sm);
+  font-weight: 700;
+  color: var(--gray-900);
+  line-height: var(--lh-title);
+}
+
+.drawer-word-translated {
+  font-size: var(--text-body-md);
+  color: var(--gray-500);
+}
+
+.drawer-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.drawer-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--gray-500);
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.drawer-icon-btn:hover {
+  background: var(--gray-200);
+  color: var(--gray-900);
+}
+
+.drawer-icon-btn.delete-btn:hover {
+  background: #fce8e6;
+  color: #c5221f;
+}
+
+.drawer-icon-btn.playing {
+  color: var(--accent-hover);
+  animation: pulse-active 1.2s infinite;
+}
+
+/* ── Expanded Details ─────────────────────────────────────── */
+.drawer-card-details {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-size: var(--text-body-sm);
+  animation: slide-down 0.2s ease-out;
+}
+
+.drawer-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.drawer-detail-label {
+  font-size: var(--text-label-sm);
+  font-weight: 700;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.drawer-context-text {
+  font-style: italic;
+  color: var(--gray-700);
+  line-height: var(--lh-body);
+}
+
+.drawer-mnemonic-wrapper {
+  background: var(--accent-light);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+  color: var(--gray-900);
+  position: relative;
+}
+
+.drawer-mnemonic-btn {
+  background: transparent;
+  border: 1px dashed var(--accent-hover);
+  color: var(--accent-hover);
+  font-family: var(--font-display);
+  font-size: var(--text-label-sm);
+  font-weight: 600;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.drawer-mnemonic-btn:hover {
+  background: var(--accent);
+  color: var(--gray-900);
+  border-style: solid;
+}
+
+.drawer-details-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.drawer-details-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.4rem;
+  font-size: var(--text-label-sm);
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--gray-700);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.drawer-details-btn:hover {
+  background: var(--gray-100);
+  color: var(--gray-900);
+  border-color: var(--gray-500);
+}
+
+.drawer-details-btn.practice-btn {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--gray-900);
+}
+
+.drawer-details-btn.practice-btn:hover {
+  background: var(--accent);
+}
+
+/* ── Empty State ──────────────────────────────────────────── */
+.drawer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: var(--gray-500);
+}
+
+.drawer-empty-icon {
+  color: var(--gray-300);
+}
+
+.drawer-empty-text {
+  font-size: var(--text-title-sm);
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.drawer-empty-hint {
+  font-size: var(--text-body-sm);
+  color: var(--gray-500);
+  line-height: var(--lh-body);
+}
+
+/* ── Animations ───────────────────────────────────────────── */
+@keyframes pulse-active {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

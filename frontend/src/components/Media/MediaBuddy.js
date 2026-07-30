@@ -209,6 +209,19 @@ function MediaBuddy({ user }) {
     }
   }, [useWhisper]);
 
+  // Pause video on vocabulary drawer open
+  useEffect(() => {
+    const handleDrawerOpen = () => {
+      if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
+        playerRef.current.pauseVideo();
+      }
+    };
+    window.addEventListener("vocabulary-drawer-opened", handleDrawerOpen);
+    return () => {
+      window.removeEventListener("vocabulary-drawer-opened", handleDrawerOpen);
+    };
+  }, []);
+
   // Sync recentSortOrder to localStorage
   useEffect(() => {
     try {
@@ -599,6 +612,7 @@ function MediaBuddy({ user }) {
       });
       if (response.ok) {
         setIsSegmentSaved(true);
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       }
     } catch (err) {
       console.error("Błąd podczas zapisywania frazy:", err);
@@ -662,6 +676,7 @@ function MediaBuddy({ user }) {
       });
       if (response.ok) {
         setIsSaved(true);
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       }
     } catch (err) {
       console.error("Błąd podczas zapisywania słówka:", err);
@@ -834,7 +849,14 @@ function MediaBuddy({ user }) {
             onChange={(e) => setCustomUrl(e.target.value)}
           />
           <button type="submit" className="loader-btn" disabled={isLoadingCustom}>
-            {isLoadingCustom ? "Pobieranie transkrypcji..." : "Załaduj wideo 🚀"}
+            {isLoadingCustom ? "Pobieranie transkrypcji..." : (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                Załaduj wideo
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+              </span>
+            )}
           </button>
         </form>
         
@@ -847,7 +869,12 @@ function MediaBuddy({ user }) {
               onClick={() => setUseWhisper(false)}
               title="Darmowe automatyczne napisy z YouTube (brak interpunkcji)"
             >
-              🌱 Darmowy (Nap. automatyczne)
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                  <path d="M2 22c1.25-6.75 6.75-12.25 13.5-13.5M22 2c-1.25 6.75-6.75 12.25-13.5 13.5" />
+                </svg>
+                Darmowy (Nap. automatyczne)
+              </span>
             </button>
             <button
               type="button"
@@ -855,7 +882,12 @@ function MediaBuddy({ user }) {
               onClick={() => setUseWhisper(true)}
               title="Płatna transkrypcja AI przez Whisper (świetna interpunkcja i wielkie litery)"
             >
-              ✨ Premium AI (Whisper)
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                Premium AI (Whisper)
+              </span>
             </button>
           </div>
         </div>
@@ -865,7 +897,10 @@ function MediaBuddy({ user }) {
         {showManualPaste && (
           <div className="manual-paste-section">
             <div className="manual-paste-info">
-              💡 <strong>YouTube zablokował automatyczne pobieranie na serwerze:</strong>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
+                <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
+              </svg>
+              <strong>YouTube zablokował automatyczne pobieranie na serwerze:</strong>
               <p style={{ margin: '0.5rem 0', fontSize: '0.92rem' }}>
                 Aby to obejść, możesz wkleić napisy ręcznie. Użyj darmowego narzędzia zewnętrznego:
               </p>
@@ -885,14 +920,28 @@ function MediaBuddy({ user }) {
                 required
               />
               <button type="submit" className="manual-paste-btn" disabled={isLoadingCustom}>
-                {isLoadingCustom ? "Przetwarzanie..." : "Zapisz napisy i załaduj wideo 💾"}
+                {isLoadingCustom ? "Przetwarzanie..." : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    Zapisz napisy i załaduj wideo
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                      <polyline points="17 21 17 13 7 13 7 21" />
+                      <polyline points="7 3 7 8 15 8" />
+                    </svg>
+                  </span>
+                )}
               </button>
             </form>
           </div>
         )}
         {/* Curated Channels & Suggestion Box */}
         <div className="curated-suggestions-section">
-          <h4 className="suggestions-title">💡 Rekomendowane kanały z gotowymi napisami</h4>
+          <h4 className="suggestions-title">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
+              <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
+            </svg>
+            Rekomendowane kanały z gotowymi napisami
+          </h4>
           <div className="suggestions-controls">
             <select 
               className="suggestions-select"
@@ -931,7 +980,12 @@ function MediaBuddy({ user }) {
                         onClick={() => fetchAndLoadVideo(video.youtubeId)}
                         disabled={isLoadingCustom}
                       >
-                        Załaduj wideo 🚀
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          Załaduj wideo
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                          </svg>
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -1152,7 +1206,12 @@ function MediaBuddy({ user }) {
                     title="Szczegółowe objaśnienie słownikowe"
                     onClick={() => setExplanationWord(selectedWord)}
                   >
-                    Więcej szczegółów 💡
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      Więcej szczegółów
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                        <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
+                      </svg>
+                    </span>
                   </button>
                 </div>
                 {isTranslating ? (
@@ -1218,7 +1277,13 @@ function MediaBuddy({ user }) {
           {/* Transcript Panel */}
           <div className="transcript-panel glass-panel">
             <div className="panel-header">
-              <span>🗣️ Transkrypcja stand-upu</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                  <path d="M12 2a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                </svg>
+                Transkrypcja stand-upu
+              </span>
               <button
                 type="button"
                 className={`autoscroll-toggle-btn ${autoScrollEnabled ? "active" : ""}`}
@@ -1229,7 +1294,19 @@ function MediaBuddy({ user }) {
                 }}
                 title={autoScrollEnabled ? "Wyłącz automatyczne przewijanie napisów" : "Włącz automatyczne przewijanie napisów"}
               >
-                {autoScrollEnabled ? "🔄 Autoscroll: WŁ" : "🛑 Autoscroll: WYŁ"}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {autoScrollEnabled ? (
+                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                    ) : (
+                      <>
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                      </>
+                    )}
+                  </svg>
+                  Autoscroll: {autoScrollEnabled ? "WŁ" : "WYŁ"}
+                </span>
               </button>
             </div>
             <div className="transcript-list">

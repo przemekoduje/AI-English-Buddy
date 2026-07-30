@@ -3303,26 +3303,17 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
     if "Neural" not in voice:
         voice = "en-US-BrianNeural"
         
-    en_voice, pl_voice = get_voice_pair(voice)
-    segments = split_text_by_tags(text)
+    print(f"DEBUG TTS: Input text = '{text}', voice = '{voice}'", flush=True)
     
-    print(f"DEBUG TTS: Input text = '{text}'", flush=True)
-    print(f"DEBUG TTS: Selected voice = '{voice}' -> English: '{en_voice}', Polish: '{pl_voice}'", flush=True)
-    print(f"DEBUG TTS: Segments = {segments}", flush=True)
-    
-    if not segments:
-        return ""
+    # If the text does not contain bilingual tags, synthesize it in one go with the requested voice
+    if "[PL]" not in text and "[EN]" not in text:
+        full_clean_text = clean_tts_text(text)
+        if not full_clean_text:
+            return ""
         
-    # If all segments turn out to be single language (either purely 'en' or purely 'pl'),
-    # synthesize in one go with the appropriate voice.
-    unique_langs = set(lang for _, lang in segments)
-    if len(unique_langs) == 1:
-        single_lang = segments[0][1]
-        target_voice = pl_voice if single_lang == "pl" else en_voice
-        full_clean_text = " ".join(seg for seg, _ in segments)
-        print(f"DEBUG TTS: Synthesizing single-language ({single_lang}) text with voice '{target_voice}'", flush=True)
+        print(f"DEBUG TTS: Synthesizing plain text with voice '{voice}'", flush=True)
         
-        if ai_mode == "openai_full" and openai_client and single_lang == "en":
+        if ai_mode == "openai_full" and openai_client and "pl-PL" not in voice:
             try:
                 openai_voice = "alloy"
                 if "Brian" in voice or "Marek" in voice:
@@ -3341,7 +3332,7 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
                 print(f"OpenAI TTS error, falling back to Edge TTS: {e}", flush=True)
                 
         async def get_single_audio():
-            communicate = edge_tts.Communicate(full_clean_text, target_voice)
+            communicate = edge_tts.Communicate(full_clean_text, voice)
             audio_data = b""
             async for chunk in communicate.stream():
                 if chunk["type"] == "audio":
@@ -3353,6 +3344,24 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
         except Exception as e:
             print(f"Error generating TTS in single helper: {e}", flush=True)
             return ""
+
+    # Otherwise, split by tags
+    en_voice, pl_voice = get_voice_pair(voice)
+    parts = re.split(r'(\[PL\]|\[EN\])', text)
+    segments = []
+    current_lang = "en"
+    for part in parts:
+        if part == "[PL]":
+            current_lang = "pl"
+        elif part == "[EN]":
+            current_lang = "en"
+        else:
+            cleaned = clean_tts_text(part)
+            if cleaned:
+                if segments and segments[-1][1] == current_lang:
+                    segments[-1] = (segments[-1][0] + " " + cleaned, current_lang)
+                else:
+                    segments.append((cleaned, current_lang))
 
     # Multi-language bilingual synthesis! Synthesize each segment with its exact native voice.
     async def get_segment_audio(segment_text, segment_voice):

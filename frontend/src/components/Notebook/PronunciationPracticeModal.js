@@ -226,7 +226,18 @@ const PronunciationPracticeModal = ({ targetText, user, onClose, onLogActivity, 
               onClick={playTargetTTS}
               title="Odsłuchaj poprawną wymowę"
             >
-              <span className="btn-icon">{isSpeaking ? "⏹" : "🔊"}</span>
+              <span className="btn-icon">
+                {isSpeaking ? (
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                    <rect x="4" y="4" width="16" height="16" rx="2" ry="2" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </svg>
+                )}
+              </span>
               {isSpeaking ? "Zatrzymaj" : "Odsłuchaj wzór"}
             </button>
 
@@ -237,7 +248,12 @@ const PronunciationPracticeModal = ({ targetText, user, onClose, onLogActivity, 
               </button>
             ) : (
               <button className="btn-record-voice" onClick={startRecording} disabled={isEvaluating}>
-                <span className="btn-icon">🎤</span>
+                <span className="btn-icon">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+                  </svg>
+                </span>
                 Nagraj swój głos
               </button>
             )}

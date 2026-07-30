@@ -12,18 +12,94 @@ import SessionSummaryModal from "./Notebook/SessionSummaryModal";
 import PronunciationPracticeModal from "./Notebook/PronunciationPracticeModal";
 
 const getTopicIcon = (topicName) => {
-  if (!topicName) return "✨";
+  const size = 16;
+  const strokeWidth = 2.5;
+  const style = { display: 'inline-block', verticalAlign: 'middle' };
+  
+  if (!topicName) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+      </svg>
+    );
+  }
+  
   const t = topicName.toLowerCase();
-  if (t.includes("business")) return "💼";
-  if (t.includes("discovery")) return "🚀";
-  if (t.includes("ai") || t.includes("tech")) return "🤖";
-  if (t.includes("nature") || t.includes("environment")) return "🌿";
-  if (t.includes("history") || t.includes("past")) return "🏛️";
-  if (t.includes("science")) return "🔬";
-  if (t.includes("travel")) return "✈️";
-  if (t.includes("culture") || t.includes("art")) return "🎨";
-  if (t.includes("health") || t.includes("sport")) return "💪";
-  return "✨";
+  
+  if (t.includes("business")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      </svg>
+    );
+  }
+  if (t.includes("discovery") || t.includes("future")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <polygon points="5 3 19 12 5 21 5 3" />
+      </svg>
+    );
+  }
+  if (t.includes("ai") || t.includes("tech") || t.includes("technology") || t.includes("robot")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <rect x="3" y="11" width="18" height="10" rx="2" />
+        <circle cx="12" cy="5" r="2" />
+        <path d="M12 7v4M8 15h.01M16 15h.01" />
+      </svg>
+    );
+  }
+  if (t.includes("nature") || t.includes("environment")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M2 22c1.25-6.75 6.75-12.25 13.5-13.5M22 2c-1.25 6.75-6.75 12.25-13.5 13.5M9 15c0-4.5 3.5-8 8-8M15 9c0 4.5-3.5 8-8 8" />
+      </svg>
+    );
+  }
+  if (t.includes("history") || t.includes("past")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M4 18h16M10 9v9M14 9v9M18 9v9M6 9v9M3 9h18M12 2L3 9h18z" />
+      </svg>
+    );
+  }
+  if (t.includes("science")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M6 3h12M12 3v14M9 12h6M5 21h14M8 12a4 4 0 0 0-4 4v5h16v-5a4 4 0 0 0-4-4" />
+      </svg>
+    );
+  }
+  if (t.includes("travel") || t.includes("adventure")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+      </svg>
+    );
+  }
+  if (t.includes("culture") || t.includes("art") || t.includes("music")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.35857 19.5 6.00857 19 6.50857 18.5C7.00857 18 7.50857 17.5 8.50857 17.5C9.50857 17.5 9.50857 19 9.50857 20C9.50857 21 11.0086 22 12 22Z" />
+        <circle cx="7.5" cy="10.5" r="1.5" />
+        <circle cx="11.5" cy="7.5" r="1.5" />
+        <circle cx="16.5" cy="9.5" r="1.5" />
+      </svg>
+    );
+  }
+  if (t.includes("health") || t.includes("sport")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
 };
 
 const GENERATION_PHASES = [
@@ -75,6 +151,7 @@ function Workspace({
   const [showFlashcards, setShowFlashcards] = useState(false);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState("");
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [explanationWord, setExplanationWord] = useState(null);
   const [showPracticeModal, setShowPracticeModal] = useState(false);
   const [practiceTargetText, setPracticeTargetText] = useState("");
@@ -199,6 +276,16 @@ function Workspace({
 
   useEffect(() => {
     loadVocabulary();
+  }, [loadVocabulary]);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      loadVocabulary();
+    };
+    window.addEventListener("vocabulary-updated", handleUpdate);
+    return () => {
+      window.removeEventListener("vocabulary-updated", handleUpdate);
+    };
   }, [loadVocabulary]);
 
   // Effect to load story parts when currentStoryId changes
@@ -955,6 +1042,7 @@ function Workspace({
           headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
           body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
         });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } catch (err) {
         console.error("Błąd zapisywania słówka:", err);
       }
@@ -1091,6 +1179,7 @@ function Workspace({
           },
           body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
         });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } catch (err) {
         console.error("Błąd podczas zapisywania słówka:", err);
       }
@@ -1166,6 +1255,7 @@ function Workspace({
           },
           body: JSON.stringify({ original: textToTranslate, translated: data.translation, story_id: currentStoryId })
         });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } else {
         setNotebookWords(prev =>
           prev.map(item =>
@@ -1252,6 +1342,7 @@ function Workspace({
         method: "DELETE",
         headers: { "X-Session-Token": user.token }
       });
+      window.dispatchEvent(new CustomEvent("vocabulary-updated"));
     } catch (err) {
       console.error("Błąd usuwania słówka z bazy:", err);
     }
@@ -1260,6 +1351,7 @@ function Workspace({
   // Usunięto handleDeleteStory, ponieważ historia jest teraz zarządzana w dedykowanej zakładce.
 
   const handleSendEmail = async () => {
+    setIsSendingEmail(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/send-notebook-email`, {
         method: "POST",
@@ -1279,6 +1371,8 @@ function Workspace({
     } catch (err) {
       console.error("Błąd email:", err);
       alert("Błąd połączenia z serwerem przy wysyłaniu e-maila.");
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -1373,6 +1467,7 @@ function Workspace({
         },
         body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
       });
+      window.dispatchEvent(new CustomEvent("vocabulary-updated"));
     } catch (err) {
       console.error("Błąd podczas zapisywania słówka z podsumowania:", err);
     }
@@ -1475,11 +1570,13 @@ function Workspace({
             <h3>Translation</h3>
             <p><strong>{translationContent.original}</strong></p>
             <p>{translationContent.translated}</p>
-            <button onClick={handleSaveToNotebook} className="btn-primary">Save to Notebook</button>
-            <button onClick={() => {
-              setShowTranslationModal(false);
-              resumeAudioAfterTooltip();
-            }} className="btn-secondary">Close</button>
+            <div className="modal-actions">
+              <button onClick={handleSaveToNotebook} className="btn-primary">Save to Notebook</button>
+              <button onClick={() => {
+                setShowTranslationModal(false);
+                resumeAudioAfterTooltip();
+              }} className="btn-secondary">Close</button>
+            </div>
           </div>
         </div>
       )}
@@ -1494,9 +1591,29 @@ function Workspace({
               value={recipientEmail} 
               onChange={e => setRecipientEmail(e.target.value)}
               className="premium-input"
+              disabled={isSendingEmail}
             />
-            <button onClick={handleSendEmail} className="btn-primary">Send Now</button>
-            <button onClick={() => setShowSendEmailModal(false)} className="btn-secondary">Cancel</button>
+            <div className="modal-actions">
+              <button 
+                onClick={handleSendEmail} 
+                className="btn-primary"
+                disabled={isSendingEmail || !recipientEmail}
+              >
+                {isSendingEmail ? (
+                  <>
+                    <span className="spinner-inline"></span>
+                    Sending...
+                  </>
+                ) : "Send Now"}
+              </button>
+              <button 
+                onClick={() => setShowSendEmailModal(false)} 
+                className="btn-secondary"
+                disabled={isSendingEmail}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

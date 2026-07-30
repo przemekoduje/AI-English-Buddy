@@ -172,12 +172,20 @@ export default function HomeScreen() {
   const [selectedTopicChip, setSelectedTopicChip] = useState<string | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<'simple' | 'medium' | 'advanced'>('medium');
   const [selectedLength, setSelectedLength] = useState<'short' | 'medium' | 'long'>('medium');
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'ai' | 'paste'>('ai');
+  const [pastedText, setPastedText] = useState('');
+  const [pastedTextTitle, setPastedTextTitle] = useState('');
 
   // Reader States
   const [sentences, setSentences] = useState<string[]>([]);
+  const [breakdownSentences, setBreakdownSentences] = useState<string[]>([]);
   const [speakingSentenceIndex, setSpeakingSentenceIndex] = useState<number | null>(null);
+  const [selectedSentenceIndex, setSelectedSentenceIndex] = useState<number | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [readMode, setReadMode] = useState<'single' | 'all'>('single');
+  const [readMode, setReadMode] = useState<'single' | 'all' | 'breakdown'>('single');
+  const [breakdownTranslations, setBreakdownTranslations] = useState<{[key: number]: string}>({});
+  const [loadingBreakdown, setLoadingBreakdown] = useState(false);
+  const [breakdownSpeechPhase, setBreakdownSpeechPhase] = useState<'polish' | 'english'>('polish');
   const speakingRef = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
   const prefetchCache = useRef<{[key: number]: string}>({});
@@ -1159,10 +1167,6 @@ export default function HomeScreen() {
       try {
         const storedUser = await AsyncStorage.getItem('buddy_user');
         let storedIP = await AsyncStorage.getItem('buddy_backend_url');
-        if (storedIP && storedIP.startsWith('http://192.168.')) {
-          storedIP = 'https://full-walls-think.loca.lt';
-          await AsyncStorage.setItem('buddy_backend_url', storedIP);
-        }
 
         // Jeśli aplikacja działa w przeglądarce na produkcji, a zapisane IP jest adresem lokalnym, wymuś zmianę na Render
         if (typeof window !== 'undefined' && window.location) {
@@ -1222,6 +1226,19 @@ export default function HomeScreen() {
       }
     })();
   }, []);
+
+  // Auto-load translations for Breakdown mode when breakdownSentences or mode changes
+  useEffect(() => {
+    if (readMode === 'breakdown' && breakdownSentences.length > 0) {
+      loadBreakdownTranslations(breakdownSentences, true);
+    }
+  }, [breakdownSentences]);
+
+  useEffect(() => {
+    if (readMode === 'breakdown' && breakdownSentences.length > 0) {
+      loadBreakdownTranslations(breakdownSentences, false);
+    }
+  }, [readMode]);
 
   // Fetch topics
   const fetchTopics = useCallback(async () => {
@@ -1690,8 +1707,14 @@ export default function HomeScreen() {
           .split(/(?<=[.!?])\s+/)
           .filter((s: string) => s.trim().length > 0);
         setSentences(parsedSentences);
+
+        const parsedBreakdownSentences = storyText
+          .split(/(?<=[.!?,;:—–])\s+/)
+          .filter((s: string) => s.trim().length > 0);
+        setBreakdownSentences(parsedBreakdownSentences);
         setStoryPrompt('');
         setSelectedTopicChip(null);
+        setBreakdownTranslations({});
         // Reset chat state
         setChatMessages([]);
         chatSessionStarted.current = false;
@@ -1711,6 +1734,44 @@ export default function HomeScreen() {
     }
   };
 
+  const handleLoadPastedText = () => {
+    if (!pastedText.trim()) {
+      Alert.alert('Info', 'Wklej tekst do nauki');
+      return;
+    }
+    const title = pastedTextTitle.trim() || 'Wklejony tekst';
+    setGeneratedText(pastedText);
+    setCurrentStoryTitle(title);
+    setCurrentStoryId(null);
+    
+    // Clean sentences
+    const parsedSentences = pastedText
+      .split(/(?<=[.!?])\s+/)
+      .filter((s: string) => s.trim().length > 0);
+    setSentences(parsedSentences);
+
+    const parsedBreakdownSentences = pastedText
+      .split(/(?<=[.!?,;:—–])\s+/)
+      .filter((s: string) => s.trim().length > 0);
+    setBreakdownSentences(parsedBreakdownSentences);
+    
+    // Clear inputs
+    setPastedText('');
+    setPastedTextTitle('');
+    
+    // Reset chat state
+    setBreakdownTranslations({});
+    setChatMessages([]);
+    chatSessionStarted.current = false;
+    paragraphHeightRef.current = 0;
+    setCurrentView('workspace');
+    
+    // Scroll to top
+    setTimeout(() => {
+      workspaceScrollRef.current?.scrollTo({ y: 0, animated: false });
+    }, 100);
+  };
+
   // Select Saved Story
   const handleSelectStory = (story: any) => {
     setGeneratedText(story.text);
@@ -1720,6 +1781,12 @@ export default function HomeScreen() {
       .split(/(?<=[.!?])\s+/)
       .filter((s: string) => s.trim().length > 0);
     setSentences(parsedSentences);
+
+    const parsedBreakdownSentences = story.text
+      .split(/(?<=[.!?,;:—–])\s+/)
+      .filter((s: string) => s.trim().length > 0);
+    setBreakdownSentences(parsedBreakdownSentences);
+    setBreakdownTranslations({});
     // Reset chat state
     setChatMessages([]);
     chatSessionStarted.current = false;
@@ -1729,6 +1796,43 @@ export default function HomeScreen() {
     setTimeout(() => {
       workspaceScrollRef.current?.scrollTo({ y: 0, animated: false });
     }, 100);
+  };
+
+  const loadBreakdownTranslations = async (sentenceList: string[], force = false) => {
+    const currentTranslations = force ? {} : breakdownTranslations;
+    const missingIndices = sentenceList.map((_, i) => i).filter(i => !currentTranslations[i]);
+    if (missingIndices.length === 0) return;
+
+    setLoadingBreakdown(true);
+    try {
+      const promises = missingIndices.map(async (idx) => {
+        try {
+          const response = await customFetch(`${backendUrl}/api/translate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: sentenceList[idx] }),
+          });
+          if (response.ok) {
+            const data = await response.json();
+            return { index: idx, translation: data.translation };
+          }
+        } catch (e) {
+          console.error(`Error translating sentence ${idx}`, e);
+        }
+        return { index: idx, translation: 'Błąd tłumaczenia' };
+      });
+
+      const results = await Promise.all(promises);
+      const newTranslations = { ...currentTranslations };
+      results.forEach(res => {
+        newTranslations[res.index] = res.translation;
+      });
+      setBreakdownTranslations(newTranslations);
+    } catch (err) {
+      Alert.alert('Błąd', 'Nie udało się pobrać tłumaczeń dla trybu Breakdown.');
+    } finally {
+      setLoadingBreakdown(false);
+    }
   };
 
   // Auto-scroll to active sentence using text proportion (since inline Text onLayout is unreliable)
@@ -1756,36 +1860,155 @@ export default function HomeScreen() {
     }
   };
 
+  const fetchAudioUri = async (text: string, voice: string): Promise<string> => {
+    const response = await customFetch(`${backendUrl}/api/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice }),
+    });
+    const responseText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      throw new Error(`Serwer zwrócił nie-JSON. Status: ${response.status}. Odpowiedź: ${responseText.substring(0, 120)}`);
+    }
+    if (!response.ok || !data.audio_base64) {
+      throw new Error(data?.error || 'Failed to fetch audio');
+    }
+    return `data:audio/mpeg;base64,${data.audio_base64}`;
+  };
+
+  const autoPlayNextPolish = async (nextIdx: number) => {
+    try {
+      speakingRef.current = true;
+      setSpeakingSentenceIndex(nextIdx);
+      setIsSpeaking(true);
+      scrollToSentence(nextIdx);
+
+      const polishText = breakdownTranslations[nextIdx];
+      const uriPl = await fetchAudioUri(polishText || breakdownSentences[nextIdx], 'pl-PL-MarekNeural');
+      if (!speakingRef.current) return;
+
+      const { sound: soundPl } = await Audio.Sound.createAsync({ uri: uriPl }, { shouldPlay: true });
+      if (!speakingRef.current) {
+        await soundPl.unloadAsync();
+        return;
+      }
+      soundRef.current = soundPl;
+
+      soundPl.setOnPlaybackStatusUpdate(async (status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          soundPl.unloadAsync();
+          if (soundRef.current === soundPl) {
+            soundRef.current = null;
+          }
+          setSpeakingSentenceIndex(null);
+          setIsSpeaking(false);
+          setBreakdownSpeechPhase('english');
+        }
+      });
+    } catch (e) {
+      console.error(e);
+      setIsSpeaking(false);
+      setSpeakingSentenceIndex(null);
+    }
+  };
+
   // TTS — single sentence
   const speakSentence = async (index: number) => {
     try {
       await stopSpeech();
+      speakingRef.current = true;
       setSpeakingSentenceIndex(index);
+
+      // If clicking a different sentence, reset the breakdown phase to Polish
+      let activePhase = breakdownSpeechPhase;
+      if (selectedSentenceIndex !== index) {
+        activePhase = 'polish';
+        setBreakdownSpeechPhase('polish');
+      }
+      setSelectedSentenceIndex(index);
       setIsSpeaking(true);
       scrollToSentence(index);
 
-      const response = await customFetch(`${backendUrl}/api/tts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: sentences[index],
-          voice: selectedVoice || 'en-US-BrianNeural',
-        }),
-      });
+      if (readMode === 'breakdown') {
+        const polishText = breakdownTranslations[index];
+        if (polishText && polishText !== 'Tłumaczenie...' && polishText !== 'Błąd tłumaczenia') {
+          if (activePhase === 'polish') {
+            // 1. Play Polish translation using pl-PL-MarekNeural (Polish male voice)
+            const uriPl = await fetchAudioUri(polishText, 'pl-PL-MarekNeural');
+            if (!speakingRef.current) return;
 
-      const data = await response.json();
-      if (!response.ok || !data.audio_base64) {
-        throw new Error(data.error || 'Nie udało się pobrać dźwięku z serwera');
+            const { sound: soundPl } = await Audio.Sound.createAsync({ uri: uriPl }, { shouldPlay: true });
+            if (!speakingRef.current) {
+              await soundPl.unloadAsync();
+              return;
+            }
+            soundRef.current = soundPl;
+            
+            soundPl.setOnPlaybackStatusUpdate(async (status) => {
+              if (status.isLoaded && status.didJustFinish) {
+                soundPl.unloadAsync();
+                if (soundRef.current === soundPl) {
+                  soundRef.current = null;
+                }
+                setSpeakingSentenceIndex(null);
+                setIsSpeaking(false);
+                setBreakdownSpeechPhase('english'); // Set next phase to English
+              }
+            });
+            return;
+          } else {
+            // 2. Play English original
+            const uriEn = await fetchAudioUri(breakdownSentences[index], selectedVoice || 'en-US-BrianNeural');
+            if (!speakingRef.current) return;
+
+            const { sound: soundEn } = await Audio.Sound.createAsync({ uri: uriEn }, { shouldPlay: true });
+            if (!speakingRef.current) {
+              await soundEn.unloadAsync();
+              return;
+            }
+            soundRef.current = soundEn;
+            
+            soundEn.setOnPlaybackStatusUpdate(async (status) => {
+              if (status.isLoaded && status.didJustFinish) {
+                soundEn.unloadAsync();
+                if (soundRef.current === soundEn) {
+                  soundRef.current = null;
+                }
+                setSpeakingSentenceIndex(null);
+                setIsSpeaking(false);
+                
+                // PO przeczytaniu angielskiego: przejdź do następnego zdania i odtwórz polskie tłumaczenie automatycznie!
+                const nextIdx = index + 1;
+                if (nextIdx < breakdownSentences.length) {
+                  setSelectedSentenceIndex(nextIdx);
+                  setBreakdownSpeechPhase('polish');
+                  setTimeout(() => {
+                    autoPlayNextPolish(nextIdx);
+                  }, 400);
+                } else {
+                  // Koniec tekstu - zresetuj stan na początek
+                  setSelectedSentenceIndex(0);
+                  setBreakdownSpeechPhase('polish');
+                }
+              }
+            });
+            return;
+          }
+        }
       }
 
-      const uri = `data:audio/mpeg;base64,${data.audio_base64}`;
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: true }
-      );
-      
+      // Default: play English only
+      const uri = await fetchAudioUri(sentences[index], selectedVoice || 'en-US-BrianNeural');
+      if (!speakingRef.current) return;
+
+      const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
+      if (!speakingRef.current) {
+        await sound.unloadAsync();
+        return;
+      }
       soundRef.current = sound;
       
       sound.setOnPlaybackStatusUpdate((status) => {
@@ -1793,7 +2016,9 @@ export default function HomeScreen() {
           setSpeakingSentenceIndex(null);
           setIsSpeaking(false);
           sound.unloadAsync();
-          soundRef.current = null;
+          if (soundRef.current === sound) {
+            soundRef.current = null;
+          }
           // If this was the last sentence, auto-start chat
           if (index === sentences.length - 1 && !chatSessionStarted.current) {
             chatSessionStarted.current = true;
@@ -1847,9 +2072,15 @@ export default function HomeScreen() {
             voice: selectedVoice || 'en-US-BrianNeural',
           }),
         });
-        const data = await response.json();
+        const responseText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (e) {
+          throw new Error(`Serwer zwrócił nie-JSON. Status: ${response.status}. Odpowiedź: ${responseText.substring(0, 120)}`);
+        }
         if (!response.ok || !data.audio_base64) {
-          throw new Error(data.error || 'Failed to fetch audio');
+          throw new Error(data?.error || 'Failed to fetch audio');
         }
         const uri = `data:audio/mpeg;base64,${data.audio_base64}`;
         prefetchCache.current[idx] = uri;
@@ -1858,11 +2089,15 @@ export default function HomeScreen() {
 
       const playNext = async () => {
         if (!speakingRef.current || currentIdx >= sentenceList.length) {
-          // All sentences finished — auto-start chat if not already started
+          // Finished playing whole list
           setIsSpeaking(false);
           setSpeakingSentenceIndex(null);
           speakingRef.current = false;
-          if (!chatSessionStarted.current) {
+          
+          if (readMode === 'breakdown') {
+            // Toggle phase for whole text read
+            setBreakdownSpeechPhase(breakdownSpeechPhase === 'polish' ? 'english' : 'polish');
+          } else if (!chatSessionStarted.current) {
             chatSessionStarted.current = true;
             startChatSession(generatedText);
           }
@@ -1870,25 +2105,53 @@ export default function HomeScreen() {
         }
 
         setSpeakingSentenceIndex(currentIdx);
+        setSelectedSentenceIndex(currentIdx);
         // Auto-scroll to current sentence
         scrollToSentence(currentIdx);
 
         try {
-          // Get audio uri for current sentence
-          const uri = await fetchSentenceBase64(currentIdx);
+          if (readMode === 'breakdown') {
+            if (breakdownSpeechPhase === 'polish') {
+              // Play Polish sentence
+              const polishText = breakdownTranslations[currentIdx];
+              if (polishText && polishText !== 'Tłumaczenie...' && polishText !== 'Błąd tłumaczenia') {
+                const uriPl = await fetchAudioUri(polishText, 'pl-PL-MarekNeural');
+                const { sound: soundPl } = await Audio.Sound.createAsync({ uri: uriPl }, { shouldPlay: true });
+                soundRef.current = soundPl;
+                soundPl.setOnPlaybackStatusUpdate(async (status) => {
+                  if (status.isLoaded && status.didJustFinish) {
+                    soundPl.unloadAsync();
+                    soundRef.current = null;
+                    currentIdx++;
+                    playNext();
+                  }
+                });
+                return;
+              }
+            } else {
+              // Play English sentence
+              const uriEn = await fetchAudioUri(sentenceList[currentIdx], selectedVoice || 'en-US-BrianNeural');
+              const { sound: soundEn } = await Audio.Sound.createAsync({ uri: uriEn }, { shouldPlay: true });
+              soundRef.current = soundEn;
+              soundEn.setOnPlaybackStatusUpdate(async (statusEn) => {
+                if (statusEn.isLoaded && statusEn.didJustFinish) {
+                  soundEn.unloadAsync();
+                  soundRef.current = null;
+                  currentIdx++;
+                  playNext();
+                }
+              });
+              return;
+            }
+          }
 
-          // Start prefetching next sentence in background
+          // Default: play English only
+          const uri = await fetchSentenceBase64(currentIdx);
           if (currentIdx + 1 < sentenceList.length) {
             fetchSentenceBase64(currentIdx + 1).catch(() => {});
           }
-
-          // Play sound
-          const { sound } = await Audio.Sound.createAsync(
-            { uri },
-            { shouldPlay: true }
-          );
+          const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
           soundRef.current = sound;
-
           sound.setOnPlaybackStatusUpdate(async (status) => {
             if (status.isLoaded && status.didJustFinish) {
               sound.unloadAsync();
@@ -1923,6 +2186,7 @@ export default function HomeScreen() {
     latestReadingSentenceIndexRef.current = index;
     setIsTranslating(true);
     setTranslatedSentenceIdx(index);
+    setSelectedSentenceIndex(index);
     setTranslationText('Tłumaczenie...');
     
     try {
@@ -2055,7 +2319,14 @@ export default function HomeScreen() {
         body: formData,
       });
 
-      const result = await response.json();
+      const responseText = await response.text();
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Serwer zwrócił niepoprawny format (nie-JSON). Status: ${response.status}. Odpowiedź: ${responseText.substring(0, 100)}`);
+      }
+
       if (response.ok && result.bot_response) {
         const botMsg = {
           id: String(Date.now()),
@@ -2064,9 +2335,12 @@ export default function HomeScreen() {
         };
         setChatMessages([botMsg]);
         speakBotText(result.bot_response);
+      } else {
+        throw new Error(result?.error || 'Nieprawidłowa odpowiedź serwera');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error starting chat:', err);
+      Alert.alert('Błąd startu czatu', `Nie udało się rozpocząć rozmowy z AI: ${err?.message || String(err)}`);
     } finally {
       setIsProcessingChat(false);
     }
@@ -2138,7 +2412,14 @@ export default function HomeScreen() {
         body: formData,
       });
 
-      const result = await response.json();
+      const responseText = await response.text();
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Serwer zwrócił niepoprawny format (nie-JSON). Status: ${response.status}. Odpowiedź: ${responseText.substring(0, 100)}`);
+      }
+
       if (response.ok) {
         const userMsg = {
           id: String(Date.now()) + '_user',
@@ -2156,7 +2437,7 @@ export default function HomeScreen() {
         setChatMessages(prev => [...prev, userMsg, botMsg]);
         speakBotText(result.bot_response);
       } else {
-        Alert.alert('Błąd', result.error || 'Nie udało się przetworzyć odpowiedzi.');
+        Alert.alert('Błąd', result?.error || 'Nie udało się przetworzyć odpowiedzi.');
       }
     } catch (err) {
       console.error('Error sending voice chat answer:', err);
@@ -2275,29 +2556,43 @@ export default function HomeScreen() {
 
       {/* Przełącznik trybu czytania — tylko w workspace z historią */}
       {currentView === 'workspace' && generatedText ? (
-        <View style={styles.readerToolbar}>
-          <Text style={[styles.readerModeLabel, readMode === 'single' && styles.readerModeLabelActive]}>
-            Zdanie
-          </Text>
-          <Switch
-            value={readMode === 'all'}
-            onValueChange={(val) => {
-              if (val) {
-                setReadMode('all');
-                speakAll(sentences);
-              } else {
-                setReadMode('single');
-                stopSpeech();
-              }
+        <View style={styles.segmentedControlRow}>
+          <TouchableOpacity
+            style={[styles.segmentedBtn, readMode === 'single' ? styles.segmentedBtnActive : null]}
+            onPress={() => {
+              setReadMode('single');
+              stopSpeech();
             }}
-            trackColor={{ false: '#DADCE0', true: '#1A73E8' }}
-            thumbColor="#FFFFFF"
-            ios_backgroundColor="#DADCE0"
-            style={{ marginHorizontal: 8 }}
-          />
-          <Text style={[styles.readerModeLabel, readMode === 'all' && styles.readerModeLabelActive]}>
-            Cały tekst
-          </Text>
+          >
+            <Text style={[styles.segmentedBtnText, readMode === 'single' ? styles.segmentedBtnTextActive : null]}>
+              Zdanie
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.segmentedBtn, readMode === 'all' ? styles.segmentedBtnActive : null]}
+            onPress={() => {
+              setReadMode('all');
+              speakAll(sentences);
+            }}
+          >
+            <Text style={[styles.segmentedBtnText, readMode === 'all' ? styles.segmentedBtnTextActive : null]}>
+              Cały tekst
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.segmentedBtn, readMode === 'breakdown' ? styles.segmentedBtnActive : null]}
+            onPress={() => {
+              setReadMode('breakdown');
+              stopSpeech();
+              loadBreakdownTranslations(sentences);
+            }}
+          >
+            <Text style={[styles.segmentedBtnText, readMode === 'breakdown' ? styles.segmentedBtnTextActive : null]}>
+              Breakdown
+            </Text>
+          </TouchableOpacity>
 
           {isSpeaking && (
             <TouchableOpacity
@@ -2539,114 +2834,190 @@ export default function HomeScreen() {
         })()}
 
         {currentView === 'workspace' && (
-          <ScrollView ref={workspaceScrollRef} contentContainerStyle={styles.workspaceContainer}>
+          <View style={{ flex: 1 }}>
+            {generatedText ? (
+              <View style={[styles.readerHeaderRow, { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8F9FA', borderBottomWidth: 1, borderBottomColor: '#DADCE0' }]}>
+                <Text style={styles.readerStoryTitle} numberOfLines={1}>{currentStoryTitle}</Text>
+                
+                {readMode === 'breakdown' && (
+                  isSpeaking ? (
+                    <TouchableOpacity
+                      style={{ marginRight: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 14, backgroundColor: '#EA4335', flexDirection: 'row', alignItems: 'center' }}
+                      onPress={stopSpeech}
+                    >
+                      <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>⏹ Stop</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={{ marginRight: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 14, backgroundColor: '#1A73E8', flexDirection: 'row', alignItems: 'center' }}
+                      onPress={() => speakSentence(selectedSentenceIndex !== null ? selectedSentenceIndex : 0)}
+                    >
+                      <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>
+                        {breakdownSpeechPhase === 'polish' ? '▶ Czytaj PL' : '▶ Czytaj EN'}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                )}
+
+                <TouchableOpacity
+                  style={styles.clearStoryButton}
+                  onPress={() => {
+                    setGeneratedText('');
+                    setCurrentStoryTitle('');
+                    setSentences([]);
+                    setBreakdownSentences([]);
+                    setChatMessages([]);
+                    setIsBotSpeaking(false);
+                  }}
+                >
+                  <Text style={styles.clearStoryButtonText}>Reset</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            <ScrollView ref={workspaceScrollRef} contentContainerStyle={styles.workspaceContainer}>
             {/* Generator input if no story generated */}
             {!generatedText ? (
               <View style={styles.generatorCard}>
-                <Text style={styles.generatorHeader}>O czym chcesz stworzyć opowiadanie?</Text>
-                <TextInput
-                  style={styles.promptInput}
-                  value={storyPrompt}
-                  onChangeText={setStoryPrompt}
-                  placeholder="Wpisz temat np. 'A lost astronaut on an alien planet...'"
-                  multiline
-                  numberOfLines={3}
-                />
-
-                <Text style={styles.chipsHeader}>Sugerowane tematy (opcjonalnie):</Text>
-                <View style={styles.chipsContainer}>
-                  {suggestedTopics.map((topic, i) => {
-                    const isSelected = selectedTopicChip === topic;
-                    return (
-                      <TouchableOpacity
-                        key={i}
-                        style={[styles.chip, isSelected ? styles.chipSelected : null]}
-                        onPress={() => setSelectedTopicChip(isSelected ? null : topic)}
-                      >
-                        <Text style={[styles.chipText, isSelected ? styles.chipTextSelected : null]}>
-                          {topic}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                {/* Tabs */}
+                <View style={styles.tabHeaderContainer}>
+                  <TouchableOpacity
+                    style={[styles.tabHeaderBtn, activeWorkspaceTab === 'ai' ? styles.tabHeaderBtnActive : null]}
+                    onPress={() => setActiveWorkspaceTab('ai')}
+                  >
+                    <Text style={[styles.tabHeaderBtnText, activeWorkspaceTab === 'ai' ? styles.tabHeaderBtnTextActive : null]}>
+                      Generator AI
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.tabHeaderBtn, activeWorkspaceTab === 'paste' ? styles.tabHeaderBtnActive : null]}
+                    onPress={() => setActiveWorkspaceTab('paste')}
+                  >
+                    <Text style={[styles.tabHeaderBtnText, activeWorkspaceTab === 'paste' ? styles.tabHeaderBtnTextActive : null]}>
+                      Własny tekst
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
-                {/* Poziom trudności */}
-                <Text style={styles.selectorLabel}>Poziom trudności angielskiego:</Text>
-                <View style={styles.selectorRow}>
-                  {[
-                    { id: 'simple', label: 'Prosty (A1-A2)' },
-                    { id: 'medium', label: 'Średni (B1-B2)' },
-                    { id: 'advanced', label: 'Zaawansowany (C1-C2)' }
-                  ].map((lvl) => {
-                    const isSel = selectedLevel === lvl.id;
-                    return (
-                      <TouchableOpacity
-                        key={lvl.id}
-                        style={[styles.selectorBtn, isSel ? styles.selectorBtnActive : null]}
-                        onPress={() => setSelectedLevel(lvl.id as any)}
-                      >
-                        <Text style={[styles.selectorBtnText, isSel ? styles.selectorBtnTextActive : null]}>
-                          {lvl.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                {activeWorkspaceTab === 'ai' ? (
+                  <>
+                    <Text style={styles.generatorHeader}>O czym chcesz stworzyć opowiadanie?</Text>
+                    <TextInput
+                      style={styles.promptInput}
+                      value={storyPrompt}
+                      onChangeText={setStoryPrompt}
+                      placeholder="Wpisz temat np. 'A lost astronaut on an alien planet...'"
+                      multiline
+                      numberOfLines={3}
+                    />
 
-                {/* Długość */}
-                <Text style={styles.selectorLabel}>Długość opowiadania:</Text>
-                <View style={styles.selectorRow}>
-                  {[
-                    { id: 'short', label: 'Krótkie' },
-                    { id: 'medium', label: 'Średnie' },
-                    { id: 'long', label: 'Długie' }
-                  ].map((len) => {
-                    const isSel = selectedLength === len.id;
-                    return (
-                      <TouchableOpacity
-                        key={len.id}
-                        style={[styles.selectorBtn, isSel ? styles.selectorBtnActive : null]}
-                        onPress={() => setSelectedLength(len.id as any)}
-                      >
-                        <Text style={[styles.selectorBtnText, isSel ? styles.selectorBtnTextActive : null]}>
-                          {len.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                    <Text style={styles.chipsHeader}>Sugerowane tematy (opcjonalnie):</Text>
+                    <View style={styles.chipsContainer}>
+                      {suggestedTopics.map((topic, i) => {
+                        const isSelected = selectedTopicChip === topic;
+                        return (
+                          <TouchableOpacity
+                            key={i}
+                            style={[styles.chip, isSelected ? styles.chipSelected : null]}
+                            onPress={() => setSelectedTopicChip(isSelected ? null : topic)}
+                          >
+                            <Text style={[styles.chipText, isSelected ? styles.chipTextSelected : null]}>
+                              {topic}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
 
-                <TouchableOpacity
-                  style={styles.generateButton}
-                  onPress={handleGenerateStory}
-                  disabled={isGenerating}
-                >
-                  {isGenerating ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <Text style={styles.generateButtonText}>Generuj opowiadanie</Text>
-                  )}
-                </TouchableOpacity>
+                    {/* Poziom trudności */}
+                    <Text style={styles.selectorLabel}>Poziom trudności angielskiego:</Text>
+                    <View style={styles.selectorRow}>
+                      {[
+                        { id: 'simple', label: 'Prosty (A1-A2)' },
+                        { id: 'medium', label: 'Średni (B1-B2)' },
+                        { id: 'advanced', label: 'Zaawansowany (C1-C2)' }
+                      ].map((lvl) => {
+                        const isSel = selectedLevel === lvl.id;
+                        return (
+                          <TouchableOpacity
+                            key={lvl.id}
+                            style={[styles.selectorBtn, isSel ? styles.selectorBtnActive : null]}
+                            onPress={() => setSelectedLevel(lvl.id as any)}
+                          >
+                            <Text style={[styles.selectorBtnText, isSel ? styles.selectorBtnTextActive : null]}>
+                              {lvl.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/* Długość */}
+                    <Text style={styles.selectorLabel}>Długość opowiadania:</Text>
+                    <View style={styles.selectorRow}>
+                      {[
+                        { id: 'short', label: 'Krótkie' },
+                        { id: 'medium', label: 'Średnie' },
+                        { id: 'long', label: 'Długie' }
+                      ].map((len) => {
+                        const isSel = selectedLength === len.id;
+                        return (
+                          <TouchableOpacity
+                            key={len.id}
+                            style={[styles.selectorBtn, isSel ? styles.selectorBtnActive : null]}
+                            onPress={() => setSelectedLength(len.id as any)}
+                          >
+                            <Text style={[styles.selectorBtnText, isSel ? styles.selectorBtnTextActive : null]}>
+                              {len.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.generateButton}
+                      onPress={handleGenerateStory}
+                      disabled={isGenerating}
+                    >
+                      {isGenerating ? (
+                        <ActivityIndicator color="white" />
+                      ) : (
+                        <Text style={styles.generateButtonText}>Generuj opowiadanie</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.generatorHeader}>Tytuł (opcjonalnie):</Text>
+                    <TextInput
+                      style={styles.pastedTitleInput}
+                      value={pastedTextTitle}
+                      onChangeText={setPastedTextTitle}
+                      placeholder="Np. Mój artykuł prasowy..."
+                    />
+
+                    <Text style={styles.generatorHeader}>Wklej tekst do nauki:</Text>
+                    <TextInput
+                      style={styles.pastedTextInput}
+                      value={pastedText}
+                      onChangeText={setPastedText}
+                      placeholder="Wklej lub wpisz tutaj swój tekst po angielsku..."
+                      multiline
+                      numberOfLines={8}
+                    />
+                    
+                    <TouchableOpacity
+                      style={styles.generateButton}
+                      onPress={handleLoadPastedText}
+                    >
+                      <Text style={styles.generateButtonText}>Załaduj tekst do nauki</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             ) : (
               <View style={styles.readerContainer}>
-                {/* Active story title */}
-                <View style={styles.readerHeaderRow}>
-                  <Text style={styles.readerStoryTitle}>{currentStoryTitle}</Text>
-                  <TouchableOpacity
-                    style={styles.clearStoryButton}
-                    onPress={() => {
-                      setGeneratedText('');
-                      setCurrentStoryTitle('');
-                      setSentences([]);
-                      setChatMessages([]);
-                      setIsBotSpeaking(false);
-                    }}
-                  >
-                    <Text style={styles.clearStoryButtonText}>Reset</Text>
-                  </TouchableOpacity>
-                </View>
 
                 <View
                   style={styles.storyTextCard}
@@ -2655,34 +3026,58 @@ export default function HomeScreen() {
                     storyCardYRef.current = e.nativeEvent.layout.y;
                   }}
                 >
-                  <Text style={styles.instructionsText}>
-                    Dotknij zdania, aby je odsłuchać. Przytrzymaj, aby zobaczyć tłumaczenie.
-                  </Text>
-
-                  {/* Paragraph Text with onLayout to capture total height */}
-                  <Text 
-                    style={styles.paragraphText}
-                    onLayout={(e) => {
-                      paragraphHeightRef.current = e.nativeEvent.layout.height;
-                    }}
-                  >
-                    {sentences.map((sentence, idx) => {
-                      const isSpeakingSentence = speakingSentenceIndex === idx;
-                      return (
-                        <Text
-                          key={idx}
-                          style={[
-                            styles.sentenceText,
-                            isSpeakingSentence ? styles.sentenceTextActive : null,
-                          ]}
-                          onPress={() => readMode === 'single' ? speakSentence(idx) : null}
-                          onLongPress={() => handleLongPressSentence(idx)}
-                        >
-                          {sentence}{' '}
-                        </Text>
-                      );
-                    })}
-                  </Text>
+                  {readMode === 'breakdown' ? (
+                    loadingBreakdown ? (
+                      <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                        <ActivityIndicator size="large" color="#1A73E8" />
+                        <Text style={{ marginTop: 12, color: '#5F6368', fontSize: 14 }}>Tłumaczenie tekstu...</Text>
+                      </View>
+                    ) : (
+                      <View style={{ gap: 16 }}>
+                        {breakdownSentences.map((sentence, idx) => {
+                          const polishText = breakdownTranslations[idx] || 'Tłumaczenie...';
+                          const isHighlighted = selectedSentenceIndex === idx || speakingSentenceIndex === idx || translatedSentenceIdx === idx;
+                          return (
+                            <View key={idx} style={[styles.breakdownRow, isHighlighted ? styles.breakdownRowActive : null]}>
+                              <TouchableOpacity 
+                                onPress={() => speakSentence(idx)}
+                                onLongPress={() => handleLongPressSentence(idx)}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.breakdownPolishText}>{polishText}</Text>
+                                <Text style={styles.breakdownEnglishText}>{sentence}</Text>
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )
+                  ) : (
+                    /* Paragraph Text with onLayout to capture total height */
+                    <Text 
+                      style={styles.paragraphText}
+                      onLayout={(e) => {
+                        paragraphHeightRef.current = e.nativeEvent.layout.height;
+                      }}
+                    >
+                      {sentences.map((sentence, idx) => {
+                        const isHighlighted = selectedSentenceIndex === idx || speakingSentenceIndex === idx || translatedSentenceIdx === idx;
+                        return (
+                          <Text
+                            key={idx}
+                            style={[
+                              styles.sentenceText,
+                              isHighlighted ? styles.sentenceTextActive : null,
+                            ]}
+                            onPress={() => readMode === 'single' ? speakSentence(idx) : null}
+                            onLongPress={() => handleLongPressSentence(idx)}
+                          >
+                            {sentence}{' '}
+                          </Text>
+                        );
+                      })}
+                    </Text>
+                  )}
                 </View>
 
                 {/* Loader rozpoczynania rozmowy */}
@@ -2796,6 +3191,7 @@ export default function HomeScreen() {
               </View>
             )}
           </ScrollView>
+          </View>
         )}
 
         {currentView === 'stories' && (
@@ -4306,24 +4702,63 @@ const styles = StyleSheet.create({
     borderBottomColor: '#DADCE0',
     backgroundColor: '#FFFFFF',
   },
-  readerToolbar: {
+  segmentedControlRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F1F3F4',
     borderBottomWidth: 1,
     borderBottomColor: '#DADCE0',
     gap: 8,
   },
-  readerModeLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#9AA0A6',
+  segmentedBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  readerModeLabelActive: {
-    color: '#202124',
+  segmentedBtnActive: {
+    backgroundColor: '#FFFFFF',
+    elevation: 1,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  segmentedBtnText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#5F6368',
+  },
+  segmentedBtnTextActive: {
+    color: '#1A73E8',
     fontWeight: '700',
+  },
+  breakdownRow: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E8EAED',
+    marginBottom: 4,
+  },
+  breakdownRowActive: {
+    backgroundColor: '#E8F0FE',
+    borderColor: '#1A73E8',
+  },
+  breakdownPolishText: {
+    fontSize: 14,
+    color: '#5F6368',
+    fontStyle: 'italic',
+    marginBottom: 4,
+  },
+  breakdownEnglishText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#202124',
   },
   readerStopBtn: {
     marginLeft: 'auto' as any,
@@ -4457,6 +4892,53 @@ const styles = StyleSheet.create({
     borderColor: '#DADCE0',
     borderRadius: 16,
     padding: 20,
+  },
+  tabHeaderContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DADCE0',
+  },
+  tabHeaderBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabHeaderBtnActive: {
+    borderBottomColor: '#1A73E8',
+  },
+  tabHeaderBtnText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#5F6368',
+  },
+  tabHeaderBtnTextActive: {
+    color: '#1A73E8',
+    fontWeight: '600',
+  },
+  pastedTitleInput: {
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 15,
+    backgroundColor: '#F8F9FA',
+    marginBottom: 12,
+    color: '#202124',
+  },
+  pastedTextInput: {
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+    height: 180,
+    textAlignVertical: 'top',
+    backgroundColor: '#F8F9FA',
+    marginBottom: 16,
+    color: '#202124',
   },
   generatorHeader: {
     fontSize: 16,

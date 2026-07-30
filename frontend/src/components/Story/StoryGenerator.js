@@ -12,18 +12,94 @@ const GENERATION_PHASES = [
 ];
 
 const getTopicIcon = (topicName) => {
-  if (!topicName) return "✨";
+  const size = 16;
+  const strokeWidth = 2.5;
+  const style = { display: 'inline-block', verticalAlign: 'middle' };
+  
+  if (!topicName) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+      </svg>
+    );
+  }
+  
   const t = topicName.toLowerCase();
-  if (t.includes("business")) return "💼";
-  if (t.includes("discovery")) return "🚀";
-  if (t.includes("ai") || t.includes("tech")) return "🤖";
-  if (t.includes("nature") || t.includes("environment")) return "🌿";
-  if (t.includes("history") || t.includes("past")) return "🏛️";
-  if (t.includes("science")) return "🔬";
-  if (t.includes("travel")) return "✈️";
-  if (t.includes("culture") || t.includes("art")) return "🎨";
-  if (t.includes("health") || t.includes("sport")) return "💪";
-  return "✨";
+  
+  if (t.includes("business")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      </svg>
+    );
+  }
+  if (t.includes("discovery") || t.includes("future")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <polygon points="5 3 19 12 5 21 5 3" />
+      </svg>
+    );
+  }
+  if (t.includes("ai") || t.includes("tech") || t.includes("technology") || t.includes("robot")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <rect x="3" y="11" width="18" height="10" rx="2" />
+        <circle cx="12" cy="5" r="2" />
+        <path d="M12 7v4M8 15h.01M16 15h.01" />
+      </svg>
+    );
+  }
+  if (t.includes("nature") || t.includes("environment")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M2 22c1.25-6.75 6.75-12.25 13.5-13.5M22 2c-1.25 6.75-6.75 12.25-13.5 13.5M9 15c0-4.5 3.5-8 8-8M15 9c0 4.5-3.5 8-8 8" />
+      </svg>
+    );
+  }
+  if (t.includes("history") || t.includes("past")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M4 18h16M10 9v9M14 9v9M18 9v9M6 9v9M3 9h18M12 2L3 9h18z" />
+      </svg>
+    );
+  }
+  if (t.includes("science")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M6 3h12M12 3v14M9 12h6M5 21h14M8 12a4 4 0 0 0-4 4v5h16v-5a4 4 0 0 0-4-4" />
+      </svg>
+    );
+  }
+  if (t.includes("travel") || t.includes("adventure")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+      </svg>
+    );
+  }
+  if (t.includes("culture") || t.includes("art") || t.includes("music")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.35857 19.5 6.00857 19 6.50857 18.5C7.00857 18 7.50857 17.5 8.50857 17.5C9.50857 17.5 9.50857 19 9.50857 20C9.50857 21 11.0086 22 12 22Z" />
+        <circle cx="7.5" cy="10.5" r="1.5" />
+        <circle cx="11.5" cy="7.5" r="1.5" />
+        <circle cx="16.5" cy="9.5" r="1.5" />
+      </svg>
+    );
+  }
+  if (t.includes("health") || t.includes("sport")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
 };
 
 const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading, suggestedTopics, user }) => {
@@ -172,7 +248,11 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           className={`gen-tab-btn ${activeTab === "ai" ? "active" : ""}`}
           onClick={() => setActiveTab("ai")}
         >
-          <span className="gen-tab-icon">✨</span>
+          <span className="gen-tab-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+          </span>
           <span>AI Lesson Generator</span>
         </button>
         <button
@@ -180,7 +260,12 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           className={`gen-tab-btn ${activeTab === "paste" ? "active" : ""}`}
           onClick={() => setActiveTab("paste")}
         >
-          <span className="gen-tab-icon">📋</span>
+          <span className="gen-tab-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+            </svg>
+          </span>
           <span>...or Paste External Text</span>
           <span className="gen-tab-badge">Instant Practice</span>
         </button>
@@ -483,7 +568,11 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
             }}
             disabled={isLoading || !pastedText.trim()}
           >
-            <span className="btn-icon">🚀</span>
+            <span className="btn-icon">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            </span>
             <span>Save to Server & Start Practicing</span>
           </button>
           <button
