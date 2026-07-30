@@ -1,5 +1,4 @@
-// frontend/src/App.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
@@ -9,6 +8,7 @@ import SavedStories from './components/Story/SavedStories';
 import Auth from './components/Auth/Auth';
 import VocabularyView from './components/Vocabulary/VocabularyView';
 import MediaBuddy from './components/Media/MediaBuddy';
+import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 
 function App() {
@@ -21,6 +21,30 @@ function App() {
   const [generatedText, setGeneratedText] = useState("");
   const [currentStoryTitle, setCurrentStoryTitle] = useState("");
   const [currentStoryId, setCurrentStoryId] = useState(null);
+  const [externalFlashcardsWords, setExternalFlashcardsWords] = useState([]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const playFlashcards = params.get('play_flashcards') === 'true';
+    const wordsB64 = params.get('words');
+    if (playFlashcards && wordsB64) {
+      try {
+        const decoded = decodeURIComponent(escape(window.atob(wordsB64)));
+        const parsedWords = JSON.parse(decoded);
+        if (Array.isArray(parsedWords) && parsedWords.length > 0) {
+          setExternalFlashcardsWords(parsedWords);
+        }
+      } catch (e) {
+        console.error("Failed to parse external flashcards words from URL:", e);
+      }
+      
+      // Clean query parameters from URL without reloading
+      const url = new URL(window.location);
+      url.searchParams.delete('play_flashcards');
+      url.searchParams.delete('words');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+    }
+  }, []);
 
   const handleLoginSuccess = (userData) => {
     localStorage.setItem("buddy_user", JSON.stringify(userData));
@@ -106,6 +130,17 @@ function App() {
           )}
         </div>
       </main>
+
+      {externalFlashcardsWords.length > 0 && (
+        <div className="flashcards-fullpage-overlay">
+          <div className="flashcards-wrapper-modal glass-panel">
+            <Flashcards 
+              notebookWords={externalFlashcardsWords} 
+              onFinishExercises={() => setExternalFlashcardsWords([])} 
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

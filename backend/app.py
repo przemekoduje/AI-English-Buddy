@@ -2501,23 +2501,133 @@ def send_notebook_email():
         except Exception as e:
             print(f"Error generating examples for email: {e}")
 
-    email_body = "Oto Twoje słowa z notatnika AI English Buddy wraz z przykładami użycia:\n\n"
-    for entry in notebook_words:
+    frontend_url = data.get('frontend_url', 'http://localhost:3000').rstrip('/')
+
+
+    # Tworzenie linku do gry w fiszki w aplikacji (Base64 UTF-8)
+    try:
+        words_for_link = []
+        for entry in notebook_words:
+            orig = entry.get('original', entry.get('word', '')).strip()
+            trans = entry.get('translated', entry.get('translation', '')).strip()
+            if orig:
+                words_for_link.append({'original': orig, 'translated': trans})
+        
+        words_json = json.dumps(words_for_link)
+        words_b64 = base64.b64encode(words_json.encode('utf-8')).decode('utf-8')
+        import urllib.parse
+        encoded_words = urllib.parse.quote(words_b64)
+        play_url = f"{frontend_url}/?play_flashcards=true&words={encoded_words}"
+    except Exception as e:
+        print(f"Error encoding words for link: {e}")
+        play_url = frontend_url
+
+    # Generowanie czytelnych, nowoczesnych kart słówek w HTML kompatybilnym z e-mail
+    list_html = ""
+    for idx, entry in enumerate(notebook_words):
         original = entry.get('original', entry.get('word', 'Brak słowa'))
         translated = entry.get('translated', entry.get('translation', 'Brak tłumaczenia'))
         
-        email_body += f"• {original} - {translated}\n"
-        
-        # Dodawanie wygenerowanych przykładów
+        # Pobieranie przykładów
         examples = examples_dict.get(original)
+        ex_section_html = ""
         if examples and isinstance(examples, list):
-            for idx, ex in enumerate(examples, 1):
-                email_body += f"   Przykład {idx}: {ex}\n"
-        email_body += "\n"
+            ex_html = ""
+            for ex in examples:
+                ex_html += f"""
+                <div style="font-size: 0.9rem; font-style: italic; color: #475569; margin-bottom: 6px; line-height: 1.4;">
+                  • {ex}
+                </div>
+                """
+            ex_section_html = f"""
+            <div style="margin-top: 14px; padding: 10px 14px; background-color: #f8fafc; border-left: 4px solid #4f46e5; border-radius: 0 8px 8px 0;">
+              <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.05em;">Przykłady użycia:</div>
+              {ex_html}
+            </div>
+            """
         
-    email_body += "Powodzenia w nauce!"
+        list_html += f"""
+        <div style="margin-bottom: 20px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
+          <!-- Słowo angielskie -->
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 0; vertical-align: middle;">
+                <span style="font-size: 1.3rem; font-weight: 700; color: #1e1b4b; display: inline-block;">{original}</span>
+              </td>
+              <td style="padding: 0; text-align: right; vertical-align: middle; width: 60px;">
+                <span style="display: inline-block; background-color: #dbeafe; color: #1e40af; font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.02em;">EN</span>
+              </td>
+            </tr>
+          </table>
+          
+          <div style="margin: 8px 0; border-top: 1px solid #f1f5f9;"></div>
+          
+          <!-- Tłumaczenie polskie -->
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 0; vertical-align: middle;">
+                <span style="font-size: 1.1rem; font-weight: 600; color: #4f46e5; display: inline-block;">{translated}</span>
+              </td>
+              <td style="padding: 0; text-align: right; vertical-align: middle; width: 60px;">
+                <span style="display: inline-block; background-color: #f3e8ff; color: #6b21a8; font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.02em;">PL</span>
+              </td>
+            </tr>
+          </table>
 
-    msg = MIMEText(email_body, 'plain', 'utf-8')
+          <!-- Przykłady użycia -->
+          {ex_section_html}
+        </div>
+        """
+
+    email_html = f"""
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Twoje słówka z notatnika AI English Buddy</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #334155; -webkit-font-smoothing: antialiased;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03); border: 1px solid #e2e8f0;">
+          
+          <!-- Nagłówek -->
+          <div style="text-align: center; margin-bottom: 24px; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 30px 20px; border-radius: 12px; color: #ffffff;">
+            <div style="font-size: 2.5rem; margin-bottom: 10px;">📓</div>
+            <h1 style="font-size: 1.6rem; font-weight: 800; margin: 0 0 8px 0; color: #ffffff; letter-spacing: -0.02em;">Twoje Słówka z Notatnika</h1>
+            <p style="color: #e0e7ff; font-size: 0.95rem; margin: 0; opacity: 0.9;">AI English Buddy przygotował dla Ciebie podsumowanie i materiały do nauki.</p>
+          </div>
+
+          <!-- Przycisk do interaktywnej nauki -->
+          <div style="text-align: center; margin: 24px 0; padding: 16px; background-color: #f1f5f9; border-radius: 12px;">
+            <p style="color: #475569; font-size: 0.9rem; margin: 0 0 12px 0; font-weight: 500;">
+              Chcesz poćwiczyć wymowę, zagrać w grę lub przetestować fiszki z animacjami?
+            </p>
+            <a href="{play_url}" target="_blank" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 700; border-radius: 8px; font-size: 0.95rem; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.25);">
+              🚀 Uruchom interaktywne Fiszki w aplikacji
+            </a>
+          </div>
+
+          <!-- Sekcja statyczna (lista słówek) -->
+          <div style="margin: 30px 0;">
+            <h2 style="font-size: 1.15rem; color: #1e293b; border-left: 4px solid #4f46e5; padding-left: 10px; margin-bottom: 15px;">
+              📝 Pełna lista słówek i przykłady
+            </h2>
+            <div>
+              {list_html}
+            </div>
+          </div>
+
+          <!-- Stopka -->
+          <div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 20px; text-align: center; font-size: 0.8rem; color: #94a3b8;">
+            Wiadomość wygenerowana automatycznie przez AI English Buddy. Powodzenia w dalszej nauce!
+          </div>
+
+        </div>
+      </body>
+    </html>
+    """
+
+    msg = MIMEText(email_html, 'html', 'utf-8')
     msg['Subject'] = "Twoje słówka z notatnika AI English Buddy"
     msg['From'] = EMAIL_USERNAME
     msg['To'] = recipient_email
@@ -3095,7 +3205,6 @@ def split_text_by_language(text):
     if not text or not text.strip():
         return []
         
-    # First, determine the overall primary language of the entire sentence/text
     overall_lang = detect_primary_language(text)
     
     segments = []
@@ -3140,14 +3249,10 @@ def split_text_by_language(text):
             inner_text = re.sub(r'^[\(\[]+|[\)\]]+$', '', chunk_stripped).strip()
             if inner_text:
                 inner_lang = detect_primary_language(inner_text)
-                # Only switch voice if inner_text has at least 2 words AND its language differs from overall_lang
-                if inner_lang != overall_lang and len(inner_text.split()) >= 2:
-                    add_segment(inner_text, inner_lang)
-                else:
-                    add_segment(inner_text, overall_lang)
+                add_segment(inner_text, inner_lang)
         else:
-            # For non-parenthetical text, keep it strictly in overall_lang so names/inserts inside sentences do not cause voice changes!
-            add_segment(chunk, overall_lang)
+            segment_lang = detect_primary_language(chunk_stripped)
+            add_segment(chunk, segment_lang)
             
     return segments
 

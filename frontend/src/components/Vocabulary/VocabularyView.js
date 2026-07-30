@@ -176,7 +176,8 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         },
         body: JSON.stringify({
           recipient_email: recipientEmail,
-          notebook_words: words.map(w => ({ original: w.original, translated: w.translated }))
+          notebook_words: words.map(w => ({ original: w.original, translated: w.translated })),
+          frontend_url: window.location.origin
         }),
       });
 
