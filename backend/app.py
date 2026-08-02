@@ -1763,8 +1763,8 @@ def generate_text():
     # Dynamic prompt construction
     if parent_id and parts:
         system_prompt = (
-            "You are an expert English teacher writing custom educational stories for learners of English. "
-            "You are writing a continuation (the next part/chapter) of an existing story. "
+            "You are an expert English teacher writing custom educational stories or series of articles for learners of English. "
+            "You are writing a continuation (the next part/chapter, or the next story/episode in a series) of an existing collection. "
             "Your response MUST be in JSON format with exactly two keys: 'title' and 'story'. "
             "Do NOT write any text before or after the JSON structure. Respond ONLY with valid JSON.\n\n"
             "Example format:\n"
@@ -1777,12 +1777,45 @@ def generate_text():
         for p in parts:
             history_context += f"\n--- PART {p['part_number']}: {p['title']} ---\n{p['text']}\n"
             
-        user_prompt = f"Here is the story so far:\n{history_context}\n\n"
-        user_prompt += f"Write the next part (Part {next_part_num}) of this story.\n"
-        if topics:
-            user_prompt += f"Steer the continuation to incorporate these new topics: {', '.join(topics)}.\n"
-        if custom_details.strip():
-            user_prompt += f"Additionally, incorporate these plot details: \"{custom_details}\"\n"
+        # Determine if user refined/provided continuation details
+        refined_details = custom_details.strip()
+        is_empty_or_just_continue = not refined_details or refined_details.lower() in [
+            "continue", "kontynuuj", "kontynuuj.", "continue.", "kontynuuj!", "continue!"
+        ]
+        
+        orig_topics = root_data.get('topics', [])
+        orig_details = root_data.get('custom_details', '')
+        
+        user_prompt = f"Here is the story/series so far:\n{history_context}\n\n"
+        user_prompt += f"Write the next part (Part {next_part_num}) of this story/series.\n"
+        
+        # Always tell the model the original context of the story
+        if orig_topics or orig_details.strip():
+            user_prompt += "Original story theme/context:\n"
+            if orig_topics:
+                user_prompt += f"- Original topics: {', '.join(orig_topics)}\n"
+            if orig_details.strip():
+                user_prompt += f"- Original details: {orig_details}\n"
+            user_prompt += "\n"
+            
+        # If user did refine, we emphasize the refinement
+        if topics or (refined_details and not is_empty_or_just_continue):
+            user_prompt += "For this continuation, incorporate these new refined details/directions:\n"
+            if topics:
+                user_prompt += f"- New topics: {', '.join(topics)}\n"
+            if refined_details and not is_empty_or_just_continue:
+                user_prompt += f"- Refinement details: \"{refined_details}\"\n"
+        elif orig_topics or orig_details.strip():
+            user_prompt += "Continue the story/series naturally following the original topics and details listed above.\n"
+
+        # Explicit instructions on following the continuation style defined by the user
+        user_prompt += (
+            "\nNote on Continuation Behavior:\n"
+            "Carefully analyze if the original details or refinement details ask for a change of subject, "
+            "different characters, or different brands in subsequent parts (e.g., 'in the continuation there should be other histories of random global brands'). "
+            "If so, do NOT continue the previous part's story/brand. Instead, generate a completely new educational story/episode "
+            "about a different brand/subject as requested for Part/Episode {next_part_num}, keeping the same language and teaching level.\n"
+        ).format(next_part_num=next_part_num)
     else:
         system_prompt = (
             "You are an expert English teacher writing custom educational stories for learners of English. "
@@ -1897,8 +1930,14 @@ def generate_text():
             if parent_id:
                 new_story_data['parent_id'] = root_id
                 new_story_data['part_number'] = next_part_num
+                if topics:
+                    new_story_data['topics'] = topics
+                if custom_details.strip():
+                    new_story_data['custom_details'] = custom_details
             else:
                 new_story_data['part_number'] = 1
+                new_story_data['topics'] = topics
+                new_story_data['custom_details'] = custom_details
 
             doc_ref = stories_ref.add(new_story_data)
             story_id = doc_ref[1].id

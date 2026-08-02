@@ -1761,7 +1761,7 @@ function Workspace({
                 <div className="continuation-actions">
                   <button
                     onClick={handleGenerateContinuation}
-                    disabled={isLoading || (selectedContinuationTopics.length === 0 && !continuationDetails.trim())}
+                    disabled={isLoading}
                     className="generate-story-btn"
                   >
                     {isLoading ? "Generating sequel..." : `Generate Part ${storyParts.length + 1}`}

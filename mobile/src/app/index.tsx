@@ -21,6 +21,7 @@ import { Audio } from 'expo-av';
 import Svg, { Path } from 'react-native-svg';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import transcriptsData from '../constants/transcripts.json';
+import Constants from 'expo-constants';
 
 const { width } = Dimensions.get('window');
 
@@ -126,7 +127,17 @@ const getInitialBackendUrl = () => {
       return 'https://ai-english-buddy-backend.onrender.com';
     }
   }
-  return 'https://full-walls-think.loca.lt'; // Tunel LocalTunnel
+
+  // Dynamiczne wykrycie IP hosta z Expo
+  const hostUri = Constants.expoConfig?.hostUri || (Constants.manifest as any)?.debuggerHost;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip) {
+      return `http://${ip}:5001`;
+    }
+  }
+  
+  return 'http://192.168.100.31:5001';
 };
 
 export default function HomeScreen() {
@@ -1167,6 +1178,14 @@ export default function HomeScreen() {
       try {
         const storedUser = await AsyncStorage.getItem('buddy_user');
         let storedIP = await AsyncStorage.getItem('buddy_backend_url');
+        const dynamicIP = getInitialBackendUrl();
+
+        if (storedIP && (storedIP.includes('loca.lt') || storedIP.includes('192.168.') || storedIP.includes('localhost') || storedIP.includes('127.0.0.1'))) {
+          if (storedIP !== dynamicIP) {
+            storedIP = dynamicIP;
+            await AsyncStorage.setItem('buddy_backend_url', storedIP);
+          }
+        }
 
         // Jeśli aplikacja działa w przeglądarce na produkcji, a zapisane IP jest adresem lokalnym, wymuś zmianę na Render
         if (typeof window !== 'undefined' && window.location) {
