@@ -727,10 +727,9 @@ function MediaBuddy({ user }) {
 
   const fetchAndLoadVideo = async (videoId) => {
     setCustomError("");
-    setShowManualPaste(false);
     setIsLoadingCustom(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=${useWhisper}`, {
+      const response = await fetch(`${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=true`, {
         headers: {
           "X-Session-Token": user.token
         }
@@ -757,14 +756,10 @@ function MediaBuddy({ user }) {
       } else {
         const errData = await response.json();
         setCustomError(errData.error || "Błąd podczas pobierania transkrypcji.");
-        setShowManualPaste(true);
-        setManualVideoId(videoId);
       }
     } catch (err) {
       console.error(err);
       setCustomError("Błąd pobierania transkrypcji z serwisu YouTube.");
-      setShowManualPaste(true);
-      setManualVideoId(videoId);
     } finally {
       setIsLoadingCustom(false);
     }
@@ -780,52 +775,7 @@ function MediaBuddy({ user }) {
     await fetchAndLoadVideo(videoId);
   };
 
-  const handleSaveManualTranscript = async (e) => {
-    e.preventDefault();
-    if (!manualText.trim()) return;
 
-    setIsLoadingCustom(true);
-    setCustomError("");
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/media/transcript/manual`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-Token": user.token
-        },
-        body: JSON.stringify({
-          video_id: manualVideoId,
-          raw_text: manualText
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const newCustomVid = {
-          id: `custom_${manualVideoId}`,
-          title: data.title || `Własne wideo (${manualVideoId})`,
-          youtubeId: manualVideoId,
-          transcript: data.transcript
-        };
-
-        if (!customVideos.some(v => v.youtubeId === manualVideoId)) {
-          setCustomVideos([...customVideos, newCustomVid]);
-        }
-        setCurrentVideo(newCustomVid);
-        setCustomUrl("");
-        setManualText("");
-        setShowManualPaste(false);
-      } else {
-        const errData = await response.json();
-        setCustomError(errData.error || "Błąd przetwarzania napisów ręcznych.");
-      }
-    } catch (err) {
-      console.error(err);
-      setCustomError("Błąd połączenia podczas przesyłania napisów.");
-    } finally {
-      setIsLoadingCustom(false);
-    }
-  };
 
   return (
     <div className="mediabuddy-container">
@@ -853,70 +803,7 @@ function MediaBuddy({ user }) {
           </button>
         </form>
         
-        <div className="transcript-mode-toggle-container">
-          <span className="toggle-label-text">Tryb pobierania transkrypcji:</span>
-          <div className="toggle-switch-wrapper">
-            <button
-              type="button"
-              className={`toggle-option-btn ${!useWhisper ? "active" : ""}`}
-              onClick={() => setUseWhisper(false)}
-              title="Darmowe automatyczne napisy z YouTube (brak interpunkcji)"
-            >
-              <span>Darmowy (Nap. automatyczne)</span>
-            </button>
-            <button
-              type="button"
-              className={`toggle-option-btn ${useWhisper ? "active" : ""}`}
-              onClick={() => setUseWhisper(true)}
-              title="Płatna transkrypcja AI przez Whisper (świetna interpunkcja i wielkie litery)"
-            >
-              <span>Premium AI (Whisper)</span>
-            </button>
-          </div>
-        </div>
-
         {customError && <p className="loader-error">{customError}</p>}
-
-        {showManualPaste && (
-          <div className="manual-paste-section">
-            <div className="manual-paste-info">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
-                <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
-              </svg>
-              <strong>YouTube zablokował automatyczne pobieranie na serwerze:</strong>
-              <p style={{ margin: '0.5rem 0', fontSize: '0.92rem' }}>
-                Aby to obejść, możesz wkleić napisy ręcznie. Użyj darmowego narzędzia zewnętrznego:
-              </p>
-              <ol>
-                <li>Kliknij tutaj: <a href={`https://youtubetranscript.com/?v=${manualVideoId}`} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 'bold', color: 'var(--primary-500)', textDecoration: 'underline' }}>Otwórz transkrypcję filmu na YouTubeTranscript</a> (otworzy się w nowej karcie).</li>
-                <li>Zaznacz i skopiuj całą treść transkrypcji (wraz ze znacznikami czasu, np. 0:03).</li>
-                <li>Wklej skopiowany tekst w pole poniżej i kliknij przycisk „Zapisz napisy i załaduj wideo”.</li>
-              </ol>
-            </div>
-            <form onSubmit={handleSaveManualTranscript} className="manual-paste-form">
-              <textarea
-                className="manual-paste-textarea"
-                placeholder="Wklej skopiowaną transkrypcję tutaj (np.:&#10;0:03&#10;Hello buddy...&#10;0:06&#10;Do you hear me?)"
-                value={manualText}
-                onChange={(e) => setManualText(e.target.value)}
-                rows={6}
-                required
-              />
-              <button type="submit" className="manual-paste-btn" disabled={isLoadingCustom}>
-                {isLoadingCustom ? "Przetwarzanie..." : (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    Zapisz napisy i załaduj wideo
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                      <polyline points="17 21 17 13 7 13 7 21" />
-                      <polyline points="7 3 7 8 15 8" />
-                    </svg>
-                  </span>
-                )}
-              </button>
-            </form>
-          </div>
-        )}
         {/* Curated Channels & Suggestion Box */}
         <div className="curated-suggestions-section">
           <h4 className="suggestions-title">
