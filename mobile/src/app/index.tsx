@@ -1484,7 +1484,10 @@ export default function HomeScreen() {
         
         customFetch(`${backendUrl}/api/translate`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || "",
+          },
           body: JSON.stringify({ text })
         })
           .then(res => {
@@ -1558,7 +1561,11 @@ export default function HomeScreen() {
     setVideoIsLoadingCustom(true);
     setVideoCustomError('');
     try {
-      const response = await customFetch(`${backendUrl}/api/media/transcript?video_id=${yId}`);
+      const response = await customFetch(`${backendUrl}/api/media/transcript?video_id=${yId}&use_whisper=true`, {
+        headers: {
+          'X-Session-Token': user?.token || '',
+        }
+      });
       if (!response.ok) {
         throw new Error("Nie udało się pobrać transkrypcji z serwera");
       }
@@ -1619,7 +1626,10 @@ export default function HomeScreen() {
     try {
       const response = await customFetch(`${backendUrl}/api/translate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || "",
+        },
         body: JSON.stringify({ text: cleanWord, context: sentenceContext })
       });
       if (latestWordRef.current !== cleanWord) return;
@@ -1700,7 +1710,10 @@ export default function HomeScreen() {
     try {
       const response = await customFetch(`${backendUrl}/api/media/explain-joke`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || "",
+        },
         body: JSON.stringify({ text: segmentText })
       });
       if (response.ok) {
@@ -2627,14 +2640,14 @@ export default function HomeScreen() {
         <View style={styles.appHeader}>
           {currentView === 'dashboard' ? (
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ width: 32, alignItems: 'flex-start' }}>
+              <View style={{ width: 40, alignItems: 'flex-start' }}>
                 <Image
                   source={require('../../assets/images/logo.png')}
-                  style={{ width: 28, height: 28, resizeMode: 'contain' }}
+                  style={{ width: 36, height: 36, resizeMode: 'contain' }}
                 />
               </View>
               <Text style={[styles.appTitle, { textAlign: 'center', flex: 1 }]}>Speakling</Text>
-              <View style={{ width: 32 }} />
+              <View style={{ width: 40 }} />
             </View>
           ) : (
             <>
@@ -3792,7 +3805,15 @@ export default function HomeScreen() {
           style={styles.navItem}
           onPress={() => setCurrentView('dashboard')}
         >
-          <HomeIcon color={currentView === 'dashboard' ? '#1A73E8' : '#5F6368'} />
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={{
+              width: 24,
+              height: 24,
+              resizeMode: 'contain',
+              opacity: currentView === 'dashboard' ? 1.0 : 0.5
+            }}
+          />
           <Text style={[styles.navText, currentView === 'dashboard' ? styles.navTextActive : null]}>
             Chat Live
           </Text>
@@ -4062,7 +4083,7 @@ const styles = StyleSheet.create({
   voiceTutorContainer: {
     flex: 1,
     padding: 24,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -4769,7 +4790,7 @@ const styles = StyleSheet.create({
   },
   appContainer: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
   },
   appHeader: {
     height: 56,
@@ -4777,8 +4798,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#DADCE0',
     backgroundColor: '#FFFFFF',
   },
   segmentedControlRow: {
@@ -4852,7 +4871,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   appTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
     color: '#202124',
   },
