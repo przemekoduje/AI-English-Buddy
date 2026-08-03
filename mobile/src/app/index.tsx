@@ -1264,23 +1264,7 @@ export default function HomeScreen() {
         let storedIP = await AsyncStorage.getItem('buddy_backend_url');
         const dynamicIP = getInitialBackendUrl();
 
-        if (storedIP && (storedIP.includes('loca.lt') || storedIP.includes('192.168.') || storedIP.includes('localhost') || storedIP.includes('127.0.0.1'))) {
-          if (storedIP !== dynamicIP) {
-            storedIP = dynamicIP;
-            await AsyncStorage.setItem('buddy_backend_url', storedIP);
-          }
-        }
 
-        // Jeśli aplikacja działa w przeglądarce na produkcji, a zapisane IP jest adresem lokalnym, wymuś zmianę na Render
-        if (typeof window !== 'undefined' && window.location) {
-          const hostname = window.location.hostname;
-          if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
-            if (!storedIP || storedIP.includes('192.168.') || storedIP.includes('127.0.0.1') || storedIP.includes('localhost')) {
-              storedIP = 'https://ai-english-buddy-backend.onrender.com';
-              await AsyncStorage.setItem('buddy_backend_url', storedIP);
-            }
-          }
-        }
 
         if (!storedIP) {
           storedIP = getInitialBackendUrl();
@@ -2590,7 +2574,10 @@ export default function HomeScreen() {
             <TextInput
               style={styles.authInput}
               value={backendUrl}
-              onChangeText={setBackendUrl}
+              onChangeText={async (text) => {
+                setBackendUrl(text);
+                await AsyncStorage.setItem('buddy_backend_url', text);
+              }}
               placeholder="http://192.168.1.100:5001"
               autoCapitalize="none"
               autoCorrect={false}

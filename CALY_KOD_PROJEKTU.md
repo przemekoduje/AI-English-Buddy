@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-08-03 11:13:13
+Wygenerowano: 2026-08-03 13:20:01
 
 ## Spis Treści
 1. `backend\app.py`
@@ -1853,8 +1853,8 @@ def generate_text():
     # Dynamic prompt construction
     if parent_id and parts:
         system_prompt = (
-            "You are an expert English teacher writing custom educational stories for learners of English. "
-            "You are writing a continuation (the next part/chapter) of an existing story. "
+            "You are an expert English teacher writing custom educational stories or series of articles for learners of English. "
+            "You are writing a continuation (the next part/chapter, or the next story/episode in a series) of an existing collection. "
             "Your response MUST be in JSON format with exactly two keys: 'title' and 'story'. "
             "Do NOT write any text before or after the JSON structure. Respond ONLY with valid JSON.\n\n"
             "Example format:\n"
@@ -1867,12 +1867,45 @@ def generate_text():
         for p in parts:
             history_context += f"\n--- PART {p['part_number']}: {p['title']} ---\n{p['text']}\n"
             
-        user_prompt = f"Here is the story so far:\n{history_context}\n\n"
-        user_prompt += f"Write the next part (Part {next_part_num}) of this story.\n"
-        if topics:
-            user_prompt += f"Steer the continuation to incorporate these new topics: {', '.join(topics)}.\n"
-        if custom_details.strip():
-            user_prompt += f"Additionally, incorporate these plot details: \"{custom_details}\"\n"
+        # Determine if user refined/provided continuation details
+        refined_details = custom_details.strip()
+        is_empty_or_just_continue = not refined_details or refined_details.lower() in [
+            "continue", "kontynuuj", "kontynuuj.", "continue.", "kontynuuj!", "continue!"
+        ]
+        
+        orig_topics = root_data.get('topics', [])
+        orig_details = root_data.get('custom_details', '')
+        
+        user_prompt = f"Here is the story/series so far:\n{history_context}\n\n"
+        user_prompt += f"Write the next part (Part {next_part_num}) of this story/series.\n"
+        
+        # Always tell the model the original context of the story
+        if orig_topics or orig_details.strip():
+            user_prompt += "Original story theme/context:\n"
+            if orig_topics:
+                user_prompt += f"- Original topics: {', '.join(orig_topics)}\n"
+            if orig_details.strip():
+                user_prompt += f"- Original details: {orig_details}\n"
+            user_prompt += "\n"
+            
+        # If user did refine, we emphasize the refinement
+        if topics or (refined_details and not is_empty_or_just_continue):
+            user_prompt += "For this continuation, incorporate these new refined details/directions:\n"
+            if topics:
+                user_prompt += f"- New topics: {', '.join(topics)}\n"
+            if refined_details and not is_empty_or_just_continue:
+                user_prompt += f"- Refinement details: \"{refined_details}\"\n"
+        elif orig_topics or orig_details.strip():
+            user_prompt += "Continue the story/series naturally following the original topics and details listed above.\n"
+
+        # Explicit instructions on following the continuation style defined by the user
+        user_prompt += (
+            "\nNote on Continuation Behavior:\n"
+            "Carefully analyze if the original details or refinement details ask for a change of subject, "
+            "different characters, or different brands in subsequent parts (e.g., 'in the continuation there should be other histories of random global brands'). "
+            "If so, do NOT continue the previous part's story/brand. Instead, generate a completely new educational story/episode "
+            "about a different brand/subject as requested for Part/Episode {next_part_num}, keeping the same language and teaching level.\n"
+        ).format(next_part_num=next_part_num)
     else:
         system_prompt = (
             "You are an expert English teacher writing custom educational stories for learners of English. "
@@ -1987,8 +2020,14 @@ def generate_text():
             if parent_id:
                 new_story_data['parent_id'] = root_id
                 new_story_data['part_number'] = next_part_num
+                if topics:
+                    new_story_data['topics'] = topics
+                if custom_details.strip():
+                    new_story_data['custom_details'] = custom_details
             else:
                 new_story_data['part_number'] = 1
+                new_story_data['topics'] = topics
+                new_story_data['custom_details'] = custom_details
 
             doc_ref = stories_ref.add(new_story_data)
             story_id = doc_ref[1].id
@@ -26457,7 +26496,7 @@ function Workspace({
                 <div className="continuation-actions">
                   <button
                     onClick={handleGenerateContinuation}
-                    disabled={isLoading || (selectedContinuationTopics.length === 0 && !continuationDetails.trim())}
+                    disabled={isLoading}
                     className="generate-story-btn"
                   >
                     {isLoading ? "Generating sequel..." : `Generate Part ${storyParts.length + 1}`}
@@ -27245,9 +27284,10 @@ import {
   Dimensions,
   Switch,
   Modal,
-  Image,
   Platform,
   Keyboard,
+  Linking,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
@@ -27255,6 +27295,7 @@ import { Audio } from 'expo-av';
 import Svg, { Path } from 'react-native-svg';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import transcriptsData from '../constants/transcripts.json';
+import Constants from 'expo-constants';
 
 const { width } = Dimensions.get('window');
 
@@ -27360,7 +27401,16 @@ const getInitialBackendUrl = () => {
       return 'https://ai-english-buddy-backend.onrender.com';
     }
   }
-  return 'https://8b744eb63c9a79.lhr.life'; // Tunel localhost.run
+  // Dynamiczne wykrycie IP hosta z Expo
+  const hostUri = Constants.expoConfig?.hostUri || (Constants.manifest as any)?.debuggerHost;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip) {
+      return `http://${ip}:5001`;
+    }
+  }
+  
+  return 'http://192.168.100.31:5001';
 };
 
 export default function HomeScreen() {
@@ -27522,6 +27572,10 @@ export default function HomeScreen() {
   const [videoCustomUrl, setVideoCustomUrl] = useState<string>('');
   const [videoIsLoadingCustom, setVideoIsLoadingCustom] = useState<boolean>(false);
   const [videoCustomError, setVideoCustomError] = useState<string>('');
+  const [videoUseWhisper, setVideoUseWhisper] = useState<boolean>(true);
+  const [videoShowManualPaste, setVideoShowManualPaste] = useState<boolean>(false);
+  const [videoManualText, setVideoManualText] = useState<string>('');
+  const [videoManualVideoId, setVideoManualVideoId] = useState<string>('');
   
   // Translation
   const [videoSelectedWord, setVideoSelectedWord] = useState<string>('');
@@ -28480,17 +28534,9 @@ export default function HomeScreen() {
       try {
         const storedUser = await AsyncStorage.getItem('buddy_user');
         let storedIP = await AsyncStorage.getItem('buddy_backend_url');
+        const dynamicIP = getInitialBackendUrl();
 
-        // Jeśli aplikacja działa w przeglądarce na produkcji, a zapisane IP jest adresem lokalnym, wymuś zmianę na Render
-        if (typeof window !== 'undefined' && window.location) {
-          const hostname = window.location.hostname;
-          if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
-            if (!storedIP || storedIP.includes('192.168.') || storedIP.includes('127.0.0.1') || storedIP.includes('localhost')) {
-              storedIP = 'https://ai-english-buddy-backend.onrender.com';
-              await AsyncStorage.setItem('buddy_backend_url', storedIP);
-            }
-          }
-        }
+
 
         if (!storedIP) {
           storedIP = getInitialBackendUrl();
@@ -28519,6 +28565,10 @@ export default function HomeScreen() {
         const storedAutoSend = await AsyncStorage.getItem('buddy_auto_send');
         if (storedAutoSend !== null) {
           setAutoSendEnabled(storedAutoSend === 'true');
+        }
+        const storedVideoUseWhisper = await AsyncStorage.getItem('buddy_video_use_whisper');
+        if (storedVideoUseWhisper !== null) {
+          setVideoUseWhisper(storedVideoUseWhisper === 'true');
         }
 
         // Configure Audio session for playback
@@ -28699,7 +28749,10 @@ export default function HomeScreen() {
         
         customFetch(`${backendUrl}/api/translate`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || "",
+          },
           body: JSON.stringify({ text })
         })
           .then(res => {
@@ -28773,9 +28826,15 @@ export default function HomeScreen() {
     setVideoIsLoadingCustom(true);
     setVideoCustomError('');
     try {
-      const response = await customFetch(`${backendUrl}/api/media/transcript?video_id=${yId}`);
+      const response = await customFetch(`${backendUrl}/api/media/transcript?video_id=${yId}&use_whisper=true`, {
+        headers: {
+          'X-Session-Token': user?.token || '',
+        }
+      });
       if (!response.ok) {
-        throw new Error("Nie udało się pobrać transkrypcji z serwera");
+        const errData = await response.json().catch(() => ({}));
+        setVideoCustomError(errData.error || "Nie udało się pobrać transkrypcji z serwera");
+        return;
       }
       const data = await response.json();
       
@@ -28834,7 +28893,10 @@ export default function HomeScreen() {
     try {
       const response = await customFetch(`${backendUrl}/api/translate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || "",
+        },
         body: JSON.stringify({ text: cleanWord, context: sentenceContext })
       });
       if (latestWordRef.current !== cleanWord) return;
@@ -28915,7 +28977,10 @@ export default function HomeScreen() {
     try {
       const response = await customFetch(`${backendUrl}/api/media/explain-joke`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || "",
+        },
         body: JSON.stringify({ text: segmentText })
       });
       if (response.ok) {
@@ -29781,7 +29846,10 @@ export default function HomeScreen() {
             <TextInput
               style={styles.authInput}
               value={backendUrl}
-              onChangeText={setBackendUrl}
+              onChangeText={async (text) => {
+                setBackendUrl(text);
+                await AsyncStorage.setItem('buddy_backend_url', text);
+              }}
               placeholder="http://192.168.1.100:5001"
               autoCapitalize="none"
               autoCorrect={false}
@@ -29842,14 +29910,14 @@ export default function HomeScreen() {
         <View style={styles.appHeader}>
           {currentView === 'dashboard' ? (
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ width: 32, alignItems: 'flex-start' }}>
+              <View style={{ width: 40, alignItems: 'flex-start' }}>
                 <Image
                   source={require('../../assets/images/logo.png')}
-                  style={{ width: 28, height: 28, resizeMode: 'contain' }}
+                  style={{ width: 36, height: 36, resizeMode: 'contain' }}
                 />
               </View>
-              <Text style={[styles.appTitle, { textAlign: 'center', flex: 1 }]}>Chat Live</Text>
-              <View style={{ width: 32 }} />
+              <Text style={[styles.appTitle, { textAlign: 'center', flex: 1 }]}>Speakling</Text>
+              <View style={{ width: 40 }} />
             </View>
           ) : (
             <>
@@ -29955,17 +30023,16 @@ export default function HomeScreen() {
                   style={styles.voiceOrbButton}
                   onPress={isVoiceTutorActive ? handleEndVoiceTutorSession : handleStartVoiceTutorSession}
                 >
-                  <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
-                    <Path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
-                    <Path d="M19 10v1a7 7 0 0 1-14 0v-1" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
-                    <Path d="M12 18v3" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
-                    <Path d="M9 21h6" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
+                  <Svg width={120} height={120} viewBox="0 0 24 24" fill="none">
+                    <Path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M19 10v1a7 7 0 0 1-14 0v-1" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M12 18v3" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M9 21h6" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
                 </TouchableOpacity>
 
                 {/* Status label (large, light sans-serif) */}
                 <Text style={{ fontSize: 28, fontWeight: '300', color: '#1F2937', marginTop: 32, textAlign: 'center' }}>
-                  {!isVoiceTutorActive && "Tap to Start"}
                   {isVoiceTutorActive && orbStatus === "inactive" && "Connecting..."}
                   {isVoiceTutorActive && orbStatus === "speaking" && "Speaking"}
                   {isVoiceTutorActive && orbStatus === "listening" && "Listening"}
@@ -29973,54 +30040,6 @@ export default function HomeScreen() {
                   {isVoiceTutorActive && orbStatus === "presending" && "Czy to wszystko?..."}
                   {isVoiceTutorActive && orbStatus === "thinking" && "Thinking..."}
                 </Text>
-
-                {/* Mode Selector Buttons */}
-                {!isVoiceTutorActive && (
-                  <>
-                    <View style={styles.modeSelectorContainer}>
-                      <TouchableOpacity
-                        style={[styles.modeSelectorBtn, aiMode === 'free' && styles.modeSelectorBtnActive]}
-                        onPress={() => handleSelectAiMode('free')}
-                      >
-                        <Text style={[styles.modeSelectorBtnText, aiMode === 'free' && styles.modeSelectorBtnTextActive]}>
-                          Free (DeepSeek)
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modeSelectorBtn, aiMode === 'hybrid' && styles.modeSelectorBtnActive]}
-                        onPress={() => handleSelectAiMode('hybrid')}
-                      >
-                        <Text style={[styles.modeSelectorBtnText, aiMode === 'hybrid' && styles.modeSelectorBtnTextActive]}>
-                          Hybrid (Fast)
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modeSelectorBtn, aiMode === 'openai_full' && styles.modeSelectorBtnActive]}
-                        onPress={() => handleSelectAiMode('openai_full')}
-                      >
-                        <Text style={[styles.modeSelectorBtnText, aiMode === 'openai_full' && styles.modeSelectorBtnTextActive]}>
-                          Full OpenAI
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.modeSelectorDesc}>
-                      {aiMode === 'free' && "🆓 Wariant 1: Darmowa transkrypcja i mowa (DeepSeek). Namysł ok. 7-15s."}
-                      {aiMode === 'hybrid' && "⚡ Wariant 3 (Zalecany): Szybki Whisper + GPT-4o-mini + darmowa mowa. Namysł ok. 2-3s."}
-                      {aiMode === 'openai_full' && "💎 Wariant 2: Pełny OpenAI (Whisper + GPT + OpenAI TTS). Najszybszy (~2s) i najlepszy głos."}
-                    </Text>
-
-                    {/* Auto-send Toggle */}
-                    <TouchableOpacity
-                      style={styles.toggleContainer}
-                      onPress={() => handleToggleAutoSend(!autoSendEnabled)}
-                    >
-                      <View style={[styles.toggleCheckbox, autoSendEnabled && styles.toggleCheckboxActive]}>
-                        {autoSendEnabled && <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>✓</Text>}
-                      </View>
-                      <Text style={styles.toggleText}>Automatyczne wysyłanie (VAD)</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
 
                 {/* Waveform component with session timer in the middle */}
                 {isVoiceTutorActive && (
@@ -30077,14 +30096,7 @@ export default function HomeScreen() {
                 )}
               </View>
 
-              {/* Tips when inactive */}
-              {!isVoiceTutorActive && !voiceTutorSummary && (
-                <View style={styles.voiceTutorTips}>
-                  <Text style={styles.voiceTutorTipsText}>
-                    🎧 Używaj słuchawek, aby zapobiec zapętleniu dźwięku.
-                  </Text>
-                </View>
-              )}
+
 
               {/* Slide-up Transcript Drawer */}
               {isVoiceTutorActive && voiceTutorMessages.length > 0 && voiceTutorShowTranscript && (
@@ -30893,6 +30905,7 @@ export default function HomeScreen() {
                       )}
                     </TouchableOpacity>
                   </View>
+                  
                   {videoCustomError ? (
                     <Text style={styles.errorText}>{videoCustomError}</Text>
                   ) : null}
@@ -30974,6 +30987,49 @@ export default function HomeScreen() {
             <View style={styles.welcomeCard}>
               <Text style={styles.welcomeTitle}>Ustawienia</Text>
 
+              <Text style={styles.authLabel}>Tryb AI (Konwersacja)</Text>
+              <View style={[styles.modeSelectorContainer, { marginTop: 10 }]}>
+                <TouchableOpacity
+                  style={[styles.modeSelectorBtn, aiMode === 'free' && styles.modeSelectorBtnActive]}
+                  onPress={() => handleSelectAiMode('free')}
+                >
+                  <Text style={[styles.modeSelectorBtnText, aiMode === 'free' && styles.modeSelectorBtnTextActive]}>
+                    Free (DeepSeek)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modeSelectorBtn, aiMode === 'hybrid' && styles.modeSelectorBtnActive]}
+                  onPress={() => handleSelectAiMode('hybrid')}
+                >
+                  <Text style={[styles.modeSelectorBtnText, aiMode === 'hybrid' && styles.modeSelectorBtnTextActive]}>
+                    Hybrid (Fast)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modeSelectorBtn, aiMode === 'openai_full' && styles.modeSelectorBtnActive]}
+                  onPress={() => handleSelectAiMode('openai_full')}
+                >
+                  <Text style={[styles.modeSelectorBtnText, aiMode === 'openai_full' && styles.modeSelectorBtnTextActive]}>
+                    Full OpenAI
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.modeSelectorDesc}>
+                {aiMode === 'free' && "🆓 Wariant 1: Darmowa transkrypcja i mowa (DeepSeek). Namysł ok. 7-15s."}
+                {aiMode === 'hybrid' && "⚡ Wariant 3 (Zalecany): Szybki Whisper + GPT-4o-mini + darmowa mowa. Namysł ok. 2-3s."}
+                {aiMode === 'openai_full' && "💎 Wariant 2: Pełny OpenAI (Whisper + GPT + OpenAI TTS). Najszybszy (~2s) i najlepszy głos."}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.toggleContainer, { marginTop: 15, marginBottom: 20 }]}
+                onPress={() => handleToggleAutoSend(!autoSendEnabled)}
+              >
+                <View style={[styles.toggleCheckbox, autoSendEnabled && styles.toggleCheckboxActive]}>
+                  {autoSendEnabled && <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>✓</Text>}
+                </View>
+                <Text style={styles.toggleText}>Automatyczne wysyłanie (VAD)</Text>
+              </TouchableOpacity>
+
               <Text style={styles.authLabel}>Adres IP Backendu</Text>
               <TextInput
                 style={styles.authInput}
@@ -30984,6 +31040,7 @@ export default function HomeScreen() {
                 }}
                 placeholder="http://192.168.1.100:5001"
                 autoCapitalize="none"
+                autoCorrect={false}
               />
 
               <Text style={styles.authLabel}>Głos lektora (Neural TTS):</Text>
@@ -31032,7 +31089,15 @@ export default function HomeScreen() {
           style={styles.navItem}
           onPress={() => setCurrentView('dashboard')}
         >
-          <HomeIcon color={currentView === 'dashboard' ? '#1A73E8' : '#5F6368'} />
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={{
+              width: 24,
+              height: 24,
+              resizeMode: 'contain',
+              opacity: currentView === 'dashboard' ? 1.0 : 0.5
+            }}
+          />
           <Text style={[styles.navText, currentView === 'dashboard' ? styles.navTextActive : null]}>
             Chat Live
           </Text>
@@ -31302,7 +31367,7 @@ const styles = StyleSheet.create({
   voiceTutorContainer: {
     flex: 1,
     padding: 24,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -31447,16 +31512,11 @@ const styles = StyleSheet.create({
     marginBottom: 36,
   },
   voiceOrbButton: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
+    width: 140,
+    height: 140,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 8,
+    marginTop: 80,
   },
   orbInactive: {
     backgroundColor: '#5F6368',
@@ -32014,7 +32074,7 @@ const styles = StyleSheet.create({
   },
   appContainer: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
   },
   appHeader: {
     height: 56,
@@ -32022,8 +32082,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#DADCE0',
     backgroundColor: '#FFFFFF',
   },
   segmentedControlRow: {
@@ -32097,7 +32155,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   appTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
     color: '#202124',
   },
