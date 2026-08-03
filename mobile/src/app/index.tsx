@@ -2633,7 +2633,7 @@ export default function HomeScreen() {
                   style={{ width: 28, height: 28, resizeMode: 'contain' }}
                 />
               </View>
-              <Text style={[styles.appTitle, { textAlign: 'center', flex: 1 }]}>Chat Live</Text>
+              <Text style={[styles.appTitle, { textAlign: 'center', flex: 1 }]}>Speakling</Text>
               <View style={{ width: 32 }} />
             </View>
           ) : (
@@ -2740,17 +2740,16 @@ export default function HomeScreen() {
                   style={styles.voiceOrbButton}
                   onPress={isVoiceTutorActive ? handleEndVoiceTutorSession : handleStartVoiceTutorSession}
                 >
-                  <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
-                    <Path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
-                    <Path d="M19 10v1a7 7 0 0 1-14 0v-1" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
-                    <Path d="M12 18v3" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
-                    <Path d="M9 21h6" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
+                  <Svg width={120} height={120} viewBox="0 0 24 24" fill="none">
+                    <Path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M19 10v1a7 7 0 0 1-14 0v-1" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M12 18v3" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M9 21h6" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
                 </TouchableOpacity>
 
                 {/* Status label (large, light sans-serif) */}
                 <Text style={{ fontSize: 28, fontWeight: '300', color: '#1F2937', marginTop: 32, textAlign: 'center' }}>
-                  {!isVoiceTutorActive && "Tap to Start"}
                   {isVoiceTutorActive && orbStatus === "inactive" && "Connecting..."}
                   {isVoiceTutorActive && orbStatus === "speaking" && "Speaking"}
                   {isVoiceTutorActive && orbStatus === "listening" && "Listening"}
@@ -2758,54 +2757,6 @@ export default function HomeScreen() {
                   {isVoiceTutorActive && orbStatus === "presending" && "Czy to wszystko?..."}
                   {isVoiceTutorActive && orbStatus === "thinking" && "Thinking..."}
                 </Text>
-
-                {/* Mode Selector Buttons */}
-                {!isVoiceTutorActive && (
-                  <>
-                    <View style={styles.modeSelectorContainer}>
-                      <TouchableOpacity
-                        style={[styles.modeSelectorBtn, aiMode === 'free' && styles.modeSelectorBtnActive]}
-                        onPress={() => handleSelectAiMode('free')}
-                      >
-                        <Text style={[styles.modeSelectorBtnText, aiMode === 'free' && styles.modeSelectorBtnTextActive]}>
-                          Free (DeepSeek)
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modeSelectorBtn, aiMode === 'hybrid' && styles.modeSelectorBtnActive]}
-                        onPress={() => handleSelectAiMode('hybrid')}
-                      >
-                        <Text style={[styles.modeSelectorBtnText, aiMode === 'hybrid' && styles.modeSelectorBtnTextActive]}>
-                          Hybrid (Fast)
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modeSelectorBtn, aiMode === 'openai_full' && styles.modeSelectorBtnActive]}
-                        onPress={() => handleSelectAiMode('openai_full')}
-                      >
-                        <Text style={[styles.modeSelectorBtnText, aiMode === 'openai_full' && styles.modeSelectorBtnTextActive]}>
-                          Full OpenAI
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.modeSelectorDesc}>
-                      {aiMode === 'free' && "🆓 Wariant 1: Darmowa transkrypcja i mowa (DeepSeek). Namysł ok. 7-15s."}
-                      {aiMode === 'hybrid' && "⚡ Wariant 3 (Zalecany): Szybki Whisper + GPT-4o-mini + darmowa mowa. Namysł ok. 2-3s."}
-                      {aiMode === 'openai_full' && "💎 Wariant 2: Pełny OpenAI (Whisper + GPT + OpenAI TTS). Najszybszy (~2s) i najlepszy głos."}
-                    </Text>
-
-                    {/* Auto-send Toggle */}
-                    <TouchableOpacity
-                      style={styles.toggleContainer}
-                      onPress={() => handleToggleAutoSend(!autoSendEnabled)}
-                    >
-                      <View style={[styles.toggleCheckbox, autoSendEnabled && styles.toggleCheckboxActive]}>
-                        {autoSendEnabled && <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>✓</Text>}
-                      </View>
-                      <Text style={styles.toggleText}>Automatyczne wysyłanie (VAD)</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
 
                 {/* Waveform component with session timer in the middle */}
                 {isVoiceTutorActive && (
@@ -2862,14 +2813,7 @@ export default function HomeScreen() {
                 )}
               </View>
 
-              {/* Tips when inactive */}
-              {!isVoiceTutorActive && !voiceTutorSummary && (
-                <View style={styles.voiceTutorTips}>
-                  <Text style={styles.voiceTutorTipsText}>
-                    🎧 Używaj słuchawek, aby zapobiec zapętleniu dźwięku.
-                  </Text>
-                </View>
-              )}
+
 
               {/* Slide-up Transcript Drawer */}
               {isVoiceTutorActive && voiceTutorMessages.length > 0 && voiceTutorShowTranscript && (
@@ -3759,17 +3703,48 @@ export default function HomeScreen() {
             <View style={styles.welcomeCard}>
               <Text style={styles.welcomeTitle}>Ustawienia</Text>
 
-              <Text style={styles.authLabel}>Adres IP Backendu</Text>
-              <TextInput
-                style={styles.authInput}
-                value={backendUrl}
-                onChangeText={async (text) => {
-                  setBackendUrl(text);
-                  await AsyncStorage.setItem('buddy_backend_url', text);
-                }}
-                placeholder="http://192.168.1.100:5001"
-                autoCapitalize="none"
-              />
+              <Text style={styles.authLabel}>Tryb AI (Konwersacja)</Text>
+              <View style={[styles.modeSelectorContainer, { marginTop: 10 }]}>
+                <TouchableOpacity
+                  style={[styles.modeSelectorBtn, aiMode === 'free' && styles.modeSelectorBtnActive]}
+                  onPress={() => handleSelectAiMode('free')}
+                >
+                  <Text style={[styles.modeSelectorBtnText, aiMode === 'free' && styles.modeSelectorBtnTextActive]}>
+                    Free (DeepSeek)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modeSelectorBtn, aiMode === 'hybrid' && styles.modeSelectorBtnActive]}
+                  onPress={() => handleSelectAiMode('hybrid')}
+                >
+                  <Text style={[styles.modeSelectorBtnText, aiMode === 'hybrid' && styles.modeSelectorBtnTextActive]}>
+                    Hybrid (Fast)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modeSelectorBtn, aiMode === 'openai_full' && styles.modeSelectorBtnActive]}
+                  onPress={() => handleSelectAiMode('openai_full')}
+                >
+                  <Text style={[styles.modeSelectorBtnText, aiMode === 'openai_full' && styles.modeSelectorBtnTextActive]}>
+                    Full OpenAI
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.modeSelectorDesc}>
+                {aiMode === 'free' && "🆓 Wariant 1: Darmowa transkrypcja i mowa (DeepSeek). Namysł ok. 7-15s."}
+                {aiMode === 'hybrid' && "⚡ Wariant 3 (Zalecany): Szybki Whisper + GPT-4o-mini + darmowa mowa. Namysł ok. 2-3s."}
+                {aiMode === 'openai_full' && "💎 Wariant 2: Pełny OpenAI (Whisper + GPT + OpenAI TTS). Najszybszy (~2s) i najlepszy głos."}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.toggleContainer, { marginTop: 15, marginBottom: 20 }]}
+                onPress={() => handleToggleAutoSend(!autoSendEnabled)}
+              >
+                <View style={[styles.toggleCheckbox, autoSendEnabled && styles.toggleCheckboxActive]}>
+                  {autoSendEnabled && <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}>✓</Text>}
+                </View>
+                <Text style={styles.toggleText}>Automatyczne wysyłanie (VAD)</Text>
+              </TouchableOpacity>
 
               <Text style={styles.authLabel}>Głos lektora (Neural TTS):</Text>
               <ScrollView 
@@ -4232,16 +4207,11 @@ const styles = StyleSheet.create({
     marginBottom: 36,
   },
   voiceOrbButton: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
+    width: 140,
+    height: 140,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 8,
+    marginTop: 80,
   },
   orbInactive: {
     backgroundColor: '#5F6368',
