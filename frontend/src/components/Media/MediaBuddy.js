@@ -119,13 +119,9 @@ function MediaBuddy({ user }) {
   const [isTranslatingSegment, setIsTranslatingSegment] = useState(false);
   const [isSegmentSaved, setIsSegmentSaved] = useState(false);
 
-  // Custom Video Loader states
   const [customUrl, setCustomUrl] = useState("");
   const [isLoadingCustom, setIsLoadingCustom] = useState(false);
   const [customError, setCustomError] = useState("");
-  const [showManualPaste, setShowManualPaste] = useState(false);
-  const [manualText, setManualText] = useState("");
-  const [manualVideoId, setManualVideoId] = useState("");
   const [selectedSourceId, setSelectedSourceId] = useState("");
   const randomizedSources = useMemo(() => {
     return CURATED_SOURCES.map(source => ({
@@ -190,24 +186,7 @@ function MediaBuddy({ user }) {
     }
   }, [autoScrollEnabled]);
 
-  const [useWhisper, setUseWhisper] = useState(() => {
-    try {
-      const saved = localStorage.getItem("media_buddy_use_whisper");
-      return saved === "false" ? false : true;
-    } catch (e) {
-      return true;
-    }
-  });
 
-  // Sync useWhisper to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem("media_buddy_use_whisper", useWhisper.toString());
-      console.log("useWhisper persisted to localStorage:", useWhisper);
-    } catch (e) {
-      console.error("Failed to save useWhisper to localStorage", e);
-    }
-  }, [useWhisper]);
 
   // Pause video on vocabulary drawer open
   useEffect(() => {
