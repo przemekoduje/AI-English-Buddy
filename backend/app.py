@@ -140,7 +140,14 @@ except Exception as e:
             return self.stream()
 
     class MockFirestoreClient:
-        def __init__(self, filepath="mock_db.json"):
+        def __init__(self, filepath=None):
+            if filepath is None:
+                filepath = os.getenv("MOCK_DB_PATH")
+            if filepath is None:
+                if os.getenv("K_SERVICE") or os.name == 'posix':
+                    filepath = "/tmp/mock_db.json"
+                else:
+                    filepath = "mock_db.json"
             self.filepath = filepath
             self._data = {}
             self.load()

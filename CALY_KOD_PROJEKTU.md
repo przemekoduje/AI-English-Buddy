@@ -1,91 +1,91 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-08-03 13:45:29
+Wygenerowano: 2026-08-03 20:34:15
 
 ## Spis Treści
-1. `backend\app.py`
-2. `backend\mock_db.json`
-3. `frontend\package.json`
-4. `frontend\public\index.html`
-5. `frontend\src\App copy.js`
-6. `frontend\src\App.css`
-7. `frontend\src\App.js`
-8. `frontend\src\App.test.js`
-9. `frontend\src\DesignTokens.css`
-10. `frontend\src\components\Auth\Auth.css`
-11. `frontend\src\components\Auth\Auth.js`
-12. `frontend\src\components\Dashboard.css`
-13. `frontend\src\components\Dashboard.js`
-14. `frontend\src\components\Flashcards.css`
-15. `frontend\src\components\Flashcards.js`
-16. `frontend\src\components\Media\MediaBuddy.css`
-17. `frontend\src\components\Media\MediaBuddy.js`
-18. `frontend\src\components\Media\transcripts.json`
-19. `frontend\src\components\Navbar.css`
-20. `frontend\src\components\Navbar.js`
-21. `frontend\src\components\Notebook\NotebookSidebar.css`
-22. `frontend\src\components\Notebook\NotebookSidebar.js`
-23. `frontend\src\components\Notebook\PronunciationPracticeModal.css`
-24. `frontend\src\components\Notebook\PronunciationPracticeModal.js`
-25. `frontend\src\components\Notebook\PronunciationPracticeModal.test.js`
-26. `frontend\src\components\Notebook\SessionSummaryModal.css`
-27. `frontend\src\components\Notebook\SessionSummaryModal.js`
-28. `frontend\src\components\Notebook\SessionSummaryModal.test.js`
-29. `frontend\src\components\Notebook\VoiceSessionSummaryModal.js`
-30. `frontend\src\components\Notebook\WordExplanationModal.css`
-31. `frontend\src\components\Notebook\WordExplanationModal.js`
-32. `frontend\src\components\Practice\PracticeMode.css`
-33. `frontend\src\components\Practice\PracticeMode.js`
-34. `frontend\src\components\Reader\Reader.css`
-35. `frontend\src\components\Reader\Reader.js`
-36. `frontend\src\components\Sidebar.css`
-37. `frontend\src\components\Sidebar.js`
-38. `frontend\src\components\Story\SavedStories.css`
-39. `frontend\src\components\Story\SavedStories.js`
-40. `frontend\src\components\Story\StoryGenerator.css`
-41. `frontend\src\components\Story\StoryGenerator.js`
-42. `frontend\src\components\Story\StoryGenerator.test.js`
-43. `frontend\src\components\TopBar.css`
-44. `frontend\src\components\TopBar.js`
-45. `frontend\src\components\Vocabulary\VocabularyDrawer.css`
-46. `frontend\src\components\Vocabulary\VocabularyDrawer.js`
-47. `frontend\src\components\Vocabulary\VocabularyView.css`
-48. `frontend\src\components\Vocabulary\VocabularyView.js`
-49. `frontend\src\components\Workspace.css`
-50. `frontend\src\components\Workspace.js`
-51. `frontend\src\config.js`
-52. `frontend\src\index.css`
-53. `frontend\src\index.js`
-54. `mobile\app.json`
-55. `mobile\assets\expo.icon\icon.json`
-56. `mobile\expo-env.d.ts`
-57. `mobile\package.json`
-58. `mobile\scripts\reset-project.js`
-59. `mobile\src\app\_layout.tsx`
-60. `mobile\src\app\explore.tsx`
-61. `mobile\src\app\index.tsx`
-62. `mobile\src\components\animated-icon.module.css`
-63. `mobile\src\components\animated-icon.tsx`
-64. `mobile\src\components\animated-icon.web.tsx`
-65. `mobile\src\components\app-tabs.tsx`
-66. `mobile\src\components\app-tabs.web.tsx`
-67. `mobile\src\components\external-link.tsx`
-68. `mobile\src\components\hint-row.tsx`
-69. `mobile\src\components\themed-text.tsx`
-70. `mobile\src\components\themed-view.tsx`
-71. `mobile\src\components\ui\collapsible.tsx`
-72. `mobile\src\components\web-badge.tsx`
-73. `mobile\src\constants\theme.ts`
-74. `mobile\src\constants\transcripts.json`
-75. `mobile\src\global.css`
-76. `mobile\src\hooks\use-color-scheme.ts`
-77. `mobile\src\hooks\use-color-scheme.web.ts`
-78. `mobile\src\hooks\use-theme.ts`
-79. `mobile\tsconfig.json`
+1. `backend/app.py`
+2. `backend/mock_db.json`
+3. `frontend/package.json`
+4. `frontend/public/index.html`
+5. `frontend/src/App copy.js`
+6. `frontend/src/App.css`
+7. `frontend/src/App.js`
+8. `frontend/src/App.test.js`
+9. `frontend/src/DesignTokens.css`
+10. `frontend/src/components/Auth/Auth.css`
+11. `frontend/src/components/Auth/Auth.js`
+12. `frontend/src/components/Dashboard.css`
+13. `frontend/src/components/Dashboard.js`
+14. `frontend/src/components/Flashcards.css`
+15. `frontend/src/components/Flashcards.js`
+16. `frontend/src/components/Media/MediaBuddy.css`
+17. `frontend/src/components/Media/MediaBuddy.js`
+18. `frontend/src/components/Media/transcripts.json`
+19. `frontend/src/components/Navbar.css`
+20. `frontend/src/components/Navbar.js`
+21. `frontend/src/components/Notebook/NotebookSidebar.css`
+22. `frontend/src/components/Notebook/NotebookSidebar.js`
+23. `frontend/src/components/Notebook/PronunciationPracticeModal.css`
+24. `frontend/src/components/Notebook/PronunciationPracticeModal.js`
+25. `frontend/src/components/Notebook/PronunciationPracticeModal.test.js`
+26. `frontend/src/components/Notebook/SessionSummaryModal.css`
+27. `frontend/src/components/Notebook/SessionSummaryModal.js`
+28. `frontend/src/components/Notebook/SessionSummaryModal.test.js`
+29. `frontend/src/components/Notebook/VoiceSessionSummaryModal.js`
+30. `frontend/src/components/Notebook/WordExplanationModal.css`
+31. `frontend/src/components/Notebook/WordExplanationModal.js`
+32. `frontend/src/components/Practice/PracticeMode.css`
+33. `frontend/src/components/Practice/PracticeMode.js`
+34. `frontend/src/components/Reader/Reader.css`
+35. `frontend/src/components/Reader/Reader.js`
+36. `frontend/src/components/Sidebar.css`
+37. `frontend/src/components/Sidebar.js`
+38. `frontend/src/components/Story/SavedStories.css`
+39. `frontend/src/components/Story/SavedStories.js`
+40. `frontend/src/components/Story/StoryGenerator.css`
+41. `frontend/src/components/Story/StoryGenerator.js`
+42. `frontend/src/components/Story/StoryGenerator.test.js`
+43. `frontend/src/components/TopBar.css`
+44. `frontend/src/components/TopBar.js`
+45. `frontend/src/components/Vocabulary/VocabularyDrawer.css`
+46. `frontend/src/components/Vocabulary/VocabularyDrawer.js`
+47. `frontend/src/components/Vocabulary/VocabularyView.css`
+48. `frontend/src/components/Vocabulary/VocabularyView.js`
+49. `frontend/src/components/Workspace.css`
+50. `frontend/src/components/Workspace.js`
+51. `frontend/src/config.js`
+52. `frontend/src/index.css`
+53. `frontend/src/index.js`
+54. `mobile/app.json`
+55. `mobile/assets/expo.icon/icon.json`
+56. `mobile/expo-env.d.ts`
+57. `mobile/package.json`
+58. `mobile/scripts/reset-project.js`
+59. `mobile/src/app/_layout.tsx`
+60. `mobile/src/app/explore.tsx`
+61. `mobile/src/app/index.tsx`
+62. `mobile/src/components/animated-icon.module.css`
+63. `mobile/src/components/animated-icon.tsx`
+64. `mobile/src/components/animated-icon.web.tsx`
+65. `mobile/src/components/app-tabs.tsx`
+66. `mobile/src/components/app-tabs.web.tsx`
+67. `mobile/src/components/external-link.tsx`
+68. `mobile/src/components/hint-row.tsx`
+69. `mobile/src/components/themed-text.tsx`
+70. `mobile/src/components/themed-view.tsx`
+71. `mobile/src/components/ui/collapsible.tsx`
+72. `mobile/src/components/web-badge.tsx`
+73. `mobile/src/constants/theme.ts`
+74. `mobile/src/constants/transcripts.json`
+75. `mobile/src/global.css`
+76. `mobile/src/hooks/use-color-scheme.ts`
+77. `mobile/src/hooks/use-color-scheme.web.ts`
+78. `mobile/src/hooks/use-theme.ts`
+79. `mobile/tsconfig.json`
 80. `firebase.json`
 
 ---
 
-## 1. Plik: `backend\app.py`
+## 1. Plik: `backend/app.py`
 
 ```python
 import os
@@ -4449,7 +4449,7 @@ if __name__ == "__main__":
 
 ---
 
-## 2. Plik: `backend\mock_db.json`
+## 2. Plik: `backend/mock_db.json`
 
 ```json
 {
@@ -4471,7 +4471,7 @@ if __name__ == "__main__":
 
 ---
 
-## 3. Plik: `frontend\package.json`
+## 3. Plik: `frontend/package.json`
 
 ```json
 {
@@ -4517,7 +4517,7 @@ if __name__ == "__main__":
 
 ---
 
-## 4. Plik: `frontend\public\index.html`
+## 4. Plik: `frontend/public/index.html`
 
 ```html
 <!DOCTYPE html>
@@ -4578,7 +4578,7 @@ if __name__ == "__main__":
 
 ---
 
-## 5. Plik: `frontend\src\App copy.js`
+## 5. Plik: `frontend/src/App copy.js`
 
 ```javascript
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -5563,7 +5563,7 @@ export default App;
 
 ---
 
-## 6. Plik: `frontend\src\App.css`
+## 6. Plik: `frontend/src/App.css`
 
 ```css
 .mission-layout {
@@ -5686,7 +5686,7 @@ export default App;
 
 ---
 
-## 7. Plik: `frontend\src\App.js`
+## 7. Plik: `frontend/src/App.js`
 
 ```javascript
 import React, { useState, useEffect } from 'react';
@@ -5881,7 +5881,7 @@ export default App;
 
 ---
 
-## 8. Plik: `frontend\src\App.test.js`
+## 8. Plik: `frontend/src/App.test.js`
 
 ```javascript
 import { render, screen } from '@testing-library/react';
@@ -5897,7 +5897,7 @@ test('renders Speakling title', () => {
 
 ---
 
-## 9. Plik: `frontend\src\DesignTokens.css`
+## 9. Plik: `frontend/src/DesignTokens.css`
 
 ```css
 :root {
@@ -6032,7 +6032,7 @@ body {
 
 ---
 
-## 10. Plik: `frontend\src\components\Auth\Auth.css`
+## 10. Plik: `frontend/src/components/Auth/Auth.css`
 
 ```css
 /* src/components/Auth/Auth.css */
@@ -6242,7 +6242,7 @@ body {
 
 ---
 
-## 11. Plik: `frontend\src\components\Auth\Auth.js`
+## 11. Plik: `frontend/src/components/Auth/Auth.js`
 
 ```javascript
 import React, { useState } from "react";
@@ -6365,7 +6365,7 @@ export default Auth;
 
 ---
 
-## 12. Plik: `frontend\src\components\Dashboard.css`
+## 12. Plik: `frontend/src/components/Dashboard.css`
 
 ```css
 /* frontend/src/components/Dashboard.css */
@@ -6928,7 +6928,7 @@ export default Auth;
 
 ---
 
-## 13. Plik: `frontend\src\components\Dashboard.js`
+## 13. Plik: `frontend/src/components/Dashboard.js`
 
 ```javascript
 import React, { useState, useEffect, useRef } from "react";
@@ -7535,7 +7535,7 @@ export default Dashboard;
 
 ---
 
-## 14. Plik: `frontend\src\components\Flashcards.css`
+## 14. Plik: `frontend/src/components/Flashcards.css`
 
 ```css
 /* src/components/Flashcards.css */
@@ -7831,7 +7831,7 @@ export default Dashboard;
 
 ---
 
-## 15. Plik: `frontend\src\components\Flashcards.js`
+## 15. Plik: `frontend/src/components/Flashcards.js`
 
 ```javascript
 import React, { useState } from "react";
@@ -7971,7 +7971,7 @@ export default Flashcards;
 
 ---
 
-## 16. Plik: `frontend\src\components\Media\MediaBuddy.css`
+## 16. Plik: `frontend/src/components/Media/MediaBuddy.css`
 
 ```css
 /* MediaBuddy.css */
@@ -9087,7 +9087,7 @@ export default Flashcards;
 
 ---
 
-## 17. Plik: `frontend\src\components\Media\MediaBuddy.js`
+## 17. Plik: `frontend/src/components/Media/MediaBuddy.js`
 
 ```javascript
 import React, { useState, useEffect, useRef, useMemo } from "react";
@@ -10445,7 +10445,7 @@ export default MediaBuddy;
 
 ---
 
-## 18. Plik: `frontend\src\components\Media\transcripts.json`
+## 18. Plik: `frontend/src/components/Media/transcripts.json`
 
 ```json
 {
@@ -12490,7 +12490,7 @@ export default MediaBuddy;
 
 ---
 
-## 19. Plik: `frontend\src\components\Navbar.css`
+## 19. Plik: `frontend/src/components/Navbar.css`
 
 ```css
 /* frontend/src/components/Navbar.css */
@@ -12554,7 +12554,7 @@ export default MediaBuddy;
 
 ---
 
-## 20. Plik: `frontend\src\components\Navbar.js`
+## 20. Plik: `frontend/src/components/Navbar.js`
 
 ```javascript
 // frontend/src/components/Navbar.js
@@ -12598,7 +12598,7 @@ export default Navbar;
 
 ---
 
-## 21. Plik: `frontend\src\components\Notebook\NotebookSidebar.css`
+## 21. Plik: `frontend/src/components/Notebook/NotebookSidebar.css`
 
 ```css
 .notebook-sidebar {
@@ -12863,7 +12863,7 @@ export default Navbar;
 
 ---
 
-## 22. Plik: `frontend\src\components\Notebook\NotebookSidebar.js`
+## 22. Plik: `frontend/src/components/Notebook/NotebookSidebar.js`
 
 ```javascript
 import React, { useState, useEffect, useRef } from "react";
@@ -13036,7 +13036,7 @@ export default NotebookSidebar;
 
 ---
 
-## 23. Plik: `frontend\src\components\Notebook\PronunciationPracticeModal.css`
+## 23. Plik: `frontend/src/components/Notebook/PronunciationPracticeModal.css`
 
 ```css
 .practice-modal-overlay {
@@ -13409,7 +13409,7 @@ export default NotebookSidebar;
 
 ---
 
-## 24. Plik: `frontend\src\components\Notebook\PronunciationPracticeModal.js`
+## 24. Plik: `frontend/src/components/Notebook/PronunciationPracticeModal.js`
 
 ```javascript
 import React, { useState, useRef, useEffect } from "react";
@@ -13738,7 +13738,7 @@ export default PronunciationPracticeModal;
 
 ---
 
-## 25. Plik: `frontend\src\components\Notebook\PronunciationPracticeModal.test.js`
+## 25. Plik: `frontend/src/components/Notebook/PronunciationPracticeModal.test.js`
 
 ```javascript
 import React from "react";
@@ -13915,7 +13915,7 @@ describe("PronunciationPracticeModal", () => {
 
 ---
 
-## 26. Plik: `frontend\src\components\Notebook\SessionSummaryModal.css`
+## 26. Plik: `frontend/src/components/Notebook/SessionSummaryModal.css`
 
 ```css
 .summary-modal-overlay {
@@ -14492,7 +14492,7 @@ describe("PronunciationPracticeModal", () => {
 
 ---
 
-## 27. Plik: `frontend\src\components\Notebook\SessionSummaryModal.js`
+## 27. Plik: `frontend/src/components/Notebook/SessionSummaryModal.js`
 
 ```javascript
 import React, { useState } from "react";
@@ -14741,7 +14741,7 @@ export default SessionSummaryModal;
 
 ---
 
-## 28. Plik: `frontend\src\components\Notebook\SessionSummaryModal.test.js`
+## 28. Plik: `frontend/src/components/Notebook/SessionSummaryModal.test.js`
 
 ```javascript
 import React from "react";
@@ -14896,7 +14896,7 @@ describe("SessionSummaryModal", () => {
 
 ---
 
-## 29. Plik: `frontend\src\components\Notebook\VoiceSessionSummaryModal.js`
+## 29. Plik: `frontend/src/components/Notebook/VoiceSessionSummaryModal.js`
 
 ```javascript
 import React, { useState } from "react";
@@ -15124,7 +15124,7 @@ export default VoiceSessionSummaryModal;
 
 ---
 
-## 30. Plik: `frontend\src\components\Notebook\WordExplanationModal.css`
+## 30. Plik: `frontend/src/components/Notebook/WordExplanationModal.css`
 
 ```css
 .explanation-modal-overlay {
@@ -15488,7 +15488,7 @@ export default VoiceSessionSummaryModal;
 
 ---
 
-## 31. Plik: `frontend\src\components\Notebook\WordExplanationModal.js`
+## 31. Plik: `frontend/src/components/Notebook/WordExplanationModal.js`
 
 ```javascript
 import React, { useState, useEffect } from "react";
@@ -15691,7 +15691,7 @@ export default WordExplanationModal;
 
 ---
 
-## 32. Plik: `frontend\src\components\Practice\PracticeMode.css`
+## 32. Plik: `frontend/src/components/Practice/PracticeMode.css`
 
 ```css
 /* src/components/Practice/PracticeMode.css */
@@ -16466,7 +16466,7 @@ export default WordExplanationModal;
 
 ---
 
-## 33. Plik: `frontend\src\components\Practice\PracticeMode.js`
+## 33. Plik: `frontend/src/components/Practice/PracticeMode.js`
 
 ```javascript
 import React, { useState, useEffect, useRef } from "react";
@@ -17361,7 +17361,7 @@ export default PracticeMode;
 
 ---
 
-## 34. Plik: `frontend\src\components\Reader\Reader.css`
+## 34. Plik: `frontend/src/components/Reader/Reader.css`
 
 ```css
 .reader-container {
@@ -17958,7 +17958,7 @@ input[type="range"] {
 
 ---
 
-## 35. Plik: `frontend\src\components\Reader\Reader.js`
+## 35. Plik: `frontend/src/components/Reader/Reader.js`
 
 ```javascript
 import React, { useState, useRef, useEffect } from "react";
@@ -18622,7 +18622,7 @@ export default Reader;
 
 ---
 
-## 36. Plik: `frontend\src\components\Sidebar.css`
+## 36. Plik: `frontend/src/components/Sidebar.css`
 
 ```css
 /* ============================================================
@@ -19052,7 +19052,7 @@ export default Reader;
 
 ---
 
-## 37. Plik: `frontend\src\components\Sidebar.js`
+## 37. Plik: `frontend/src/components/Sidebar.js`
 
 ```javascript
 import React, { useState } from 'react';
@@ -19253,7 +19253,7 @@ export default Sidebar;
 
 ---
 
-## 38. Plik: `frontend\src\components\Story\SavedStories.css`
+## 38. Plik: `frontend/src/components/Story/SavedStories.css`
 
 ```css
 /* src/components/Story/SavedStories.css */
@@ -19615,7 +19615,7 @@ export default Sidebar;
 
 ---
 
-## 39. Plik: `frontend\src\components\Story\SavedStories.js`
+## 39. Plik: `frontend/src/components/Story/SavedStories.js`
 
 ```javascript
 import React, { useState, useEffect, useCallback } from "react";
@@ -19881,7 +19881,7 @@ export default SavedStories;
 
 ---
 
-## 40. Plik: `frontend\src\components\Story\StoryGenerator.css`
+## 40. Plik: `frontend/src/components/Story/StoryGenerator.css`
 
 ```css
 .story-generator {
@@ -20647,7 +20647,7 @@ export default SavedStories;
 
 ---
 
-## 41. Plik: `frontend\src\components\Story\StoryGenerator.js`
+## 41. Plik: `frontend/src/components/Story/StoryGenerator.js`
 
 ```javascript
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -21215,7 +21215,7 @@ export default StoryGenerator;
 
 ---
 
-## 42. Plik: `frontend\src\components\Story\StoryGenerator.test.js`
+## 42. Plik: `frontend/src/components/Story/StoryGenerator.test.js`
 
 ```javascript
 import React from 'react';
@@ -21304,7 +21304,7 @@ describe('StoryGenerator Popular Science Settings', () => {
 
 ---
 
-## 43. Plik: `frontend\src\components\TopBar.css`
+## 43. Plik: `frontend/src/components/TopBar.css`
 
 ```css
 /* ============================================================
@@ -21441,7 +21441,7 @@ describe('StoryGenerator Popular Science Settings', () => {
 
 ---
 
-## 44. Plik: `frontend\src\components\TopBar.js`
+## 44. Plik: `frontend/src/components/TopBar.js`
 
 ```javascript
 import React from 'react';
@@ -21462,7 +21462,7 @@ export default TopBar;
 
 ---
 
-## 45. Plik: `frontend\src\components\Vocabulary\VocabularyDrawer.css`
+## 45. Plik: `frontend/src/components/Vocabulary/VocabularyDrawer.css`
 
 ```css
 /* ============================================================
@@ -21981,7 +21981,7 @@ export default TopBar;
 
 ---
 
-## 46. Plik: `frontend\src\components\Vocabulary\VocabularyDrawer.js`
+## 46. Plik: `frontend/src/components/Vocabulary/VocabularyDrawer.js`
 
 ```javascript
 import React, { useState, useEffect, useCallback } from "react";
@@ -22552,7 +22552,7 @@ export default VocabularyDrawer;
 
 ---
 
-## 47. Plik: `frontend\src\components\Vocabulary\VocabularyView.css`
+## 47. Plik: `frontend/src/components/Vocabulary/VocabularyView.css`
 
 ```css
 /* ============================================================
@@ -23359,7 +23359,7 @@ export default VocabularyDrawer;
 
 ---
 
-## 48. Plik: `frontend\src\components\Vocabulary\VocabularyView.js`
+## 48. Plik: `frontend/src/components/Vocabulary/VocabularyView.js`
 
 ```javascript
 import React, { useState, useEffect, useCallback } from "react";
@@ -24029,7 +24029,7 @@ export default VocabularyView;
 
 ---
 
-## 49. Plik: `frontend\src\components\Workspace.css`
+## 49. Plik: `frontend/src/components/Workspace.css`
 
 ```css
 .workspace-layout {
@@ -24733,7 +24733,7 @@ export default VocabularyView;
 
 ---
 
-## 50. Plik: `frontend\src\components\Workspace.js`
+## 50. Plik: `frontend/src/components/Workspace.js`
 
 ```javascript
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -26715,7 +26715,7 @@ export default Workspace;
 
 ---
 
-## 51. Plik: `frontend\src\config.js`
+## 51. Plik: `frontend/src/config.js`
 
 ```javascript
 // Konfiguracja adresu URL API backendu.
@@ -26726,7 +26726,7 @@ export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5
 
 ---
 
-## 52. Plik: `frontend\src\index.css`
+## 52. Plik: `frontend/src/index.css`
 
 ```css
 /* Outfit and Roboto — Google Keep Style Fonts */
@@ -26928,7 +26928,7 @@ button, input, select, textarea {
 
 ---
 
-## 53. Plik: `frontend\src\index.js`
+## 53. Plik: `frontend/src/index.js`
 
 ```javascript
 import React from 'react';
@@ -26946,7 +26946,7 @@ root.render(
 
 ---
 
-## 54. Plik: `mobile\app.json`
+## 54. Plik: `mobile/app.json`
 
 ```json
 {
@@ -26998,7 +26998,7 @@ root.render(
 
 ---
 
-## 55. Plik: `mobile\assets\expo.icon\icon.json`
+## 55. Plik: `mobile/assets/expo.icon/icon.json`
 
 ```json
 {
@@ -27045,7 +27045,7 @@ root.render(
 
 ---
 
-## 56. Plik: `mobile\expo-env.d.ts`
+## 56. Plik: `mobile/expo-env.d.ts`
 
 ```typescript
 /// <reference types="expo/types" />
@@ -27055,7 +27055,7 @@ root.render(
 
 ---
 
-## 57. Plik: `mobile\package.json`
+## 57. Plik: `mobile/package.json`
 
 ```json
 {
@@ -27106,7 +27106,7 @@ root.render(
 
 ---
 
-## 58. Plik: `mobile\scripts\reset-project.js`
+## 58. Plik: `mobile/scripts/reset-project.js`
 
 ```javascript
 #!/usr/bin/env node
@@ -27227,7 +27227,7 @@ rl.question(
 
 ---
 
-## 59. Plik: `mobile\src\app\_layout.tsx`
+## 59. Plik: `mobile/src/app/_layout.tsx`
 
 ```typescript
 import { Slot } from 'expo-router';
@@ -27253,7 +27253,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 60. Plik: `mobile\src\app\explore.tsx`
+## 60. Plik: `mobile/src/app/explore.tsx`
 
 ```typescript
 import React from 'react';
@@ -27270,7 +27270,7 @@ export default function ExploreScreen() {
 
 ---
 
-## 61. Plik: `mobile\src\app\index.tsx`
+## 61. Plik: `mobile/src/app/index.tsx`
 
 ```typescript
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -33715,7 +33715,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 62. Plik: `mobile\src\components\animated-icon.module.css`
+## 62. Plik: `mobile/src/components/animated-icon.module.css`
 
 ```css
 .expoLogoBackground {
@@ -33728,7 +33728,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 63. Plik: `mobile\src\components\animated-icon.tsx`
+## 63. Plik: `mobile/src/components/animated-icon.tsx`
 
 ```typescript
 import { Image } from 'expo-image';
@@ -33867,7 +33867,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 64. Plik: `mobile\src\components\animated-icon.web.tsx`
+## 64. Plik: `mobile/src/components/animated-icon.web.tsx`
 
 ```typescript
 import { Image } from 'expo-image';
@@ -33982,7 +33982,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 65. Plik: `mobile\src\components\app-tabs.tsx`
+## 65. Plik: `mobile/src/components/app-tabs.tsx`
 
 ```typescript
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
@@ -34021,7 +34021,7 @@ export default function AppTabs() {
 
 ---
 
-## 66. Plik: `mobile\src\components\app-tabs.web.tsx`
+## 66. Plik: `mobile/src/components/app-tabs.web.tsx`
 
 ```typescript
 import {
@@ -34143,7 +34143,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 67. Plik: `mobile\src\components\external-link.tsx`
+## 67. Plik: `mobile/src/components/external-link.tsx`
 
 ```typescript
 import { Href, Link } from 'expo-router';
@@ -34175,7 +34175,7 @@ export function ExternalLink({ href, ...rest }: Props) {
 
 ---
 
-## 68. Plik: `mobile\src\components\hint-row.tsx`
+## 68. Plik: `mobile/src/components/hint-row.tsx`
 
 ```typescript
 import type { ReactNode } from 'react';
@@ -34217,7 +34217,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 69. Plik: `mobile\src\components\themed-text.tsx`
+## 69. Plik: `mobile/src/components/themed-text.tsx`
 
 ```typescript
 import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
@@ -34297,7 +34297,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 70. Plik: `mobile\src\components\themed-view.tsx`
+## 70. Plik: `mobile/src/components/themed-view.tsx`
 
 ```typescript
 import { View, type ViewProps } from 'react-native';
@@ -34320,7 +34320,7 @@ export function ThemedView({ style, lightColor, darkColor, type, ...otherProps }
 
 ---
 
-## 71. Plik: `mobile\src\components\ui\collapsible.tsx`
+## 71. Plik: `mobile/src/components/ui/collapsible.tsx`
 
 ```typescript
 import { SymbolView } from 'expo-symbols';
@@ -34392,7 +34392,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 72. Plik: `mobile\src\components\web-badge.tsx`
+## 72. Plik: `mobile/src/components/web-badge.tsx`
 
 ```typescript
 import { version } from 'expo/package.json';
@@ -34442,7 +34442,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 73. Plik: `mobile\src\constants\theme.ts`
+## 73. Plik: `mobile/src/constants/theme.ts`
 
 ```typescript
 /**
@@ -34514,7 +34514,7 @@ export const MaxContentWidth = 800;
 
 ---
 
-## 74. Plik: `mobile\src\constants\transcripts.json`
+## 74. Plik: `mobile/src/constants/transcripts.json`
 
 ```json
 {
@@ -36559,7 +36559,7 @@ export const MaxContentWidth = 800;
 
 ---
 
-## 75. Plik: `mobile\src\global.css`
+## 75. Plik: `mobile/src/global.css`
 
 ```css
 :root {
@@ -36575,7 +36575,7 @@ export const MaxContentWidth = 800;
 
 ---
 
-## 76. Plik: `mobile\src\hooks\use-color-scheme.ts`
+## 76. Plik: `mobile/src/hooks/use-color-scheme.ts`
 
 ```typescript
 export { useColorScheme } from 'react-native';
@@ -36583,7 +36583,7 @@ export { useColorScheme } from 'react-native';
 
 ---
 
-## 77. Plik: `mobile\src\hooks\use-color-scheme.web.ts`
+## 77. Plik: `mobile/src/hooks/use-color-scheme.web.ts`
 
 ```typescript
 import { useEffect, useState } from 'react';
@@ -36611,7 +36611,7 @@ export function useColorScheme() {
 
 ---
 
-## 78. Plik: `mobile\src\hooks\use-theme.ts`
+## 78. Plik: `mobile/src/hooks/use-theme.ts`
 
 ```typescript
 /**
@@ -36632,7 +36632,7 @@ export function useTheme() {
 
 ---
 
-## 79. Plik: `mobile\tsconfig.json`
+## 79. Plik: `mobile/tsconfig.json`
 
 ```json
 {
