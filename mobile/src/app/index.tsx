@@ -15,6 +15,7 @@ import {
   Platform,
   Keyboard,
   Linking,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
@@ -1568,9 +1569,8 @@ export default function HomeScreen() {
 
     setVideoIsLoadingCustom(true);
     setVideoCustomError('');
-    setVideoShowManualPaste(false);
     try {
-      const response = await customFetch(`${backendUrl}/api/media/transcript?video_id=${yId}&use_whisper=${videoUseWhisper}`, {
+      const response = await customFetch(`${backendUrl}/api/media/transcript?video_id=${yId}&use_whisper=true`, {
         headers: {
           'X-Session-Token': user?.token || '',
         }
@@ -1578,8 +1578,6 @@ export default function HomeScreen() {
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         setVideoCustomError(errData.error || "Nie udało się pobrać transkrypcji z serwera");
-        setVideoShowManualPaste(true);
-        setVideoManualVideoId(yId);
         return;
       }
       const data = await response.json();
@@ -1603,55 +1601,6 @@ export default function HomeScreen() {
     } catch (err: any) {
       console.error(err);
       setVideoCustomError(err.message || "Błąd pobierania transkrypcji");
-      setVideoShowManualPaste(true);
-      setVideoManualVideoId(yId);
-    } finally {
-      setVideoIsLoadingCustom(false);
-    }
-  };
-
-  const handleSaveManualTranscript = async () => {
-    if (!videoManualText.trim()) return;
-
-    setVideoIsLoadingCustom(true);
-    setVideoCustomError('');
-    try {
-      const response = await customFetch(`${backendUrl}/api/media/transcript/manual`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-Token": user?.token || "",
-        },
-        body: JSON.stringify({
-          video_id: videoManualVideoId,
-          raw_text: videoManualText
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const newVideo = {
-          id: `custom_${videoManualVideoId}`,
-          title: data.title || `Własne wideo (${videoManualVideoId})`,
-          youtubeId: videoManualVideoId,
-          transcript: data.transcript || []
-        };
-
-        const updatedCustom = [newVideo, ...customVideos.filter(v => v.youtubeId !== videoManualVideoId)];
-        setCustomVideos(updatedCustom);
-        await AsyncStorage.setItem('buddy_custom_videos', JSON.stringify(updatedCustom));
-        
-        setCurrentVideo(newVideo);
-        setVideoCustomUrl('');
-        setVideoManualText('');
-        setVideoShowManualPaste(false);
-      } else {
-        const errData = await response.json().catch(() => ({}));
-        setVideoCustomError(errData.error || "Błąd przetwarzania napisów ręcznych.");
-      }
-    } catch (err) {
-      console.error(err);
-      setVideoCustomError("Błąd połączenia podczas przesyłania napisów.");
     } finally {
       setVideoIsLoadingCustom(false);
     }
@@ -3698,108 +3647,9 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                   </View>
                   
-                  {/* Whisper Toggle Selector */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 8, gap: 10 }}>
-                    <Text style={{ fontSize: 13, color: '#3C4043', fontWeight: '500' }}>Metoda transkrypcji:</Text>
-                    <TouchableOpacity
-                      style={{
-                        paddingVertical: 5,
-                        paddingHorizontal: 10,
-                        borderRadius: 6,
-                        backgroundColor: !videoUseWhisper ? '#1A73E8' : '#F1F3F4'
-                      }}
-                      onPress={async () => {
-                        setVideoUseWhisper(false);
-                        await AsyncStorage.setItem('buddy_video_use_whisper', 'false');
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, color: !videoUseWhisper ? '#FFFFFF' : '#3C4043', fontWeight: 'bold' }}>Standard</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={{
-                        paddingVertical: 5,
-                        paddingHorizontal: 10,
-                        borderRadius: 6,
-                        backgroundColor: videoUseWhisper ? '#1A73E8' : '#F1F3F4'
-                      }}
-                      onPress={async () => {
-                        setVideoUseWhisper(true);
-                        await AsyncStorage.setItem('buddy_video_use_whisper', 'true');
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, color: videoUseWhisper ? '#FFFFFF' : '#3C4043', fontWeight: 'bold' }}>Premium AI (Whisper)</Text>
-                    </TouchableOpacity>
-                  </View>
-
                   {videoCustomError ? (
                     <Text style={styles.errorText}>{videoCustomError}</Text>
                   ) : null}
-
-                  {/* Manual Paste Fallback UI */}
-                  {videoShowManualPaste && (
-                    <View style={{
-                      marginTop: 16,
-                      padding: 12,
-                      backgroundColor: '#F8F9FA',
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: '#DADCE0'
-                    }}>
-                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#B00020', marginBottom: 4 }}>
-                        Wystąpił problem z pobraniem transkrypcji:
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#3C4043', marginBottom: 8 }}>
-                        YouTube zablokował automatyczne pobieranie. Aby to obejść, skopiuj napisy z zewnętrznego serwisu:
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#1A73E8', textDecorationLine: 'underline', marginBottom: 12, fontWeight: 'bold' }}
-                        onPress={() => {
-                          if (typeof window !== 'undefined') {
-                            window.open(`https://youtubetranscript.com/?v=${videoManualVideoId}`, '_blank');
-                          } else {
-                            Linking.openURL(`https://youtubetranscript.com/?v=${videoManualVideoId}`);
-                          }
-                        }}
-                      >
-                        🔗 Otwórz transkrypcję filmu na YouTubeTranscript
-                      </Text>
-                      <TextInput
-                        style={{
-                          height: 100,
-                          backgroundColor: '#FFFFFF',
-                          borderColor: '#DADCE0',
-                          borderWidth: 1,
-                          borderRadius: 6,
-                          padding: 8,
-                          fontSize: 12,
-                          textAlignVertical: 'top',
-                          color: '#3C4043',
-                          marginBottom: 10
-                        }}
-                        multiline={true}
-                        numberOfLines={5}
-                        placeholder="Wklej skopiowaną transkrypcję tutaj (np.:&#10;0:03&#10;Hello buddy...&#10;0:06&#10;Do you hear me?)"
-                        placeholderTextColor="#9AA0A6"
-                        value={videoManualText}
-                        onChangeText={setVideoManualText}
-                      />
-                      <TouchableOpacity
-                        style={{
-                          backgroundColor: '#34A853',
-                          paddingVertical: 8,
-                          borderRadius: 6,
-                          alignItems: 'center'
-                        }}
-                        onPress={handleSaveManualTranscript}
-                        disabled={videoIsLoadingCustom}
-                      >
-                        {videoIsLoadingCustom ? (
-                          <ActivityIndicator color="white" size="small" />
-                        ) : (
-                          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>Zapisz napisy i załaduj wideo</Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  )}
                 </View>
               </ScrollView>
             </View>
@@ -3920,6 +3770,19 @@ export default function HomeScreen() {
                 </View>
                 <Text style={styles.toggleText}>Automatyczne wysyłanie (VAD)</Text>
               </TouchableOpacity>
+
+              <Text style={styles.authLabel}>Adres IP Backendu</Text>
+              <TextInput
+                style={styles.authInput}
+                value={backendUrl}
+                onChangeText={async (text) => {
+                  setBackendUrl(text);
+                  await AsyncStorage.setItem('buddy_backend_url', text);
+                }}
+                placeholder="http://192.168.1.100:5001"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
 
               <Text style={styles.authLabel}>Głos lektora (Neural TTS):</Text>
               <ScrollView 
