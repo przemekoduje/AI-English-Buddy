@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-08-03 13:38:42
+Wygenerowano: 2026-08-03 13:45:29
 
 ## Spis Treści
 1. `backend\app.py`
@@ -9214,6 +9214,9 @@ function MediaBuddy({ user }) {
   const [customUrl, setCustomUrl] = useState("");
   const [isLoadingCustom, setIsLoadingCustom] = useState(false);
   const [customError, setCustomError] = useState("");
+  const [showManualPaste, setShowManualPaste] = useState(false);
+  const [manualText, setManualText] = useState("");
+  const [manualVideoId, setManualVideoId] = useState("");
   const [selectedSourceId, setSelectedSourceId] = useState("");
   const randomizedSources = useMemo(() => {
     return CURATED_SOURCES.map(source => ({
@@ -9277,6 +9280,25 @@ function MediaBuddy({ user }) {
       console.error("Failed to save autoScrollEnabled to localStorage", e);
     }
   }, [autoScrollEnabled]);
+
+  const [useWhisper, setUseWhisper] = useState(() => {
+    try {
+      const saved = localStorage.getItem("media_buddy_use_whisper");
+      return saved === "false" ? false : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  // Sync useWhisper to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("media_buddy_use_whisper", useWhisper.toString());
+      console.log("useWhisper persisted to localStorage:", useWhisper);
+    } catch (e) {
+      console.error("Failed to save useWhisper to localStorage", e);
+    }
+  }, [useWhisper]);
 
 
 
@@ -9798,9 +9820,10 @@ function MediaBuddy({ user }) {
 
   const fetchAndLoadVideo = async (videoId) => {
     setCustomError("");
+    setShowManualPaste(false);
     setIsLoadingCustom(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=true`, {
+      const response = await fetch(`${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=${useWhisper}`, {
         headers: {
           "X-Session-Token": user.token
         }
@@ -9827,10 +9850,14 @@ function MediaBuddy({ user }) {
       } else {
         const errData = await response.json();
         setCustomError(errData.error || "Błąd podczas pobierania transkrypcji.");
+        setShowManualPaste(true);
+        setManualVideoId(videoId);
       }
     } catch (err) {
       console.error(err);
       setCustomError("Błąd pobierania transkrypcji z serwisu YouTube.");
+      setShowManualPaste(true);
+      setManualVideoId(videoId);
     } finally {
       setIsLoadingCustom(false);
     }
@@ -9844,6 +9871,53 @@ function MediaBuddy({ user }) {
       return;
     }
     await fetchAndLoadVideo(videoId);
+  };
+
+  const handleSaveManualTranscript = async (e) => {
+    e.preventDefault();
+    if (!manualText.trim()) return;
+
+    setIsLoadingCustom(true);
+    setCustomError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/media/transcript/manual`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token
+        },
+        body: JSON.stringify({
+          video_id: manualVideoId,
+          raw_text: manualText
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newCustomVid = {
+          id: `custom_${manualVideoId}`,
+          title: data.title || `Własne wideo (${manualVideoId})`,
+          youtubeId: manualVideoId,
+          transcript: data.transcript
+        };
+
+        if (!customVideos.some(v => v.youtubeId === manualVideoId)) {
+          setCustomVideos([...customVideos, newCustomVid]);
+        }
+        setCurrentVideo(newCustomVid);
+        setCustomUrl("");
+        setManualText("");
+        setShowManualPaste(false);
+      } else {
+        const errData = await response.json();
+        setCustomError(errData.error || "Błąd przetwarzania napisów ręcznych.");
+      }
+    } catch (err) {
+      console.error(err);
+      setCustomError("Błąd połączenia podczas przesyłania napisów.");
+    } finally {
+      setIsLoadingCustom(false);
+    }
   };
 
 
@@ -9874,7 +9948,70 @@ function MediaBuddy({ user }) {
           </button>
         </form>
         
+        <div className="transcript-mode-toggle-container">
+          <span className="toggle-label-text">Tryb pobierania transkrypcji:</span>
+          <div className="toggle-switch-wrapper">
+            <button
+              type="button"
+              className={`toggle-option-btn ${!useWhisper ? "active" : ""}`}
+              onClick={() => setUseWhisper(false)}
+              title="Darmowe automatyczne napisy z YouTube (brak interpunkcji)"
+            >
+              <span>Darmowy (Nap. automatyczne)</span>
+            </button>
+            <button
+              type="button"
+              className={`toggle-option-btn ${useWhisper ? "active" : ""}`}
+              onClick={() => setUseWhisper(true)}
+              title="Płatna transkrypcja AI przez Whisper (świetna interpunkcja i wielkie litery)"
+            >
+              <span>Premium AI (Whisper)</span>
+            </button>
+          </div>
+        </div>
+
         {customError && <p className="loader-error">{customError}</p>}
+
+        {showManualPaste && (
+          <div className="manual-paste-section">
+            <div className="manual-paste-info">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
+                <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
+              </svg>
+              <strong>YouTube zablokował automatyczne pobieranie na serwerze:</strong>
+              <p style={{ margin: '0.5rem 0', fontSize: '0.92rem' }}>
+                Aby to obejść, możesz wkleić napisy ręcznie. Użyj darmowego narzędzia zewnętrznego:
+              </p>
+              <ol>
+                <li>Kliknij tutaj: <a href={`https://youtubetranscript.com/?v=${manualVideoId}`} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 'bold', color: 'var(--primary-500)', textDecoration: 'underline' }}>Otwórz transkrypcję filmu na YouTubeTranscript</a> (otworzy się w nowej karcie).</li>
+                <li>Zaznacz i skopiuj całą treść transkrypcji (wraz ze znacznikami czasu, np. 0:03).</li>
+                <li>Wklej skopiowany tekst w pole poniżej i kliknij przycisk „Zapisz napisy i załaduj wideo”.</li>
+              </ol>
+            </div>
+            <form onSubmit={handleSaveManualTranscript} className="manual-paste-form">
+              <textarea
+                className="manual-paste-textarea"
+                placeholder="Wklej skopiowaną transkrypcję tutaj (np.:&#10;0:03&#10;Hello buddy...&#10;0:06&#10;Do you hear me?)"
+                value={manualText}
+                onChange={(e) => setManualText(e.target.value)}
+                rows={6}
+                required
+              />
+              <button type="submit" className="manual-paste-btn" disabled={isLoadingCustom}>
+                {isLoadingCustom ? "Przetwarzanie..." : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    Zapisz napisy i załaduj wideo
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                      <polyline points="17 21 17 13 7 13 7 21" />
+                      <polyline points="7 3 7 8 15 8" />
+                    </svg>
+                  </span>
+                )}
+              </button>
+            </form>
+          </div>
+        )}
         {/* Curated Channels & Suggestion Box */}
         <div className="curated-suggestions-section">
           <h4 className="suggestions-title">
@@ -28691,8 +28828,9 @@ export default function HomeScreen() {
 
     setVideoIsLoadingCustom(true);
     setVideoCustomError('');
+    setVideoShowManualPaste(false);
     try {
-      const response = await customFetch(`${backendUrl}/api/media/transcript?video_id=${yId}&use_whisper=true`, {
+      const response = await customFetch(`${backendUrl}/api/media/transcript?video_id=${yId}&use_whisper=${videoUseWhisper}`, {
         headers: {
           'X-Session-Token': user?.token || '',
         }
@@ -28700,6 +28838,8 @@ export default function HomeScreen() {
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         setVideoCustomError(errData.error || "Nie udało się pobrać transkrypcji z serwera");
+        setVideoShowManualPaste(true);
+        setVideoManualVideoId(yId);
         return;
       }
       const data = await response.json();
@@ -28723,6 +28863,55 @@ export default function HomeScreen() {
     } catch (err: any) {
       console.error(err);
       setVideoCustomError(err.message || "Błąd pobierania transkrypcji");
+      setVideoShowManualPaste(true);
+      setVideoManualVideoId(yId);
+    } finally {
+      setVideoIsLoadingCustom(false);
+    }
+  };
+
+  const handleSaveManualTranscript = async () => {
+    if (!videoManualText.trim()) return;
+
+    setVideoIsLoadingCustom(true);
+    setVideoCustomError('');
+    try {
+      const response = await customFetch(`${backendUrl}/api/media/transcript/manual`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || "",
+        },
+        body: JSON.stringify({
+          video_id: videoManualVideoId,
+          raw_text: videoManualText
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newVideo = {
+          id: `custom_${videoManualVideoId}`,
+          title: data.title || `Własne wideo (${videoManualVideoId})`,
+          youtubeId: videoManualVideoId,
+          transcript: data.transcript || []
+        };
+
+        const updatedCustom = [newVideo, ...customVideos.filter(v => v.youtubeId !== videoManualVideoId)];
+        setCustomVideos(updatedCustom);
+        await AsyncStorage.setItem('buddy_custom_videos', JSON.stringify(updatedCustom));
+        
+        setCurrentVideo(newVideo);
+        setVideoCustomUrl('');
+        setVideoManualText('');
+        setVideoShowManualPaste(false);
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        setVideoCustomError(errData.error || "Błąd przetwarzania napisów ręcznych.");
+      }
+    } catch (err) {
+      console.error(err);
+      setVideoCustomError("Błąd połączenia podczas przesyłania napisów.");
     } finally {
       setVideoIsLoadingCustom(false);
     }
@@ -30772,9 +30961,109 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                   </View>
                   
+                  
+                  {/* Whisper Toggle Selector */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 8, gap: 10 }}>
+                    <Text style={{ fontSize: 13, color: '#3C4043', fontWeight: '500' }}>Metoda transkrypcji:</Text>
+                    <TouchableOpacity
+                      style={{
+                        paddingVertical: 5,
+                        paddingHorizontal: 10,
+                        borderRadius: 6,
+                        backgroundColor: !videoUseWhisper ? '#1A73E8' : '#F1F3F4'
+                      }}
+                      onPress={async () => {
+                        setVideoUseWhisper(false);
+                        await AsyncStorage.setItem('buddy_video_use_whisper', 'false');
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: !videoUseWhisper ? '#FFFFFF' : '#3C4043', fontWeight: 'bold' }}>Standard</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{
+                        paddingVertical: 5,
+                        paddingHorizontal: 10,
+                        borderRadius: 6,
+                        backgroundColor: videoUseWhisper ? '#1A73E8' : '#F1F3F4'
+                      }}
+                      onPress={async () => {
+                        setVideoUseWhisper(true);
+                        await AsyncStorage.setItem('buddy_video_use_whisper', 'true');
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: videoUseWhisper ? '#FFFFFF' : '#3C4043', fontWeight: 'bold' }}>Premium AI (Whisper)</Text>
+                    </TouchableOpacity>
+                  </View>
+
                   {videoCustomError ? (
                     <Text style={styles.errorText}>{videoCustomError}</Text>
                   ) : null}
+
+                  {/* Manual Paste Fallback UI */}
+                  {videoShowManualPaste && (
+                    <View style={{
+                      marginTop: 16,
+                      padding: 12,
+                      backgroundColor: '#F8F9FA',
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: '#DADCE0'
+                    }}>
+                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#B00020', marginBottom: 4 }}>
+                        Wystąpił problem z pobraniem transkrypcji:
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#3C4043', marginBottom: 8 }}>
+                        YouTube zablokował automatyczne pobieranie. Aby to obejść, skopiuj napisy z zewnętrznego serwisu:
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#1A73E8', textDecorationLine: 'underline', marginBottom: 12, fontWeight: 'bold' }}
+                        onPress={() => {
+                          if (typeof window !== 'undefined') {
+                            window.open(`https://youtubetranscript.com/?v=${videoManualVideoId}`, '_blank');
+                          } else {
+                            Linking.openURL(`https://youtubetranscript.com/?v=${videoManualVideoId}`);
+                          }
+                        }}
+                      >
+                        🔗 Otwórz transkrypcję filmu na YouTubeTranscript
+                      </Text>
+                      <TextInput
+                        style={{
+                          height: 100,
+                          backgroundColor: '#FFFFFF',
+                          borderColor: '#DADCE0',
+                          borderWidth: 1,
+                          borderRadius: 6,
+                          padding: 8,
+                          fontSize: 12,
+                          textAlignVertical: 'top',
+                          color: '#3C4043',
+                          marginBottom: 10
+                        }}
+                        multiline={true}
+                        numberOfLines={5}
+                        placeholder="Wklej skopiowaną transkrypcję tutaj (np.:&#10;0:03&#10;Hello buddy...&#10;0:06&#10;Do you hear me?)"
+                        placeholderTextColor="#9AA0A6"
+                        value={videoManualText}
+                        onChangeText={setVideoManualText}
+                      />
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: '#34A853',
+                          paddingVertical: 8,
+                          borderRadius: 6,
+                          alignItems: 'center'
+                        }}
+                        onPress={handleSaveManualTranscript}
+                        disabled={videoIsLoadingCustom}
+                      >
+                        {videoIsLoadingCustom ? (
+                          <ActivityIndicator color="white" size="small" />
+                        ) : (
+                          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>Zapisz napisy i załaduj wideo</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               </ScrollView>
             </View>
