@@ -1,4 +1,6 @@
 .story-generator {
+  max-width: 900px;
+  margin: 2rem 0 3rem 0;
   padding: 2rem;
   background: white;
   border-radius: var(--radius-md);

@@ -248,11 +248,6 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           className={`gen-tab-btn ${activeTab === "ai" ? "active" : ""}`}
           onClick={() => setActiveTab("ai")}
         >
-          <span className="gen-tab-icon">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
-          </span>
           <span>AI Lesson Generator</span>
         </button>
         <button
@@ -260,14 +255,7 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           className={`gen-tab-btn ${activeTab === "paste" ? "active" : ""}`}
           onClick={() => setActiveTab("paste")}
         >
-          <span className="gen-tab-icon">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
-              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-            </svg>
-          </span>
           <span>...or Paste External Text</span>
-          <span className="gen-tab-badge">Instant Practice</span>
         </button>
       </div>
 
@@ -288,7 +276,6 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
               className={`topic-chip ${isSelected ? "selected" : ""}`}
               disabled={isLoading}
             >
-              <span className="topic-chip-icon">{getTopicIcon(topic)}</span>
               <span className="topic-chip-text">{topic}</span>
               {isSelected && <span className="topic-chip-check">✓</span>}
             </button>
@@ -303,13 +290,7 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           onClick={() => setShowSettings(!showSettings)}
           disabled={isLoading}
         >
-          <span>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px', verticalAlign: 'middle' }}>
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            Story Style & Settings
-          </span>
+          <span>Story Style & Settings</span>
           <span>{showSettings ? "▲" : "▼"}</span>
         </button>
       </div>
@@ -469,14 +450,7 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           {isLoading ? (
             <span className="loader-inner">Developing Story...</span>
           ) : (
-            <>
-              <span>Craft My Story</span>
-              <span className="btn-icon">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-                </svg>
-              </span>
-            </>
+            <span>Craft My Story</span>
           )}
         </button>
 
@@ -489,23 +463,13 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           {isLoading ? (
             <span className="loader-inner">Developing Lesson...</span>
           ) : (
-            <>
-              <span>Generuj lekcję domyślną</span>
-              <span className="btn-icon">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4" />
-                  <path d="M12 8h.01" />
-                </svg>
-              </span>
-            </>
+            <span>Generuj lekcję domyślną</span>
           )}
         </button>
       </div>
 
       <div className="paste-quick-trigger-banner" onClick={() => setActiveTab("paste")}>
         <div className="trigger-content">
-          <span className="trigger-icon">📋</span>
           <div>
             <strong>...or paste text</strong> from external sources (articles, emails, books)
             <p>Click here to import your own text with full interactive vocabulary & TTS →</p>
@@ -516,7 +480,6 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
       ) : (
       <div className="paste-mode-panel glass-panel">
         <div className="paste-header">
-          <h3>📋 ...or paste text (Import External Content)</h3>
           <p>Got an article from BBC News, a business report, or a story excerpt? Paste it below! We will save it to your server library and give you instant access to interactive word definitions, neural TTS pronunciation, grammar checks, and flashcards—just like an AI-generated lesson.</p>
         </div>
 

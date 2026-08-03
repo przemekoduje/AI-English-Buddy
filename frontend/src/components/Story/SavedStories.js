@@ -113,7 +113,6 @@ const SavedStories = ({ user, onSelectStory }) => {
     <div className="saved-stories-container">
       <div className="saved-stories-header">
         <div className="header-meta">
-          <h2>Saved Stories</h2>
           <p className="subtitle">Manage and read your generated stories</p>
         </div>
         <div className="search-wrapper">

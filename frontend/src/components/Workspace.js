@@ -1619,17 +1619,17 @@ function Workspace({
       )}
 
       <main className="workspace-main">
-        <header className="workspace-header">
-          <div className="header-left-group">
-            <button onClick={handleBackButtonClick} className="back-btn-inline" title={generatedText ? "Wróć do filtrów" : "Wróć do pulpitu"}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="19" y1="12" x2="5" y2="12"></line>
-                <polyline points="12 19 5 12 12 5"></polyline>
-              </svg>
-            </button>
-            <h1>{currentStoryTitle || "English Buddy Workspace"}</h1>
-            
-            {generatedText && (
+        {generatedText && (
+          <header className="workspace-header">
+            <div className="header-left-group">
+              <button onClick={handleBackButtonClick} className="back-btn-inline" title="Wróć do filtrów">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="19" y1="12" x2="5" y2="12"></line>
+                  <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+              </button>
+              <h1>{currentStoryTitle || "English Buddy Workspace"}</h1>
+              
               <div className="header-actions-group">
                 <button 
                   onClick={() => {
@@ -1664,9 +1664,9 @@ function Workspace({
                   </svg>
                 </button>
               </div>
-            )}
-          </div>
-        </header>
+            </div>
+          </header>
+        )}
 
         {storyParts.length > 0 && (
           <div className="chapter-tabs">

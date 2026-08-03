@@ -548,12 +548,6 @@ const Reader = ({
                   : "Możesz kontynuować czytanie lub kliknąć w kulę już teraz, aby AI natychmiast zadało Ci pytanie dotyczące tekstu i oceniło Twoją wymowę!"}
               </p>
             </div>
-            <div className="live-chat-trigger-btn">
-              <span>{showLiveChatBadge ? "Otwórz Kulę Live" : "Rozpocznij Czat teraz"}</span>
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-            </div>
           </div>
         ) : (
           <div className="practice-live-chat-stage glass-panel">

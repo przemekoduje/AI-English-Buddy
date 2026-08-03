@@ -411,4 +411,13 @@
   .collapse-toggle-btn {
     display: none !important;
   }
+  
+  .nav-item-dashboard {
+    display: flex !important;
+  }
+}
+
+/* Hide Chat Live on desktop */
+.nav-item-dashboard {
+  display: none !important;
 }

@@ -14,6 +14,7 @@ import {
   Modal,
   Image,
   Platform,
+  Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
@@ -127,7 +128,6 @@ const getInitialBackendUrl = () => {
       return 'https://ai-english-buddy-backend.onrender.com';
     }
   }
-
   // Dynamiczne wykrycie IP hosta z Expo
   const hostUri = Constants.expoConfig?.hostUri || (Constants.manifest as any)?.debuggerHost;
   if (hostUri) {
@@ -150,8 +150,87 @@ export default function HomeScreen() {
   const [autoSendEnabled, setAutoSendEnabled] = useState<boolean>(true);
 
   const handleSelectAiMode = async (mode: 'free' | 'openai_full' | 'hybrid') => {
-    setAiMode(mode);
-    await AsyncStorage.setItem('buddy_ai_mode', mode);
+    if (mode === 'free') {
+      setAiMode(mode);
+      await AsyncStorage.setItem('buddy_ai_mode', mode);
+      return;
+    }
+
+    try {
+      const response = await customFetch(`${backendUrl}/api/user-permissions`, {
+        headers: {
+          'X-Session-Token': user?.token || '',
+        }
+      });
+      if (response.ok) {
+        const perms = await response.json();
+        const hasAccess = mode === 'hybrid' ? perms.access_hybrid : perms.access_openai_full;
+        if (hasAccess) {
+          setAiMode(mode);
+          await AsyncStorage.setItem('buddy_ai_mode', mode);
+          return;
+        }
+      }
+    } catch (err) {
+      console.log("Error checking permissions:", err);
+    }
+
+    const requestAccessAction = async () => {
+      try {
+        const res = await customFetch(`${backendUrl}/api/request-mode-access`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Session-Token': user?.token || '',
+          },
+          body: JSON.stringify({ mode })
+        });
+        if (res.ok) {
+          if (Platform.OS === 'web') {
+            window.alert("Prośba wysłana. Gdy administrator ją zatwierdzi, będziesz mógł wybrać ten tryb.");
+          } else {
+            Alert.alert("Prośba wysłana", "Wysłałem prośbę o dostęp. Gdy ją zatwierdzę, będziesz mógł wybrać ten tryb.");
+          }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          const errMsg = errData.error || "Nie udało się wysłać prośby.";
+          if (Platform.OS === 'web') {
+            window.alert(errMsg);
+          } else {
+            Alert.alert("Błąd", errMsg);
+          }
+        }
+      } catch (err) {
+        const errMsg = "Błąd połączenia z serwerem.";
+        if (Platform.OS === 'web') {
+          window.alert(errMsg);
+        } else {
+          Alert.alert("Błąd", errMsg);
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmSend = window.confirm("Aby korzystać z wersji Hybrid oraz Full, należy uzyskać moją zgodę. Czy chcesz wysłać prośbę o dostęp? Otrzymam powiadomienie na e-mail i będę mógł je zatwierdzić.");
+      if (confirmSend) {
+        requestAccessAction();
+      }
+    } else {
+      Alert.alert(
+        "Wymagana zgoda",
+        "Aby korzystać z wersji Hybrid oraz Full, należy uzyskać moją zgodę. Czy chcesz wysłać prośbę o dostęp? Otrzymam powiadomienie na e-mail i będę mógł je zatwierdzić.",
+        [
+          {
+            text: "Wyślij prośbę o dostęp",
+            onPress: requestAccessAction
+          },
+          {
+            text: "Anuluj",
+            style: "cancel"
+          }
+        ]
+      );
+    }
   };
 
   const handleToggleAutoSend = async (val: boolean) => {
@@ -2549,9 +2628,10 @@ export default function HomeScreen() {
           {currentView === 'dashboard' ? (
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ width: 32, alignItems: 'flex-start' }}>
-                <Svg width={28} height={28} viewBox="0 0 100 100" fill="none">
-                  <Path d="M65 30C65 20 55 15 45 15C30 15 30 35 50 45C70 55 70 75 55 85C45 90 35 85 35 75" stroke="#111827" strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Image
+                  source={require('../../assets/images/logo.png')}
+                  style={{ width: 28, height: 28, resizeMode: 'contain' }}
+                />
               </View>
               <Text style={[styles.appTitle, { textAlign: 'center', flex: 1 }]}>Chat Live</Text>
               <View style={{ width: 32 }} />
@@ -2894,7 +2974,7 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
-            <ScrollView ref={workspaceScrollRef} contentContainerStyle={styles.workspaceContainer}>
+            <ScrollView ref={workspaceScrollRef} contentContainerStyle={styles.workspaceContainer} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
             {/* Generator input if no story generated */}
             {!generatedText ? (
               <View style={styles.generatorCard}>
@@ -2920,7 +3000,12 @@ export default function HomeScreen() {
 
                 {activeWorkspaceTab === 'ai' ? (
                   <>
-                    <Text style={styles.generatorHeader}>O czym chcesz stworzyć opowiadanie?</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.generatorHeader}>O czym chcesz stworzyć opowiadanie?</Text>
+                      <TouchableOpacity onPress={Keyboard.dismiss} style={{ padding: 4 }}>
+                        <Text style={{ color: '#1A73E8', fontSize: 13, fontWeight: '600' }}>Schowaj klawiaturę</Text>
+                      </TouchableOpacity>
+                    </View>
                     <TextInput
                       style={styles.promptInput}
                       value={storyPrompt}
@@ -3016,7 +3101,12 @@ export default function HomeScreen() {
                       placeholder="Np. Mój artykuł prasowy..."
                     />
 
-                    <Text style={styles.generatorHeader}>Wklej tekst do nauki:</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.generatorHeader}>Wklej tekst do nauki:</Text>
+                      <TouchableOpacity onPress={Keyboard.dismiss} style={{ padding: 4 }}>
+                        <Text style={{ color: '#1A73E8', fontSize: 13, fontWeight: '600' }}>Schowaj klawiaturę</Text>
+                      </TouchableOpacity>
+                    </View>
                     <TextInput
                       style={styles.pastedTextInput}
                       value={pastedText}

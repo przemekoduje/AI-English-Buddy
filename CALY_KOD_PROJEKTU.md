@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-07-16 14:10:41
+Wygenerowano: 2026-08-03 11:13:13
 
 ## Spis Treści
 1. `backend\app.py`
@@ -46,40 +46,42 @@ Wygenerowano: 2026-07-16 14:10:41
 42. `frontend\src\components\Story\StoryGenerator.test.js`
 43. `frontend\src\components\TopBar.css`
 44. `frontend\src\components\TopBar.js`
-45. `frontend\src\components\Vocabulary\VocabularyView.css`
-46. `frontend\src\components\Vocabulary\VocabularyView.js`
-47. `frontend\src\components\Workspace.css`
-48. `frontend\src\components\Workspace.js`
-49. `frontend\src\config.js`
-50. `frontend\src\index.css`
-51. `frontend\src\index.js`
-52. `mobile\app.json`
-53. `mobile\assets\expo.icon\icon.json`
-54. `mobile\expo-env.d.ts`
-55. `mobile\package.json`
-56. `mobile\scripts\reset-project.js`
-57. `mobile\src\app\_layout.tsx`
-58. `mobile\src\app\explore.tsx`
-59. `mobile\src\app\index.tsx`
-60. `mobile\src\components\animated-icon.module.css`
-61. `mobile\src\components\animated-icon.tsx`
-62. `mobile\src\components\animated-icon.web.tsx`
-63. `mobile\src\components\app-tabs.tsx`
-64. `mobile\src\components\app-tabs.web.tsx`
-65. `mobile\src\components\external-link.tsx`
-66. `mobile\src\components\hint-row.tsx`
-67. `mobile\src\components\themed-text.tsx`
-68. `mobile\src\components\themed-view.tsx`
-69. `mobile\src\components\ui\collapsible.tsx`
-70. `mobile\src\components\web-badge.tsx`
-71. `mobile\src\constants\theme.ts`
-72. `mobile\src\constants\transcripts.json`
-73. `mobile\src\global.css`
-74. `mobile\src\hooks\use-color-scheme.ts`
-75. `mobile\src\hooks\use-color-scheme.web.ts`
-76. `mobile\src\hooks\use-theme.ts`
-77. `mobile\tsconfig.json`
-78. `firebase.json`
+45. `frontend\src\components\Vocabulary\VocabularyDrawer.css`
+46. `frontend\src\components\Vocabulary\VocabularyDrawer.js`
+47. `frontend\src\components\Vocabulary\VocabularyView.css`
+48. `frontend\src\components\Vocabulary\VocabularyView.js`
+49. `frontend\src\components\Workspace.css`
+50. `frontend\src\components\Workspace.js`
+51. `frontend\src\config.js`
+52. `frontend\src\index.css`
+53. `frontend\src\index.js`
+54. `mobile\app.json`
+55. `mobile\assets\expo.icon\icon.json`
+56. `mobile\expo-env.d.ts`
+57. `mobile\package.json`
+58. `mobile\scripts\reset-project.js`
+59. `mobile\src\app\_layout.tsx`
+60. `mobile\src\app\explore.tsx`
+61. `mobile\src\app\index.tsx`
+62. `mobile\src\components\animated-icon.module.css`
+63. `mobile\src\components\animated-icon.tsx`
+64. `mobile\src\components\animated-icon.web.tsx`
+65. `mobile\src\components\app-tabs.tsx`
+66. `mobile\src\components\app-tabs.web.tsx`
+67. `mobile\src\components\external-link.tsx`
+68. `mobile\src\components\hint-row.tsx`
+69. `mobile\src\components\themed-text.tsx`
+70. `mobile\src\components\themed-view.tsx`
+71. `mobile\src\components\ui\collapsible.tsx`
+72. `mobile\src\components\web-badge.tsx`
+73. `mobile\src\constants\theme.ts`
+74. `mobile\src\constants\transcripts.json`
+75. `mobile\src\global.css`
+76. `mobile\src\hooks\use-color-scheme.ts`
+77. `mobile\src\hooks\use-color-scheme.web.ts`
+78. `mobile\src\hooks\use-theme.ts`
+79. `mobile\tsconfig.json`
+80. `firebase.json`
 
 ---
 
@@ -1458,6 +1460,8 @@ def get_youtube_transcript():
     if not video_id:
         return jsonify({"error": "Brak identyfikatora wideo"}), 400
 
+    use_whisper = request.args.get("use_whisper", "true").lower() == "true"
+
     # Fetch title using oembed API
     video_title = f"Wideo YouTube ({video_id})"
     try:
@@ -1469,42 +1473,120 @@ def get_youtube_transcript():
         print(f"Error fetching title for {video_id}: {e}")
 
     formatted = []
-    
-    # Try pytubefix first as it is less blocked by YouTube on cloud datacenter IPs (like Render)
+
+    # 1. First, check if there are manual (human-uploaded) English subtitles using yt-dlp
     try:
-        print(f"Attempting to fetch transcript using pytubefix for video {video_id}...", flush=True)
-        from pytubefix import YouTube
-        url = f"https://youtube.com/watch?v={video_id}"
-        yt = YouTube(url, client='WEB')
-        
-        if video_title == f"Wideo YouTube ({video_id})":
-            try:
-                video_title = yt.title
-            except Exception as title_err:
-                print(f"Could not fetch title from pytubefix: {title_err}")
-        
-        # Try to find English captions
-        caption = yt.captions.get('en') or yt.captions.get('a.en')
-        if not caption:
-            # Fallback: search for any caption that starts or ends with 'en'
-            for c_code in yt.captions:
-                if c_code.startswith('en') or c_code.endswith('.en'):
-                    caption = yt.captions[c_code]
+        print(f"Checking for manual English subtitles using yt-dlp for video {video_id}...", flush=True)
+        import yt_dlp
+        ydl_opts = {
+            'skip_download': True,
+            'writesub': True,
+            'subtitleslangs': ['en'],
+            'quiet': True,
+            'no_warnings': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            
+            if video_title == f"Wideo YouTube ({video_id})":
+                video_title = info.get("title", video_title)
+                
+            subtitles = info.get('subtitles', {})
+            manual_en_key = None
+            for key in subtitles.keys():
+                if key.startswith('en'):
+                    manual_en_key = key
                     break
                     
-        if caption:
-            srt_data = caption.generate_srt_captions()
-            formatted = parse_srt(srt_data)
-            print(f"Successfully fetched {len(formatted)} segments using pytubefix.", flush=True)
-        else:
-            print(f"No English captions track found in pytubefix for {video_id}.", flush=True)
-            
-    except Exception as py_err:
-        print(f"Pytubefix failed for {video_id}: {py_err}. Falling back to youtube-transcript-api...", flush=True)
+            if manual_en_key:
+                en_subs = subtitles[manual_en_key]
+                srt_url = None
+                ext = None
+                for sub_format in en_subs:
+                    if sub_format.get('ext') == 'srt':
+                        srt_url = sub_format.get('url')
+                        ext = 'srt'
+                        break
+                if not srt_url:
+                    for sub_format in en_subs:
+                        if sub_format.get('ext') in ['srt', 'vtt']:
+                            srt_url = sub_format.get('url')
+                            ext = sub_format.get('ext')
+                            break
+                            
+                if srt_url:
+                    sub_response = requests.get(srt_url, timeout=10)
+                    if sub_response.ok:
+                        formatted = parse_srt(sub_response.text)
+                        print(f"Successfully fetched manual subtitles using yt-dlp.", flush=True)
+                    else:
+                        print(f"Failed to download manual subtitles from URL.", flush=True)
+            else:
+                print(f"No manual English subtitles found for {video_id}.", flush=True)
+    except Exception as e:
+        print(f"Error checking manual subtitles with yt-dlp: {e}", flush=True)
 
-    # Fallback to youtube-transcript-api if pytubefix failed or returned nothing
+    # 2. Fallback to OpenAI Whisper API (Opcja B - premium transcription of downloaded audio)
+    if not formatted and use_whisper:
+        try:
+            print(f"Attempting to download audio and transcribe using OpenAI Whisper API...", flush=True)
+            import yt_dlp
+            import os
+            temp_folder = os.path.join(os.path.dirname(__file__), 'temp_audio')
+            os.makedirs(temp_folder, exist_ok=True)
+            
+            ydl_opts = {
+                'format': 'worstaudio[ext=m4a]/worst[ext=m4a]/worstaudio/worst',
+                'outtmpl': os.path.join(temp_folder, '%(id)s.%(ext)s'),
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            filepath = None
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=True)
+                filepath = ydl.prepare_filename(info)
+                if video_title == f"Wideo YouTube ({video_id})":
+                    video_title = info.get("title", video_title)
+                
+            if filepath and os.path.exists(filepath):
+                print(f"Audio downloaded successfully to {filepath}. Calling OpenAI Whisper API...", flush=True)
+                global openai_client
+                active_client = openai_client
+                if not active_client:
+                    from openai import OpenAI
+                    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+                    if OPENAI_API_KEY:
+                        active_client = OpenAI(api_key=OPENAI_API_KEY)
+                
+                if active_client:
+                    with open(filepath, "rb") as audio_file:
+                        srt_text = active_client.audio.transcriptions.create(
+                            model="whisper-1",
+                            file=audio_file,
+                            response_format="srt"
+                        )
+                    if srt_text:
+                        formatted = parse_srt(srt_text)
+                        print(f"Successfully transcribed video audio using OpenAI Whisper API.", flush=True)
+                else:
+                    print("OpenAI client not initialized (missing API key).", flush=True)
+                
+                # Cleanup
+                try:
+                    os.remove(filepath)
+                    print("Cleaned up temporary audio file.", flush=True)
+                except Exception as cleanup_err:
+                    print(f"Error during audio cleanup: {cleanup_err}", flush=True)
+            else:
+                print("Failed to download audio file via yt-dlp.", flush=True)
+        except Exception as whisper_err:
+            print(f"Whisper transcription pipeline failed for {video_id}: {whisper_err}", flush=True)
+
+    # 3. Last fallback to youtube-transcript-api (automatic captions) if Whisper failed or API key missing
     if not formatted:
         try:
+            print(f"Whisper pipeline failed/unavailable. Falling back to youtube-transcript-api for automatic captions...", flush=True)
             from youtube_transcript_api import YouTubeTranscriptApi
             api = YouTubeTranscriptApi()
             transcript = api.fetch(video_id, languages=['en'])
@@ -1520,12 +1602,34 @@ def get_youtube_transcript():
                         "end": end,
                         "text": text
                     })
-            print(f"Successfully fetched {len(formatted)} segments using youtube-transcript-api fallback.", flush=True)
+            print(f"Successfully fetched automatic segments using youtube-transcript-api fallback.", flush=True)
         except Exception as e:
-            print(f"Both methods failed for {video_id}: {e}", flush=True)
-            return jsonify({
-                "error": "Nie udało się pobrać transkrypcji dla tego filmu. Upewnij się, że film posiada angielskie napisy."
-            }), 500
+            print(f"youtube-transcript-api fallback failed for {video_id}: {e}", flush=True)
+
+    # 4. Final safety fallback to pytubefix (automatic captions)
+    if not formatted:
+        try:
+            print(f"Falling back to pytubefix for video {video_id}...", flush=True)
+            from pytubefix import YouTube
+            url = f"https://youtube.com/watch?v={video_id}"
+            yt = YouTube(url, client='WEB')
+            caption = yt.captions.get('en') or yt.captions.get('a.en')
+            if not caption:
+                for c_code in yt.captions:
+                    if c_code.startswith('en') or c_code.endswith('.en'):
+                        caption = yt.captions[c_code]
+                        break
+            if caption:
+                srt_data = caption.generate_srt_captions()
+                formatted = parse_srt(srt_data)
+                print(f"Successfully fetched automatic segments using pytubefix fallback.", flush=True)
+        except Exception as py_err:
+            print(f"pytubefix fallback failed for {video_id}: {py_err}", flush=True)
+
+    if not formatted:
+        return jsonify({
+            "error": "Nie udało się pobrać transkrypcji dla tego filmu. Upewnij się, że film posiada angielskie napisy."
+        }), 500
 
     try:
         aggregated = semantic_group_transcript(formatted)
@@ -2462,12 +2566,158 @@ def send_notebook_email():
     if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
         return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Dodaj zmienne w panelu Render."}), 400
 
-    email_body = "Oto Twoje słowa z notatnika AI English Buddy:\n\n"
-    for entry in notebook_words:
-        email_body += f"- {entry['original']} - {entry['translated']}\n"
-    email_body += "\nPowodzenia w nauce!"
+    # Pobieranie przykładowych zdań od AI
+    words_list = [entry.get('original', entry.get('word', '')) for entry in notebook_words]
+    words_list = [w for w in words_list if w]
+    
+    examples_dict = {}
+    if words_list:
+        system_prompt = (
+            "You are a helpful English tutor. For the given list of vocabulary words, "
+            "provide exactly 2 example sentences for each word demonstrating its correct usage. "
+            "Return the result STRICTLY as a JSON object where the keys are the original words and the values are lists of 2 strings (the sentences)."
+            "\n\nExample Output:\n{\n  \"apple\": [\"I ate a red apple.\", \"She bought some apples at the store.\"]\n}"
+        )
+        user_prompt = "Words: " + ", ".join(words_list)
+        try:
+            output_data = query_deepseek_with_system(system_prompt, user_prompt)
+            content = output_data['choices'][0]['message']['content'].strip()
+            if content.startswith("```json"):
+                content = content.split("```json", 1)[1]
+            if content.endswith("```"):
+                content = content.rsplit("```", 1)[0]
+            content = content.strip()
+            examples_dict = json.loads(content)
+        except Exception as e:
+            print(f"Error generating examples for email: {e}")
 
-    msg = MIMEText(email_body, 'plain', 'utf-8')
+    frontend_url = data.get('frontend_url', 'http://localhost:3000').rstrip('/')
+
+
+    # Tworzenie linku do gry w fiszki w aplikacji (Base64 UTF-8)
+    try:
+        words_for_link = []
+        for entry in notebook_words:
+            orig = entry.get('original', entry.get('word', '')).strip()
+            trans = entry.get('translated', entry.get('translation', '')).strip()
+            if orig:
+                words_for_link.append({'original': orig, 'translated': trans})
+        
+        words_json = json.dumps(words_for_link)
+        words_b64 = base64.b64encode(words_json.encode('utf-8')).decode('utf-8')
+        import urllib.parse
+        encoded_words = urllib.parse.quote(words_b64)
+        play_url = f"{frontend_url}/?play_flashcards=true&words={encoded_words}"
+    except Exception as e:
+        print(f"Error encoding words for link: {e}")
+        play_url = frontend_url
+
+    # Generowanie czytelnych, nowoczesnych kart słówek w HTML kompatybilnym z e-mail
+    list_html = ""
+    for idx, entry in enumerate(notebook_words):
+        original = entry.get('original', entry.get('word', 'Brak słowa'))
+        translated = entry.get('translated', entry.get('translation', 'Brak tłumaczenia'))
+        
+        # Pobieranie przykładów
+        examples = examples_dict.get(original)
+        ex_section_html = ""
+        if examples and isinstance(examples, list):
+            ex_html = ""
+            for ex in examples:
+                ex_html += f"""
+                <div style="font-size: 0.9rem; font-style: italic; color: #475569; margin-bottom: 6px; line-height: 1.4;">
+                  • {ex}
+                </div>
+                """
+            ex_section_html = f"""
+            <div style="margin-top: 14px; padding: 10px 14px; background-color: #f8fafc; border-left: 4px solid #4f46e5; border-radius: 0 8px 8px 0;">
+              <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.05em;">Przykłady użycia:</div>
+              {ex_html}
+            </div>
+            """
+        
+        list_html += f"""
+        <div style="margin-bottom: 20px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);">
+          <!-- Słowo angielskie -->
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 0; vertical-align: middle;">
+                <span style="font-size: 1.3rem; font-weight: 700; color: #1e1b4b; display: inline-block;">{original}</span>
+              </td>
+              <td style="padding: 0; text-align: right; vertical-align: middle; width: 60px;">
+                <span style="display: inline-block; background-color: #dbeafe; color: #1e40af; font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.02em;">EN</span>
+              </td>
+            </tr>
+          </table>
+          
+          <div style="margin: 8px 0; border-top: 1px solid #f1f5f9;"></div>
+          
+          <!-- Tłumaczenie polskie -->
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 0; vertical-align: middle;">
+                <span style="font-size: 1.1rem; font-weight: 600; color: #4f46e5; display: inline-block;">{translated}</span>
+              </td>
+              <td style="padding: 0; text-align: right; vertical-align: middle; width: 60px;">
+                <span style="display: inline-block; background-color: #f3e8ff; color: #6b21a8; font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.02em;">PL</span>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Przykłady użycia -->
+          {ex_section_html}
+        </div>
+        """
+
+    email_html = f"""
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Twoje słówka z notatnika AI English Buddy</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #334155; -webkit-font-smoothing: antialiased;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03); border: 1px solid #e2e8f0;">
+          
+          <!-- Nagłówek -->
+          <div style="text-align: center; margin-bottom: 24px; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 30px 20px; border-radius: 12px; color: #ffffff;">
+            <div style="font-size: 2.5rem; margin-bottom: 10px;">📓</div>
+            <h1 style="font-size: 1.6rem; font-weight: 800; margin: 0 0 8px 0; color: #ffffff; letter-spacing: -0.02em;">Twoje Słówka z Notatnika</h1>
+            <p style="color: #e0e7ff; font-size: 0.95rem; margin: 0; opacity: 0.9;">AI English Buddy przygotował dla Ciebie podsumowanie i materiały do nauki.</p>
+          </div>
+
+          <!-- Przycisk do interaktywnej nauki -->
+          <div style="text-align: center; margin: 24px 0; padding: 16px; background-color: #f1f5f9; border-radius: 12px;">
+            <p style="color: #475569; font-size: 0.9rem; margin: 0 0 12px 0; font-weight: 500;">
+              Chcesz poćwiczyć wymowę, zagrać w grę lub przetestować fiszki z animacjami?
+            </p>
+            <a href="{play_url}" target="_blank" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: 700; border-radius: 8px; font-size: 0.95rem; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.25);">
+              🚀 Uruchom interaktywne Fiszki w aplikacji
+            </a>
+          </div>
+
+          <!-- Sekcja statyczna (lista słówek) -->
+          <div style="margin: 30px 0;">
+            <h2 style="font-size: 1.15rem; color: #1e293b; border-left: 4px solid #4f46e5; padding-left: 10px; margin-bottom: 15px;">
+              📝 Pełna lista słówek i przykłady
+            </h2>
+            <div>
+              {list_html}
+            </div>
+          </div>
+
+          <!-- Stopka -->
+          <div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 20px; text-align: center; font-size: 0.8rem; color: #94a3b8;">
+            Wiadomość wygenerowana automatycznie przez AI English Buddy. Powodzenia w dalszej nauce!
+          </div>
+
+        </div>
+      </body>
+    </html>
+    """
+
+    msg = MIMEText(email_html, 'html', 'utf-8')
     msg['Subject'] = "Twoje słówka z notatnika AI English Buddy"
     msg['From'] = EMAIL_USERNAME
     msg['To'] = recipient_email
@@ -3045,7 +3295,6 @@ def split_text_by_language(text):
     if not text or not text.strip():
         return []
         
-    # First, determine the overall primary language of the entire sentence/text
     overall_lang = detect_primary_language(text)
     
     segments = []
@@ -3090,14 +3339,10 @@ def split_text_by_language(text):
             inner_text = re.sub(r'^[\(\[]+|[\)\]]+$', '', chunk_stripped).strip()
             if inner_text:
                 inner_lang = detect_primary_language(inner_text)
-                # Only switch voice if inner_text has at least 2 words AND its language differs from overall_lang
-                if inner_lang != overall_lang and len(inner_text.split()) >= 2:
-                    add_segment(inner_text, inner_lang)
-                else:
-                    add_segment(inner_text, overall_lang)
+                add_segment(inner_text, inner_lang)
         else:
-            # For non-parenthetical text, keep it strictly in overall_lang so names/inserts inside sentences do not cause voice changes!
-            add_segment(chunk, overall_lang)
+            segment_lang = detect_primary_language(chunk_stripped)
+            add_segment(chunk, segment_lang)
             
     return segments
 
@@ -3148,26 +3393,17 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
     if "Neural" not in voice:
         voice = "en-US-BrianNeural"
         
-    en_voice, pl_voice = get_voice_pair(voice)
-    segments = split_text_by_tags(text)
+    print(f"DEBUG TTS: Input text = '{text}', voice = '{voice}'", flush=True)
     
-    print(f"DEBUG TTS: Input text = '{text}'", flush=True)
-    print(f"DEBUG TTS: Selected voice = '{voice}' -> English: '{en_voice}', Polish: '{pl_voice}'", flush=True)
-    print(f"DEBUG TTS: Segments = {segments}", flush=True)
-    
-    if not segments:
-        return ""
+    # If the text does not contain bilingual tags, synthesize it in one go with the requested voice
+    if "[PL]" not in text and "[EN]" not in text:
+        full_clean_text = clean_tts_text(text)
+        if not full_clean_text:
+            return ""
         
-    # If all segments turn out to be single language (either purely 'en' or purely 'pl'),
-    # synthesize in one go with the appropriate voice.
-    unique_langs = set(lang for _, lang in segments)
-    if len(unique_langs) == 1:
-        single_lang = segments[0][1]
-        target_voice = pl_voice if single_lang == "pl" else en_voice
-        full_clean_text = " ".join(seg for seg, _ in segments)
-        print(f"DEBUG TTS: Synthesizing single-language ({single_lang}) text with voice '{target_voice}'", flush=True)
+        print(f"DEBUG TTS: Synthesizing plain text with voice '{voice}'", flush=True)
         
-        if ai_mode == "openai_full" and openai_client and single_lang == "en":
+        if ai_mode == "openai_full" and openai_client and "pl-PL" not in voice:
             try:
                 openai_voice = "alloy"
                 if "Brian" in voice or "Marek" in voice:
@@ -3186,7 +3422,7 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
                 print(f"OpenAI TTS error, falling back to Edge TTS: {e}", flush=True)
                 
         async def get_single_audio():
-            communicate = edge_tts.Communicate(full_clean_text, target_voice)
+            communicate = edge_tts.Communicate(full_clean_text, voice)
             audio_data = b""
             async for chunk in communicate.stream():
                 if chunk["type"] == "audio":
@@ -3198,6 +3434,24 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
         except Exception as e:
             print(f"Error generating TTS in single helper: {e}", flush=True)
             return ""
+
+    # Otherwise, split by tags
+    en_voice, pl_voice = get_voice_pair(voice)
+    parts = re.split(r'(\[PL\]|\[EN\])', text)
+    segments = []
+    current_lang = "en"
+    for part in parts:
+        if part == "[PL]":
+            current_lang = "pl"
+        elif part == "[EN]":
+            current_lang = "en"
+        else:
+            cleaned = clean_tts_text(part)
+            if cleaned:
+                if segments and segments[-1][1] == current_lang:
+                    segments[-1] = (segments[-1][0] + " " + cleaned, current_lang)
+                else:
+                    segments.append((cleaned, current_lang))
 
     # Multi-language bilingual synthesis! Synthesize each segment with its exact native voice.
     async def get_segment_audio(segment_text, segment_voice):
@@ -3635,6 +3889,19 @@ def chat_free():
     voice = request.form.get('voice', 'en-US-BrianNeural').strip()
     ai_mode = request.form.get('ai_mode', 'free').strip()
 
+    if ai_mode in ['openai_full', 'hybrid']:
+        try:
+            user_ref = db.collection('users').document(user_email).get()
+            if user_ref.exists:
+                user_data = user_ref.to_dict()
+                access_field = "access_hybrid" if ai_mode == "hybrid" else "access_openai_full"
+                if not user_data.get(access_field, False):
+                    return jsonify({
+                        "error": f"Brak uprawnień do korzystania z trybu {ai_mode}. Poproś administratora o dostęp."
+                    }), 403
+        except Exception as e:
+            print(f"Error checking mode permission: {e}")
+
     try:
         history = json.loads(history_str)
     except Exception as e:
@@ -4051,10 +4318,94 @@ def send_chat_summary_email():
         print(f"Error sending chat summary email: {e}")
         return jsonify({"error": f"Nie udało się wysłać e-maila: {str(e)}"}), 500
 
+@app.route("/api/user-permissions", methods=['GET'])
+def get_user_permissions():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    try:
+        user_ref = db.collection('users').document(user_email).get()
+        if not user_ref.exists:
+            return jsonify({"error": "Użytkownik nie istnieje"}), 404
+        user_data = user_ref.to_dict()
+        return jsonify({
+            "access_hybrid": user_data.get("access_hybrid", False),
+            "access_openai_full": user_data.get("access_openai_full", False)
+        }), 200
+    except Exception as e:
+        print(f"Error fetching user permissions: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/request-mode-access", methods=['POST'])
+def request_mode_access():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    data = request.get_json() or {}
+    requested_mode = data.get("mode", "")
+    if requested_mode not in ['hybrid', 'openai_full']:
+        return jsonify({"error": "Niepoprawny tryb"}), 400
+    try:
+        host_url = request.host_url.rstrip('/')
+        confirm_url = f"{host_url}/api/grant-mode-access?email={user_email}&mode={requested_mode}&token=speakling_secure_grant_key"
+        subject = f"[Speakling] Prosba o dostep do trybu {requested_mode} od {user_email}"
+        email_html = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2>Prośba o odblokowanie trybu AI</h2>
+            <p>Użytkownik <strong>{user_email}</strong> poprosił o dostęp do trybu: <strong>{requested_mode}</strong>.</p>
+            <p>Aby przyznać dostęp, kliknij poniższy przycisk:</p>
+            <div style="margin-top: 20px;">
+              <a href="{confirm_url}" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Zezwól / Udziel dostępu</a>
+            </div>
+          </body>
+        </html>
+        """
+        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=15) as server:
+            server.starttls()
+            server.login(EMAIL_USERNAME, EMAIL_PASSWORD)
+            msg = MIMEText(email_html, 'html', 'utf-8')
+            msg['Subject'] = subject
+            msg['From'] = EMAIL_USERNAME
+            msg['To'] = EMAIL_USERNAME
+            server.sendmail(EMAIL_USERNAME, [EMAIL_USERNAME], msg.as_string())
+        return jsonify({"message": "Prośba została wysłana."}), 200
+    except Exception as e:
+        print(f"Error requesting mode access: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/grant-mode-access", methods=['GET'])
+def grant_mode_access():
+    email = request.args.get("email", "").strip().lower()
+    mode = request.args.get("mode", "").strip()
+    token = request.args.get("token", "").strip()
+    if token != "speakling_secure_grant_key":
+        return "Brak autoryzacji", 403
+    if not email or mode not in ['hybrid', 'openai_full']:
+        return "Niepoprawne parametry", 400
+    try:
+        field_name = "access_hybrid" if mode == "hybrid" else "access_openai_full"
+        db.collection('users').document(email).update({
+            field_name: True
+        })
+        return f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px; padding: 20px;">
+            <div style="border: 1px solid #c3e6cb; background-color: #d4edda; color: #155724; padding: 20px; border-radius: 8px; max-width: 500px; margin: 0 auto;">
+              <h1 style="margin-top: 0;">Dostęp przyznany!</h1>
+              <p>Użytkownik <strong>{email}</strong> otrzymał dostęp do trybu: <strong>{mode}</strong>.</p>
+            </div>
+          </body>
+        </html>
+        """
+    except Exception as e:
+        return f"Błąd podczas przyznawania dostępu: {str(e)}", 500
+
 if __name__ == "__main__":
     # db.create_all() # Nie potrzebne dla Firestore, Firebase zarządza strukturą dokumentów
     # print("Baza danych zainicjalizowana.")
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    port = int(os.environ.get("PORT", 5001))
+    app.run(debug=True, host='0.0.0.0', port=port)
 ```
 
 ---
@@ -5218,11 +5569,80 @@ export default App;
   transition: opacity 200ms, transform 200ms;
 }
 
-/* Text selection — Perplexity teal */
+/* Text selection — Google Keep yellow */
 ::selection {
-  background-color: var(--accent-mid);
+  background-color: var(--accent-light);
   color: var(--gray-900);
 }
+
+/* ── Flashcards Overlay ──────────────────────────────────── */
+.flashcards-fullpage-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.flashcards-wrapper-modal {
+  width: 100%;
+  max-width: 640px;
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  padding: 2rem;
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border-subtle);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Floating Live Chat Bubble - Desktop Only */
+.live-chat-floating-bubble {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--accent, #fbbc04);
+  color: var(--gray-900, #202124);
+  border: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 4999; /* slightly below modals, but above everything else */
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s, box-shadow 0.2s;
+}
+
+.live-chat-floating-bubble:hover {
+  transform: scale(1.08) translateY(-2px);
+  background: var(--accent-hover, #f2a600);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2), 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
+.live-chat-floating-bubble:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 768px) {
+  .live-chat-floating-bubble {
+    display: none !important;
+  }
+}
+
 ```
 
 ---
@@ -5230,8 +5650,7 @@ export default App;
 ## 7. Plik: `frontend\src\App.js`
 
 ```javascript
-// frontend/src/App.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
@@ -5240,11 +5659,15 @@ import Workspace from './components/Workspace';
 import SavedStories from './components/Story/SavedStories';
 import Auth from './components/Auth/Auth';
 import VocabularyView from './components/Vocabulary/VocabularyView';
+import VocabularyDrawer from './components/Vocabulary/VocabularyDrawer';
 import MediaBuddy from './components/Media/MediaBuddy';
+import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 
 function App() {
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState(() => {
+    return window.innerWidth <= 768 ? 'dashboard' : 'workspace';
+  });
   const [user, setUser] = useState(() => {
     const stored = localStorage.getItem("buddy_user");
     return stored ? JSON.parse(stored) : null;
@@ -5253,6 +5676,42 @@ function App() {
   const [generatedText, setGeneratedText] = useState("");
   const [currentStoryTitle, setCurrentStoryTitle] = useState("");
   const [currentStoryId, setCurrentStoryId] = useState(null);
+  const [externalFlashcardsWords, setExternalFlashcardsWords] = useState([]);
+
+  const [customAlert, setCustomAlert] = useState(null);
+
+  useEffect(() => {
+    const originalAlert = window.alert;
+    window.alert = (message) => {
+      setCustomAlert(message);
+    };
+    return () => {
+      window.alert = originalAlert;
+    };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const playFlashcards = params.get('play_flashcards') === 'true';
+    const wordsB64 = params.get('words');
+    if (playFlashcards && wordsB64) {
+      try {
+        const decoded = decodeURIComponent(escape(window.atob(wordsB64)));
+        const parsedWords = JSON.parse(decoded);
+        if (Array.isArray(parsedWords) && parsedWords.length > 0) {
+          setExternalFlashcardsWords(parsedWords);
+        }
+      } catch (e) {
+        console.error("Failed to parse external flashcards words from URL:", e);
+      }
+      
+      // Clean query parameters from URL without reloading
+      const url = new URL(window.location);
+      url.searchParams.delete('play_flashcards');
+      url.searchParams.delete('words');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+    }
+  }, []);
 
   const handleLoginSuccess = (userData) => {
     localStorage.setItem("buddy_user", JSON.stringify(userData));
@@ -5338,6 +5797,42 @@ function App() {
           )}
         </div>
       </main>
+      {externalFlashcardsWords.length > 0 && (
+        <div className="flashcards-fullpage-overlay">
+          <div className="flashcards-wrapper-modal glass-panel">
+            <Flashcards 
+              notebookWords={externalFlashcardsWords} 
+              onFinishExercises={() => setExternalFlashcardsWords([])} 
+              user={user}
+            />
+          </div>
+        </div>
+      )}
+
+      {currentView !== 'notebook' && <VocabularyDrawer user={user} />}
+
+      {customAlert && (
+        <div className="modal-overlay" style={{ zIndex: 10000 }}>
+          <div className="modal-content">
+            <h3>Notification</h3>
+            <p>{customAlert}</p>
+            <div className="modal-actions">
+              <button onClick={() => setCustomAlert(null)} className="btn-primary">OK</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {currentView !== 'dashboard' && (
+        <button 
+          className="live-chat-floating-bubble" 
+          onClick={() => handleNavigate('dashboard')}
+          title="Chat Live"
+        >
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
@@ -5367,29 +5862,29 @@ test('renders Speakling title', () => {
 
 ```css
 :root {
-  /* ── Accent — Perplexity Teal ──────────────────────────────────────────── */
-  --accent:        #20808D;
-  --accent-hover:  #1a6b77;
-  --accent-light:  rgba(32, 128, 141, 0.08);
-  --accent-mid:    rgba(32, 128, 141, 0.15);
+  /* ── Accent — Google Keep Yellow ───────────────────────────────────────── */
+  --accent:        #fbbc04;          /* Keep classic yellow */
+  --accent-hover:  #f2a600;          /* slightly darker yellow */
+  --accent-light:  #feefc3;          /* soft cream yellow active state bg */
+  --accent-mid:    rgba(251, 188, 4, 0.25);
 
   /* Keep alias for backwards compat with older components */
   --primary-500: var(--accent);
   --primary-600: var(--accent-hover);
-  --primary-700: #155f6a;
+  --primary-700: #d49a00;
   --secondary-500: var(--accent);
   --secondary-600: var(--accent-hover);
 
-  /* ── Neutral Surface Scale ─────────────────────────────────────────────── */
-  --gray-0:    #ffffff;          /* pure white  */
-  --gray-50:   #fafafa;          /* app bg      */
-  --gray-100:  #f5f5f5;          /* sidebar bg  */
-  --gray-200:  #ebebeb;          /* hover fill  */
-  --gray-300:  #e0e0e0;          /* border      */
-  --gray-400:  #c2c2c2;          /* placeholder */
-  --gray-500:  #8a8a8a;          /* secondary text */
-  --gray-700:  #404040;          /* body text   */
-  --gray-900:  #171717;          /* primary text*/
+  /* ── Neutral Surface Scale — Google Keep Light Scheme ──────────────────── */
+  --gray-0:    #ffffff;          /* pure white (cards background) */
+  --gray-50:   #ffffff;          /* Keep app bg (clean white) */
+  --gray-100:  #f1f3f4;          /* sidebar hover / search bar bg */
+  --gray-200:  #e8eaed;          /* secondary hover fill */
+  --gray-300:  #e0e0e0;          /* thin border color */
+  --gray-400:  #dadce0;          /* input borders / placeholders */
+  --gray-500:  #5f6368;          /* secondary text (gray icons) */
+  --gray-700:  #3c4043;          /* body/reading text */
+  --gray-900:  #202124;          /* primary text (titles, bold) */
 
   /* Backwards compat aliases */
   --slate-50:  var(--gray-50);
@@ -5406,24 +5901,24 @@ test('renders Speakling title', () => {
   --surface:       var(--gray-0);
   --surface-hover: var(--gray-100);
   --sidebar-bg:    var(--gray-0);
-  --topbar-bg:     rgba(255, 255, 255, 0.85);
+  --topbar-bg:     rgba(255, 255, 255, 0.95);
   --border:        var(--gray-300);
-  --border-subtle: rgba(0, 0, 0, 0.07);
+  --border-subtle: rgba(0, 0, 0, 0.05);
 
   /* Legacy */
   --grad-primary:  var(--accent);
-  --grad-premium:  linear-gradient(135deg, var(--accent), #2da8b8);
+  --grad-premium:  linear-gradient(135deg, var(--accent), #ffca28);
   --grad-subtle:   var(--gray-100);
-  --glass-bg:      rgba(255, 255, 255, 0.8);
-  --glass-border:  rgba(0, 0, 0, 0.08);
-  --glass-blur:    blur(16px);
+  --glass-bg:      rgba(255, 255, 255, 0.9);
+  --glass-border:  rgba(0, 0, 0, 0.05);
+  --glass-blur:    blur(8px);
 
   /* ── Typography ──────────────────────────────────────────────────────────
-     Inter ≈ SF Pro (Apple-like, also close to Perplexity's UI font)
-     Roboto for body/reading text
+     Outfit for geometric headings (feels like Product Sans / Google Sans)
+     Roboto for clean, readable body text
      ──────────────────────────────────────────────────────────────────────── */
-  --font-display:  'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-main:     'Inter', system-ui, -apple-system, sans-serif;
+  --font-display:  'Outfit', 'Google Sans', 'Roboto', sans-serif;
+  --font-main:     'Roboto', system-ui, -apple-system, sans-serif;
   --font-serif:    'Georgia', 'Times New Roman', serif;
   --font-mono:     'Roboto Mono', ui-monospace, 'Courier New', monospace;
 
@@ -5437,7 +5932,7 @@ test('renders Speakling title', () => {
   --text-title-lg:     1.375rem;
   --text-title-md:     1.0625rem;
   --text-title-sm:     0.9375rem;
-  --text-body-lg:      0.9375rem;   /* 15px — Perplexity default body */
+  --text-body-lg:      0.9375rem;   /* 15px */
   --text-body-md:      0.875rem;
   --text-body-sm:      0.8125rem;
   --text-label-lg:     0.875rem;
@@ -5456,19 +5951,19 @@ test('renders Speakling title', () => {
   --ls-body:       0;
   --ls-label:      0;
 
-  /* ── Elevation — ultra-subtle (Perplexity / Apple style) ─────────────── */
-  --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md:      0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --shadow-xl:      0 20px 48px rgba(0, 0, 0, 0.10), 0 4px 12px rgba(0, 0, 0, 0.05);
-  --shadow-premium: 0 4px 16px rgba(32, 128, 141, 0.15);
+  /* ── Elevation — Google / Material Design style ──────────────────────── */
+  --shadow-sm:      0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:      0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+  --shadow-lg:      0 4px 10px 0 rgba(60,64,67,0.3), 0 8px 16px 6px rgba(60,64,67,0.15);
+  --shadow-xl:      0 8px 16px 0 rgba(60,64,67,0.3), 0 16px 24px 8px rgba(60,64,67,0.15);
+  --shadow-premium: 0 2px 6px 0 rgba(60,64,67,0.15);
 
-  /* ── Radius — Apple-like (slightly tighter than MD3) ─────────────────── */
+  /* ── Radius — Keep style (8px / standard boxy) ────────────────────────── */
   --radius-sm:   4px;
   --radius-md:   8px;
-  --radius-lg:   12px;
-  --radius-xl:   16px;
-  --radius-2xl:  24px;
+  --radius-lg:   8px;
+  --radius-xl:   12px;
+  --radius-2xl:  16px;
   --radius-full: 9999px;
 
   /* ── Transitions ─────────────────────────────────────────────────────── */
@@ -5509,7 +6004,8 @@ body {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: radial-gradient(circle at center, #1e1b4b 0%, #0f172a 100%);
+  background-color: #f8f9fa; /* Clean Google light grey background */
+  background-image: radial-gradient(circle at center, rgba(251, 188, 4, 0.08) 0%, rgba(241, 243, 244, 0.4) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5519,49 +6015,47 @@ body {
   font-family: var(--font-main);
 }
 
-/* Glowing background orbs */
+/* Glowing background orbs - soft light theme versions */
 .auth-glow-orb-1 {
   position: absolute;
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(124, 58, 237, 0.25) 0%, transparent 70%);
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, rgba(251, 188, 4, 0.12) 0%, transparent 70%);
   top: -100px;
   left: -100px;
-  filter: blur(50px);
+  filter: blur(60px);
   pointer-events: none;
-  animation: orbFloat 12s infinite alternate ease-in-out;
+  animation: orbFloat 14s infinite alternate ease-in-out;
 }
 
 .auth-glow-orb-2 {
   position: absolute;
   width: 500px;
   height: 500px;
-  background: radial-gradient(circle, rgba(236, 72, 153, 0.2) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(251, 188, 4, 0.08) 0%, transparent 70%);
   bottom: -150px;
   right: -100px;
-  filter: blur(60px);
+  filter: blur(80px);
   pointer-events: none;
-  animation: orbFloat 16s infinite alternate-reverse ease-in-out;
+  animation: orbFloat 18s infinite alternate-reverse ease-in-out;
 }
 
 @keyframes orbFloat {
   0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(40px, 60px) scale(1.1); }
-  100% { transform: translate(-20px, -30px) scale(0.9); }
+  50% { transform: translate(30px, 45px) scale(1.05); }
+  100% { transform: translate(-15px, -20px) scale(0.95); }
 }
 
-/* Glassmorphic Card */
+/* Modern Light Card */
 .auth-card {
   width: 100%;
   max-width: 440px;
   padding: 3rem 2.5rem;
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-xl);
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4), 
-              0 0 100px rgba(124, 58, 237, 0.1);
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--gray-300, #e0e0e0);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(60, 64, 67, 0.08), 
+              0 1px 8px rgba(60, 64, 67, 0.04);
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -5571,41 +6065,29 @@ body {
 }
 
 @keyframes cardEnter {
-  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  from { opacity: 0; transform: translateY(15px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .auth-brand {
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 2rem;
 }
 
-.brand-logo {
-  width: 54px;
-  height: 54px;
-  background: var(--grad-premium);
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  color: white;
-  margin: 0 auto 1.25rem;
-  box-shadow: 0 10px 25px rgba(219, 39, 119, 0.2);
-}
-
-.auth-brand h2 {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: white;
-  margin-bottom: 0.5rem;
+.auth-brand h2.brand-title {
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--gray-900, #202124);
+  margin-bottom: 0.15rem;
   letter-spacing: -0.5px;
 }
 
-.brand-subtitle {
-  font-size: 0.85rem;
-  color: #94a3b8;
-  font-weight: 500;
+.brand-subtitle.italic-subtitle {
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--gray-500, #5f6368);
+  opacity: 0.95;
 }
 
 /* Form Styles */
@@ -5616,13 +6098,13 @@ body {
 }
 
 .auth-error-banner {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #fca5a5;
+  background: #fdf2f2;
+  border: 1px solid #f8b4b4;
+  color: #c81e1e;
   padding: 0.875rem;
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.4;
   text-align: center;
 }
@@ -5636,50 +6118,50 @@ body {
 .input-group label {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--gray-700, #3c4043);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .input-group input {
   padding: 0.875rem 1.25rem;
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-md);
-  color: white;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--gray-400, #dadce0);
+  border-radius: 8px;
+  color: var(--gray-900, #202124);
   font-family: var(--font-main);
   font-size: 0.95rem;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-fast, 0.2s);
 }
 
 .input-group input:focus {
   outline: none;
-  border-color: var(--primary-500);
-  background: rgba(15, 23, 42, 0.6);
-  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
+  border-color: var(--accent, #fbbc04);
+  background: var(--surface, #ffffff);
+  box-shadow: 0 0 0 3px rgba(251, 188, 4, 0.15);
 }
 
 .auth-submit-btn {
   margin-top: 0.5rem;
   padding: 1rem;
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   border: none;
-  background: var(--grad-premium);
-  color: white;
+  background: var(--grad-premium, #fbbc04);
+  color: #202124; /* Dark text for high contrast on yellow */
   font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
-  box-shadow: 0 10px 25px rgba(124, 58, 237, 0.2);
-  transition: all var(--transition-fast);
+  box-shadow: 0 4px 12px rgba(251, 188, 4, 0.2);
+  transition: all var(--transition-fast, 0.2s);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .auth-submit-btn:hover:not(:disabled) {
-  filter: brightness(1.1);
-  transform: translateY(-2px);
-  box-shadow: 0 15px 30px rgba(124, 58, 237, 0.3);
+  background: var(--accent-hover, #f2a600);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(251, 188, 4, 0.3);
 }
 
 .auth-submit-btn:active:not(:disabled) {
@@ -5687,32 +6169,35 @@ body {
 }
 
 .auth-submit-btn:disabled {
-  opacity: 0.7;
+  opacity: 0.6;
   cursor: not-allowed;
+  background: var(--gray-200, #e8eaed);
+  color: var(--gray-500, #5f6368);
+  box-shadow: none;
 }
 
 /* Toggle Link */
 .auth-toggle {
-  margin-top: 2rem;
+  margin-top: 1.5rem;
   text-align: center;
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: var(--gray-500, #5f6368);
 }
 
 .auth-toggle button {
   background: none;
   border: none;
-  color: var(--primary-400);
+  color: var(--accent-hover, #f2a600);
   font-weight: 700;
   padding: 0;
   margin-left: 0.25rem;
   cursor: pointer;
-  transition: color var(--transition-fast);
+  transition: color var(--transition-fast, 0.2s);
   text-decoration: underline;
 }
 
 .auth-toggle button:hover {
-  color: var(--secondary-500);
+  color: var(--primary-700, #d49a00);
 }
 ```
 
@@ -5770,13 +6255,8 @@ const Auth = ({ onLoginSuccess }) => {
       
       <div className="auth-card glass-panel">
         <div className="auth-brand">
-          <div className="brand-logo" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '12px' }}>
-            <svg viewBox="0 0 100 100" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary-color, #1A73E8)' }}>
-              <path d="M65 30C65 20 55 15 45 15C30 15 30 35 50 45C70 55 70 75 55 85C45 90 35 85 35 75" />
-            </svg>
-          </div>
-          <h2>Speakling</h2>
-          <p className="brand-subtitle">Your personal guide to English mastery</p>
+          <h2 className="brand-title">Speakling</h2>
+          <p className="brand-subtitle italic-subtitle">by AI Buddy</p>
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
@@ -5858,8 +6338,7 @@ export default Auth;
   justify-content: space-between;
   min-height: calc(100vh - 120px);
   padding: 3rem 2rem;
-  background: radial-gradient(circle at 50% 50%, rgba(26, 115, 232, 0.04) 0%, transparent 70%),
-              radial-gradient(circle at 10% 10%, rgba(155, 114, 248, 0.03) 0%, transparent 45%);
+  background: var(--bg-main);
   animation: view-enter 0.5s var(--transition-soft);
   font-family: var(--font-main);
   box-sizing: border-box;
@@ -5875,7 +6354,7 @@ export default Auth;
 }
 
 .blue-gradient-text {
-  background: linear-gradient(135deg, var(--primary-500), #8D5CF6);
+  background: linear-gradient(135deg, var(--accent), #ff8f00);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -6219,8 +6698,9 @@ export default Auth;
 }
 
 .user .bubble-text {
-  background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
-  color: white;
+  background: var(--accent-light);
+  color: var(--gray-900);
+  border: 1px solid rgba(251, 188, 4, 0.35);
   border-top-right-radius: 4px;
 }
 
@@ -7295,7 +7775,7 @@ export default Dashboard;
   background: var(--accent);
   border: none;
   border-radius: var(--radius-full);
-  color: #ffffff;
+  color: var(--gray-900);
   font-family: var(--font-display);
   font-size: var(--text-label-lg);
   font-weight: 600;
@@ -7306,6 +7786,7 @@ export default Dashboard;
 
 .results-btn-primary:hover {
   background: var(--accent-hover);
+  color: var(--gray-900);
 }
 ```
 
@@ -7544,7 +8025,7 @@ export default Flashcards;
   top: 0.5rem;
   left: 0.5rem;
   background: var(--grad-premium);
-  color: #ffffff;
+  color: var(--gray-900);
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.2rem 0.5rem;
@@ -7800,7 +8281,7 @@ export default Flashcards;
 
 .segment-action-btn.explain:hover {
   background: var(--primary-500);
-  color: #ffffff;
+  color: var(--gray-900);
 }
 
 .segment-action-btn.practice {
@@ -7810,7 +8291,7 @@ export default Flashcards;
 
 .segment-action-btn.practice:hover {
   background: var(--secondary-500);
-  color: #ffffff;
+  color: var(--gray-900);
 }
 
 /* Quick Dictionary Panel */
@@ -7861,7 +8342,7 @@ export default Flashcards;
 
 .word-details-btn:hover {
   background: var(--primary-500);
-  color: #ffffff;
+  color: var(--gray-900);
 }
 
 .translated-text {
@@ -7884,7 +8365,7 @@ export default Flashcards;
   cursor: pointer;
   border: 1px solid var(--primary-500);
   background: var(--primary-500);
-  color: #ffffff;
+  color: var(--gray-900);
   transition: var(--transition-soft);
   box-shadow: var(--shadow-sm);
 }
@@ -7892,6 +8373,7 @@ export default Flashcards;
 .btn-save-vocabulary:hover {
   background: var(--primary-600);
   border-color: var(--primary-600);
+  color: var(--gray-900);
 }
 
 .btn-save-vocabulary.saved {
@@ -8026,7 +8508,7 @@ export default Flashcards;
   border-radius: var(--radius-md);
   border: none;
   background: var(--grad-premium);
-  color: #ffffff;
+  color: var(--gray-900);
   font-family: var(--font-main);
   font-size: 0.9rem;
   font-weight: 700;
@@ -8251,7 +8733,7 @@ export default Flashcards;
   border-radius: var(--radius-sm);
   border: none;
   background: var(--primary-500);
-  color: #ffffff;
+  color: var(--gray-900);
   cursor: pointer;
   font-family: var(--font-main);
   transition: var(--transition-fast);
@@ -8259,6 +8741,7 @@ export default Flashcards;
 
 .suggestion-load-btn:hover {
   background: var(--primary-600);
+  color: var(--gray-900);
   transform: translateY(-0.5px);
 }
 
@@ -8312,6 +8795,254 @@ export default Flashcards;
   font-weight: 600;
   color: var(--slate-700);
   margin: 0;
+}
+
+/* Horizontal Galleries and Progress Bar Styles */
+.media-selector-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.media-selector-row:last-child {
+  margin-bottom: 0;
+}
+
+.media-selector-row-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--slate-700);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.media-selector-scroll {
+  display: flex;
+  overflow-x: auto;
+  gap: 1.25rem;
+  padding: 0.25rem 0.25rem 0.75rem 0.25rem;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.media-selector-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.media-selector-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+.media-selector-scroll::-webkit-scrollbar-thumb {
+  background: var(--slate-300);
+  border-radius: 10px;
+}
+
+.media-selector-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--slate-400);
+}
+
+.media-selector-scroll .video-tile {
+  flex: 0 0 240px;
+  max-width: 240px;
+}
+
+.media-selector-empty-text {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--slate-400);
+  padding: 1.5rem 0;
+}
+
+.video-tile-progress-bar-wrapper {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.video-tile-progress-bar {
+  height: 100%;
+  background: var(--primary-500);
+  transition: width 0.3s ease;
+}
+
+/* Scroll Buttons Carousel Styling */
+.media-selector-scroll-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.scroll-btn {
+  position: absolute;
+  top: calc(50% - 14px); /* Center aligning with thumbnails minus padding offset */
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  color: var(--slate-700);
+  font-size: 1.5rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-soft);
+  z-index: 15;
+  outline: none;
+  user-select: none;
+}
+
+.scroll-btn:hover {
+  background: var(--slate-50);
+  border-color: var(--slate-400);
+  color: var(--primary-600);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.scroll-btn:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.scroll-btn.left {
+  left: -19px;
+}
+
+.scroll-btn.right {
+  right: -19px;
+}
+
+/* Adjust padding on scroll viewport to prevent overlapping hover cards */
+.media-selector-scroll {
+  padding: 0.5rem 0.5rem 1rem 0.5rem;
+  margin: 0 -0.5rem;
+}
+
+/* Sorting Controls Styling */
+.media-selector-row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.media-selector-sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sort-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--slate-500);
+}
+
+.sort-toggle-btn {
+  background: var(--slate-100);
+  border: 1px solid var(--border);
+  color: var(--slate-700);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.sort-toggle-btn:hover {
+  background: var(--slate-200);
+  color: var(--slate-900);
+}
+
+.sort-toggle-btn.active {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  color: #ffffff;
+}
+
+/* Autoscroll Toggle Button */
+.autoscroll-toggle-btn {
+  background: var(--slate-100);
+  border: 1px solid var(--border);
+  color: var(--slate-700);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.autoscroll-toggle-btn:hover {
+  background: var(--slate-200);
+  color: var(--slate-900);
+}
+
+.autoscroll-toggle-btn.active {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  color: #ffffff;
+}
+
+/* Transcript Mode Toggle Switch */
+.transcript-mode-toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.toggle-label-text {
+  color: var(--slate-600);
+  font-weight: 500;
+}
+
+.toggle-switch-wrapper {
+  display: flex;
+  background: var(--slate-100);
+  padding: 2px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.toggle-option-btn {
+  background: none;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.toggle-option-btn:hover {
+  color: var(--slate-800);
+}
+
+.toggle-option-btn.active {
+  background: #ffffff;
+  color: var(--primary-600);
+  box-shadow: var(--shadow-sm);
 }
 ```
 
@@ -8465,6 +9196,147 @@ function MediaBuddy({ user }) {
     }
   });
 
+  const [videoProgress, setVideoProgress] = useState(() => {
+    try {
+      const saved = localStorage.getItem("media_buddy_video_progress");
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      console.error("Failed to load video progress from localStorage", e);
+      return {};
+    }
+  });
+
+  const [recentSortOrder, setRecentSortOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem("media_buddy_recent_sort_order");
+      return saved === "oldest" ? "oldest" : "newest";
+    } catch (e) {
+      return "newest";
+    }
+  });
+
+  const [unwatchedSortOrder, setUnwatchedSortOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem("media_buddy_unwatched_sort_order");
+      return saved === "oldest" ? "oldest" : "newest";
+    } catch (e) {
+      return "newest";
+    }
+  });
+
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(() => {
+    try {
+      const saved = localStorage.getItem("media_buddy_autoscroll_enabled");
+      return saved === "false" ? false : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  // Sync autoScrollEnabled to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("media_buddy_autoscroll_enabled", autoScrollEnabled.toString());
+      console.log("Autoscroll persisted to localStorage:", autoScrollEnabled);
+    } catch (e) {
+      console.error("Failed to save autoScrollEnabled to localStorage", e);
+    }
+  }, [autoScrollEnabled]);
+
+  const [useWhisper, setUseWhisper] = useState(() => {
+    try {
+      const saved = localStorage.getItem("media_buddy_use_whisper");
+      return saved === "false" ? false : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  // Sync useWhisper to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("media_buddy_use_whisper", useWhisper.toString());
+      console.log("useWhisper persisted to localStorage:", useWhisper);
+    } catch (e) {
+      console.error("Failed to save useWhisper to localStorage", e);
+    }
+  }, [useWhisper]);
+
+  // Pause video on vocabulary drawer open
+  useEffect(() => {
+    const handleDrawerOpen = () => {
+      if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
+        playerRef.current.pauseVideo();
+      }
+    };
+    window.addEventListener("vocabulary-drawer-opened", handleDrawerOpen);
+    return () => {
+      window.removeEventListener("vocabulary-drawer-opened", handleDrawerOpen);
+    };
+  }, []);
+
+  // Sync recentSortOrder to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("media_buddy_recent_sort_order", recentSortOrder);
+    } catch (e) {
+      console.error("Failed to save recentSortOrder to localStorage", e);
+    }
+  }, [recentSortOrder]);
+
+  // Sync unwatchedSortOrder to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("media_buddy_unwatched_sort_order", unwatchedSortOrder);
+    } catch (e) {
+      console.error("Failed to save unwatchedSortOrder to localStorage", e);
+    }
+  }, [unwatchedSortOrder]);
+
+  const allVideos = useMemo(() => {
+    return [...CURATED_VIDEOS, ...customVideos];
+  }, [customVideos]);
+
+  const recentVideos = useMemo(() => {
+    const watched = allVideos.filter(v => videoProgress[v.id]);
+    watched.sort((a, b) => {
+      const timeA = videoProgress[a.id]?.lastWatched || 0;
+      const timeB = videoProgress[b.id]?.lastWatched || 0;
+      return recentSortOrder === "newest" ? timeB - timeA : timeA - timeB;
+    });
+    
+    if (watched.length < 10) {
+      const unwatched = allVideos.filter(v => !videoProgress[v.id]);
+      const padded = recentSortOrder === "newest" ? unwatched : [...unwatched].reverse();
+      return [...watched, ...padded].slice(0, 10);
+    }
+    return watched.slice(0, 10);
+  }, [allVideos, videoProgress, recentSortOrder]);
+
+  const unwatchedVideos = useMemo(() => {
+    const list = allVideos.filter(v => {
+      const prog = videoProgress[v.id];
+      return !prog || prog.progressPercent < 25;
+    });
+    list.sort((a, b) => {
+      const progA = videoProgress[a.id];
+      const progB = videoProgress[b.id];
+      const timeA = progA?.lastWatched || 0;
+      const timeB = progB?.lastWatched || 0;
+      
+      if (timeA && timeB) {
+        return unwatchedSortOrder === "newest" ? timeB - timeA : timeA - timeB;
+      }
+      if (timeA) return unwatchedSortOrder === "newest" ? -1 : 1;
+      if (timeB) return unwatchedSortOrder === "newest" ? 1 : -1;
+      
+      const idxA = allVideos.indexOf(a);
+      const idxB = allVideos.indexOf(b);
+      return unwatchedSortOrder === "newest" ? idxB - idxA : idxA - idxB;
+    });
+    return list;
+  }, [allVideos, videoProgress, unwatchedSortOrder]);
+
   // Sync customVideos to localStorage
   useEffect(() => {
     try {
@@ -8496,6 +9368,22 @@ function MediaBuddy({ user }) {
   const playerRef = useRef(null);
   const timerRef = useRef(null);
   const isInitialMount = useRef(true);
+  const latestWordRef = useRef("");
+  const latestSegmentIndexRef = useRef(-1);
+  const lastSavedSecondRef = useRef(-1);
+  const currentVideoRef = useRef(currentVideo);
+  const recentScrollRef = useRef(null);
+  const unwatchedScrollRef = useRef(null);
+
+  const scrollRow = (ref, direction) => {
+    if (ref.current) {
+      const scrollAmount = 480; // Scroll by two video tiles
+      ref.current.scrollBy({
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth"
+      });
+    }
+  };
 
   // Helper to create or recreate YouTube Player instance with a specific videoId
   const createPlayer = (videoId, autoPlay = true) => {
@@ -8574,6 +9462,32 @@ function MediaBuddy({ user }) {
         if (playerRef.current && typeof playerRef.current.getCurrentTime === "function") {
           const time = playerRef.current.getCurrentTime();
           setCurrentTime(time);
+          
+          const currentSecond = Math.floor(time);
+          if (currentSecond !== lastSavedSecondRef.current && typeof playerRef.current.getDuration === "function") {
+            lastSavedSecondRef.current = currentSecond;
+            const duration = playerRef.current.getDuration();
+            const activeVid = currentVideoRef.current;
+            if (duration > 0 && activeVid) {
+              setVideoProgress(prev => {
+                const nextProgress = {
+                  ...prev,
+                  [activeVid.id]: {
+                    lastWatched: Date.now(),
+                    currentTime: time,
+                    duration: duration,
+                    progressPercent: (time / duration) * 100
+                  }
+                };
+                try {
+                  localStorage.setItem("media_buddy_video_progress", JSON.stringify(nextProgress));
+                } catch (e) {
+                  console.error("Failed to save progress", e);
+                }
+                return nextProgress;
+              });
+            }
+          }
         }
       }, 100);
     } else {
@@ -8591,6 +9505,7 @@ function MediaBuddy({ user }) {
 
   // Switch video and recreate player when currentVideo changes
   useEffect(() => {
+    currentVideoRef.current = currentVideo;
     if (window.YT && window.YT.Player) {
       createPlayer(currentVideo.youtubeId, !isInitialMount.current);
     }
@@ -8603,6 +9518,7 @@ function MediaBuddy({ user }) {
     setWordTranslation("");
     setSegmentTranslation("");
     setIsSegmentSaved(false);
+    lastSavedSecondRef.current = -1; // Reset last saved second
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentVideo]);
 
@@ -8620,32 +9536,42 @@ function MediaBuddy({ user }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, activeSegmentIndex]);
 
-  // Synchronize active segment and trigger auto-scrolling (only when playing)
+  // Synchronize active segment and trigger auto-scrolling
   useEffect(() => {
-    if (!isPlaying) return;
+    // Add a 0.4s anticipation bias when playing to compensate for rendering/scroll latency.
+    // When paused, use exact currentTime.
+    const checkTime = isPlaying ? currentTime + 0.4 : currentTime;
 
-    // Add a 0.4s anticipation bias to compensate for rendering/scroll latency and highlight early
-    const checkTime = currentTime + 0.4;
-    const idx = currentVideo.transcript.findIndex(
-      (seg) => checkTime >= seg.start && checkTime <= seg.end
-    );
+    // Search from the end to prefer newer overlapping segments
+    let idx = -1;
+    for (let i = currentVideo.transcript.length - 1; i >= 0; i--) {
+      const seg = currentVideo.transcript[i];
+      if (checkTime >= seg.start && checkTime <= seg.end) {
+        idx = i;
+        break;
+      }
+    }
+
     if (idx !== -1) {
       if (idx !== activeSegmentIndex) {
         setActiveSegmentIndex(idx);
-        // Auto-scroll transcript container to make active card visible
-        const activeCard = document.querySelector(`.transcript-segment-card[data-index="${idx}"]`);
-        if (activeCard) {
-          activeCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        // Auto-scroll transcript container to make active card visible (only when playing and enabled)
+        if (isPlaying && autoScrollEnabled) {
+          const activeCard = document.querySelector(`.transcript-segment-card[data-index="${idx}"]`);
+          if (activeCard) {
+            activeCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
         }
       }
     } else {
-      // Clear active segment highlight if we are outside the segment boundary (with a tight 0.2s tolerance using checkTime)
+      // Clear active segment highlight if we are outside the segment boundary (with a tight tolerance when playing)
       const lastSeg = currentVideo.transcript[activeSegmentIndex];
-      if (lastSeg && (checkTime < lastSeg.start - 0.2 || checkTime > lastSeg.end + 0.2)) {
+      const tolerance = isPlaying ? 0.2 : 0.0;
+      if (lastSeg && (checkTime < lastSeg.start - tolerance || checkTime > lastSeg.end + tolerance)) {
         setActiveSegmentIndex(-1);
       }
     }
-  }, [currentTime, currentVideo, activeSegmentIndex, isPlaying]);
+  }, [currentTime, currentVideo, activeSegmentIndex, isPlaying, autoScrollEnabled]);
 
   // Click card body: seek to segment start and pause video (for study) / toggle play state if active
   const handleCardClick = (seg, index) => {
@@ -8682,11 +9608,15 @@ function MediaBuddy({ user }) {
     const segment = currentVideo.transcript[index];
     if (!segment || !segment.text) return;
 
-    // Avoid translating if already translating or already translated
-    if (isTranslatingSegment || segmentTranslation) return;
+    // If we are already translating the SAME segment, or already have its translation, skip
+    if (latestSegmentIndexRef.current === index && (isTranslatingSegment || segmentTranslation)) {
+      return;
+    }
 
+    latestSegmentIndexRef.current = index;
     setIsTranslatingSegment(true);
     setIsSegmentSaved(false);
+    setSegmentTranslation(""); // Clear previous translation to show loader
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/translate`, {
@@ -8697,6 +9627,7 @@ function MediaBuddy({ user }) {
         },
         body: JSON.stringify({ text: segment.text })
       });
+      if (latestSegmentIndexRef.current !== index) return;
       if (response.ok) {
         const data = await response.json();
         setSegmentTranslation(data.translation || "Brak tłumaczenia");
@@ -8704,10 +9635,13 @@ function MediaBuddy({ user }) {
         setSegmentTranslation("Błąd tłumaczenia");
       }
     } catch (err) {
+      if (latestSegmentIndexRef.current !== index) return;
       console.error(err);
       setSegmentTranslation("Błąd połączenia");
     } finally {
-      setIsTranslatingSegment(false);
+      if (latestSegmentIndexRef.current === index) {
+        setIsTranslatingSegment(false);
+      }
     }
   };
 
@@ -8731,6 +9665,7 @@ function MediaBuddy({ user }) {
       });
       if (response.ok) {
         setIsSegmentSaved(true);
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       }
     } catch (err) {
       console.error("Błąd podczas zapisywania frazy:", err);
@@ -8743,6 +9678,7 @@ function MediaBuddy({ user }) {
     if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
       playerRef.current.pauseVideo();
     }
+    latestWordRef.current = word;
     setSelectedWord(word);
     setWordTranslation("");
     setIsTranslating(true);
@@ -8757,6 +9693,7 @@ function MediaBuddy({ user }) {
         },
         body: JSON.stringify({ text: word, context: sentenceContext })
       });
+      if (latestWordRef.current !== word) return;
       if (response.ok) {
         const data = await response.json();
         setWordTranslation(data.translation || "Brak tłumaczenia");
@@ -8764,10 +9701,13 @@ function MediaBuddy({ user }) {
         setWordTranslation("Błąd tłumaczenia");
       }
     } catch (err) {
+      if (latestWordRef.current !== word) return;
       console.error(err);
       setWordTranslation("Błąd połączenia");
     } finally {
-      setIsTranslating(false);
+      if (latestWordRef.current === word) {
+        setIsTranslating(false);
+      }
     }
   };
 
@@ -8789,6 +9729,7 @@ function MediaBuddy({ user }) {
       });
       if (response.ok) {
         setIsSaved(true);
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       }
     } catch (err) {
       console.error("Błąd podczas zapisywania słówka:", err);
@@ -8805,7 +9746,7 @@ function MediaBuddy({ user }) {
     setShowPracticeModal(true);
   };
 
-  const renderInteractiveText = (text) => {
+  const renderInteractiveText = (text, segmentIndex) => {
     const tokens = text.split(/(\s+)/);
     return tokens.map((token, idx) => {
       if (/^\s+$/.test(token)) {
@@ -8818,6 +9759,9 @@ function MediaBuddy({ user }) {
           className="media-interactive-word"
           onClick={(e) => {
             e.stopPropagation();
+            if (segmentIndex !== undefined && segmentIndex !== -1) {
+              setActiveSegmentIndex(segmentIndex);
+            }
             handleWordClick(cleanWord, text);
           }}
         >
@@ -8839,7 +9783,7 @@ function MediaBuddy({ user }) {
     setShowManualPaste(false);
     setIsLoadingCustom(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/media/transcript?video_id=${videoId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=${useWhisper}`, {
         headers: {
           "X-Session-Token": user.token
         }
@@ -8948,7 +9892,7 @@ function MediaBuddy({ user }) {
       )}
       {/* Custom Video URL Loader */}
       <div className="custom-video-loader glass-panel">
-        <h3 className="loader-title">🔗 Dodaj własne wideo z YouTube</h3>
+        <h3 className="loader-title">Dodaj własne wideo z YouTube</h3>
         <form onSubmit={handleLoadCustomVideo} className="loader-form">
           <input
             type="text"
@@ -8958,15 +9902,41 @@ function MediaBuddy({ user }) {
             onChange={(e) => setCustomUrl(e.target.value)}
           />
           <button type="submit" className="loader-btn" disabled={isLoadingCustom}>
-            {isLoadingCustom ? "Pobieranie transkrypcji..." : "Załaduj wideo 🚀"}
+            {isLoadingCustom ? "Pobieranie transkrypcji..." : "Załaduj wideo"}
           </button>
         </form>
+        
+        <div className="transcript-mode-toggle-container">
+          <span className="toggle-label-text">Tryb pobierania transkrypcji:</span>
+          <div className="toggle-switch-wrapper">
+            <button
+              type="button"
+              className={`toggle-option-btn ${!useWhisper ? "active" : ""}`}
+              onClick={() => setUseWhisper(false)}
+              title="Darmowe automatyczne napisy z YouTube (brak interpunkcji)"
+            >
+              <span>Darmowy (Nap. automatyczne)</span>
+            </button>
+            <button
+              type="button"
+              className={`toggle-option-btn ${useWhisper ? "active" : ""}`}
+              onClick={() => setUseWhisper(true)}
+              title="Płatna transkrypcja AI przez Whisper (świetna interpunkcja i wielkie litery)"
+            >
+              <span>Premium AI (Whisper)</span>
+            </button>
+          </div>
+        </div>
+
         {customError && <p className="loader-error">{customError}</p>}
 
         {showManualPaste && (
           <div className="manual-paste-section">
             <div className="manual-paste-info">
-              💡 <strong>YouTube zablokował automatyczne pobieranie na serwerze:</strong>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
+                <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
+              </svg>
+              <strong>YouTube zablokował automatyczne pobieranie na serwerze:</strong>
               <p style={{ margin: '0.5rem 0', fontSize: '0.92rem' }}>
                 Aby to obejść, możesz wkleić napisy ręcznie. Użyj darmowego narzędzia zewnętrznego:
               </p>
@@ -8986,14 +9956,25 @@ function MediaBuddy({ user }) {
                 required
               />
               <button type="submit" className="manual-paste-btn" disabled={isLoadingCustom}>
-                {isLoadingCustom ? "Przetwarzanie..." : "Zapisz napisy i załaduj wideo 💾"}
+                {isLoadingCustom ? "Przetwarzanie..." : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    Zapisz napisy i załaduj wideo
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                      <polyline points="17 21 17 13 7 13 7 21" />
+                      <polyline points="7 3 7 8 15 8" />
+                    </svg>
+                  </span>
+                )}
               </button>
             </form>
           </div>
         )}
         {/* Curated Channels & Suggestion Box */}
         <div className="curated-suggestions-section">
-          <h4 className="suggestions-title">💡 Rekomendowane kanały z gotowymi napisami</h4>
+          <h4 className="suggestions-title">
+            Rekomendowane kanały z gotowymi napisami
+          </h4>
           <div className="suggestions-controls">
             <select 
               className="suggestions-select"
@@ -9032,7 +10013,12 @@ function MediaBuddy({ user }) {
                         onClick={() => fetchAndLoadVideo(video.youtubeId)}
                         disabled={isLoadingCustom}
                       >
-                        Załaduj wideo 🚀
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          Załaduj wideo
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                          </svg>
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -9046,39 +10032,187 @@ function MediaBuddy({ user }) {
       {/* Video Selector Row */}
       <div className="media-selector-bar glass-panel">
         <h2 className="media-selector-title">Wybierz klip:</h2>
-        <div className="media-selector-grid">
-          {[...CURATED_VIDEOS, ...customVideos].map((vid) => {
-            const isCustom = vid.id.startsWith("custom_");
-            const isActive = currentVideo.id === vid.id;
-            return (
-              <div
-                key={vid.id}
-                className={`video-tile ${isActive ? "active" : ""}`}
-                onClick={() => setCurrentVideo(vid)}
+        
+        {/* Row 1: Ostatnio oglądane */}
+        <div className="media-selector-row">
+          <div className="media-selector-row-header">
+            <div className="media-selector-row-title">
+              <span>🕒 Ostatnio oglądane</span>
+            </div>
+            <div className="media-selector-sort-controls">
+              <span className="sort-label">Sortowanie:</span>
+              <button 
+                type="button" 
+                className={`sort-toggle-btn ${recentSortOrder === "newest" ? "active" : ""}`}
+                onClick={() => setRecentSortOrder("newest")}
+                title="Sortuj od najnowszych"
               >
-                <div className="video-tile-thumbnail-wrapper">
-                  <img
-                    src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
-                    alt={vid.title}
-                    className="video-tile-thumbnail"
-                  />
-                  {isActive && <div className="video-tile-active-badge">Aktualny</div>}
-                  {isCustom && (
-                    <button
-                      className="video-tile-delete-btn"
-                      onClick={(e) => handleDeleteCustomVideo(e, vid.id)}
-                      title="Usuń z historii"
+                Od najnowszych
+              </button>
+              <button 
+                type="button" 
+                className={`sort-toggle-btn ${recentSortOrder === "oldest" ? "active" : ""}`}
+                onClick={() => setRecentSortOrder("oldest")}
+                title="Sortuj od najstarszych"
+              >
+                Od najstarszych
+              </button>
+            </div>
+          </div>
+          <div className="media-selector-scroll-wrapper">
+            <button 
+              type="button" 
+              className="scroll-btn left" 
+              onClick={() => scrollRow(recentScrollRef, "left")}
+              title="Przewiń w lewo"
+            >
+              ‹
+            </button>
+            <div className="media-selector-scroll" ref={recentScrollRef}>
+              {recentVideos.map((vid) => {
+                const isCustom = vid.id.startsWith("custom_");
+                const isActive = currentVideo.id === vid.id;
+                const prog = videoProgress[vid.id];
+                return (
+                  <div
+                    key={vid.id}
+                    className={`video-tile ${isActive ? "active" : ""}`}
+                    onClick={() => setCurrentVideo(vid)}
+                  >
+                    <div className="video-tile-thumbnail-wrapper">
+                      <img
+                        src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
+                        alt={vid.title}
+                        className="video-tile-thumbnail"
+                      />
+                      {isActive && <div className="video-tile-active-badge">Aktualny</div>}
+                      {isCustom && (
+                        <button
+                          className="video-tile-delete-btn"
+                          onClick={(e) => handleDeleteCustomVideo(e, vid.id)}
+                          title="Usuń z historii"
+                        >
+                          ✕
+                        </button>
+                      )}
+                      {prog && prog.progressPercent > 0 && (
+                        <div className="video-tile-progress-bar-wrapper">
+                          <div 
+                            className="video-tile-progress-bar" 
+                            style={{ width: `${Math.min(100, prog.progressPercent)}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div className="video-tile-info">
+                      <h4 className="video-tile-title">{vid.title}</h4>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <button 
+              type="button" 
+              className="scroll-btn right" 
+              onClick={() => scrollRow(recentScrollRef, "right")}
+              title="Przewiń w prawo"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Nieoglądane */}
+        <div className="media-selector-row">
+          <div className="media-selector-row-header">
+            <div className="media-selector-row-title">
+              <span>📺 Nieoglądane</span>
+            </div>
+            <div className="media-selector-sort-controls">
+              <span className="sort-label">Sortowanie:</span>
+              <button 
+                type="button" 
+                className={`sort-toggle-btn ${unwatchedSortOrder === "newest" ? "active" : ""}`}
+                onClick={() => setUnwatchedSortOrder("newest")}
+                title="Sortuj od najnowszych"
+              >
+                Od najnowszych
+              </button>
+              <button 
+                type="button" 
+                className={`sort-toggle-btn ${unwatchedSortOrder === "oldest" ? "active" : ""}`}
+                onClick={() => setUnwatchedSortOrder("oldest")}
+                title="Sortuj od najstarszych"
+              >
+                Od najstarszych
+              </button>
+            </div>
+          </div>
+          {unwatchedVideos.length === 0 ? (
+            <div className="media-selector-empty-text">Wszystkie wideo zostały obejrzane! 🎉</div>
+          ) : (
+            <div className="media-selector-scroll-wrapper">
+              <button 
+                type="button" 
+                className="scroll-btn left" 
+                onClick={() => scrollRow(unwatchedScrollRef, "left")}
+                title="Przewiń w lewo"
+              >
+                ‹
+              </button>
+              <div className="media-selector-scroll" ref={unwatchedScrollRef}>
+                {unwatchedVideos.map((vid) => {
+                  const isCustom = vid.id.startsWith("custom_");
+                  const isActive = currentVideo.id === vid.id;
+                  const prog = videoProgress[vid.id];
+                  return (
+                    <div
+                      key={vid.id}
+                      className={`video-tile ${isActive ? "active" : ""}`}
+                      onClick={() => setCurrentVideo(vid)}
                     >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                <div className="video-tile-info">
-                  <h4 className="video-tile-title">{vid.title}</h4>
-                </div>
+                      <div className="video-tile-thumbnail-wrapper">
+                        <img
+                          src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
+                          alt={vid.title}
+                          className="video-tile-thumbnail"
+                        />
+                        {isActive && <div className="video-tile-active-badge">Aktualny</div>}
+                        {isCustom && (
+                          <button
+                            className="video-tile-delete-btn"
+                            onClick={(e) => handleDeleteCustomVideo(e, vid.id)}
+                            title="Usuń z historii"
+                          >
+                            ✕
+                          </button>
+                        )}
+                        {prog && prog.progressPercent > 0 && (
+                          <div className="video-tile-progress-bar-wrapper">
+                            <div 
+                              className="video-tile-progress-bar" 
+                              style={{ width: `${Math.min(100, prog.progressPercent)}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="video-tile-info">
+                        <h4 className="video-tile-title">{vid.title}</h4>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+              <button 
+                type="button" 
+                className="scroll-btn right" 
+                onClick={() => scrollRow(unwatchedScrollRef, "right")}
+                title="Przewiń w prawo"
+              >
+                ›
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -9105,7 +10239,12 @@ function MediaBuddy({ user }) {
                     title="Szczegółowe objaśnienie słownikowe"
                     onClick={() => setExplanationWord(selectedWord)}
                   >
-                    Więcej szczegółów 💡
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      Więcej szczegółów
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                        <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
+                      </svg>
+                    </span>
                   </button>
                 </div>
                 {isTranslating ? (
@@ -9170,7 +10309,39 @@ function MediaBuddy({ user }) {
           
           {/* Transcript Panel */}
           <div className="transcript-panel glass-panel">
-            <h3 className="panel-header">🗣️ Transkrypcja stand-upu</h3>
+            <div className="panel-header">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                  <path d="M12 2a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                </svg>
+                Transkrypcja stand-upu
+              </span>
+              <button
+                type="button"
+                className={`autoscroll-toggle-btn ${autoScrollEnabled ? "active" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  console.log("Autoscroll toggle button clicked! Current state:", autoScrollEnabled, " -> Toggling to:", !autoScrollEnabled);
+                  setAutoScrollEnabled(!autoScrollEnabled);
+                }}
+                title={autoScrollEnabled ? "Wyłącz automatyczne przewijanie napisów" : "Włącz automatyczne przewijanie napisów"}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {autoScrollEnabled ? (
+                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                    ) : (
+                      <>
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                      </>
+                    )}
+                  </svg>
+                  Autoscroll: {autoScrollEnabled ? "WŁ" : "WYŁ"}
+                </span>
+              </button>
+            </div>
             <div className="transcript-list">
               {currentVideo.transcript.map((seg, idx) => (
                 <div
@@ -9185,7 +10356,7 @@ function MediaBuddy({ user }) {
                     </span>
                   </div>
                   <div className="segment-content">
-                    <p className="segment-text-line">{renderInteractiveText(seg.text)}</p>
+                    <p className="segment-text-line">{renderInteractiveText(seg.text, idx)}</p>
                     <div className="segment-actions">
                       <button
                         className="segment-action-btn practice"
@@ -11444,23 +12615,24 @@ export default Navbar;
 
 .action-icon-btn.practice {
   background: var(--primary-500);
-  color: white;
-  border: none;
+  color: var(--gray-900);
+  border: 1px solid var(--primary-500);
 }
 
 .action-icon-btn.practice:hover:not(:disabled) {
   background: var(--primary-600);
-  color: white;
+  color: var(--gray-900);
+  border-color: var(--primary-600);
 }
 
 .action-icon-btn.summary {
-  background: #10b981; /* Premium Emerald */
+  background: #e65100; /* Warm Amber/Orange */
   color: white;
   border: none;
 }
 
 .action-icon-btn.summary:hover:not(:disabled) {
-  background: #059669;
+  background: #bf360c;
   color: white;
 }
 
@@ -12426,7 +13598,18 @@ const PronunciationPracticeModal = ({ targetText, user, onClose, onLogActivity, 
               onClick={playTargetTTS}
               title="Odsłuchaj poprawną wymowę"
             >
-              <span className="btn-icon">{isSpeaking ? "⏹" : "🔊"}</span>
+              <span className="btn-icon">
+                {isSpeaking ? (
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                    <rect x="4" y="4" width="16" height="16" rx="2" ry="2" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </svg>
+                )}
+              </span>
               {isSpeaking ? "Zatrzymaj" : "Odsłuchaj wzór"}
             </button>
 
@@ -12437,7 +13620,12 @@ const PronunciationPracticeModal = ({ targetText, user, onClose, onLogActivity, 
               </button>
             ) : (
               <button className="btn-record-voice" onClick={startRecording} disabled={isEvaluating}>
-                <span className="btn-icon">🎤</span>
+                <span className="btn-icon">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+                  </svg>
+                </span>
                 Nagraj swój głos
               </button>
             )}
@@ -14533,22 +15721,22 @@ export default WordExplanationModal;
 }
 
 .phase-indicator .dot:hover {
-  border-color: var(--primary-400, #a78bfa);
-  color: var(--primary-600, #7c3aed);
+  border-color: var(--accent);
+  color: var(--accent-hover);
   transform: translateY(-2px);
 }
 
 .phase-indicator .dot.active {
-  background: var(--primary-50, #f5f3ff);
-  border-color: var(--primary-400, #a78bfa);
-  color: var(--primary-700, #5b21b6);
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--gray-700);
 }
 
 .phase-indicator .dot.current {
-  background: linear-gradient(135deg, var(--primary-600, #7c3aed), var(--primary-500, #6366f1));
+  background: var(--accent);
   border-color: transparent;
-  color: white;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+  color: var(--gray-900);
+  box-shadow: 0 4px 12px rgba(251, 188, 4, 0.3);
   transform: scale(1.08);
 }
 
@@ -14600,16 +15788,16 @@ export default WordExplanationModal;
 
 .step-btn:hover {
   background: linear-gradient(135deg, #ffffff, #f8fafc);
-  border-color: var(--primary-300, #c4b5fd);
-  color: var(--primary-700, #5b21b6);
+  border-color: var(--accent);
+  color: var(--gray-900);
   transform: translateY(-1px);
 }
 
 .step-btn.active {
-  background: linear-gradient(135deg, var(--primary-600, #7c3aed), var(--primary-500, #6366f1));
-  color: white;
+  background: var(--accent);
+  color: var(--gray-900);
   border-color: transparent;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  box-shadow: 0 4px 12px rgba(251, 188, 4, 0.25);
   transform: translateY(-1px);
 }
 
@@ -14917,26 +16105,28 @@ export default WordExplanationModal;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: linear-gradient(135deg, var(--primary-600, #7c3aed), var(--primary-500, #6366f1));
-  color: white;
+  background: linear-gradient(135deg, var(--accent) 0%, #ff8f00 100%);
+  color: var(--gray-900);
   padding: 0.65rem 1.1rem;
   border-radius: var(--radius-md);
   font-weight: 700;
   font-size: 0.9rem;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  box-shadow: 0 4px 12px rgba(251, 188, 4, 0.2);
   transition: all 0.2s ease;
 }
 
 .practice-live-chat-trigger:hover .live-chat-trigger-btn {
   transform: translateX(3px);
-  background: linear-gradient(135deg, #6d28d9, #4f46e5);
+  background: linear-gradient(135deg, var(--accent-hover) 0%, #e65100 100%);
+  color: var(--gray-900);
+  box-shadow: 0 6px 14px rgba(251, 188, 4, 0.3);
 }
 
 /* Stage / Active Conversation Box */
 .practice-live-chat-stage {
   background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(167, 139, 250, 0.35);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
   display: flex;
@@ -15091,11 +16281,13 @@ export default WordExplanationModal;
 }
 
 .live-chat-msg.bot-msg .msg-avatar {
-  background: linear-gradient(135deg, #6366f1, #a855f7);
+  background: linear-gradient(135deg, var(--accent) 0%, #ff8f00 100%);
+  color: var(--gray-900);
 }
 
 .live-chat-msg.user-msg .msg-avatar {
-  background: var(--primary-600, #7c3aed);
+  background: var(--accent-hover);
+  color: var(--gray-900);
 }
 
 .msg-content {
@@ -15120,8 +16312,9 @@ export default WordExplanationModal;
 }
 
 .live-chat-msg.user-msg .msg-bubble {
-  background: linear-gradient(135deg, var(--primary-600, #7c3aed), var(--primary-500, #6366f1));
-  color: white;
+  background: var(--accent-light);
+  color: var(--gray-900);
+  border: 1px solid rgba(251, 188, 4, 0.35);
   border-top-right-radius: 2px;
 }
 
@@ -15999,12 +17192,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                         ? "Przeanalizowałeś już większość tekstu! Kliknij w kulę lub ten panel, aby lektor AI zadał Ci pytanie na żywo dotyczące tej czytanki i ocenił Twoją odpowiedź głosem."
                         : "Możesz kontynuować czytanie lub kliknąć w kulę już teraz, aby AI natychmiast zadało Ci pytanie dotyczące tekstu i oceniło Twoją wymowę!"}
                     </p>
-                  </div>
-                  <div className="live-chat-trigger-btn">
-                    <span>{showLiveChatBadge || phase === 4 ? "Otwórz Kulę Live" : "Rozpocznij Czat teraz"}</span>
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
                   </div>
                 </div>
               ) : (
@@ -17282,12 +18469,6 @@ const Reader = ({
                   : "Możesz kontynuować czytanie lub kliknąć w kulę już teraz, aby AI natychmiast zadało Ci pytanie dotyczące tekstu i oceniło Twoją wymowę!"}
               </p>
             </div>
-            <div className="live-chat-trigger-btn">
-              <span>{showLiveChatBadge ? "Otwórz Kulę Live" : "Rozpocznij Czat teraz"}</span>
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-            </div>
           </div>
         ) : (
           <div className="practice-live-chat-stage glass-panel">
@@ -17403,27 +18584,26 @@ export default Reader;
 
 ```css
 /* ============================================================
-   Sidebar — Perplexity / Apple Light Style
+   Sidebar — Google Keep Light Style
    ============================================================ */
 
 .mission-sidebar {
-  width: 240px;
+  width: 280px; /* Keep sidebar is slightly wider for labels */
   height: 100vh;
   background: var(--surface);
-  border-right: 1px solid var(--border-subtle);
+  border-right: none; /* No border for seamless blend */
   display: flex;
   flex-direction: column;
-  padding: 1.5rem 0.75rem 1rem;
+  padding: 1.5rem 0 1rem 0; /* No left/right padding so pills can touch the edge */
   position: sticky;
   top: 0;
   z-index: 100;
-  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .mission-sidebar.collapsed {
-  width: 64px;
-  padding: 1.5rem 0.5rem 1rem;
+  width: 72px;
+  padding: 1.5rem 0 1rem 0;
 }
 
 /* ── Brand ────────────────────────────────────────────────── */
@@ -17432,8 +18612,8 @@ export default Reader;
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 1.75rem;
-  padding: 0 0.5rem;
-  transition: gap 0.25s, padding 0.25s;
+  padding: 0 1.5rem; /* Internal padding to align with items */
+  transition: gap 0.2s, padding 0.2s;
 }
 
 .mission-sidebar.collapsed .sidebar-brand {
@@ -17443,24 +18623,25 @@ export default Reader;
 }
 
 .brand-icon {
-  width: 32px;
-  height: 32px;
-  background: var(--accent);
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  background: transparent; /* Seamless or simple circular icon */
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
-  color: white;
+  font-size: 1.25rem;
+  color: var(--accent); /* Keep Yellow */
   flex-shrink: 0;
 }
 
 .brand-name {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--gray-900);
+  font-family: var(--font-display);
+  font-size: 1.375rem; /* Keep style title */
+  font-weight: 500;
+  color: var(--gray-500); /* Keep brand text is slightly greyish */
   letter-spacing: -0.01em;
-  transition: opacity 0.2s, max-width 0.2s, visibility 0.2s;
+  transition: opacity 0.15s, max-width 0.15s, visibility 0.15s;
   max-width: 200px;
   opacity: 1;
   visibility: visible;
@@ -17477,37 +18658,42 @@ export default Reader;
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   flex: 1;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5625rem 0.75rem;
-  border-radius: var(--radius-md);
+  gap: 1.5rem; /* Spacious gap between icon and text */
+  padding: 0.75rem 1.5rem;
+  border-radius: 0 24px 24px 0; /* Keep active pill: rounded on the right, flat on the left */
   border: none;
   background: transparent;
-  color: var(--gray-500);
+  color: var(--gray-700);
   font-family: var(--font-main);
-  font-size: var(--text-body-lg);
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast);
   text-align: left;
   white-space: nowrap;
-  width: 100%;
+  width: calc(100% - 12px); /* Spaced slightly from right edge */
+  margin-right: 12px;
 }
 
 .mission-sidebar.collapsed .nav-item {
   justify-content: center;
   gap: 0;
-  padding: 0.5625rem;
+  padding: 0.75rem;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
 }
 
 .nav-label {
-  transition: opacity 0.2s, max-width 0.2s, visibility 0.2s;
+  transition: opacity 0.15s, max-width 0.15s, visibility 0.15s;
   max-width: 200px;
   opacity: 1;
   visibility: visible;
@@ -17520,17 +18706,17 @@ export default Reader;
 }
 
 .nav-item:hover {
-  background: var(--gray-100);
+  background: var(--gray-100); /* light gray hover */
   color: var(--gray-900);
 }
 
 .nav-item.active {
-  background: var(--accent-light);
-  color: var(--accent);
+  background: var(--accent-light); /* Soft yellow/cream highlight */
+  color: var(--gray-900);
 }
 
 .nav-item.active .nav-icon {
-  color: var(--accent);
+  color: var(--accent); /* Keep classic yellow */
 }
 
 .nav-item.disabled {
@@ -17810,6 +18996,15 @@ export default Reader;
   .collapse-toggle-btn {
     display: none !important;
   }
+  
+  .nav-item-dashboard {
+    display: flex !important;
+  }
+}
+
+/* Hide Chat Live on desktop */
+.nav-item-dashboard {
+  display: none !important;
 }
 ```
 
@@ -17819,6 +19014,7 @@ export default Reader;
 
 ```javascript
 import React, { useState } from 'react';
+import logoImg from '../assets/logo.png';
 import './Sidebar.css';
 
 const Sidebar = ({ currentView, onNavigate, user, onLogout }) => {
@@ -17914,9 +19110,7 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout }) => {
     <aside className={`mission-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-brand">
         <div className="brand-icon">
-          <svg viewBox="0 0 100 100" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M65 30C65 20 55 15 45 15C30 15 30 35 50 45C70 55 70 75 55 85C45 90 35 85 35 75" />
-          </svg>
+          <img src={logoImg} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
         </div>
         <h1 className="brand-name">Speakling</h1>
       </div>
@@ -17925,7 +19119,7 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout }) => {
         {menuItems.map((item) => (
           <button
             key={item.id}
-            className={`nav-item ${currentView === item.id ? 'active' : ''} ${item.disabled ? 'disabled' : ''}`}
+            className={`nav-item nav-item-${item.id} ${currentView === item.id ? 'active' : ''} ${item.disabled ? 'disabled' : ''}`}
             onClick={() => !item.disabled && onNavigate(item.id)}
             disabled={item.disabled}
             title={item.disabled ? `${item.label} (Wkrótce / Coming Soon)` : (isCollapsed ? item.label : undefined)}
@@ -18497,7 +19691,6 @@ const SavedStories = ({ user, onSelectStory }) => {
     <div className="saved-stories-container">
       <div className="saved-stories-header">
         <div className="header-meta">
-          <h2>Saved Stories</h2>
           <p className="subtitle">Manage and read your generated stories</p>
         </div>
         <div className="search-wrapper">
@@ -18650,6 +19843,8 @@ export default SavedStories;
 
 ```css
 .story-generator {
+  max-width: 900px;
+  margin: 2rem 0 3rem 0;
   padding: 2rem;
   background: white;
   border-radius: var(--radius-md);
@@ -18854,7 +20049,7 @@ export default SavedStories;
   border-radius: var(--radius-md);
   border: none;
   background: var(--primary-500);
-  color: white;
+  color: var(--gray-900);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -18866,6 +20061,7 @@ export default SavedStories;
 
 .generate-story-btn:hover:not(:disabled) {
   background: var(--primary-600);
+  color: var(--gray-900);
 }
 
 .generate-story-btn:disabled {
@@ -18887,8 +20083,8 @@ export default SavedStories;
   font-family: var(--font-main);
   border-radius: var(--radius-md);
   border: none;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--accent) 0%, #ff8f00 100%);
+  color: var(--gray-900);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -18896,13 +20092,14 @@ export default SavedStories;
   cursor: pointer;
   transition: all 0.2s var(--transition-soft);
   width: fit-content;
-  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 4px 10px rgba(251, 188, 4, 0.15);
 }
 
 .generate-default-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+  background: linear-gradient(135deg, var(--accent-hover) 0%, #e65100 100%);
+  color: var(--gray-900);
   transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 6px 14px rgba(251, 188, 4, 0.25);
 }
 
 .generate-default-btn:disabled {
@@ -19165,17 +20362,17 @@ export default SavedStories;
 }
 
 .gen-tab-btn:hover {
-  border-color: var(--primary-300, #c4b5fd);
-  background: var(--primary-50, #f5f3ff);
-  color: var(--primary-700, #5b21b6);
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--gray-900);
   transform: translateY(-1px);
 }
 
 .gen-tab-btn.active {
-  background: linear-gradient(135deg, var(--primary-600, #7c3aed), var(--primary-700, #6d28d9));
+  background: var(--accent);
   border-color: transparent;
-  color: white;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25);
+  color: var(--gray-900);
+  box-shadow: 0 4px 12px rgba(251, 188, 4, 0.25);
 }
 
 .gen-tab-icon {
@@ -19203,16 +20400,16 @@ export default SavedStories;
   padding: 1.1rem 1.5rem;
   border-radius: var(--radius-md, 12px);
   background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-  border: 1.5px dashed var(--primary-300, #c4b5fd);
+  border: 1.5px dashed var(--accent);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .paste-quick-trigger-banner:hover {
-  background: linear-gradient(135deg, #f5f3ff, #ede9fe);
-  border-color: var(--primary-500, #7c3aed);
+  background: linear-gradient(135deg, var(--gray-0), var(--accent-light));
+  border-color: var(--accent-hover);
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.12);
+  box-shadow: 0 8px 20px rgba(251, 188, 4, 0.12);
 }
 
 .trigger-content {
@@ -19330,19 +20527,21 @@ export default SavedStories;
   gap: 0.65rem;
   padding: 0.85rem 1.75rem;
   border-radius: var(--radius-md, 12px);
-  background: linear-gradient(135deg, var(--primary-600, #7c3aed), var(--primary-700, #6d28d9));
-  color: white;
+  background: var(--accent);
+  color: var(--gray-900);
   font-weight: 700;
   font-size: 1.05rem;
   border: none;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+  box-shadow: 0 4px 14px rgba(251, 188, 4, 0.25);
 }
 
 .load-pasted-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: var(--gray-900);
   transform: translateY(-2px);
-  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.45);
+  box-shadow: 0 8px 22px rgba(251, 188, 4, 0.35);
 }
 
 .load-pasted-btn:disabled {
@@ -19423,18 +20622,94 @@ const GENERATION_PHASES = [
 ];
 
 const getTopicIcon = (topicName) => {
-  if (!topicName) return "✨";
+  const size = 16;
+  const strokeWidth = 2.5;
+  const style = { display: 'inline-block', verticalAlign: 'middle' };
+  
+  if (!topicName) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+      </svg>
+    );
+  }
+  
   const t = topicName.toLowerCase();
-  if (t.includes("business")) return "💼";
-  if (t.includes("discovery")) return "🚀";
-  if (t.includes("ai") || t.includes("tech")) return "🤖";
-  if (t.includes("nature") || t.includes("environment")) return "🌿";
-  if (t.includes("history") || t.includes("past")) return "🏛️";
-  if (t.includes("science")) return "🔬";
-  if (t.includes("travel")) return "✈️";
-  if (t.includes("culture") || t.includes("art")) return "🎨";
-  if (t.includes("health") || t.includes("sport")) return "💪";
-  return "✨";
+  
+  if (t.includes("business")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      </svg>
+    );
+  }
+  if (t.includes("discovery") || t.includes("future")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <polygon points="5 3 19 12 5 21 5 3" />
+      </svg>
+    );
+  }
+  if (t.includes("ai") || t.includes("tech") || t.includes("technology") || t.includes("robot")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <rect x="3" y="11" width="18" height="10" rx="2" />
+        <circle cx="12" cy="5" r="2" />
+        <path d="M12 7v4M8 15h.01M16 15h.01" />
+      </svg>
+    );
+  }
+  if (t.includes("nature") || t.includes("environment")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M2 22c1.25-6.75 6.75-12.25 13.5-13.5M22 2c-1.25 6.75-6.75 12.25-13.5 13.5M9 15c0-4.5 3.5-8 8-8M15 9c0 4.5-3.5 8-8 8" />
+      </svg>
+    );
+  }
+  if (t.includes("history") || t.includes("past")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M4 18h16M10 9v9M14 9v9M18 9v9M6 9v9M3 9h18M12 2L3 9h18z" />
+      </svg>
+    );
+  }
+  if (t.includes("science")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M6 3h12M12 3v14M9 12h6M5 21h14M8 12a4 4 0 0 0-4 4v5h16v-5a4 4 0 0 0-4-4" />
+      </svg>
+    );
+  }
+  if (t.includes("travel") || t.includes("adventure")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+      </svg>
+    );
+  }
+  if (t.includes("culture") || t.includes("art") || t.includes("music")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.35857 19.5 6.00857 19 6.50857 18.5C7.00857 18 7.50857 17.5 8.50857 17.5C9.50857 17.5 9.50857 19 9.50857 20C9.50857 21 11.0086 22 12 22Z" />
+        <circle cx="7.5" cy="10.5" r="1.5" />
+        <circle cx="11.5" cy="7.5" r="1.5" />
+        <circle cx="16.5" cy="9.5" r="1.5" />
+      </svg>
+    );
+  }
+  if (t.includes("health") || t.includes("sport")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
 };
 
 const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading, suggestedTopics, user }) => {
@@ -19583,7 +20858,6 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           className={`gen-tab-btn ${activeTab === "ai" ? "active" : ""}`}
           onClick={() => setActiveTab("ai")}
         >
-          <span className="gen-tab-icon">✨</span>
           <span>AI Lesson Generator</span>
         </button>
         <button
@@ -19591,9 +20865,7 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           className={`gen-tab-btn ${activeTab === "paste" ? "active" : ""}`}
           onClick={() => setActiveTab("paste")}
         >
-          <span className="gen-tab-icon">📋</span>
           <span>...or Paste External Text</span>
-          <span className="gen-tab-badge">Instant Practice</span>
         </button>
       </div>
 
@@ -19614,7 +20886,6 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
               className={`topic-chip ${isSelected ? "selected" : ""}`}
               disabled={isLoading}
             >
-              <span className="topic-chip-icon">{getTopicIcon(topic)}</span>
               <span className="topic-chip-text">{topic}</span>
               {isSelected && <span className="topic-chip-check">✓</span>}
             </button>
@@ -19629,13 +20900,7 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           onClick={() => setShowSettings(!showSettings)}
           disabled={isLoading}
         >
-          <span>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px', verticalAlign: 'middle' }}>
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            Story Style & Settings
-          </span>
+          <span>Story Style & Settings</span>
           <span>{showSettings ? "▲" : "▼"}</span>
         </button>
       </div>
@@ -19795,14 +21060,7 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           {isLoading ? (
             <span className="loader-inner">Developing Story...</span>
           ) : (
-            <>
-              <span>Craft My Story</span>
-              <span className="btn-icon">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-                </svg>
-              </span>
-            </>
+            <span>Craft My Story</span>
           )}
         </button>
 
@@ -19815,23 +21073,13 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
           {isLoading ? (
             <span className="loader-inner">Developing Lesson...</span>
           ) : (
-            <>
-              <span>Generuj lekcję domyślną</span>
-              <span className="btn-icon">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4" />
-                  <path d="M12 8h.01" />
-                </svg>
-              </span>
-            </>
+            <span>Generuj lekcję domyślną</span>
           )}
         </button>
       </div>
 
       <div className="paste-quick-trigger-banner" onClick={() => setActiveTab("paste")}>
         <div className="trigger-content">
-          <span className="trigger-icon">📋</span>
           <div>
             <strong>...or paste text</strong> from external sources (articles, emails, books)
             <p>Click here to import your own text with full interactive vocabulary & TTS →</p>
@@ -19842,7 +21090,6 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
       ) : (
       <div className="paste-mode-panel glass-panel">
         <div className="paste-header">
-          <h3>📋 ...or paste text (Import External Content)</h3>
           <p>Got an article from BBC News, a business report, or a story excerpt? Paste it below! We will save it to your server library and give you instant access to interactive word definitions, neural TTS pronunciation, grammar checks, and flashcards—just like an AI-generated lesson.</p>
         </div>
 
@@ -19894,7 +21141,11 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
             }}
             disabled={isLoading || !pastedText.trim()}
           >
-            <span className="btn-icon">🚀</span>
+            <span className="btn-icon">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            </span>
             <span>Save to Server & Start Practicing</span>
           </button>
           <button
@@ -20022,14 +21273,13 @@ describe('StoryGenerator Popular Science Settings', () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1.5rem;
-  background: var(--topbar-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 0.75rem 2rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 50;
+  height: 64px;
 }
 
 .topbar-left {
@@ -20039,10 +21289,11 @@ describe('StoryGenerator Popular Science Settings', () => {
 }
 
 .page-title {
-  font-size: var(--text-title-md);
-  font-weight: 600;
-  color: var(--gray-900);
-  letter-spacing: var(--ls-title);
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 500;
+  color: var(--gray-500);
+  letter-spacing: 0;
 }
 
 .search-wrapper {
@@ -20169,7 +21420,1097 @@ export default TopBar;
 
 ---
 
-## 45. Plik: `frontend\src\components\Vocabulary\VocabularyView.css`
+## 45. Plik: `frontend\src\components\Vocabulary\VocabularyDrawer.css`
+
+```css
+/* ============================================================
+   VocabularyDrawer.css — Slide-out Sidebar & Floating Tab
+   ============================================================ */
+
+/* ── Floating Pull-out Button ──────────────────────────────── */
+.vocabulary-drawer-trigger {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 990;
+  background: var(--accent);
+  color: var(--gray-900);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  padding: 0.85rem 0.6rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all var(--transition-fast);
+}
+
+.vocabulary-drawer-trigger:hover {
+  background: var(--accent-hover);
+  padding-right: 0.85rem;
+  box-shadow: var(--shadow-lg);
+}
+
+.vocabulary-drawer-trigger .trigger-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vocabulary-drawer-trigger .trigger-badge {
+  background: var(--gray-900);
+  color: var(--gray-0);
+  font-size: var(--text-label-sm);
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-full);
+  min-width: 1.5rem;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.vocabulary-drawer-trigger .trigger-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-family: var(--font-display);
+  font-size: var(--text-label-sm);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gray-900);
+  margin-top: 0.2rem;
+}
+
+/* ── Backdrop Overlay ─────────────────────────────────────── */
+.vocabulary-drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-soft);
+}
+
+.vocabulary-drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Sliding Panel ────────────────────────────────────────── */
+.vocabulary-drawer-panel {
+  position: fixed;
+  top: 0;
+  right: -420px;
+  width: min(420px, 100vw);
+  height: 100vh;
+  background: var(--surface);
+  box-shadow: var(--shadow-xl);
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  transition: right var(--transition-soft);
+  border-left: 1px solid var(--border);
+  font-family: var(--font-main);
+  color: var(--gray-900);
+}
+
+.vocabulary-drawer-panel.open {
+  right: 0;
+}
+
+/* ── Drawer Header ────────────────────────────────────────── */
+.drawer-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--gray-50);
+}
+
+.drawer-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drawer-title-row h2 {
+  font-size: var(--text-title-lg);
+  font-weight: 700;
+  font-family: var(--font-display);
+  color: var(--gray-900);
+  margin: 0;
+}
+
+.drawer-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--gray-500);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.drawer-close-btn:hover {
+  background: var(--gray-200);
+  color: var(--gray-900);
+}
+
+.drawer-quick-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.drawer-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--gray-700);
+  font-family: var(--font-display);
+  font-size: var(--text-label-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.drawer-action-btn:hover:not(:disabled) {
+  background: var(--gray-100);
+  color: var(--gray-900);
+}
+
+.drawer-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.drawer-action-btn.accent-action {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--gray-900);
+  font-weight: 600;
+}
+
+.drawer-action-btn.accent-action:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+/* ── Filters & Search ─────────────────────────────────────── */
+.drawer-filter-bar {
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--surface);
+}
+
+.drawer-search-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.drawer-search-input {
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-body-md);
+  background: var(--gray-50);
+  color: var(--gray-900);
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.drawer-search-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--accent-mid);
+}
+
+.drawer-search-clear {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--gray-500);
+  cursor: pointer;
+  padding: 0.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+}
+
+.drawer-search-clear:hover {
+  background: var(--gray-200);
+  color: var(--gray-900);
+}
+
+.drawer-type-tabs {
+  display: flex;
+  gap: 0.25rem;
+  background: var(--gray-100);
+  padding: 0.2rem;
+  border-radius: var(--radius-md);
+}
+
+.drawer-type-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 0.35rem;
+  font-size: var(--text-label-sm);
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  color: var(--gray-500);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.drawer-type-tab.active {
+  background: var(--surface);
+  color: var(--gray-900);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  font-weight: 600;
+}
+
+/* ── Content & Scroll Area ────────────────────────────────── */
+.drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ── Word Cards ───────────────────────────────────────────── */
+.drawer-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+  position: relative;
+  transition: all var(--transition-fast);
+}
+
+.drawer-card:hover {
+  border-color: var(--border);
+  box-shadow: var(--shadow-premium);
+  background: var(--gray-50);
+}
+
+.drawer-card.expanded {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.drawer-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.drawer-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.drawer-word-original {
+  font-size: var(--text-title-sm);
+  font-weight: 700;
+  color: var(--gray-900);
+  line-height: var(--lh-title);
+}
+
+.drawer-word-translated {
+  font-size: var(--text-body-md);
+  color: var(--gray-500);
+}
+
+.drawer-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.drawer-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--gray-500);
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.drawer-icon-btn:hover {
+  background: var(--gray-200);
+  color: var(--gray-900);
+}
+
+.drawer-icon-btn.delete-btn:hover {
+  background: #fce8e6;
+  color: #c5221f;
+}
+
+.drawer-icon-btn.playing {
+  color: var(--accent-hover);
+  animation: pulse-active 1.2s infinite;
+}
+
+/* ── Expanded Details ─────────────────────────────────────── */
+.drawer-card-details {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-size: var(--text-body-sm);
+  animation: slide-down 0.2s ease-out;
+}
+
+.drawer-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.drawer-detail-label {
+  font-size: var(--text-label-sm);
+  font-weight: 700;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.drawer-context-text {
+  font-style: italic;
+  color: var(--gray-700);
+  line-height: var(--lh-body);
+}
+
+.drawer-mnemonic-wrapper {
+  background: var(--accent-light);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+  color: var(--gray-900);
+  position: relative;
+}
+
+.drawer-mnemonic-btn {
+  background: transparent;
+  border: 1px dashed var(--accent-hover);
+  color: var(--accent-hover);
+  font-family: var(--font-display);
+  font-size: var(--text-label-sm);
+  font-weight: 600;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.drawer-mnemonic-btn:hover {
+  background: var(--accent);
+  color: var(--gray-900);
+  border-style: solid;
+}
+
+.drawer-details-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.drawer-details-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.4rem;
+  font-size: var(--text-label-sm);
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--gray-700);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.drawer-details-btn:hover {
+  background: var(--gray-100);
+  color: var(--gray-900);
+  border-color: var(--gray-500);
+}
+
+.drawer-details-btn.practice-btn {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--gray-900);
+}
+
+.drawer-details-btn.practice-btn:hover {
+  background: var(--accent);
+}
+
+/* ── Empty State ──────────────────────────────────────────── */
+.drawer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: var(--gray-500);
+}
+
+.drawer-empty-icon {
+  color: var(--gray-300);
+}
+
+.drawer-empty-text {
+  font-size: var(--text-title-sm);
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.drawer-empty-hint {
+  font-size: var(--text-body-sm);
+  color: var(--gray-500);
+  line-height: var(--lh-body);
+}
+
+/* ── Animations ───────────────────────────────────────────── */
+@keyframes pulse-active {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+```
+
+---
+
+## 46. Plik: `frontend\src\components\Vocabulary\VocabularyDrawer.js`
+
+```javascript
+import React, { useState, useEffect, useCallback } from "react";
+import { API_BASE_URL } from "../../config";
+import "./VocabularyDrawer.css";
+import Flashcards from "../Flashcards";
+import WordExplanationModal from "../Notebook/WordExplanationModal";
+import PronunciationPracticeModal from "../Notebook/PronunciationPracticeModal";
+
+const VocabularyDrawer = ({ user }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [words, setWords] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Search & Filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState("all"); // all, words, phrases
+
+  // Detail Expansion
+  const [expandedWordId, setExpandedWordId] = useState(null);
+
+  // Lazy Loading Mnemonic State
+  const [loadingMnemonicIds, setLoadingMnemonicIds] = useState({});
+
+  // Modals state
+  const [showFlashcards, setShowFlashcards] = useState(false);
+  const [explanationWord, setExplanationWord] = useState(null);
+  const [practiceTargetText, setPracticeTargetText] = useState(null);
+
+  // TTS State
+  const [playingWord, setPlayingWord] = useState(null);
+
+  // Email status
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  // Fetch vocabulary
+  const fetchVocabulary = useCallback(async () => {
+    if (!user?.token) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
+        headers: {
+          "X-Session-Token": user.token,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setWords(data);
+      }
+    } catch (err) {
+      console.error("Error fetching vocabulary in drawer:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Initial load & Event Listeners
+  useEffect(() => {
+    fetchVocabulary();
+
+    const handleUpdate = () => {
+      fetchVocabulary();
+    };
+
+    window.addEventListener("vocabulary-updated", handleUpdate);
+    return () => {
+      window.removeEventListener("vocabulary-updated", handleUpdate);
+    };
+  }, [fetchVocabulary]);
+
+  // Handle TTS
+  const handlePlayTTS = async (e, text) => {
+    e.stopPropagation();
+    if (playingWord === text) return;
+    setPlayingWord(text);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          voice: "en-US-BrianNeural",
+        }),
+      });
+      if (!response.ok) throw new Error("TTS failed");
+      const data = await response.json();
+      if (data.audio_base64) {
+        const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+        const audio = new Audio(audioUrl);
+        audio.onended = () => setPlayingWord(null);
+        audio.onerror = () => setPlayingWord(null);
+        audio.play();
+      } else {
+        setPlayingWord(null);
+      }
+    } catch (err) {
+      console.error("Error playing TTS in drawer:", err);
+      setPlayingWord(null);
+    }
+  };
+
+  // Handle Delete
+  const handleDeleteWord = async (e, originalWord) => {
+    e.stopPropagation();
+    if (!window.confirm(`Czy na pewno chcesz usunąć "${originalWord}" ze swojego słownika?`)) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(originalWord)}`, {
+        method: "DELETE",
+        headers: {
+          "X-Session-Token": user?.token || "",
+        },
+      });
+      if (response.ok) {
+        setWords((prev) => prev.filter((w) => w.original !== originalWord));
+        // Notify other views
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+      } else {
+        alert("Błąd podczas usuwania słówka.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Błąd połączenia z serwerem podczas usuwania.");
+    }
+  };
+
+  // Fetch or Generate Mnemonic (lazy)
+  const handleToggleMnemonic = async (e, item) => {
+    e.stopPropagation();
+    const wordId = item.id || item.original;
+
+    if (item.mnemonic) return; // already loaded
+
+    setLoadingMnemonicIds((prev) => ({ ...prev, [wordId]: true }));
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(item.id || item.original)}/mnemonic`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || "",
+        },
+      });
+
+      if (response.ok) {
+        const mnemonicData = await response.json();
+        setWords((prev) =>
+          prev.map((w) => {
+            if ((w.id && w.id === item.id) || w.original === item.original) {
+              return { ...w, mnemonic: mnemonicData };
+            }
+            return w;
+          })
+        );
+      }
+    } catch (err) {
+      console.error("Error loading mnemonic:", err);
+    } finally {
+      setLoadingMnemonicIds((prev) => ({ ...prev, [wordId]: false }));
+    }
+  };
+
+  // Export to Email
+  const handleExportEmail = async () => {
+    if (!user?.email || words.length === 0) return;
+    setSendingEmail(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/send-notebook-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || "",
+        },
+        body: JSON.stringify({
+          recipient_email: user.email,
+          notebook_words: words.map((w) => ({ original: w.original, translated: w.translated })),
+        }),
+      });
+
+      if (response.ok) {
+        alert(`Słownik został pomyślnie wysłany na adres: ${user.email}`);
+      } else {
+        alert("Wystąpił błąd podczas wysyłania e-maila.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Błąd połączenia podczas wysyłania e-maila.");
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  // Filter & Sort logic
+  const filteredWords = words.filter((w) => {
+    const query = searchQuery.toLowerCase();
+    const matchesSearch =
+      w.original.toLowerCase().includes(query) || w.translated.toLowerCase().includes(query);
+
+    if (!matchesSearch) return false;
+
+    const isExpression = w.original.trim().split(/\s+/).length > 1;
+    if (filterType === "words" && isExpression) return false;
+    if (filterType === "phrases" && !isExpression) return false;
+
+    return true;
+  });
+
+  const handleOpenDrawer = () => {
+    setIsOpen(true);
+    window.dispatchEvent(new CustomEvent("vocabulary-drawer-opened"));
+  };
+
+  return (
+    <>
+      {/* Floating Trigger Tab */}
+      <button className="vocabulary-drawer-trigger" onClick={handleOpenDrawer}>
+        <div className="trigger-icon">
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+          </svg>
+        </div>
+        <span className="trigger-badge">{words.length}</span>
+        <span className="trigger-label">Słownik</span>
+      </button>
+
+      {/* Backdrop Overlay */}
+      <div
+        className={`vocabulary-drawer-overlay ${isOpen ? "open" : ""}`}
+        onClick={() => setIsOpen(false)}
+      />
+
+      {/* Sliding Drawer Panel */}
+      <div className={`vocabulary-drawer-panel ${isOpen ? "open" : ""}`}>
+        {/* Header */}
+        <div className="drawer-header">
+          <div className="drawer-title-row">
+            <h2>Słownik AI</h2>
+            <button className="drawer-close-btn" onClick={() => setIsOpen(false)}>
+              <svg
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="drawer-quick-actions">
+            <button
+              className="drawer-action-btn accent-action"
+              onClick={() => setShowFlashcards(true)}
+              disabled={words.length === 0}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+              </svg>
+              Ćwicz Fiszki
+            </button>
+            <button
+              className="drawer-action-btn"
+              onClick={handleExportEmail}
+              disabled={words.length === 0 || sendingEmail}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+              {sendingEmail ? "Wysyłanie..." : "Wyślij E-mail"}
+            </button>
+          </div>
+        </div>
+
+        {/* Search & Filters */}
+        <div className="drawer-filter-bar">
+          <div className="drawer-search-wrapper">
+            <input
+              type="text"
+              className="drawer-search-input"
+              placeholder="Szukaj słówka lub frazy..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button className="drawer-search-clear" onClick={() => setSearchQuery("")}>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          <div className="drawer-type-tabs">
+            <button
+              className={`drawer-type-tab ${filterType === "all" ? "active" : ""}`}
+              onClick={() => setFilterType("all")}
+            >
+              Wszystkie
+            </button>
+            <button
+              className={`drawer-type-tab ${filterType === "words" ? "active" : ""}`}
+              onClick={() => setFilterType("words")}
+            >
+              Słowa
+            </button>
+            <button
+              className={`drawer-type-tab ${filterType === "phrases" ? "active" : ""}`}
+              onClick={() => setFilterType("phrases")}
+            >
+              Frazy
+            </button>
+          </div>
+        </div>
+
+        {/* Word List Scroll Area */}
+        <div className="drawer-content">
+          {filteredWords.length > 0 ? (
+            filteredWords.map((item, idx) => {
+              const wordId = item.id || item.original;
+              const isExpanded = expandedWordId === wordId;
+
+              return (
+                <div
+                  key={idx}
+                  className={`drawer-card ${isExpanded ? "expanded" : ""}`}
+                  onClick={() => {
+                    setExpandedWordId(isExpanded ? null : wordId);
+                  }}
+                >
+                  <div className="drawer-card-header">
+                    <div className="drawer-card-text">
+                      <span className="drawer-word-original">{item.original}</span>
+                      <span className="drawer-word-translated">{item.translated}</span>
+                    </div>
+
+                    <div className="drawer-card-header-actions">
+                      <button
+                        className={`drawer-icon-btn ${playingWord === item.original ? "playing" : ""}`}
+                        onClick={(e) => handlePlayTTS(e, item.original)}
+                        title="Odsłuchaj"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                        </svg>
+                      </button>
+                      <button
+                        className="drawer-icon-btn delete-btn"
+                        onClick={(e) => handleDeleteWord(e, item.original)}
+                        title="Usuń"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="drawer-card-details" onClick={(e) => e.stopPropagation()}>
+                      {/* Context / Example */}
+                      {item.context && (
+                        <div className="drawer-detail-section">
+                          <span className="drawer-detail-label">Kontekst:</span>
+                          <p className="drawer-context-text">"{item.context}"</p>
+                        </div>
+                      )}
+
+                      {/* Mnemonic Hook */}
+                      <div className="drawer-detail-section">
+                        <span className="drawer-detail-label">Hak Pamięciowy (AI):</span>
+                        {item.mnemonic ? (
+                          <div className="drawer-mnemonic-wrapper">
+                            <p style={{ margin: 0, fontWeight: 500 }}>
+                              {item.mnemonic.mnemonic_association || item.mnemonic.association}
+                            </p>
+                            {item.mnemonic.story && (
+                              <p style={{ margin: "4px 0 0 0", opacity: 0.85, fontSize: "11px" }}>
+                                {item.mnemonic.story}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <button
+                            className="drawer-mnemonic-btn"
+                            disabled={loadingMnemonicIds[wordId]}
+                            onClick={(e) => handleToggleMnemonic(e, item)}
+                          >
+                            {loadingMnemonicIds[wordId] ? "Generowanie..." : "✨ Generuj Hak Pamięciowy"}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Extra Actions */}
+                      <div className="drawer-details-actions">
+                        <button
+                          className="drawer-details-btn practice-btn"
+                          onClick={() => setPracticeTargetText(item.original)}
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="14"
+                            height="14"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                            <line x1="12" y1="19" x2="12" y2="23" />
+                            <line x1="8" y1="23" x2="16" y2="23" />
+                          </svg>
+                          Mów
+                        </button>
+                        <button
+                          className="drawer-details-btn"
+                          onClick={() => setExplanationWord(item.original)}
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="14"
+                            height="14"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="16" x2="12" y2="12" />
+                            <line x1="12" y1="8" x2="12.01" y2="8" />
+                          </svg>
+                          Wyjaśnij
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          ) : loading ? (
+            <div className="drawer-empty">
+              <p className="drawer-empty-text">Ładowanie...</p>
+            </div>
+          ) : (
+            <div className="drawer-empty">
+              <div className="drawer-empty-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="40"
+                  height="40"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+              </div>
+              <p className="drawer-empty-text">Brak słówek</p>
+              <p className="drawer-empty-hint">
+                Twój słownik jest pusty lub nic nie pasuje do filtrów.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Global Modals from Drawer */}
+      {showFlashcards && (
+        <div className="flashcards-fullpage-overlay">
+          <div className="flashcards-wrapper-modal glass-panel">
+            <Flashcards
+              notebookWords={words}
+              onFinishExercises={() => setShowFlashcards(false)}
+            />
+          </div>
+        </div>
+      )}
+      {explanationWord && (
+        <WordExplanationModal
+          wordOrPhrase={explanationWord}
+          user={user}
+          onClose={() => setExplanationWord(null)}
+        />
+      )}
+      {practiceTargetText && (
+        <PronunciationPracticeModal
+          targetText={practiceTargetText}
+          user={user}
+          onClose={() => setPracticeTargetText(null)}
+          onLogActivity={() => {}}
+          onLogPronunciationError={() => {}}
+        />
+      )}
+    </>
+  );
+};
+
+export default VocabularyDrawer;
+```
+
+---
+
+## 47. Plik: `frontend\src\components\Vocabulary\VocabularyView.css`
 
 ```css
 /* ============================================================
@@ -20238,7 +22579,7 @@ export default TopBar;
 .action-premium-btn.flashcards-btn {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--gray-900);
   font-weight: 600;
 }
 
@@ -20823,7 +23164,7 @@ export default TopBar;
 
 .mnemonic-trigger-btn.active {
   background: var(--accent);
-  color: white;
+  color: var(--gray-900);
   border-color: var(--accent);
 }
 
@@ -20976,7 +23317,7 @@ export default TopBar;
 
 ---
 
-## 46. Plik: `frontend\src\components\Vocabulary\VocabularyView.js`
+## 48. Plik: `frontend\src\components\Vocabulary\VocabularyView.js`
 
 ```javascript
 import React, { useState, useEffect, useCallback } from "react";
@@ -21038,6 +23379,14 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
 
   useEffect(() => {
     fetchVocabulary();
+
+    const handleUpdate = () => {
+      fetchVocabulary();
+    };
+    window.addEventListener("vocabulary-updated", handleUpdate);
+    return () => {
+      window.removeEventListener("vocabulary-updated", handleUpdate);
+    };
   }, [fetchVocabulary]);
 
   // Handle Delete
@@ -21053,6 +23402,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
       });
       if (response.ok) {
         setWords(prev => prev.filter(w => w.original !== originalWord));
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } else {
         alert("Błąd podczas usuwania słówka.");
       }
@@ -21157,7 +23507,8 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         },
         body: JSON.stringify({
           recipient_email: recipientEmail,
-          notebook_words: words.map(w => ({ original: w.original, translated: w.translated }))
+          notebook_words: words.map(w => ({ original: w.original, translated: w.translated })),
+          frontend_url: window.location.origin
         }),
       });
 
@@ -21244,7 +23595,6 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
     <div className="vocabulary-dashboard">
       <div className="vocab-header-panel">
         <div className="vocab-title-block">
-          <h1>Słownik i Fiszki</h1>
           <p className="vocab-subtitle">Przeglądaj zebrane słownictwo, ćwicz wymowę oraz powtarzaj materiał z fiszkami.</p>
         </div>
 
@@ -21255,7 +23605,11 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
             onClick={() => setShowFlashcards(true)}
             disabled={totalCount === 0}
           >
-            <span className="btn-icon">⚡</span>
+            <span className="btn-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            </span>
             <span>Uruchom Fiszki</span>
           </button>
           
@@ -21264,7 +23618,12 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
             onClick={() => setShowEmailModal(true)}
             disabled={totalCount === 0}
           >
-            <span className="btn-icon">✉️</span>
+            <span className="btn-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+            </span>
             <span>Eksportuj na E-mail</span>
           </button>
         </div>
@@ -21277,7 +23636,12 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
           onClick={() => setTimeFilter("all")}
           title="Kliknij, aby pokazać wszystkie zwroty"
         >
-          <div className="stat-icon">📚</div>
+          <div className="stat-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+          </div>
           <div className="stat-content">
             <span className="stat-value">{totalCount}</span>
             <span className="stat-label">Wszystkie zwroty</span>
@@ -21292,7 +23656,14 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
           onClick={() => setTimeFilter(prev => prev === "today" ? "all" : "today")}
           title="Kliknij, aby filtrować słówka dodane dzisiaj"
         >
-          <div className="stat-icon">📅</div>
+          <div className="stat-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+          </div>
           <div className="stat-content">
             <span className="stat-value">{todayCount}</span>
             <span className="stat-label">Dodane dzisiaj</span>
@@ -21303,7 +23674,15 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         </div>
 
         <div className="vocab-stat-card glass-panel animate-fade-in delay-2">
-          <div className="stat-icon">🏆</div>
+          <div className="stat-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+              <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+              <path d="M4 22h16" />
+              <path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34" />
+              <path d="M12 2a6 6 0 0 1 6 6v3c0 3.3-2.7 6-6 6s-6-2.7-6-6V8c0-3.3 2.7-6 6-6z" />
+            </svg>
+          </div>
           <div className="stat-content">
             <span className="stat-value">
               {totalCount >= 20 ? "Złoty" : totalCount >= 10 ? "Srebrny" : "Brązowy"}
@@ -21551,10 +23930,9 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         />
       )}
 
-      {/* 4. Export Email Modal */}
       {showEmailModal && (
-        <div className="vocab-modal-overlay">
-          <form className="vocab-modal-card glass-panel" onSubmit={handleSendEmail}>
+        <div className="modal-overlay">
+          <form className="modal-content" onSubmit={handleSendEmail}>
             <h3>Eksportuj słownik na e-mail</h3>
             <p className="modal-description">Wprowadź swój adres e-mail. Wyślemy listę Twoich zapisanych słów wraz z tłumaczeniami.</p>
             
@@ -21563,26 +23941,30 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
               placeholder="Twój adres email..." 
               value={recipientEmail} 
               onChange={e => setRecipientEmail(e.target.value)}
-              className="premium-modal-input"
+              className="premium-input"
               required
               disabled={emailStatus === "sending"}
             />
 
-            {emailStatus === "sending" && <div className="email-status-text loading">Trwa wysyłanie...</div>}
-            {emailStatus === "success" && <div className="email-status-text success">✓ Słówka zostały wysłane!</div>}
-            {emailStatus === "error" && <div className="email-status-text error">✕ Wystąpił błąd. Spróbuj ponownie.</div>}
+            {emailStatus === "success" && <div className="email-status-text success" style={{ marginBottom: "1rem" }}>✓ Słówka zostały wysłane!</div>}
+            {emailStatus === "error" && <div className="email-status-text error" style={{ marginBottom: "1rem" }}>✕ Wystąpił błąd. Spróbuj ponownie.</div>}
 
             <div className="modal-actions">
               <button 
                 type="submit" 
-                className="action-premium-btn" 
-                disabled={emailStatus === "sending"}
+                className="btn-primary" 
+                disabled={emailStatus === "sending" || !recipientEmail}
               >
-                Wyślij
+                {emailStatus === "sending" ? (
+                  <>
+                    <span className="spinner-inline"></span>
+                    Wysyłanie...
+                  </>
+                ) : "Wyślij"}
               </button>
               <button 
                 type="button" 
-                className="action-premium-btn secondary-btn"
+                className="btn-secondary"
                 onClick={() => {
                   setShowEmailModal(false);
                   setEmailStatus("");
@@ -21605,7 +23987,7 @@ export default VocabularyView;
 
 ---
 
-## 47. Plik: `frontend\src\components\Workspace.css`
+## 49. Plik: `frontend\src\components\Workspace.css`
 
 ```css
 .workspace-layout {
@@ -21736,7 +24118,7 @@ export default VocabularyView;
 .header-action-text-btn.mastery-btn {
   background: var(--accent);
   border-color: var(--accent);
-  color: #ffffff;
+  color: var(--gray-900);
   font-weight: 600;
   padding: 0 1.125rem;
   height: 36px;
@@ -21751,7 +24133,7 @@ export default VocabularyView;
 .header-action-text-btn.mastery-btn:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
-  color: #ffffff;
+  color: var(--gray-900);
   transform: none;
 }
 
@@ -21881,39 +24263,118 @@ export default VocabularyView;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(17, 24, 39, 0.4);
+  background: rgba(0, 0, 0, 0.32);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 5000;
+  animation: modal-fade-in 0.2s ease-out;
 }
 
 .modal-content {
-  background: white;
-  padding: 3rem;
+  background: var(--surface);
+  padding: 2.5rem;
   border-radius: var(--radius-xl);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-premium);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-xl);
   max-width: 450px;
   width: 90%;
   text-align: center;
+  animation: modal-zoom-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .modal-content h3 {
-  font-size: 1.5rem;
-  font-weight: 800;
+  font-size: var(--text-headline-sm);
+  font-weight: 700;
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+  color: var(--gray-900);
+  letter-spacing: var(--ls-headline);
+}
+
+.modal-content p {
+  color: var(--gray-500);
+  font-size: var(--text-body-md);
   margin-bottom: 1.5rem;
+  line-height: var(--lh-body);
 }
 
 .premium-input {
   width: 100%;
-  padding: 1rem;
+  padding: 0.75rem 1rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: var(--slate-50);
+  background: var(--gray-50);
   font-family: var(--font-main);
-  margin-bottom: 2rem;
+  font-size: var(--text-body-md);
+  color: var(--gray-900);
+  margin-bottom: 1.5rem;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.premium-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.modal-actions button {
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-size: var(--text-label-lg);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-actions .btn-primary {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--gray-900);
+}
+
+.modal-actions .btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.modal-actions .btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--gray-500);
+}
+
+.modal-actions .btn-secondary:hover:not(:disabled) {
+  background: var(--gray-100);
+  color: var(--gray-700);
+}
+
+.modal-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-zoom-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 
 /* Context Menu */
@@ -21995,12 +24456,13 @@ export default VocabularyView;
 
 .context-menu button.ctx-practice-btn {
   flex: 0 0 100%;
-  background-color: rgba(124, 58, 237, 0.1);
-  color: var(--primary-600, #7C3AED);
+  background-color: var(--accent-light);
+  color: var(--gray-700);
+  border: 1px solid rgba(251, 188, 4, 0.25);
 }
 
 .context-menu button.ctx-practice-btn:hover {
-  background-color: rgba(124, 58, 237, 0.2);
+  background-color: var(--accent-mid);
 }
 
 .context-menu button svg {
@@ -22210,11 +24672,26 @@ export default VocabularyView;
   border-color: var(--slate-400);
 }
 
+.spinner-inline {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin-btn 0.8s linear infinite;
+  margin-right: 8px;
+  display: inline-block;
+}
+
+@keyframes spin-btn {
+  to { transform: rotate(360deg); }
+}
+
 ```
 
 ---
 
-## 48. Plik: `frontend\src\components\Workspace.js`
+## 50. Plik: `frontend\src\components\Workspace.js`
 
 ```javascript
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -22231,18 +24708,94 @@ import SessionSummaryModal from "./Notebook/SessionSummaryModal";
 import PronunciationPracticeModal from "./Notebook/PronunciationPracticeModal";
 
 const getTopicIcon = (topicName) => {
-  if (!topicName) return "✨";
+  const size = 16;
+  const strokeWidth = 2.5;
+  const style = { display: 'inline-block', verticalAlign: 'middle' };
+  
+  if (!topicName) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+      </svg>
+    );
+  }
+  
   const t = topicName.toLowerCase();
-  if (t.includes("business")) return "💼";
-  if (t.includes("discovery")) return "🚀";
-  if (t.includes("ai") || t.includes("tech")) return "🤖";
-  if (t.includes("nature") || t.includes("environment")) return "🌿";
-  if (t.includes("history") || t.includes("past")) return "🏛️";
-  if (t.includes("science")) return "🔬";
-  if (t.includes("travel")) return "✈️";
-  if (t.includes("culture") || t.includes("art")) return "🎨";
-  if (t.includes("health") || t.includes("sport")) return "💪";
-  return "✨";
+  
+  if (t.includes("business")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      </svg>
+    );
+  }
+  if (t.includes("discovery") || t.includes("future")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <polygon points="5 3 19 12 5 21 5 3" />
+      </svg>
+    );
+  }
+  if (t.includes("ai") || t.includes("tech") || t.includes("technology") || t.includes("robot")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <rect x="3" y="11" width="18" height="10" rx="2" />
+        <circle cx="12" cy="5" r="2" />
+        <path d="M12 7v4M8 15h.01M16 15h.01" />
+      </svg>
+    );
+  }
+  if (t.includes("nature") || t.includes("environment")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M2 22c1.25-6.75 6.75-12.25 13.5-13.5M22 2c-1.25 6.75-6.75 12.25-13.5 13.5M9 15c0-4.5 3.5-8 8-8M15 9c0 4.5-3.5 8-8 8" />
+      </svg>
+    );
+  }
+  if (t.includes("history") || t.includes("past")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M4 18h16M10 9v9M14 9v9M18 9v9M6 9v9M3 9h18M12 2L3 9h18z" />
+      </svg>
+    );
+  }
+  if (t.includes("science")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M6 3h12M12 3v14M9 12h6M5 21h14M8 12a4 4 0 0 0-4 4v5h16v-5a4 4 0 0 0-4-4" />
+      </svg>
+    );
+  }
+  if (t.includes("travel") || t.includes("adventure")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+      </svg>
+    );
+  }
+  if (t.includes("culture") || t.includes("art") || t.includes("music")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.35857 19.5 6.00857 19 6.50857 18.5C7.00857 18 7.50857 17.5 8.50857 17.5C9.50857 17.5 9.50857 19 9.50857 20C9.50857 21 11.0086 22 12 22Z" />
+        <circle cx="7.5" cy="10.5" r="1.5" />
+        <circle cx="11.5" cy="7.5" r="1.5" />
+        <circle cx="16.5" cy="9.5" r="1.5" />
+      </svg>
+    );
+  }
+  if (t.includes("health") || t.includes("sport")) {
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
 };
 
 const GENERATION_PHASES = [
@@ -22294,6 +24847,7 @@ function Workspace({
   const [showFlashcards, setShowFlashcards] = useState(false);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState("");
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [explanationWord, setExplanationWord] = useState(null);
   const [showPracticeModal, setShowPracticeModal] = useState(false);
   const [practiceTargetText, setPracticeTargetText] = useState("");
@@ -22418,6 +24972,16 @@ function Workspace({
 
   useEffect(() => {
     loadVocabulary();
+  }, [loadVocabulary]);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      loadVocabulary();
+    };
+    window.addEventListener("vocabulary-updated", handleUpdate);
+    return () => {
+      window.removeEventListener("vocabulary-updated", handleUpdate);
+    };
   }, [loadVocabulary]);
 
   // Effect to load story parts when currentStoryId changes
@@ -23174,6 +25738,7 @@ function Workspace({
           headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
           body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
         });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } catch (err) {
         console.error("Błąd zapisywania słówka:", err);
       }
@@ -23310,6 +25875,7 @@ function Workspace({
           },
           body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
         });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } catch (err) {
         console.error("Błąd podczas zapisywania słówka:", err);
       }
@@ -23385,6 +25951,7 @@ function Workspace({
           },
           body: JSON.stringify({ original: textToTranslate, translated: data.translation, story_id: currentStoryId })
         });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } else {
         setNotebookWords(prev =>
           prev.map(item =>
@@ -23471,6 +26038,7 @@ function Workspace({
         method: "DELETE",
         headers: { "X-Session-Token": user.token }
       });
+      window.dispatchEvent(new CustomEvent("vocabulary-updated"));
     } catch (err) {
       console.error("Błąd usuwania słówka z bazy:", err);
     }
@@ -23479,6 +26047,7 @@ function Workspace({
   // Usunięto handleDeleteStory, ponieważ historia jest teraz zarządzana w dedykowanej zakładce.
 
   const handleSendEmail = async () => {
+    setIsSendingEmail(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/send-notebook-email`, {
         method: "POST",
@@ -23498,6 +26067,8 @@ function Workspace({
     } catch (err) {
       console.error("Błąd email:", err);
       alert("Błąd połączenia z serwerem przy wysyłaniu e-maila.");
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -23592,6 +26163,7 @@ function Workspace({
         },
         body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
       });
+      window.dispatchEvent(new CustomEvent("vocabulary-updated"));
     } catch (err) {
       console.error("Błąd podczas zapisywania słówka z podsumowania:", err);
     }
@@ -23694,11 +26266,13 @@ function Workspace({
             <h3>Translation</h3>
             <p><strong>{translationContent.original}</strong></p>
             <p>{translationContent.translated}</p>
-            <button onClick={handleSaveToNotebook} className="btn-primary">Save to Notebook</button>
-            <button onClick={() => {
-              setShowTranslationModal(false);
-              resumeAudioAfterTooltip();
-            }} className="btn-secondary">Close</button>
+            <div className="modal-actions">
+              <button onClick={handleSaveToNotebook} className="btn-primary">Save to Notebook</button>
+              <button onClick={() => {
+                setShowTranslationModal(false);
+                resumeAudioAfterTooltip();
+              }} className="btn-secondary">Close</button>
+            </div>
           </div>
         </div>
       )}
@@ -23713,25 +26287,45 @@ function Workspace({
               value={recipientEmail} 
               onChange={e => setRecipientEmail(e.target.value)}
               className="premium-input"
+              disabled={isSendingEmail}
             />
-            <button onClick={handleSendEmail} className="btn-primary">Send Now</button>
-            <button onClick={() => setShowSendEmailModal(false)} className="btn-secondary">Cancel</button>
+            <div className="modal-actions">
+              <button 
+                onClick={handleSendEmail} 
+                className="btn-primary"
+                disabled={isSendingEmail || !recipientEmail}
+              >
+                {isSendingEmail ? (
+                  <>
+                    <span className="spinner-inline"></span>
+                    Sending...
+                  </>
+                ) : "Send Now"}
+              </button>
+              <button 
+                onClick={() => setShowSendEmailModal(false)} 
+                className="btn-secondary"
+                disabled={isSendingEmail}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       <main className="workspace-main">
-        <header className="workspace-header">
-          <div className="header-left-group">
-            <button onClick={handleBackButtonClick} className="back-btn-inline" title={generatedText ? "Wróć do filtrów" : "Wróć do pulpitu"}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="19" y1="12" x2="5" y2="12"></line>
-                <polyline points="12 19 5 12 12 5"></polyline>
-              </svg>
-            </button>
-            <h1>{currentStoryTitle || "English Buddy Workspace"}</h1>
-            
-            {generatedText && (
+        {generatedText && (
+          <header className="workspace-header">
+            <div className="header-left-group">
+              <button onClick={handleBackButtonClick} className="back-btn-inline" title="Wróć do filtrów">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="19" y1="12" x2="5" y2="12"></line>
+                  <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+              </button>
+              <h1>{currentStoryTitle || "English Buddy Workspace"}</h1>
+              
               <div className="header-actions-group">
                 <button 
                   onClick={() => {
@@ -23766,9 +26360,9 @@ function Workspace({
                   </svg>
                 </button>
               </div>
-            )}
-          </div>
-        </header>
+            </div>
+          </header>
+        )}
 
         {storyParts.length > 0 && (
           <div className="chapter-tabs">
@@ -24079,7 +26673,7 @@ export default Workspace;
 
 ---
 
-## 49. Plik: `frontend\src\config.js`
+## 51. Plik: `frontend\src\config.js`
 
 ```javascript
 // Konfiguracja adresu URL API backendu.
@@ -24090,11 +26684,11 @@ export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5
 
 ---
 
-## 50. Plik: `frontend\src\index.css`
+## 52. Plik: `frontend\src\index.css`
 
 ```css
-/* Inter — closest publicly available font to SF Pro and Perplexity's UI */
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap');
+/* Outfit and Roboto — Google Keep Style Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap');
 @import './DesignTokens.css';
 
 body {
@@ -24167,11 +26761,132 @@ button, input, select, textarea {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-premium);
 }
+
+/* Global Premium Modals */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+  animation: modal-fade-in 0.2s ease-out;
+}
+
+.modal-content {
+  background: var(--surface);
+  padding: 2.5rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-xl);
+  max-width: 450px;
+  width: 90%;
+  text-align: center;
+  animation: modal-zoom-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-content h3 {
+  font-size: var(--text-headline-sm);
+  font-weight: 700;
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+  color: var(--gray-900);
+  letter-spacing: var(--ls-headline);
+}
+
+.modal-content p {
+  color: var(--gray-500);
+  font-size: var(--text-body-md);
+  margin-bottom: 1.5rem;
+  line-height: var(--lh-body);
+}
+
+.premium-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--gray-50);
+  font-family: var(--font-main);
+  font-size: var(--text-body-md);
+  color: var(--gray-900);
+  margin-bottom: 1.5rem;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.premium-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.modal-actions button {
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-size: var(--text-label-lg);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-actions .btn-primary {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--gray-900);
+}
+
+.modal-actions .btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.modal-actions .btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--gray-500);
+}
+
+.modal-actions .btn-secondary:hover:not(:disabled) {
+  background: var(--gray-100);
+  color: var(--gray-700);
+}
+
+.modal-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-zoom-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
 ```
 
 ---
 
-## 51. Plik: `frontend\src\index.js`
+## 53. Plik: `frontend\src\index.js`
 
 ```javascript
 import React from 'react';
@@ -24189,7 +26904,7 @@ root.render(
 
 ---
 
-## 52. Plik: `mobile\app.json`
+## 54. Plik: `mobile\app.json`
 
 ```json
 {
@@ -24241,7 +26956,7 @@ root.render(
 
 ---
 
-## 53. Plik: `mobile\assets\expo.icon\icon.json`
+## 55. Plik: `mobile\assets\expo.icon\icon.json`
 
 ```json
 {
@@ -24288,7 +27003,7 @@ root.render(
 
 ---
 
-## 54. Plik: `mobile\expo-env.d.ts`
+## 56. Plik: `mobile\expo-env.d.ts`
 
 ```typescript
 /// <reference types="expo/types" />
@@ -24298,7 +27013,7 @@ root.render(
 
 ---
 
-## 55. Plik: `mobile\package.json`
+## 57. Plik: `mobile\package.json`
 
 ```json
 {
@@ -24349,7 +27064,7 @@ root.render(
 
 ---
 
-## 56. Plik: `mobile\scripts\reset-project.js`
+## 58. Plik: `mobile\scripts\reset-project.js`
 
 ```javascript
 #!/usr/bin/env node
@@ -24470,7 +27185,7 @@ rl.question(
 
 ---
 
-## 57. Plik: `mobile\src\app\_layout.tsx`
+## 59. Plik: `mobile\src\app\_layout.tsx`
 
 ```typescript
 import { Slot } from 'expo-router';
@@ -24496,7 +27211,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 58. Plik: `mobile\src\app\explore.tsx`
+## 60. Plik: `mobile\src\app\explore.tsx`
 
 ```typescript
 import React from 'react';
@@ -24513,7 +27228,7 @@ export default function ExploreScreen() {
 
 ---
 
-## 59. Plik: `mobile\src\app\index.tsx`
+## 61. Plik: `mobile\src\app\index.tsx`
 
 ```typescript
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -24532,6 +27247,7 @@ import {
   Modal,
   Image,
   Platform,
+  Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
@@ -24644,7 +27360,7 @@ const getInitialBackendUrl = () => {
       return 'https://ai-english-buddy-backend.onrender.com';
     }
   }
-  return 'https://full-walls-think.loca.lt'; // Tunel LocalTunnel
+  return 'https://8b744eb63c9a79.lhr.life'; // Tunel localhost.run
 };
 
 export default function HomeScreen() {
@@ -24657,8 +27373,87 @@ export default function HomeScreen() {
   const [autoSendEnabled, setAutoSendEnabled] = useState<boolean>(true);
 
   const handleSelectAiMode = async (mode: 'free' | 'openai_full' | 'hybrid') => {
-    setAiMode(mode);
-    await AsyncStorage.setItem('buddy_ai_mode', mode);
+    if (mode === 'free') {
+      setAiMode(mode);
+      await AsyncStorage.setItem('buddy_ai_mode', mode);
+      return;
+    }
+
+    try {
+      const response = await customFetch(`${backendUrl}/api/user-permissions`, {
+        headers: {
+          'X-Session-Token': user?.token || '',
+        }
+      });
+      if (response.ok) {
+        const perms = await response.json();
+        const hasAccess = mode === 'hybrid' ? perms.access_hybrid : perms.access_openai_full;
+        if (hasAccess) {
+          setAiMode(mode);
+          await AsyncStorage.setItem('buddy_ai_mode', mode);
+          return;
+        }
+      }
+    } catch (err) {
+      console.log("Error checking permissions:", err);
+    }
+
+    const requestAccessAction = async () => {
+      try {
+        const res = await customFetch(`${backendUrl}/api/request-mode-access`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Session-Token': user?.token || '',
+          },
+          body: JSON.stringify({ mode })
+        });
+        if (res.ok) {
+          if (Platform.OS === 'web') {
+            window.alert("Prośba wysłana. Gdy administrator ją zatwierdzi, będziesz mógł wybrać ten tryb.");
+          } else {
+            Alert.alert("Prośba wysłana", "Wysłałem prośbę o dostęp. Gdy ją zatwierdzę, będziesz mógł wybrać ten tryb.");
+          }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          const errMsg = errData.error || "Nie udało się wysłać prośby.";
+          if (Platform.OS === 'web') {
+            window.alert(errMsg);
+          } else {
+            Alert.alert("Błąd", errMsg);
+          }
+        }
+      } catch (err) {
+        const errMsg = "Błąd połączenia z serwerem.";
+        if (Platform.OS === 'web') {
+          window.alert(errMsg);
+        } else {
+          Alert.alert("Błąd", errMsg);
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmSend = window.confirm("Aby korzystać z wersji Hybrid oraz Full, należy uzyskać moją zgodę. Czy chcesz wysłać prośbę o dostęp? Otrzymam powiadomienie na e-mail i będę mógł je zatwierdzić.");
+      if (confirmSend) {
+        requestAccessAction();
+      }
+    } else {
+      Alert.alert(
+        "Wymagana zgoda",
+        "Aby korzystać z wersji Hybrid oraz Full, należy uzyskać moją zgodę. Czy chcesz wysłać prośbę o dostęp? Otrzymam powiadomienie na e-mail i będę mógł je zatwierdzić.",
+        [
+          {
+            text: "Wyślij prośbę o dostęp",
+            onPress: requestAccessAction
+          },
+          {
+            text: "Anuluj",
+            style: "cancel"
+          }
+        ]
+      );
+    }
   };
 
   const handleToggleAutoSend = async (val: boolean) => {
@@ -24690,12 +27485,20 @@ export default function HomeScreen() {
   const [selectedTopicChip, setSelectedTopicChip] = useState<string | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<'simple' | 'medium' | 'advanced'>('medium');
   const [selectedLength, setSelectedLength] = useState<'short' | 'medium' | 'long'>('medium');
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'ai' | 'paste'>('ai');
+  const [pastedText, setPastedText] = useState('');
+  const [pastedTextTitle, setPastedTextTitle] = useState('');
 
   // Reader States
   const [sentences, setSentences] = useState<string[]>([]);
+  const [breakdownSentences, setBreakdownSentences] = useState<string[]>([]);
   const [speakingSentenceIndex, setSpeakingSentenceIndex] = useState<number | null>(null);
+  const [selectedSentenceIndex, setSelectedSentenceIndex] = useState<number | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [readMode, setReadMode] = useState<'single' | 'all'>('single');
+  const [readMode, setReadMode] = useState<'single' | 'all' | 'breakdown'>('single');
+  const [breakdownTranslations, setBreakdownTranslations] = useState<{[key: number]: string}>({});
+  const [loadingBreakdown, setLoadingBreakdown] = useState(false);
+  const [breakdownSpeechPhase, setBreakdownSpeechPhase] = useState<'polish' | 'english'>('polish');
   const speakingRef = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
   const prefetchCache = useRef<{[key: number]: string}>({});
@@ -24741,6 +27544,9 @@ export default function HomeScreen() {
   const playerRef = useRef<any>(null);
   const timerRef = useRef<any>(null);
   const transcriptScrollRef = useRef<ScrollView>(null);
+  const latestWordRef = useRef("");
+  const latestSegmentIndexRef = useRef(-1);
+  const latestReadingSentenceIndexRef = useRef(-1);
 
   // Voice Chatbot States
   const [chatMessages, setChatMessages] = useState<any[]>([]);
@@ -25674,10 +28480,6 @@ export default function HomeScreen() {
       try {
         const storedUser = await AsyncStorage.getItem('buddy_user');
         let storedIP = await AsyncStorage.getItem('buddy_backend_url');
-        if (storedIP && storedIP.startsWith('http://192.168.')) {
-          storedIP = 'https://full-walls-think.loca.lt';
-          await AsyncStorage.setItem('buddy_backend_url', storedIP);
-        }
 
         // Jeśli aplikacja działa w przeglądarce na produkcji, a zapisane IP jest adresem lokalnym, wymuś zmianę na Render
         if (typeof window !== 'undefined' && window.location) {
@@ -25737,6 +28539,19 @@ export default function HomeScreen() {
       }
     })();
   }, []);
+
+  // Auto-load translations for Breakdown mode when breakdownSentences or mode changes
+  useEffect(() => {
+    if (readMode === 'breakdown' && breakdownSentences.length > 0) {
+      loadBreakdownTranslations(breakdownSentences, true);
+    }
+  }, [breakdownSentences]);
+
+  useEffect(() => {
+    if (readMode === 'breakdown' && breakdownSentences.length > 0) {
+      loadBreakdownTranslations(breakdownSentences, false);
+    }
+  }, [readMode]);
 
   // Fetch topics
   const fetchTopics = useCallback(async () => {
@@ -25830,29 +28645,38 @@ export default function HomeScreen() {
     };
   }, [videoIsPlaying, currentView]);
 
-  // Synchronize active segment index based on currentTime + 0.4s early offset
+  // Synchronize active segment index based on currentTime
   useEffect(() => {
     if (currentView !== 'media') return;
-    const checkTime = videoCurrentTime + 0.4;
-    const idx = currentVideo.transcript.findIndex(
-      (seg: any) => checkTime >= seg.start && checkTime <= seg.end
-    );
+    const checkTime = videoIsPlaying ? videoCurrentTime + 0.4 : videoCurrentTime;
+    
+    // Search from the end to prefer newer overlapping segments
+    let idx = -1;
+    for (let i = currentVideo.transcript.length - 1; i >= 0; i--) {
+      const seg = currentVideo.transcript[i];
+      if (checkTime >= seg.start && checkTime <= seg.end) {
+        idx = i;
+        break;
+      }
+    }
+
     if (idx !== -1) {
       if (idx !== videoActiveSegmentIdx) {
         setVideoActiveSegmentIdx(idx);
-        // Scroll active card into view
-        if (transcriptScrollRef.current) {
+        // Scroll active card into view (only when playing)
+        if (videoIsPlaying && transcriptScrollRef.current) {
           transcriptScrollRef.current.scrollTo({ y: idx * 95, animated: true });
         }
       }
     } else {
-      // Clear active segment highlight if we are outside the segment boundary (with a tight 0.2s tolerance using checkTime)
+      // Clear active segment highlight if we are outside the segment boundary
       const lastSeg = currentVideo.transcript[videoActiveSegmentIdx];
-      if (lastSeg && (checkTime < lastSeg.start - 0.2 || checkTime > lastSeg.end + 0.2)) {
+      const tolerance = videoIsPlaying ? 0.2 : 0.0;
+      if (lastSeg && (checkTime < lastSeg.start - tolerance || checkTime > lastSeg.end + tolerance)) {
         setVideoActiveSegmentIdx(-1);
       }
     }
-  }, [videoCurrentTime, currentVideo, videoActiveSegmentIdx, currentView]);
+  }, [videoCurrentTime, currentVideo, videoActiveSegmentIdx, currentView, videoIsPlaying]);
 
   // Auto-translate active segment when video is paused
   useEffect(() => {
@@ -25860,27 +28684,45 @@ export default function HomeScreen() {
     if (!videoIsPlaying && videoActiveSegmentIdx !== -1) {
       const activeSeg = currentVideo.transcript[videoActiveSegmentIdx];
       if (activeSeg) {
+        const index = videoActiveSegmentIdx;
+        
+        // Skip if we already have the translation or are translating the same segment
+        if (latestSegmentIndexRef.current === index && (videoIsTranslatingSegment || videoSegmentTranslation)) {
+          return;
+        }
+        
+        latestSegmentIndexRef.current = index;
         const text = activeSeg.text;
         setVideoIsTranslatingSegment(true);
         setVideoIsSegmentSaved(false);
+        setVideoSegmentTranslation(''); // Clear previous to show loading state
+        
         customFetch(`${backendUrl}/api/translate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text })
         })
-          .then(res => res.json())
+          .then(res => {
+            if (latestSegmentIndexRef.current !== index) return null;
+            return res.json();
+          })
           .then(data => {
+            if (!data) return;
+            if (latestSegmentIndexRef.current !== index) return;
             if (data.translation) {
-              setVideoSegmentTranslation(data.translation);
+               setVideoSegmentTranslation(data.translation);
             } else {
-              setVideoSegmentTranslation("(Błąd tłumaczenia)");
+               setVideoSegmentTranslation("(Błąd tłumaczenia)");
             }
           })
           .catch(() => {
+            if (latestSegmentIndexRef.current !== index) return;
             setVideoSegmentTranslation("(Błąd połączenia)");
           })
           .finally(() => {
-            setVideoIsTranslatingSegment(false);
+            if (latestSegmentIndexRef.current === index) {
+              setVideoIsTranslatingSegment(false);
+            }
           });
       }
     } else {
@@ -25974,11 +28816,16 @@ export default function HomeScreen() {
     }
   };
 
-  const handleWordClick = async (word: string, sentenceContext?: string) => {
+  const handleWordClick = async (word: string, sentenceContext?: string, segmentIndex?: number) => {
     setVideoIsPlaying(false); // Pause wideo
     const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "").trim();
     if (!cleanWord) return;
     
+    if (segmentIndex !== undefined && segmentIndex !== -1) {
+      setVideoActiveSegmentIdx(segmentIndex);
+    }
+    
+    latestWordRef.current = cleanWord;
     setVideoSelectedWord(cleanWord);
     setVideoWordTranslation('');
     setVideoIsTranslatingWord(true);
@@ -25990,6 +28837,7 @@ export default function HomeScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: cleanWord, context: sentenceContext })
       });
+      if (latestWordRef.current !== cleanWord) return;
       if (response.ok) {
         const data = await response.json();
         setVideoWordTranslation(data.translation || "(Brak tłumaczenia)");
@@ -25997,9 +28845,12 @@ export default function HomeScreen() {
         setVideoWordTranslation("(Błąd serwera)");
       }
     } catch (e) {
+      if (latestWordRef.current !== cleanWord) return;
       setVideoWordTranslation("(Błąd połączenia)");
     } finally {
-      setVideoIsTranslatingWord(false);
+      if (latestWordRef.current === cleanWord) {
+        setVideoIsTranslatingWord(false);
+      }
     }
   };
 
@@ -26169,8 +29020,14 @@ export default function HomeScreen() {
           .split(/(?<=[.!?])\s+/)
           .filter((s: string) => s.trim().length > 0);
         setSentences(parsedSentences);
+
+        const parsedBreakdownSentences = storyText
+          .split(/(?<=[.!?,;:—–])\s+/)
+          .filter((s: string) => s.trim().length > 0);
+        setBreakdownSentences(parsedBreakdownSentences);
         setStoryPrompt('');
         setSelectedTopicChip(null);
+        setBreakdownTranslations({});
         // Reset chat state
         setChatMessages([]);
         chatSessionStarted.current = false;
@@ -26190,6 +29047,44 @@ export default function HomeScreen() {
     }
   };
 
+  const handleLoadPastedText = () => {
+    if (!pastedText.trim()) {
+      Alert.alert('Info', 'Wklej tekst do nauki');
+      return;
+    }
+    const title = pastedTextTitle.trim() || 'Wklejony tekst';
+    setGeneratedText(pastedText);
+    setCurrentStoryTitle(title);
+    setCurrentStoryId(null);
+    
+    // Clean sentences
+    const parsedSentences = pastedText
+      .split(/(?<=[.!?])\s+/)
+      .filter((s: string) => s.trim().length > 0);
+    setSentences(parsedSentences);
+
+    const parsedBreakdownSentences = pastedText
+      .split(/(?<=[.!?,;:—–])\s+/)
+      .filter((s: string) => s.trim().length > 0);
+    setBreakdownSentences(parsedBreakdownSentences);
+    
+    // Clear inputs
+    setPastedText('');
+    setPastedTextTitle('');
+    
+    // Reset chat state
+    setBreakdownTranslations({});
+    setChatMessages([]);
+    chatSessionStarted.current = false;
+    paragraphHeightRef.current = 0;
+    setCurrentView('workspace');
+    
+    // Scroll to top
+    setTimeout(() => {
+      workspaceScrollRef.current?.scrollTo({ y: 0, animated: false });
+    }, 100);
+  };
+
   // Select Saved Story
   const handleSelectStory = (story: any) => {
     setGeneratedText(story.text);
@@ -26199,6 +29094,12 @@ export default function HomeScreen() {
       .split(/(?<=[.!?])\s+/)
       .filter((s: string) => s.trim().length > 0);
     setSentences(parsedSentences);
+
+    const parsedBreakdownSentences = story.text
+      .split(/(?<=[.!?,;:—–])\s+/)
+      .filter((s: string) => s.trim().length > 0);
+    setBreakdownSentences(parsedBreakdownSentences);
+    setBreakdownTranslations({});
     // Reset chat state
     setChatMessages([]);
     chatSessionStarted.current = false;
@@ -26208,6 +29109,43 @@ export default function HomeScreen() {
     setTimeout(() => {
       workspaceScrollRef.current?.scrollTo({ y: 0, animated: false });
     }, 100);
+  };
+
+  const loadBreakdownTranslations = async (sentenceList: string[], force = false) => {
+    const currentTranslations = force ? {} : breakdownTranslations;
+    const missingIndices = sentenceList.map((_, i) => i).filter(i => !currentTranslations[i]);
+    if (missingIndices.length === 0) return;
+
+    setLoadingBreakdown(true);
+    try {
+      const promises = missingIndices.map(async (idx) => {
+        try {
+          const response = await customFetch(`${backendUrl}/api/translate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: sentenceList[idx] }),
+          });
+          if (response.ok) {
+            const data = await response.json();
+            return { index: idx, translation: data.translation };
+          }
+        } catch (e) {
+          console.error(`Error translating sentence ${idx}`, e);
+        }
+        return { index: idx, translation: 'Błąd tłumaczenia' };
+      });
+
+      const results = await Promise.all(promises);
+      const newTranslations = { ...currentTranslations };
+      results.forEach(res => {
+        newTranslations[res.index] = res.translation;
+      });
+      setBreakdownTranslations(newTranslations);
+    } catch (err) {
+      Alert.alert('Błąd', 'Nie udało się pobrać tłumaczeń dla trybu Breakdown.');
+    } finally {
+      setLoadingBreakdown(false);
+    }
   };
 
   // Auto-scroll to active sentence using text proportion (since inline Text onLayout is unreliable)
@@ -26235,36 +29173,155 @@ export default function HomeScreen() {
     }
   };
 
+  const fetchAudioUri = async (text: string, voice: string): Promise<string> => {
+    const response = await customFetch(`${backendUrl}/api/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice }),
+    });
+    const responseText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      throw new Error(`Serwer zwrócił nie-JSON. Status: ${response.status}. Odpowiedź: ${responseText.substring(0, 120)}`);
+    }
+    if (!response.ok || !data.audio_base64) {
+      throw new Error(data?.error || 'Failed to fetch audio');
+    }
+    return `data:audio/mpeg;base64,${data.audio_base64}`;
+  };
+
+  const autoPlayNextPolish = async (nextIdx: number) => {
+    try {
+      speakingRef.current = true;
+      setSpeakingSentenceIndex(nextIdx);
+      setIsSpeaking(true);
+      scrollToSentence(nextIdx);
+
+      const polishText = breakdownTranslations[nextIdx];
+      const uriPl = await fetchAudioUri(polishText || breakdownSentences[nextIdx], 'pl-PL-MarekNeural');
+      if (!speakingRef.current) return;
+
+      const { sound: soundPl } = await Audio.Sound.createAsync({ uri: uriPl }, { shouldPlay: true });
+      if (!speakingRef.current) {
+        await soundPl.unloadAsync();
+        return;
+      }
+      soundRef.current = soundPl;
+
+      soundPl.setOnPlaybackStatusUpdate(async (status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          soundPl.unloadAsync();
+          if (soundRef.current === soundPl) {
+            soundRef.current = null;
+          }
+          setSpeakingSentenceIndex(null);
+          setIsSpeaking(false);
+          setBreakdownSpeechPhase('english');
+        }
+      });
+    } catch (e) {
+      console.error(e);
+      setIsSpeaking(false);
+      setSpeakingSentenceIndex(null);
+    }
+  };
+
   // TTS — single sentence
   const speakSentence = async (index: number) => {
     try {
       await stopSpeech();
+      speakingRef.current = true;
       setSpeakingSentenceIndex(index);
+
+      // If clicking a different sentence, reset the breakdown phase to Polish
+      let activePhase = breakdownSpeechPhase;
+      if (selectedSentenceIndex !== index) {
+        activePhase = 'polish';
+        setBreakdownSpeechPhase('polish');
+      }
+      setSelectedSentenceIndex(index);
       setIsSpeaking(true);
       scrollToSentence(index);
 
-      const response = await customFetch(`${backendUrl}/api/tts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: sentences[index],
-          voice: selectedVoice || 'en-US-BrianNeural',
-        }),
-      });
+      if (readMode === 'breakdown') {
+        const polishText = breakdownTranslations[index];
+        if (polishText && polishText !== 'Tłumaczenie...' && polishText !== 'Błąd tłumaczenia') {
+          if (activePhase === 'polish') {
+            // 1. Play Polish translation using pl-PL-MarekNeural (Polish male voice)
+            const uriPl = await fetchAudioUri(polishText, 'pl-PL-MarekNeural');
+            if (!speakingRef.current) return;
 
-      const data = await response.json();
-      if (!response.ok || !data.audio_base64) {
-        throw new Error(data.error || 'Nie udało się pobrać dźwięku z serwera');
+            const { sound: soundPl } = await Audio.Sound.createAsync({ uri: uriPl }, { shouldPlay: true });
+            if (!speakingRef.current) {
+              await soundPl.unloadAsync();
+              return;
+            }
+            soundRef.current = soundPl;
+            
+            soundPl.setOnPlaybackStatusUpdate(async (status) => {
+              if (status.isLoaded && status.didJustFinish) {
+                soundPl.unloadAsync();
+                if (soundRef.current === soundPl) {
+                  soundRef.current = null;
+                }
+                setSpeakingSentenceIndex(null);
+                setIsSpeaking(false);
+                setBreakdownSpeechPhase('english'); // Set next phase to English
+              }
+            });
+            return;
+          } else {
+            // 2. Play English original
+            const uriEn = await fetchAudioUri(breakdownSentences[index], selectedVoice || 'en-US-BrianNeural');
+            if (!speakingRef.current) return;
+
+            const { sound: soundEn } = await Audio.Sound.createAsync({ uri: uriEn }, { shouldPlay: true });
+            if (!speakingRef.current) {
+              await soundEn.unloadAsync();
+              return;
+            }
+            soundRef.current = soundEn;
+            
+            soundEn.setOnPlaybackStatusUpdate(async (status) => {
+              if (status.isLoaded && status.didJustFinish) {
+                soundEn.unloadAsync();
+                if (soundRef.current === soundEn) {
+                  soundRef.current = null;
+                }
+                setSpeakingSentenceIndex(null);
+                setIsSpeaking(false);
+                
+                // PO przeczytaniu angielskiego: przejdź do następnego zdania i odtwórz polskie tłumaczenie automatycznie!
+                const nextIdx = index + 1;
+                if (nextIdx < breakdownSentences.length) {
+                  setSelectedSentenceIndex(nextIdx);
+                  setBreakdownSpeechPhase('polish');
+                  setTimeout(() => {
+                    autoPlayNextPolish(nextIdx);
+                  }, 400);
+                } else {
+                  // Koniec tekstu - zresetuj stan na początek
+                  setSelectedSentenceIndex(0);
+                  setBreakdownSpeechPhase('polish');
+                }
+              }
+            });
+            return;
+          }
+        }
       }
 
-      const uri = `data:audio/mpeg;base64,${data.audio_base64}`;
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: true }
-      );
-      
+      // Default: play English only
+      const uri = await fetchAudioUri(sentences[index], selectedVoice || 'en-US-BrianNeural');
+      if (!speakingRef.current) return;
+
+      const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
+      if (!speakingRef.current) {
+        await sound.unloadAsync();
+        return;
+      }
       soundRef.current = sound;
       
       sound.setOnPlaybackStatusUpdate((status) => {
@@ -26272,7 +29329,9 @@ export default function HomeScreen() {
           setSpeakingSentenceIndex(null);
           setIsSpeaking(false);
           sound.unloadAsync();
-          soundRef.current = null;
+          if (soundRef.current === sound) {
+            soundRef.current = null;
+          }
           // If this was the last sentence, auto-start chat
           if (index === sentences.length - 1 && !chatSessionStarted.current) {
             chatSessionStarted.current = true;
@@ -26326,9 +29385,15 @@ export default function HomeScreen() {
             voice: selectedVoice || 'en-US-BrianNeural',
           }),
         });
-        const data = await response.json();
+        const responseText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (e) {
+          throw new Error(`Serwer zwrócił nie-JSON. Status: ${response.status}. Odpowiedź: ${responseText.substring(0, 120)}`);
+        }
         if (!response.ok || !data.audio_base64) {
-          throw new Error(data.error || 'Failed to fetch audio');
+          throw new Error(data?.error || 'Failed to fetch audio');
         }
         const uri = `data:audio/mpeg;base64,${data.audio_base64}`;
         prefetchCache.current[idx] = uri;
@@ -26337,11 +29402,15 @@ export default function HomeScreen() {
 
       const playNext = async () => {
         if (!speakingRef.current || currentIdx >= sentenceList.length) {
-          // All sentences finished — auto-start chat if not already started
+          // Finished playing whole list
           setIsSpeaking(false);
           setSpeakingSentenceIndex(null);
           speakingRef.current = false;
-          if (!chatSessionStarted.current) {
+          
+          if (readMode === 'breakdown') {
+            // Toggle phase for whole text read
+            setBreakdownSpeechPhase(breakdownSpeechPhase === 'polish' ? 'english' : 'polish');
+          } else if (!chatSessionStarted.current) {
             chatSessionStarted.current = true;
             startChatSession(generatedText);
           }
@@ -26349,25 +29418,53 @@ export default function HomeScreen() {
         }
 
         setSpeakingSentenceIndex(currentIdx);
+        setSelectedSentenceIndex(currentIdx);
         // Auto-scroll to current sentence
         scrollToSentence(currentIdx);
 
         try {
-          // Get audio uri for current sentence
-          const uri = await fetchSentenceBase64(currentIdx);
+          if (readMode === 'breakdown') {
+            if (breakdownSpeechPhase === 'polish') {
+              // Play Polish sentence
+              const polishText = breakdownTranslations[currentIdx];
+              if (polishText && polishText !== 'Tłumaczenie...' && polishText !== 'Błąd tłumaczenia') {
+                const uriPl = await fetchAudioUri(polishText, 'pl-PL-MarekNeural');
+                const { sound: soundPl } = await Audio.Sound.createAsync({ uri: uriPl }, { shouldPlay: true });
+                soundRef.current = soundPl;
+                soundPl.setOnPlaybackStatusUpdate(async (status) => {
+                  if (status.isLoaded && status.didJustFinish) {
+                    soundPl.unloadAsync();
+                    soundRef.current = null;
+                    currentIdx++;
+                    playNext();
+                  }
+                });
+                return;
+              }
+            } else {
+              // Play English sentence
+              const uriEn = await fetchAudioUri(sentenceList[currentIdx], selectedVoice || 'en-US-BrianNeural');
+              const { sound: soundEn } = await Audio.Sound.createAsync({ uri: uriEn }, { shouldPlay: true });
+              soundRef.current = soundEn;
+              soundEn.setOnPlaybackStatusUpdate(async (statusEn) => {
+                if (statusEn.isLoaded && statusEn.didJustFinish) {
+                  soundEn.unloadAsync();
+                  soundRef.current = null;
+                  currentIdx++;
+                  playNext();
+                }
+              });
+              return;
+            }
+          }
 
-          // Start prefetching next sentence in background
+          // Default: play English only
+          const uri = await fetchSentenceBase64(currentIdx);
           if (currentIdx + 1 < sentenceList.length) {
             fetchSentenceBase64(currentIdx + 1).catch(() => {});
           }
-
-          // Play sound
-          const { sound } = await Audio.Sound.createAsync(
-            { uri },
-            { shouldPlay: true }
-          );
+          const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
           soundRef.current = sound;
-
           sound.setOnPlaybackStatusUpdate(async (status) => {
             if (status.isLoaded && status.didJustFinish) {
               sound.unloadAsync();
@@ -26399,8 +29496,10 @@ export default function HomeScreen() {
       return;
     }
     
+    latestReadingSentenceIndexRef.current = index;
     setIsTranslating(true);
     setTranslatedSentenceIdx(index);
+    setSelectedSentenceIndex(index);
     setTranslationText('Tłumaczenie...');
     
     try {
@@ -26409,6 +29508,7 @@ export default function HomeScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: sentences[index] }),
       });
+      if (latestReadingSentenceIndexRef.current !== index) return;
       const data = await response.json();
       if (response.ok && data.translation) {
         setTranslationText(data.translation);
@@ -26416,9 +29516,12 @@ export default function HomeScreen() {
         setTranslationText('Błąd tłumaczenia');
       }
     } catch (err) {
+      if (latestReadingSentenceIndexRef.current !== index) return;
       setTranslationText('Błąd połączenia');
     } finally {
-      setIsTranslating(false);
+      if (latestReadingSentenceIndexRef.current === index) {
+        setIsTranslating(false);
+      }
     }
   };
 
@@ -26529,7 +29632,14 @@ export default function HomeScreen() {
         body: formData,
       });
 
-      const result = await response.json();
+      const responseText = await response.text();
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Serwer zwrócił niepoprawny format (nie-JSON). Status: ${response.status}. Odpowiedź: ${responseText.substring(0, 100)}`);
+      }
+
       if (response.ok && result.bot_response) {
         const botMsg = {
           id: String(Date.now()),
@@ -26538,9 +29648,12 @@ export default function HomeScreen() {
         };
         setChatMessages([botMsg]);
         speakBotText(result.bot_response);
+      } else {
+        throw new Error(result?.error || 'Nieprawidłowa odpowiedź serwera');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error starting chat:', err);
+      Alert.alert('Błąd startu czatu', `Nie udało się rozpocząć rozmowy z AI: ${err?.message || String(err)}`);
     } finally {
       setIsProcessingChat(false);
     }
@@ -26612,7 +29725,14 @@ export default function HomeScreen() {
         body: formData,
       });
 
-      const result = await response.json();
+      const responseText = await response.text();
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Serwer zwrócił niepoprawny format (nie-JSON). Status: ${response.status}. Odpowiedź: ${responseText.substring(0, 100)}`);
+      }
+
       if (response.ok) {
         const userMsg = {
           id: String(Date.now()) + '_user',
@@ -26630,7 +29750,7 @@ export default function HomeScreen() {
         setChatMessages(prev => [...prev, userMsg, botMsg]);
         speakBotText(result.bot_response);
       } else {
-        Alert.alert('Błąd', result.error || 'Nie udało się przetworzyć odpowiedzi.');
+        Alert.alert('Błąd', result?.error || 'Nie udało się przetworzyć odpowiedzi.');
       }
     } catch (err) {
       console.error('Error sending voice chat answer:', err);
@@ -26723,9 +29843,10 @@ export default function HomeScreen() {
           {currentView === 'dashboard' ? (
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ width: 32, alignItems: 'flex-start' }}>
-                <Svg width={28} height={28} viewBox="0 0 100 100" fill="none">
-                  <Path d="M65 30C65 20 55 15 45 15C30 15 30 35 50 45C70 55 70 75 55 85C45 90 35 85 35 75" stroke="#111827" strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Image
+                  source={require('../../assets/images/logo.png')}
+                  style={{ width: 28, height: 28, resizeMode: 'contain' }}
+                />
               </View>
               <Text style={[styles.appTitle, { textAlign: 'center', flex: 1 }]}>Chat Live</Text>
               <View style={{ width: 32 }} />
@@ -26749,29 +29870,43 @@ export default function HomeScreen() {
 
       {/* Przełącznik trybu czytania — tylko w workspace z historią */}
       {currentView === 'workspace' && generatedText ? (
-        <View style={styles.readerToolbar}>
-          <Text style={[styles.readerModeLabel, readMode === 'single' && styles.readerModeLabelActive]}>
-            Zdanie
-          </Text>
-          <Switch
-            value={readMode === 'all'}
-            onValueChange={(val) => {
-              if (val) {
-                setReadMode('all');
-                speakAll(sentences);
-              } else {
-                setReadMode('single');
-                stopSpeech();
-              }
+        <View style={styles.segmentedControlRow}>
+          <TouchableOpacity
+            style={[styles.segmentedBtn, readMode === 'single' ? styles.segmentedBtnActive : null]}
+            onPress={() => {
+              setReadMode('single');
+              stopSpeech();
             }}
-            trackColor={{ false: '#DADCE0', true: '#1A73E8' }}
-            thumbColor="#FFFFFF"
-            ios_backgroundColor="#DADCE0"
-            style={{ marginHorizontal: 8 }}
-          />
-          <Text style={[styles.readerModeLabel, readMode === 'all' && styles.readerModeLabelActive]}>
-            Cały tekst
-          </Text>
+          >
+            <Text style={[styles.segmentedBtnText, readMode === 'single' ? styles.segmentedBtnTextActive : null]}>
+              Zdanie
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.segmentedBtn, readMode === 'all' ? styles.segmentedBtnActive : null]}
+            onPress={() => {
+              setReadMode('all');
+              speakAll(sentences);
+            }}
+          >
+            <Text style={[styles.segmentedBtnText, readMode === 'all' ? styles.segmentedBtnTextActive : null]}>
+              Cały tekst
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.segmentedBtn, readMode === 'breakdown' ? styles.segmentedBtnActive : null]}
+            onPress={() => {
+              setReadMode('breakdown');
+              stopSpeech();
+              loadBreakdownTranslations(sentences);
+            }}
+          >
+            <Text style={[styles.segmentedBtnText, readMode === 'breakdown' ? styles.segmentedBtnTextActive : null]}>
+              Breakdown
+            </Text>
+          </TouchableOpacity>
 
           {isSpeaking && (
             <TouchableOpacity
@@ -27013,114 +30148,200 @@ export default function HomeScreen() {
         })()}
 
         {currentView === 'workspace' && (
-          <ScrollView ref={workspaceScrollRef} contentContainerStyle={styles.workspaceContainer}>
+          <View style={{ flex: 1 }}>
+            {generatedText ? (
+              <View style={[styles.readerHeaderRow, { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8F9FA', borderBottomWidth: 1, borderBottomColor: '#DADCE0' }]}>
+                <Text style={styles.readerStoryTitle} numberOfLines={1}>{currentStoryTitle}</Text>
+                
+                {readMode === 'breakdown' && (
+                  isSpeaking ? (
+                    <TouchableOpacity
+                      style={{ marginRight: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 14, backgroundColor: '#EA4335', flexDirection: 'row', alignItems: 'center' }}
+                      onPress={stopSpeech}
+                    >
+                      <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>⏹ Stop</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={{ marginRight: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 14, backgroundColor: '#1A73E8', flexDirection: 'row', alignItems: 'center' }}
+                      onPress={() => speakSentence(selectedSentenceIndex !== null ? selectedSentenceIndex : 0)}
+                    >
+                      <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>
+                        {breakdownSpeechPhase === 'polish' ? '▶ Czytaj PL' : '▶ Czytaj EN'}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                )}
+
+                <TouchableOpacity
+                  style={styles.clearStoryButton}
+                  onPress={() => {
+                    setGeneratedText('');
+                    setCurrentStoryTitle('');
+                    setSentences([]);
+                    setBreakdownSentences([]);
+                    setChatMessages([]);
+                    setIsBotSpeaking(false);
+                  }}
+                >
+                  <Text style={styles.clearStoryButtonText}>Reset</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            <ScrollView ref={workspaceScrollRef} contentContainerStyle={styles.workspaceContainer} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
             {/* Generator input if no story generated */}
             {!generatedText ? (
               <View style={styles.generatorCard}>
-                <Text style={styles.generatorHeader}>O czym chcesz stworzyć opowiadanie?</Text>
-                <TextInput
-                  style={styles.promptInput}
-                  value={storyPrompt}
-                  onChangeText={setStoryPrompt}
-                  placeholder="Wpisz temat np. 'A lost astronaut on an alien planet...'"
-                  multiline
-                  numberOfLines={3}
-                />
-
-                <Text style={styles.chipsHeader}>Sugerowane tematy (opcjonalnie):</Text>
-                <View style={styles.chipsContainer}>
-                  {suggestedTopics.map((topic, i) => {
-                    const isSelected = selectedTopicChip === topic;
-                    return (
-                      <TouchableOpacity
-                        key={i}
-                        style={[styles.chip, isSelected ? styles.chipSelected : null]}
-                        onPress={() => setSelectedTopicChip(isSelected ? null : topic)}
-                      >
-                        <Text style={[styles.chipText, isSelected ? styles.chipTextSelected : null]}>
-                          {topic}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                {/* Tabs */}
+                <View style={styles.tabHeaderContainer}>
+                  <TouchableOpacity
+                    style={[styles.tabHeaderBtn, activeWorkspaceTab === 'ai' ? styles.tabHeaderBtnActive : null]}
+                    onPress={() => setActiveWorkspaceTab('ai')}
+                  >
+                    <Text style={[styles.tabHeaderBtnText, activeWorkspaceTab === 'ai' ? styles.tabHeaderBtnTextActive : null]}>
+                      Generator AI
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.tabHeaderBtn, activeWorkspaceTab === 'paste' ? styles.tabHeaderBtnActive : null]}
+                    onPress={() => setActiveWorkspaceTab('paste')}
+                  >
+                    <Text style={[styles.tabHeaderBtnText, activeWorkspaceTab === 'paste' ? styles.tabHeaderBtnTextActive : null]}>
+                      Własny tekst
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
-                {/* Poziom trudności */}
-                <Text style={styles.selectorLabel}>Poziom trudności angielskiego:</Text>
-                <View style={styles.selectorRow}>
-                  {[
-                    { id: 'simple', label: 'Prosty (A1-A2)' },
-                    { id: 'medium', label: 'Średni (B1-B2)' },
-                    { id: 'advanced', label: 'Zaawansowany (C1-C2)' }
-                  ].map((lvl) => {
-                    const isSel = selectedLevel === lvl.id;
-                    return (
-                      <TouchableOpacity
-                        key={lvl.id}
-                        style={[styles.selectorBtn, isSel ? styles.selectorBtnActive : null]}
-                        onPress={() => setSelectedLevel(lvl.id as any)}
-                      >
-                        <Text style={[styles.selectorBtnText, isSel ? styles.selectorBtnTextActive : null]}>
-                          {lvl.label}
-                        </Text>
+                {activeWorkspaceTab === 'ai' ? (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.generatorHeader}>O czym chcesz stworzyć opowiadanie?</Text>
+                      <TouchableOpacity onPress={Keyboard.dismiss} style={{ padding: 4 }}>
+                        <Text style={{ color: '#1A73E8', fontSize: 13, fontWeight: '600' }}>Schowaj klawiaturę</Text>
                       </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                    </View>
+                    <TextInput
+                      style={styles.promptInput}
+                      value={storyPrompt}
+                      onChangeText={setStoryPrompt}
+                      placeholder="Wpisz temat np. 'A lost astronaut on an alien planet...'"
+                      multiline
+                      numberOfLines={3}
+                    />
 
-                {/* Długość */}
-                <Text style={styles.selectorLabel}>Długość opowiadania:</Text>
-                <View style={styles.selectorRow}>
-                  {[
-                    { id: 'short', label: 'Krótkie' },
-                    { id: 'medium', label: 'Średnie' },
-                    { id: 'long', label: 'Długie' }
-                  ].map((len) => {
-                    const isSel = selectedLength === len.id;
-                    return (
-                      <TouchableOpacity
-                        key={len.id}
-                        style={[styles.selectorBtn, isSel ? styles.selectorBtnActive : null]}
-                        onPress={() => setSelectedLength(len.id as any)}
-                      >
-                        <Text style={[styles.selectorBtnText, isSel ? styles.selectorBtnTextActive : null]}>
-                          {len.label}
-                        </Text>
+                    <Text style={styles.chipsHeader}>Sugerowane tematy (opcjonalnie):</Text>
+                    <View style={styles.chipsContainer}>
+                      {suggestedTopics.map((topic, i) => {
+                        const isSelected = selectedTopicChip === topic;
+                        return (
+                          <TouchableOpacity
+                            key={i}
+                            style={[styles.chip, isSelected ? styles.chipSelected : null]}
+                            onPress={() => setSelectedTopicChip(isSelected ? null : topic)}
+                          >
+                            <Text style={[styles.chipText, isSelected ? styles.chipTextSelected : null]}>
+                              {topic}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/* Poziom trudności */}
+                    <Text style={styles.selectorLabel}>Poziom trudności angielskiego:</Text>
+                    <View style={styles.selectorRow}>
+                      {[
+                        { id: 'simple', label: 'Prosty (A1-A2)' },
+                        { id: 'medium', label: 'Średni (B1-B2)' },
+                        { id: 'advanced', label: 'Zaawansowany (C1-C2)' }
+                      ].map((lvl) => {
+                        const isSel = selectedLevel === lvl.id;
+                        return (
+                          <TouchableOpacity
+                            key={lvl.id}
+                            style={[styles.selectorBtn, isSel ? styles.selectorBtnActive : null]}
+                            onPress={() => setSelectedLevel(lvl.id as any)}
+                          >
+                            <Text style={[styles.selectorBtnText, isSel ? styles.selectorBtnTextActive : null]}>
+                              {lvl.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/* Długość */}
+                    <Text style={styles.selectorLabel}>Długość opowiadania:</Text>
+                    <View style={styles.selectorRow}>
+                      {[
+                        { id: 'short', label: 'Krótkie' },
+                        { id: 'medium', label: 'Średnie' },
+                        { id: 'long', label: 'Długie' }
+                      ].map((len) => {
+                        const isSel = selectedLength === len.id;
+                        return (
+                          <TouchableOpacity
+                            key={len.id}
+                            style={[styles.selectorBtn, isSel ? styles.selectorBtnActive : null]}
+                            onPress={() => setSelectedLength(len.id as any)}
+                          >
+                            <Text style={[styles.selectorBtnText, isSel ? styles.selectorBtnTextActive : null]}>
+                              {len.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.generateButton}
+                      onPress={handleGenerateStory}
+                      disabled={isGenerating}
+                    >
+                      {isGenerating ? (
+                        <ActivityIndicator color="white" />
+                      ) : (
+                        <Text style={styles.generateButtonText}>Generuj opowiadanie</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.generatorHeader}>Tytuł (opcjonalnie):</Text>
+                    <TextInput
+                      style={styles.pastedTitleInput}
+                      value={pastedTextTitle}
+                      onChangeText={setPastedTextTitle}
+                      placeholder="Np. Mój artykuł prasowy..."
+                    />
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.generatorHeader}>Wklej tekst do nauki:</Text>
+                      <TouchableOpacity onPress={Keyboard.dismiss} style={{ padding: 4 }}>
+                        <Text style={{ color: '#1A73E8', fontSize: 13, fontWeight: '600' }}>Schowaj klawiaturę</Text>
                       </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                <TouchableOpacity
-                  style={styles.generateButton}
-                  onPress={handleGenerateStory}
-                  disabled={isGenerating}
-                >
-                  {isGenerating ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <Text style={styles.generateButtonText}>Generuj opowiadanie</Text>
-                  )}
-                </TouchableOpacity>
+                    </View>
+                    <TextInput
+                      style={styles.pastedTextInput}
+                      value={pastedText}
+                      onChangeText={setPastedText}
+                      placeholder="Wklej lub wpisz tutaj swój tekst po angielsku..."
+                      multiline
+                      numberOfLines={8}
+                    />
+                    
+                    <TouchableOpacity
+                      style={styles.generateButton}
+                      onPress={handleLoadPastedText}
+                    >
+                      <Text style={styles.generateButtonText}>Załaduj tekst do nauki</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             ) : (
               <View style={styles.readerContainer}>
-                {/* Active story title */}
-                <View style={styles.readerHeaderRow}>
-                  <Text style={styles.readerStoryTitle}>{currentStoryTitle}</Text>
-                  <TouchableOpacity
-                    style={styles.clearStoryButton}
-                    onPress={() => {
-                      setGeneratedText('');
-                      setCurrentStoryTitle('');
-                      setSentences([]);
-                      setChatMessages([]);
-                      setIsBotSpeaking(false);
-                    }}
-                  >
-                    <Text style={styles.clearStoryButtonText}>Reset</Text>
-                  </TouchableOpacity>
-                </View>
 
                 <View
                   style={styles.storyTextCard}
@@ -27129,34 +30350,58 @@ export default function HomeScreen() {
                     storyCardYRef.current = e.nativeEvent.layout.y;
                   }}
                 >
-                  <Text style={styles.instructionsText}>
-                    Dotknij zdania, aby je odsłuchać. Przytrzymaj, aby zobaczyć tłumaczenie.
-                  </Text>
-
-                  {/* Paragraph Text with onLayout to capture total height */}
-                  <Text 
-                    style={styles.paragraphText}
-                    onLayout={(e) => {
-                      paragraphHeightRef.current = e.nativeEvent.layout.height;
-                    }}
-                  >
-                    {sentences.map((sentence, idx) => {
-                      const isSpeakingSentence = speakingSentenceIndex === idx;
-                      return (
-                        <Text
-                          key={idx}
-                          style={[
-                            styles.sentenceText,
-                            isSpeakingSentence ? styles.sentenceTextActive : null,
-                          ]}
-                          onPress={() => readMode === 'single' ? speakSentence(idx) : null}
-                          onLongPress={() => handleLongPressSentence(idx)}
-                        >
-                          {sentence}{' '}
-                        </Text>
-                      );
-                    })}
-                  </Text>
+                  {readMode === 'breakdown' ? (
+                    loadingBreakdown ? (
+                      <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                        <ActivityIndicator size="large" color="#1A73E8" />
+                        <Text style={{ marginTop: 12, color: '#5F6368', fontSize: 14 }}>Tłumaczenie tekstu...</Text>
+                      </View>
+                    ) : (
+                      <View style={{ gap: 16 }}>
+                        {breakdownSentences.map((sentence, idx) => {
+                          const polishText = breakdownTranslations[idx] || 'Tłumaczenie...';
+                          const isHighlighted = selectedSentenceIndex === idx || speakingSentenceIndex === idx || translatedSentenceIdx === idx;
+                          return (
+                            <View key={idx} style={[styles.breakdownRow, isHighlighted ? styles.breakdownRowActive : null]}>
+                              <TouchableOpacity 
+                                onPress={() => speakSentence(idx)}
+                                onLongPress={() => handleLongPressSentence(idx)}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.breakdownPolishText}>{polishText}</Text>
+                                <Text style={styles.breakdownEnglishText}>{sentence}</Text>
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )
+                  ) : (
+                    /* Paragraph Text with onLayout to capture total height */
+                    <Text 
+                      style={styles.paragraphText}
+                      onLayout={(e) => {
+                        paragraphHeightRef.current = e.nativeEvent.layout.height;
+                      }}
+                    >
+                      {sentences.map((sentence, idx) => {
+                        const isHighlighted = selectedSentenceIndex === idx || speakingSentenceIndex === idx || translatedSentenceIdx === idx;
+                        return (
+                          <Text
+                            key={idx}
+                            style={[
+                              styles.sentenceText,
+                              isHighlighted ? styles.sentenceTextActive : null,
+                            ]}
+                            onPress={() => readMode === 'single' ? speakSentence(idx) : null}
+                            onLongPress={() => handleLongPressSentence(idx)}
+                          >
+                            {sentence}{' '}
+                          </Text>
+                        );
+                      })}
+                    </Text>
+                  )}
                 </View>
 
                 {/* Loader rozpoczynania rozmowy */}
@@ -27270,6 +30515,7 @@ export default function HomeScreen() {
               </View>
             )}
           </ScrollView>
+          </View>
         )}
 
         {currentView === 'stories' && (
@@ -27430,7 +30676,7 @@ export default function HomeScreen() {
                           {words.map((w: string, wIdx: number) => (
                             <TouchableOpacity 
                               key={wIdx} 
-                              onPress={() => handleWordClick(w, seg.text)}
+                              onPress={() => handleWordClick(w, seg.text, idx)}
                               style={styles.wordTouch}
                             >
                               <Text style={styles.wordText}>{w}</Text>
@@ -28780,24 +32026,63 @@ const styles = StyleSheet.create({
     borderBottomColor: '#DADCE0',
     backgroundColor: '#FFFFFF',
   },
-  readerToolbar: {
+  segmentedControlRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F1F3F4',
     borderBottomWidth: 1,
     borderBottomColor: '#DADCE0',
     gap: 8,
   },
-  readerModeLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#9AA0A6',
+  segmentedBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  readerModeLabelActive: {
-    color: '#202124',
+  segmentedBtnActive: {
+    backgroundColor: '#FFFFFF',
+    elevation: 1,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  segmentedBtnText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#5F6368',
+  },
+  segmentedBtnTextActive: {
+    color: '#1A73E8',
     fontWeight: '700',
+  },
+  breakdownRow: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E8EAED',
+    marginBottom: 4,
+  },
+  breakdownRowActive: {
+    backgroundColor: '#E8F0FE',
+    borderColor: '#1A73E8',
+  },
+  breakdownPolishText: {
+    fontSize: 14,
+    color: '#5F6368',
+    fontStyle: 'italic',
+    marginBottom: 4,
+  },
+  breakdownEnglishText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#202124',
   },
   readerStopBtn: {
     marginLeft: 'auto' as any,
@@ -28931,6 +32216,53 @@ const styles = StyleSheet.create({
     borderColor: '#DADCE0',
     borderRadius: 16,
     padding: 20,
+  },
+  tabHeaderContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DADCE0',
+  },
+  tabHeaderBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabHeaderBtnActive: {
+    borderBottomColor: '#1A73E8',
+  },
+  tabHeaderBtnText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#5F6368',
+  },
+  tabHeaderBtnTextActive: {
+    color: '#1A73E8',
+    fontWeight: '600',
+  },
+  pastedTitleInput: {
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 15,
+    backgroundColor: '#F8F9FA',
+    marginBottom: 12,
+    color: '#202124',
+  },
+  pastedTextInput: {
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+    height: 180,
+    textAlignVertical: 'top',
+    backgroundColor: '#F8F9FA',
+    marginBottom: 16,
+    color: '#202124',
   },
   generatorHeader: {
     fontSize: 16,
@@ -30170,7 +33502,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 60. Plik: `mobile\src\components\animated-icon.module.css`
+## 62. Plik: `mobile\src\components\animated-icon.module.css`
 
 ```css
 .expoLogoBackground {
@@ -30183,7 +33515,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 61. Plik: `mobile\src\components\animated-icon.tsx`
+## 63. Plik: `mobile\src\components\animated-icon.tsx`
 
 ```typescript
 import { Image } from 'expo-image';
@@ -30322,7 +33654,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 62. Plik: `mobile\src\components\animated-icon.web.tsx`
+## 64. Plik: `mobile\src\components\animated-icon.web.tsx`
 
 ```typescript
 import { Image } from 'expo-image';
@@ -30437,7 +33769,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 63. Plik: `mobile\src\components\app-tabs.tsx`
+## 65. Plik: `mobile\src\components\app-tabs.tsx`
 
 ```typescript
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
@@ -30476,7 +33808,7 @@ export default function AppTabs() {
 
 ---
 
-## 64. Plik: `mobile\src\components\app-tabs.web.tsx`
+## 66. Plik: `mobile\src\components\app-tabs.web.tsx`
 
 ```typescript
 import {
@@ -30598,7 +33930,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 65. Plik: `mobile\src\components\external-link.tsx`
+## 67. Plik: `mobile\src\components\external-link.tsx`
 
 ```typescript
 import { Href, Link } from 'expo-router';
@@ -30630,7 +33962,7 @@ export function ExternalLink({ href, ...rest }: Props) {
 
 ---
 
-## 66. Plik: `mobile\src\components\hint-row.tsx`
+## 68. Plik: `mobile\src\components\hint-row.tsx`
 
 ```typescript
 import type { ReactNode } from 'react';
@@ -30672,7 +34004,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 67. Plik: `mobile\src\components\themed-text.tsx`
+## 69. Plik: `mobile\src\components\themed-text.tsx`
 
 ```typescript
 import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
@@ -30752,7 +34084,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 68. Plik: `mobile\src\components\themed-view.tsx`
+## 70. Plik: `mobile\src\components\themed-view.tsx`
 
 ```typescript
 import { View, type ViewProps } from 'react-native';
@@ -30775,7 +34107,7 @@ export function ThemedView({ style, lightColor, darkColor, type, ...otherProps }
 
 ---
 
-## 69. Plik: `mobile\src\components\ui\collapsible.tsx`
+## 71. Plik: `mobile\src\components\ui\collapsible.tsx`
 
 ```typescript
 import { SymbolView } from 'expo-symbols';
@@ -30847,7 +34179,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 70. Plik: `mobile\src\components\web-badge.tsx`
+## 72. Plik: `mobile\src\components\web-badge.tsx`
 
 ```typescript
 import { version } from 'expo/package.json';
@@ -30897,7 +34229,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 71. Plik: `mobile\src\constants\theme.ts`
+## 73. Plik: `mobile\src\constants\theme.ts`
 
 ```typescript
 /**
@@ -30969,7 +34301,7 @@ export const MaxContentWidth = 800;
 
 ---
 
-## 72. Plik: `mobile\src\constants\transcripts.json`
+## 74. Plik: `mobile\src\constants\transcripts.json`
 
 ```json
 {
@@ -33014,7 +36346,7 @@ export const MaxContentWidth = 800;
 
 ---
 
-## 73. Plik: `mobile\src\global.css`
+## 75. Plik: `mobile\src\global.css`
 
 ```css
 :root {
@@ -33030,7 +36362,7 @@ export const MaxContentWidth = 800;
 
 ---
 
-## 74. Plik: `mobile\src\hooks\use-color-scheme.ts`
+## 76. Plik: `mobile\src\hooks\use-color-scheme.ts`
 
 ```typescript
 export { useColorScheme } from 'react-native';
@@ -33038,7 +36370,7 @@ export { useColorScheme } from 'react-native';
 
 ---
 
-## 75. Plik: `mobile\src\hooks\use-color-scheme.web.ts`
+## 77. Plik: `mobile\src\hooks\use-color-scheme.web.ts`
 
 ```typescript
 import { useEffect, useState } from 'react';
@@ -33066,7 +36398,7 @@ export function useColorScheme() {
 
 ---
 
-## 76. Plik: `mobile\src\hooks\use-theme.ts`
+## 78. Plik: `mobile\src\hooks\use-theme.ts`
 
 ```typescript
 /**
@@ -33087,7 +36419,7 @@ export function useTheme() {
 
 ---
 
-## 77. Plik: `mobile\tsconfig.json`
+## 79. Plik: `mobile\tsconfig.json`
 
 ```json
 {
@@ -33114,7 +36446,7 @@ export function useTheme() {
 
 ---
 
-## 78. Plik: `firebase.json`
+## 80. Plik: `firebase.json`
 
 ```json
 {

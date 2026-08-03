@@ -13,7 +13,9 @@ import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 
 function App() {
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState(() => {
+    return window.innerWidth <= 768 ? 'dashboard' : 'workspace';
+  });
   const [user, setUser] = useState(() => {
     const stored = localStorage.getItem("buddy_user");
     return stored ? JSON.parse(stored) : null;
@@ -167,6 +169,17 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+      {currentView !== 'dashboard' && (
+        <button 
+          className="live-chat-floating-bubble" 
+          onClick={() => handleNavigate('dashboard')}
+          title="Chat Live"
+        >
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
       )}
     </div>
   );

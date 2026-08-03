@@ -273,7 +273,6 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
     <div className="vocabulary-dashboard">
       <div className="vocab-header-panel">
         <div className="vocab-title-block">
-          <h1>Słownik i Fiszki</h1>
           <p className="vocab-subtitle">Przeglądaj zebrane słownictwo, ćwicz wymowę oraz powtarzaj materiał z fiszkami.</p>
         </div>
 

@@ -3838,6 +3838,19 @@ def chat_free():
     voice = request.form.get('voice', 'en-US-BrianNeural').strip()
     ai_mode = request.form.get('ai_mode', 'free').strip()
 
+    if ai_mode in ['openai_full', 'hybrid']:
+        try:
+            user_ref = db.collection('users').document(user_email).get()
+            if user_ref.exists:
+                user_data = user_ref.to_dict()
+                access_field = "access_hybrid" if ai_mode == "hybrid" else "access_openai_full"
+                if not user_data.get(access_field, False):
+                    return jsonify({
+                        "error": f"Brak uprawnień do korzystania z trybu {ai_mode}. Poproś administratora o dostęp."
+                    }), 403
+        except Exception as e:
+            print(f"Error checking mode permission: {e}")
+
     try:
         history = json.loads(history_str)
     except Exception as e:
@@ -4254,7 +4267,91 @@ def send_chat_summary_email():
         print(f"Error sending chat summary email: {e}")
         return jsonify({"error": f"Nie udało się wysłać e-maila: {str(e)}"}), 500
 
+@app.route("/api/user-permissions", methods=['GET'])
+def get_user_permissions():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    try:
+        user_ref = db.collection('users').document(user_email).get()
+        if not user_ref.exists:
+            return jsonify({"error": "Użytkownik nie istnieje"}), 404
+        user_data = user_ref.to_dict()
+        return jsonify({
+            "access_hybrid": user_data.get("access_hybrid", False),
+            "access_openai_full": user_data.get("access_openai_full", False)
+        }), 200
+    except Exception as e:
+        print(f"Error fetching user permissions: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/request-mode-access", methods=['POST'])
+def request_mode_access():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    data = request.get_json() or {}
+    requested_mode = data.get("mode", "")
+    if requested_mode not in ['hybrid', 'openai_full']:
+        return jsonify({"error": "Niepoprawny tryb"}), 400
+    try:
+        host_url = request.host_url.rstrip('/')
+        confirm_url = f"{host_url}/api/grant-mode-access?email={user_email}&mode={requested_mode}&token=speakling_secure_grant_key"
+        subject = f"[Speakling] Prosba o dostep do trybu {requested_mode} od {user_email}"
+        email_html = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2>Prośba o odblokowanie trybu AI</h2>
+            <p>Użytkownik <strong>{user_email}</strong> poprosił o dostęp do trybu: <strong>{requested_mode}</strong>.</p>
+            <p>Aby przyznać dostęp, kliknij poniższy przycisk:</p>
+            <div style="margin-top: 20px;">
+              <a href="{confirm_url}" style="background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Zezwól / Udziel dostępu</a>
+            </div>
+          </body>
+        </html>
+        """
+        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=15) as server:
+            server.starttls()
+            server.login(EMAIL_USERNAME, EMAIL_PASSWORD)
+            msg = MIMEText(email_html, 'html', 'utf-8')
+            msg['Subject'] = subject
+            msg['From'] = EMAIL_USERNAME
+            msg['To'] = EMAIL_USERNAME
+            server.sendmail(EMAIL_USERNAME, [EMAIL_USERNAME], msg.as_string())
+        return jsonify({"message": "Prośba została wysłana."}), 200
+    except Exception as e:
+        print(f"Error requesting mode access: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/grant-mode-access", methods=['GET'])
+def grant_mode_access():
+    email = request.args.get("email", "").strip().lower()
+    mode = request.args.get("mode", "").strip()
+    token = request.args.get("token", "").strip()
+    if token != "speakling_secure_grant_key":
+        return "Brak autoryzacji", 403
+    if not email or mode not in ['hybrid', 'openai_full']:
+        return "Niepoprawne parametry", 400
+    try:
+        field_name = "access_hybrid" if mode == "hybrid" else "access_openai_full"
+        db.collection('users').document(email).update({
+            field_name: True
+        })
+        return f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px; padding: 20px;">
+            <div style="border: 1px solid #c3e6cb; background-color: #d4edda; color: #155724; padding: 20px; border-radius: 8px; max-width: 500px; margin: 0 auto;">
+              <h1 style="margin-top: 0;">Dostęp przyznany!</h1>
+              <p>Użytkownik <strong>{email}</strong> otrzymał dostęp do trybu: <strong>{mode}</strong>.</p>
+            </div>
+          </body>
+        </html>
+        """
+    except Exception as e:
+        return f"Błąd podczas przyznawania dostępu: {str(e)}", 500
+
 if __name__ == "__main__":
     # db.create_all() # Nie potrzebne dla Firestore, Firebase zarządza strukturą dokumentów
     # print("Baza danych zainicjalizowana.")
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    port = int(os.environ.get("PORT", 5001))
+    app.run(debug=True, host='0.0.0.0', port=port)

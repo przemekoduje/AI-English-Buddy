@@ -839,7 +839,7 @@ function MediaBuddy({ user }) {
       )}
       {/* Custom Video URL Loader */}
       <div className="custom-video-loader glass-panel">
-        <h3 className="loader-title">🔗 Dodaj własne wideo z YouTube</h3>
+        <h3 className="loader-title">Dodaj własne wideo z YouTube</h3>
         <form onSubmit={handleLoadCustomVideo} className="loader-form">
           <input
             type="text"
@@ -849,14 +849,7 @@ function MediaBuddy({ user }) {
             onChange={(e) => setCustomUrl(e.target.value)}
           />
           <button type="submit" className="loader-btn" disabled={isLoadingCustom}>
-            {isLoadingCustom ? "Pobieranie transkrypcji..." : (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                Załaduj wideo
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-              </span>
-            )}
+            {isLoadingCustom ? "Pobieranie transkrypcji..." : "Załaduj wideo"}
           </button>
         </form>
         
@@ -869,12 +862,7 @@ function MediaBuddy({ user }) {
               onClick={() => setUseWhisper(false)}
               title="Darmowe automatyczne napisy z YouTube (brak interpunkcji)"
             >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                  <path d="M2 22c1.25-6.75 6.75-12.25 13.5-13.5M22 2c-1.25 6.75-6.75 12.25-13.5 13.5" />
-                </svg>
-                Darmowy (Nap. automatyczne)
-              </span>
+              <span>Darmowy (Nap. automatyczne)</span>
             </button>
             <button
               type="button"
@@ -882,12 +870,7 @@ function MediaBuddy({ user }) {
               onClick={() => setUseWhisper(true)}
               title="Płatna transkrypcja AI przez Whisper (świetna interpunkcja i wielkie litery)"
             >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-                Premium AI (Whisper)
-              </span>
+              <span>Premium AI (Whisper)</span>
             </button>
           </div>
         </div>
@@ -937,9 +920,6 @@ function MediaBuddy({ user }) {
         {/* Curated Channels & Suggestion Box */}
         <div className="curated-suggestions-section">
           <h4 className="suggestions-title">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
-              <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
-            </svg>
             Rekomendowane kanały z gotowymi napisami
           </h4>
           <div className="suggestions-controls">
