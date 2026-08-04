@@ -143,7 +143,7 @@ const getInitialBackendUrl = () => {
 };
 
 export default function HomeScreen() {
-  const [backendUrl, setBackendUrl] = useState(getInitialBackendUrl()); // Local network IP or Render production URL
+  const [backendUrl, setBackendUrl] = useState(getInitialBackendUrl()); // '' in production (Firebase → Cloud Run), local IP in dev
   const [user, setUser] = useState<{ token: string; email: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<'dashboard' | 'workspace' | 'stories' | 'notebook' | 'settings' | 'media'>('dashboard');

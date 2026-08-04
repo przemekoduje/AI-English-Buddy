@@ -2609,7 +2609,7 @@ def send_notebook_email():
         return jsonify({"error": "Adres e-mail odbiorcy i słowa z notatnika są wymagane."}), 400
     
     if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
-        return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Dodaj zmienne w panelu Render."}), 400
+        return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Skonfiguruj zmienne w Cloud Run (GCP)."}), 400
 
     # Pobieranie przykładowych zdań od AI
     words_list = [entry.get('original', entry.get('word', '')) for entry in notebook_words]
@@ -2874,7 +2874,7 @@ def send_summary_email():
         return jsonify({"error": "Adres e-mail odbiorcy i podsumowanie są wymagane."}), 400
     
     if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
-        return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Dodaj zmienne w panelu Render."}), 400
+        return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Skonfiguruj zmienne w Cloud Run (GCP)."}), 400
 
     listening_data = summary.get("listening_analysis", {})
     engagement_data = summary.get("engagement_analysis", {})
@@ -4287,7 +4287,7 @@ def send_chat_summary_email():
         return jsonify({"error": "Adres e-mail odbiorcy i podsumowanie są wymagane."}), 400
     
     if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
-        return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Dodaj zmienne w panelu Render."}), 400
+        return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Skonfiguruj zmienne w Cloud Run (GCP)."}), 400
 
     issues = summary.get("issues", [])
     vocabulary = summary.get("vocabulary", [])
