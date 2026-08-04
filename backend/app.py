@@ -1603,45 +1603,7 @@ def debug_youtube_transcript():
     
     return jsonify(debug_info)
 
-@app.route("/api/media/transcript/manual", methods=['POST'])
-def parse_manual_transcript_endpoint():
-    user_email = get_user_from_request()
-    if not user_email:
-        return jsonify({"error": "Brak autoryzacji"}), 401
 
-    data = request.get_json() or {}
-    video_id = data.get("video_id")
-    raw_text = data.get("raw_text", "").strip()
-    video_title = data.get("title", "").strip()
-
-    if not video_id or not raw_text:
-        return jsonify({"error": "Brak identyfikatora wideo lub tekstu transkrypcji"}), 400
-
-    if not video_title:
-        video_title = f"Wideo YouTube ({video_id})"
-        try:
-            oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
-            response = requests.get(oembed_url, timeout=5)
-            if response.ok:
-                video_title = response.json().get("title", video_title)
-        except Exception as e:
-            print(f"Error fetching title for manual {video_id}: {e}")
-
-    try:
-        formatted = parse_manual_transcript(raw_text)
-        if not formatted:
-            return jsonify({"error": "Nie znaleziono poprawnych napisów w przesłanym tekście. Upewnij się, że tekst zawiera znaczniki czasu (np. 0:03)."}), 400
-
-        aggregated = semantic_group_transcript(formatted)
-        
-        return jsonify({
-            "video_id": video_id,
-            "title": video_title,
-            "transcript": aggregated
-        })
-    except Exception as e:
-        print(f"Error parsing manual transcript: {e}")
-        return jsonify({"error": f"Błąd przetwarzania napisów: {str(e)}"}), 500
 
 def parse_story_response(generated_content):
     content = generated_content.strip()
