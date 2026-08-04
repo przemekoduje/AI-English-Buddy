@@ -126,10 +126,11 @@ const getInitialBackendUrl = () => {
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
     if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
-      return 'https://ai-english-buddy-backend.onrender.com';
+      // Produkcja: Firebase Hosting automatycznie przekierowuje /api/** → Cloud Run
+      return '';
     }
   }
-  // Dynamiczne wykrycie IP hosta z Expo
+  // Lokalne dev: dynamiczne wykrycie IP hosta z Expo
   const hostUri = Constants.expoConfig?.hostUri || (Constants.manifest as any)?.debuggerHost;
   if (hostUri) {
     const ip = hostUri.split(':')[0];
