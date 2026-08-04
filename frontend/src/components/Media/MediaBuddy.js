@@ -725,6 +725,48 @@ function MediaBuddy({ user }) {
 
   const fetchAndLoadVideo = async (videoId) => {
     setCustomError("");
+    
+    // Check if we have a static transcript locally in transcripts.json
+    const getStaticTranscript = (id) => {
+      if (transcriptsData[id]) return transcriptsData[id];
+      if (id === "_QdPW8JrYzQ") return transcriptsData.james_veitch_spam;
+      if (id === "Dceyy0cX6J4") return transcriptsData.james_veitch_unsubscribe;
+      if (id === "cqjhCC4sP4Q") return transcriptsData.jeff_allen_teenagers;
+      return null;
+    };
+
+    const staticTranscript = getStaticTranscript(videoId);
+    if (staticTranscript) {
+      let title = `Wideo (${videoId})`;
+      // Try to find the title in CURATED_SOURCES
+      for (const source of CURATED_SOURCES) {
+        const found = source.videos.find(v => v.youtubeId === videoId);
+        if (found) {
+          title = found.title;
+          break;
+        }
+      }
+      // Or in CURATED_VIDEOS
+      const foundCurated = CURATED_VIDEOS.find(v => v.youtubeId === videoId);
+      if (foundCurated) {
+        title = foundCurated.title;
+      }
+
+      const staticVid = {
+        id: `custom_${videoId}`,
+        title: title,
+        youtubeId: videoId,
+        transcript: staticTranscript
+      };
+
+      if (!customVideos.some(v => v.youtubeId === videoId)) {
+        setCustomVideos([...customVideos, staticVid]);
+      }
+      setCurrentVideo(staticVid);
+      setCustomUrl("");
+      return;
+    }
+
     setIsLoadingCustom(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=${useWhisper}`, {

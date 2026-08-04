@@ -1548,6 +1548,47 @@ export default function HomeScreen() {
       return;
     }
 
+    // Check if we have a static transcript locally in transcriptsData
+    const getStaticTranscript = (id: string) => {
+      if ((transcriptsData as any)[id]) return (transcriptsData as any)[id];
+      if (id === "_QdPW8JrYzQ") return (transcriptsData as any).james_veitch_spam;
+      if (id === "Dceyy0cX6J4") return (transcriptsData as any).james_veitch_unsubscribe;
+      if (id === "cqjhCC4sP4Q") return (transcriptsData as any).jeff_allen_teenagers;
+      return null;
+    };
+
+    const staticTranscript = getStaticTranscript(yId);
+    if (staticTranscript) {
+      let title = `Wideo (${yId})`;
+      if (yId === "5MgBikgcWnY") title = "Tim Urban - Inside the mind of a master procrastinator";
+      if (yId === "iCvmsMzlF7o") title = "Amy Cuddy - Your body language may shape who you are";
+      if (yId === "w-HYZv6HzAs") title = "Simon Sinek - How great leaders inspire action";
+      if (yId === "Sxxw3qtb3_g") title = "What is Git? (in 100 Seconds)";
+      if (yId === "erEgovG9WBs") title = "100+ Web Development Terms you need to know";
+      if (yId === "_QdPW8JrYzQ") title = "James Veitch - Spammer";
+      if (yId === "Dceyy0cX6J4") title = "James Veitch - Unsubscribe";
+      if (yId === "cqjhCC4sP4Q") title = "Jeff Allen - Teenagers";
+
+      const staticVid = {
+        id: "custom_" + yId,
+        youtubeId: yId,
+        title: title,
+        transcript: staticTranscript
+      };
+
+      const updatedCustom = [staticVid, ...customVideos.filter(v => v.youtubeId !== yId)];
+      setCustomVideos(updatedCustom);
+      await AsyncStorage.setItem('buddy_custom_videos', JSON.stringify(updatedCustom));
+
+      setCurrentVideo(staticVid);
+      setVideoCustomUrl('');
+      setVideoCustomError('');
+      setVideoIsPlaying(false);
+      setVideoCurrentTime(0);
+      setVideoActiveSegmentIdx(-1);
+      return;
+    }
+
     setVideoIsLoadingCustom(true);
     setVideoCustomError('');
     try {
