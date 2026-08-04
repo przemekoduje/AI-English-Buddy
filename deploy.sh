@@ -6,6 +6,8 @@ set -e
 echo "=== 1. Budowanie aplikacji mobilnej (Expo Web) ==="
 cd mobile
 npx expo export --platform web
+echo "=== 1b. Patching viewport (blokada pinch-zoom) ==="
+python3 scripts/patch-viewport.py
 cd ..
 
 echo "=== 2. Budowanie aplikacji przeglądarkowej (React Web) ==="
