@@ -4812,9 +4812,10 @@ const styles = StyleSheet.create({
     height: 60,
   },
   authLogoImage: {
-    width: 72,
-    height: 72,
-    marginBottom: 12,
+    width: 40,
+    height: 40,
+    marginBottom: 8,
+    mixBlendMode: 'multiply' as any,
   },
   authLogo: {
     fontSize: 32,
