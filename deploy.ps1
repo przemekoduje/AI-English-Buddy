@@ -8,7 +8,7 @@ npx expo export --platform web
 Set-Location ..
 
 Write-Host "=== 2. Budowanie aplikacji przeglądarkowej (React Web) ==="
-$env:REACT_APP_API_URL="https://ai-english-buddy-backend.onrender.com"
+$env:REACT_APP_API_URL=""
 npm run build --prefix frontend
 
 Write-Host "=== 3. Łączenie buildów (kopiowanie wersji mobilnej do podfolderu /mobile) ==="

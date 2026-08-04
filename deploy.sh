@@ -9,8 +9,7 @@ npx expo export --platform web
 cd ..
 
 echo "=== 2. Budowanie aplikacji przeglądarkowej (React Web) ==="
-# Używamy adresu URL backendu z Render
-REACT_APP_API_URL=https://ai-english-buddy-backend.onrender.com npm run build --prefix frontend
+REACT_APP_API_URL="" npm run build --prefix frontend
 
 echo "=== 3. Łączenie buildów (kopiowanie wersji mobilnej do podfolderu /mobile) ==="
 rm -rf frontend/build/mobile
