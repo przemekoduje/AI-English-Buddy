@@ -205,6 +205,20 @@ function MediaBuddy({ user }) {
     }
   }, [useWhisper]);
 
+  const [useRapidAPI, setUseRapidAPI] = useState(() => {
+    try {
+      return localStorage.getItem("media_buddy_use_rapidapi") === "true";
+    } catch (e) {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("media_buddy_use_rapidapi", useRapidAPI.toString());
+    } catch (e) {}
+  }, [useRapidAPI]);
+
 
 
   // Pause video on vocabulary drawer open
@@ -785,7 +799,11 @@ function MediaBuddy({ user }) {
 
     setIsLoadingCustom(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=${useWhisper}`, {
+      const endpoint = useRapidAPI
+        ? `${API_BASE_URL}/api/media/transcript/rapidapi?video_id=${videoId}`
+        : `${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=${useWhisper}`;
+
+      const response = await fetch(endpoint, {
         headers: {
           "X-Session-Token": user.token
         }
@@ -866,22 +884,52 @@ function MediaBuddy({ user }) {
           <div className="toggle-switch-wrapper">
             <button
               type="button"
-              className={`toggle-option-btn ${!useWhisper ? "active" : ""}`}
-              onClick={() => setUseWhisper(false)}
+              className={`toggle-option-btn ${!useWhisper && !useRapidAPI ? "active" : ""}`}
+              onClick={() => { setUseWhisper(false); setUseRapidAPI(false); }}
               title="Darmowe automatyczne napisy z YouTube (brak interpunkcji)"
             >
               <span>Darmowy (Nap. automatyczne)</span>
             </button>
             <button
               type="button"
-              className={`toggle-option-btn ${useWhisper ? "active" : ""}`}
-              onClick={() => setUseWhisper(true)}
+              className={`toggle-option-btn ${useWhisper && !useRapidAPI ? "active" : ""}`}
+              onClick={() => { setUseWhisper(true); setUseRapidAPI(false); }}
               title="Płatna transkrypcja AI przez Whisper (świetna interpunkcja i wielkie litery)"
             >
               <span>Premium AI (Whisper)</span>
             </button>
+            <button
+              type="button"
+              className={`toggle-option-btn ${useRapidAPI ? "active rapidapi-active" : ""}`}
+              onClick={() => { setUseRapidAPI(!useRapidAPI); }}
+              title="Zewnętrzne Cloud API – omija blokady YouTube na serwerze (PŁATNE)"
+            >
+              <span>☁️ Cloud API (RapidAPI)</span>
+            </button>
           </div>
         </div>
+
+        {/* RapidAPI Warning Banner */}
+        {useRapidAPI && (
+          <div className="rapidapi-warning-banner">
+            <div className="rapidapi-warning-icon">⚠️</div>
+            <div className="rapidapi-warning-content">
+              <strong>Tryb płatny – Cloud API (RapidAPI) jest aktywny</strong>
+              <p>
+                Ten tryb pobiera transkrypcje przez zewnętrzne API (<strong>~10 USD/mc</strong>).
+                Omija blokady YouTube na serwerach chmurowych, ale generuje koszty przy każdym zapytaniu.
+                Wyłącz go jeśli nie potrzebujesz pobierać nowych filmów.
+              </p>
+            </div>
+            <button
+              className="rapidapi-warning-close"
+              onClick={() => setUseRapidAPI(false)}
+              title="Wyłącz Cloud API"
+            >
+              Wyłącz
+            </button>
+          </div>
+        )}
 
         {customError && <p className="loader-error">{customError}</p>}
 

@@ -1107,3 +1107,66 @@
   color: var(--primary-600);
   box-shadow: var(--shadow-sm);
 }
+
+.toggle-option-btn.rapidapi-active {
+  background: #fff3cd;
+  color: #856404;
+  box-shadow: 0 0 0 2px #ffc10740;
+}
+
+/* RapidAPI Warning Banner */
+.rapidapi-warning-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: linear-gradient(135deg, #fff8e1, #fff3cd);
+  border: 1.5px solid #ffc107;
+  border-left: 4px solid #ff8f00;
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  margin-top: 0.75rem;
+  animation: fade-in 0.3s ease;
+}
+
+.rapidapi-warning-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.rapidapi-warning-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.rapidapi-warning-content strong {
+  display: block;
+  font-size: 0.88rem;
+  color: #7b4f00;
+  margin-bottom: 0.3rem;
+}
+
+.rapidapi-warning-content p {
+  font-size: 0.8rem;
+  color: #856404;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.rapidapi-warning-close {
+  flex-shrink: 0;
+  background: #ff8f00;
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+
+.rapidapi-warning-close:hover {
+  background: #e65100;
+}

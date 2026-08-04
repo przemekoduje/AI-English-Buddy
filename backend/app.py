@@ -1367,6 +1367,133 @@ def parse_manual_transcript(raw_text):
         
     return parsed
 
+@app.route("/api/media/transcript/rapidapi", methods=['GET'])
+def get_youtube_transcript_rapidapi():
+    """
+    Pobiera transkrypcję z YouTube przez zewnętrzne RapidAPI (youtube-transcript3).
+    Omija blokady IP YouTube charakterystyczne dla serwerów chmurowych.
+    Wymaga aktywnej subskrypcji RapidAPI (ok. 10 USD/mc).
+    """
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    video_id = request.args.get("video_id")
+    if not video_id:
+        return jsonify({"error": "Brak identyfikatora wideo"}), 400
+
+    RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+    RAPIDAPI_HOST = os.getenv("RAPIDAPI_YOUTUBE_HOST", "youtube-transcript3.p.rapidapi.com")
+
+    if not RAPIDAPI_KEY:
+        return jsonify({
+            "error": "Brak klucza RAPIDAPI_KEY w konfiguracji serwera. Skontaktuj się z administratorem."
+        }), 503
+
+    # Fetch video title via oembed
+    video_title = f"Wideo YouTube ({video_id})"
+    try:
+        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+        oembed_resp = requests.get(oembed_url, timeout=5)
+        if oembed_resp.ok:
+            video_title = oembed_resp.json().get("title", video_title)
+    except Exception:
+        pass
+
+    # Call RapidAPI YouTube Transcript
+    try:
+        print(f"[RapidAPI] Fetching transcript for video_id={video_id} via {RAPIDAPI_HOST}", flush=True)
+        url = f"https://{RAPIDAPI_HOST}/api/transcript-with-url"
+        headers = {
+            "X-RapidAPI-Key": RAPIDAPI_KEY,
+            "X-RapidAPI-Host": RAPIDAPI_HOST
+        }
+        params = {
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+            "flat_text": "false",
+            "lang": "en"
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=20)
+
+        if not resp.ok:
+            # Try alternate endpoint format
+            url2 = f"https://{RAPIDAPI_HOST}/api/transcript"
+            params2 = {"videoId": video_id, "lang": "en"}
+            resp = requests.get(url2, headers=headers, params=params2, timeout=20)
+
+        if not resp.ok:
+            print(f"[RapidAPI] Error {resp.status_code}: {resp.text[:300]}", flush=True)
+            return jsonify({
+                "error": f"RapidAPI zwróciło błąd {resp.status_code}. Sprawdź subskrypcję lub zmień plan."
+            }), 502
+
+        data = resp.json()
+        print(f"[RapidAPI] Response keys: {list(data.keys()) if isinstance(data, dict) else type(data)}", flush=True)
+
+        # Parse various RapidAPI response formats
+        formatted = []
+
+        # Format A: list of {text, start, duration}
+        if isinstance(data, list):
+            for entry in data:
+                start = round(float(entry.get("start", 0)), 2)
+                duration = round(float(entry.get("duration", 2)), 2)
+                end = round(start + duration, 2)
+                text = entry.get("text", "").replace("\n", " ").strip()
+                if text:
+                    formatted.append({"start": start, "end": end, "text": text})
+
+        # Format B: {"content": [...]}
+        elif isinstance(data, dict) and "content" in data:
+            for entry in data["content"]:
+                start = round(float(entry.get("start", 0)), 2)
+                duration = round(float(entry.get("duration", 2)), 2)
+                end = round(start + duration, 2)
+                text = entry.get("text", "").replace("\n", " ").strip()
+                if text:
+                    formatted.append({"start": start, "end": end, "text": text})
+
+        # Format C: {"transcript": [...]} or {"transcripts": [...]}
+        elif isinstance(data, dict):
+            entries = data.get("transcript") or data.get("transcripts") or data.get("segments") or []
+            if isinstance(entries, list):
+                for entry in entries:
+                    if isinstance(entry, dict):
+                        start = round(float(entry.get("start", entry.get("startMs", 0)) if "startMs" not in entry else entry["startMs"] / 1000), 2)
+                        duration = round(float(entry.get("duration", 2)), 2)
+                        end = round(start + duration, 2)
+                        text = entry.get("text", entry.get("subtitle", "")).replace("\n", " ").strip()
+                        if text:
+                            formatted.append({"start": start, "end": end, "text": text})
+            elif isinstance(entries, str):
+                # Plain text — create a single segment
+                formatted.append({"start": 0.0, "end": 999.0, "text": entries.strip()})
+
+        if not formatted:
+            print(f"[RapidAPI] Parsed 0 segments. Raw response: {str(data)[:500]}", flush=True)
+            return jsonify({
+                "error": "RapidAPI nie zwróciło żadnych segmentów transkrypcji dla tego filmu."
+            }), 404
+
+        print(f"[RapidAPI] Successfully parsed {len(formatted)} segments.", flush=True)
+
+        try:
+            aggregated = semantic_group_transcript(formatted)
+        except Exception:
+            aggregated = formatted
+
+        return jsonify({
+            "video_id": video_id,
+            "title": video_title,
+            "transcript": aggregated,
+            "source": "rapidapi"
+        })
+
+    except Exception as e:
+        print(f"[RapidAPI] Exception: {e}", flush=True)
+        return jsonify({"error": f"Błąd połączenia z RapidAPI: {str(e)}"}), 500
+
+
 @app.route("/api/media/transcript", methods=['GET'])
 def get_youtube_transcript():
     user_email = get_user_from_request()
