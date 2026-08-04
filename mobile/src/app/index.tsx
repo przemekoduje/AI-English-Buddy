@@ -1794,7 +1794,7 @@ export default function HomeScreen() {
         Alert.alert('Błąd', data.error || 'Niepoprawne dane logowania');
       }
     } catch (err) {
-      Alert.alert('Błąd połączenia', 'Nie udało się połączyć z serwerem. Upewnij się, że serwer działa pod wskazanym adresem IP.');
+      Alert.alert('Błąd połączenia', 'Nie udało się połączyć z serwerem. Sprawdź połączenie z internetem i spróbuj ponownie.');
     } finally {
       setAuthLoading(false);
     }
@@ -2610,22 +2610,14 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.authContainer}>
         <ScrollView contentContainerStyle={styles.authScroll}>
           <View style={styles.headerSpacer} />
-          <Text style={styles.authLogo}>AI English Buddy</Text>
-          <Text style={styles.authSub}>Twoja inteligentna nauka języka angielskiego</Text>
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.authLogoImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.authLogo}>Speakling</Text>
 
           <View style={styles.authCard}>
-            <Text style={styles.authLabel}>Adres IP komputera (Backend)</Text>
-            <TextInput
-              style={styles.authInput}
-              value={backendUrl}
-              onChangeText={async (text) => {
-                setBackendUrl(text);
-                await AsyncStorage.setItem('buddy_backend_url', text);
-              }}
-              placeholder="http://192.168.1.100:5001"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
 
             <Text style={styles.authLabel}>Email</Text>
             <TextInput
@@ -4819,18 +4811,18 @@ const styles = StyleSheet.create({
   headerSpacer: {
     height: 60,
   },
+  authLogoImage: {
+    width: 72,
+    height: 72,
+    marginBottom: 12,
+  },
   authLogo: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
     color: '#1A1A1A',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  authSub: {
-    fontSize: 14,
-    color: '#5F6368',
     marginBottom: 36,
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
   authCard: {
     width: '100%',
