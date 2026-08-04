@@ -723,6 +723,15 @@ function MediaBuddy({ user }) {
     return (match && match[2].length === 11) ? match[2] : url.trim();
   };
 
+  const handleSelectVideo = (vid) => {
+    if (currentVideo && currentVideo.id === vid.id) return;
+    setIsLoadingCustom(true);
+    setTimeout(() => {
+      setCurrentVideo(vid);
+      setIsLoadingCustom(false);
+    }, 600);
+  };
+
   const fetchAndLoadVideo = async (videoId) => {
     setCustomError("");
     
@@ -984,7 +993,7 @@ function MediaBuddy({ user }) {
                   <div
                     key={vid.id}
                     className={`video-tile ${isActive ? "active" : ""}`}
-                    onClick={() => setCurrentVideo(vid)}
+                    onClick={() => handleSelectVideo(vid)}
                   >
                     <div className="video-tile-thumbnail-wrapper">
                       <img
@@ -1076,7 +1085,7 @@ function MediaBuddy({ user }) {
                     <div
                       key={vid.id}
                       className={`video-tile ${isActive ? "active" : ""}`}
-                      onClick={() => setCurrentVideo(vid)}
+                      onClick={() => handleSelectVideo(vid)}
                     >
                       <div className="video-tile-thumbnail-wrapper">
                         <img
