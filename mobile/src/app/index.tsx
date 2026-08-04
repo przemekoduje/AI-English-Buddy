@@ -2611,7 +2611,7 @@ export default function HomeScreen() {
         <ScrollView contentContainerStyle={styles.authScroll}>
           <View style={styles.headerSpacer} />
           <Image
-            source={require('../../assets/images/logo.png')}
+            source={require('../../assets/images/logo-transparent.png')}
             style={styles.authLogoImage}
             resizeMode="contain"
           />
@@ -4815,7 +4815,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     marginBottom: 8,
-    mixBlendMode: 'multiply' as any,
   },
   authLogo: {
     fontSize: 32,
