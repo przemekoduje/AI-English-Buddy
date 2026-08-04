@@ -737,33 +737,40 @@ function MediaBuddy({ user }) {
 
     const staticTranscript = getStaticTranscript(videoId);
     if (staticTranscript) {
-      let title = `Wideo (${videoId})`;
-      // Try to find the title in CURATED_SOURCES
-      for (const source of CURATED_SOURCES) {
-        const found = source.videos.find(v => v.youtubeId === videoId);
-        if (found) {
-          title = found.title;
-          break;
+      setIsLoadingCustom(true);
+      setTimeout(() => {
+        let title = `Wideo (${videoId})`;
+        // Try to find the title in CURATED_SOURCES
+        for (const source of CURATED_SOURCES) {
+          const found = source.videos.find(v => v.youtubeId === videoId);
+          if (found) {
+            title = found.title;
+            break;
+          }
         }
-      }
-      // Or in CURATED_VIDEOS
-      const foundCurated = CURATED_VIDEOS.find(v => v.youtubeId === videoId);
-      if (foundCurated) {
-        title = foundCurated.title;
-      }
+        // Or in CURATED_VIDEOS
+        const foundCurated = CURATED_VIDEOS.find(v => v.youtubeId === videoId);
+        if (foundCurated) {
+          title = foundCurated.title;
+        }
 
-      const staticVid = {
-        id: `custom_${videoId}`,
-        title: title,
-        youtubeId: videoId,
-        transcript: staticTranscript
-      };
+        const staticVid = {
+          id: `custom_${videoId}`,
+          title: title,
+          youtubeId: videoId,
+          transcript: staticTranscript
+        };
 
-      if (!customVideos.some(v => v.youtubeId === videoId)) {
-        setCustomVideos([...customVideos, staticVid]);
-      }
-      setCurrentVideo(staticVid);
-      setCustomUrl("");
+        setCustomVideos(prev => {
+          if (!prev.some(v => v.youtubeId === videoId)) {
+            return [...prev, staticVid];
+          }
+          return prev;
+        });
+        setCurrentVideo(staticVid);
+        setCustomUrl("");
+        setIsLoadingCustom(false);
+      }, 800);
       return;
     }
 

@@ -1559,33 +1559,39 @@ export default function HomeScreen() {
 
     const staticTranscript = getStaticTranscript(yId);
     if (staticTranscript) {
-      let title = `Wideo (${yId})`;
-      if (yId === "5MgBikgcWnY") title = "Tim Urban - Inside the mind of a master procrastinator";
-      if (yId === "iCvmsMzlF7o") title = "Amy Cuddy - Your body language may shape who you are";
-      if (yId === "w-HYZv6HzAs") title = "Simon Sinek - How great leaders inspire action";
-      if (yId === "Sxxw3qtb3_g") title = "What is Git? (in 100 Seconds)";
-      if (yId === "erEgovG9WBs") title = "100+ Web Development Terms you need to know";
-      if (yId === "_QdPW8JrYzQ") title = "James Veitch - Spammer";
-      if (yId === "Dceyy0cX6J4") title = "James Veitch - Unsubscribe";
-      if (yId === "cqjhCC4sP4Q") title = "Jeff Allen - Teenagers";
+      setVideoIsLoadingCustom(true);
+      setTimeout(async () => {
+        let title = `Wideo (${yId})`;
+        if (yId === "5MgBikgcWnY") title = "Tim Urban - Inside the mind of a master procrastinator";
+        if (yId === "iCvmsMzlF7o") title = "Amy Cuddy - Your body language may shape who you are";
+        if (yId === "w-HYZv6HzAs") title = "Simon Sinek - How great leaders inspire action";
+        if (yId === "Sxxw3qtb3_g") title = "What is Git? (in 100 Seconds)";
+        if (yId === "erEgovG9WBs") title = "100+ Web Development Terms you need to know";
+        if (yId === "_QdPW8JrYzQ") title = "James Veitch - Spammer";
+        if (yId === "Dceyy0cX6J4") title = "James Veitch - Unsubscribe";
+        if (yId === "cqjhCC4sP4Q") title = "Jeff Allen - Teenagers";
 
-      const staticVid = {
-        id: "custom_" + yId,
-        youtubeId: yId,
-        title: title,
-        transcript: staticTranscript
-      };
+        const staticVid = {
+          id: "custom_" + yId,
+          youtubeId: yId,
+          title: title,
+          transcript: staticTranscript
+        };
 
-      const updatedCustom = [staticVid, ...customVideos.filter(v => v.youtubeId !== yId)];
-      setCustomVideos(updatedCustom);
-      await AsyncStorage.setItem('buddy_custom_videos', JSON.stringify(updatedCustom));
+        setCustomVideos(prev => {
+          const updated = [staticVid, ...prev.filter(v => v.youtubeId !== yId)];
+          AsyncStorage.setItem('buddy_custom_videos', JSON.stringify(updated));
+          return updated;
+        });
 
-      setCurrentVideo(staticVid);
-      setVideoCustomUrl('');
-      setVideoCustomError('');
-      setVideoIsPlaying(false);
-      setVideoCurrentTime(0);
-      setVideoActiveSegmentIdx(-1);
+        setCurrentVideo(staticVid);
+        setVideoCustomUrl('');
+        setVideoCustomError('');
+        setVideoIsPlaying(false);
+        setVideoCurrentTime(0);
+        setVideoActiveSegmentIdx(-1);
+        setVideoIsLoadingCustom(false);
+      }, 800);
       return;
     }
 
