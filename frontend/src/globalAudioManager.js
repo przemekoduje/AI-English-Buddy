@@ -19,6 +19,9 @@ const globalAudioManager = (() => {
         try { _currentAudio.pause(); } catch (e) {}
         _currentAudio = null;
       }
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+      }
       _currentRequestId++;
       return _currentRequestId;
     },
@@ -54,6 +57,9 @@ const globalAudioManager = (() => {
       if (_currentAudio) {
         try { _currentAudio.pause(); } catch (e) {}
         _currentAudio = null;
+      }
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
       }
       _currentRequestId++;
     },
