@@ -868,10 +868,6 @@ function Workspace({
   };
 
   const speakChunk = async (index, single = false) => {
-    // Jeśli fetch jest w toku — blokuj. Pozwala na start gdy poprzednie się skończyło.
-    if (isChunkFetchingRef.current) return;
-    isChunkFetchingRef.current = true;
-
     // Zajmij globalny slot — anuluje poprzednie odtwarzanie z dowolnego źródła
     const requestId = globalAudioManager.acquire();
     activeTTSRequestIdRef.current = requestId;
@@ -912,7 +908,6 @@ function Workspace({
       });
 
       if (!globalAudioManager.isValid(requestId)) {
-        isChunkFetchingRef.current = false;
         return;
       }
 
@@ -921,7 +916,6 @@ function Workspace({
       if (!data.audio_base64) throw new Error("No audio data returned");
 
       if (!globalAudioManager.isValid(requestId) || wasPlayingBeforeTooltipRef.current || isPausedRef.current) {
-        isChunkFetchingRef.current = false;
         return;
       }
 
@@ -930,7 +924,6 @@ function Workspace({
       audio.playbackRate = speechRate;
 
       audio.onended = () => {
-        isChunkFetchingRef.current = false;
         if (!globalAudioManager.isValid(requestId)) return;
         globalAudioManager.release(requestId);
         if (single) {
@@ -941,18 +934,15 @@ function Workspace({
       };
 
       audio.onerror = () => {
-        isChunkFetchingRef.current = false;
         if (!globalAudioManager.isValid(requestId)) return;
         globalAudioManager.release(requestId);
         handleStop();
       };
 
       if (!globalAudioManager.setAudio(requestId, audio)) {
-        isChunkFetchingRef.current = false;
         return;
       }
       currentAudioRef.current = audio;
-      isChunkFetchingRef.current = false; // zwolnij blokadę fetchowania PRZED odtwarzaniem i przejściem do następnego kroku
 
       try {
         await audio.play();
@@ -960,11 +950,9 @@ function Workspace({
         if (playErr.name !== 'AbortError') {
           console.warn("Chunk play error:", playErr);
         }
-        isChunkFetchingRef.current = false;
         currentAudioRef.current = null;
       }
     } catch (err) {
-      isChunkFetchingRef.current = false;
       if (globalAudioManager.isValid(requestId)) {
         console.error("Error generating/playing speech:", err);
         globalAudioManager.release(requestId);
