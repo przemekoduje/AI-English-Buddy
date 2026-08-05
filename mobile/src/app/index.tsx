@@ -1862,7 +1862,7 @@ export default function HomeScreen() {
         setSentences(parsedSentences);
 
         const parsedBreakdownSentences = storyText
-          .split(/(?<=[.!?,;:—–])\s+/)
+          .split(/(?<=[.!?])\s+/)
           .filter((s: string) => s.trim().length > 0);
         setBreakdownSentences(parsedBreakdownSentences);
         setStoryPrompt('');
@@ -1904,7 +1904,7 @@ export default function HomeScreen() {
     setSentences(parsedSentences);
 
     const parsedBreakdownSentences = pastedText
-      .split(/(?<=[.!?,;:—–])\s+/)
+      .split(/(?<=[.!?])\s+/)
       .filter((s: string) => s.trim().length > 0);
     setBreakdownSentences(parsedBreakdownSentences);
     
@@ -1936,7 +1936,7 @@ export default function HomeScreen() {
     setSentences(parsedSentences);
 
     const parsedBreakdownSentences = story.text
-      .split(/(?<=[.!?,;:—–])\s+/)
+      .split(/(?<=[.!?])\s+/)
       .filter((s: string) => s.trim().length > 0);
     setBreakdownSentences(parsedBreakdownSentences);
     setBreakdownTranslations({});
