@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL } from '../config';
 import "../App.css";
 import "./Workspace.css";
+import globalAudioManager from '../globalAudioManager';
 import Flashcards from "./Flashcards";
 import StoryGenerator from "./Story/StoryGenerator";
 import Reader from "./Reader/Reader";
@@ -865,18 +866,16 @@ function Workspace({
   };
 
   const speakChunk = async (index, single = false) => {
-    const requestId = ++activeTTSRequestIdRef.current;
+    // Zajmij globalny slot — anuluje poprzednie odtwarzanie z dowolnego źródła
+    const requestId = globalAudioManager.acquire();
+    activeTTSRequestIdRef.current = requestId; // trzymamy lokalnie dla kompatybilności
 
     if (index >= textChunks.length) {
       handleStop();
       return;
     }
 
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current = null;
-    }
-
+    currentAudioRef.current = null;
     setCurrentChunkIndex(index);
     currentChunkIndexRef.current = index;
     setIsSpeaking(true);
@@ -905,24 +904,21 @@ function Workspace({
         })
       });
 
-      if (requestId !== activeTTSRequestIdRef.current) {
-        return;
-      }
+      if (!globalAudioManager.isValid(requestId)) return;
 
       if (!response.ok) throw new Error("Failed to generate audio");
       const data = await response.json();
       if (!data.audio_base64) throw new Error("No audio data returned");
 
-      if (requestId !== activeTTSRequestIdRef.current || wasPlayingBeforeTooltipRef.current || isPausedRef.current) {
-        return;
-      }
+      if (!globalAudioManager.isValid(requestId) || wasPlayingBeforeTooltipRef.current || isPausedRef.current) return;
 
       const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
       const audio = new Audio(audioUrl);
       audio.playbackRate = speechRate;
 
       audio.onended = () => {
-        if (requestId !== activeTTSRequestIdRef.current) return;
+        if (!globalAudioManager.isValid(requestId)) return;
+        globalAudioManager.release(requestId);
         if (single) {
           handleStop();
         } else {
@@ -931,15 +927,18 @@ function Workspace({
       };
 
       audio.onerror = () => {
-        if (requestId !== activeTTSRequestIdRef.current) return;
+        if (!globalAudioManager.isValid(requestId)) return;
+        globalAudioManager.release(requestId);
         handleStop();
       };
 
+      if (!globalAudioManager.setAudio(requestId, audio)) return;
       currentAudioRef.current = audio;
       audio.play();
     } catch (err) {
-      if (requestId === activeTTSRequestIdRef.current) {
+      if (globalAudioManager.isValid(requestId)) {
         console.error("Error generating/playing speech:", err);
+        globalAudioManager.release(requestId);
         handleStop();
       }
     }
@@ -971,11 +970,10 @@ function Workspace({
   handlePlaybackRef.current = handlePlayback;
 
   const handleStop = () => {
-    activeTTSRequestIdRef.current++;
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current = null;
-    }
+    // Zatrzymuje WSZYSTKIE aktywne audio w całej aplikacji
+    globalAudioManager.stopAll();
+    activeTTSRequestIdRef.current = globalAudioManager.currentRequestId;
+    currentAudioRef.current = null;
     setIsSpeaking(false);
     isSpeakingRef.current = false;
     setIsPaused(false);
@@ -1316,10 +1314,10 @@ function Workspace({
 
   const handleSpeakSelectedText = async () => {
     if (!selectedText) return;
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current = null;
-    }
+    const requestId = globalAudioManager.acquire();
+    activeTTSRequestIdRef.current = requestId;
+    currentAudioRef.current = null;
+
     setActivityLog(prev => [
       ...prev,
       {
@@ -1337,11 +1335,14 @@ function Workspace({
           voice: selectedVoiceURI || "en-US-BrianNeural"
         })
       });
+      if (!globalAudioManager.isValid(requestId)) return;
       const data = await response.json();
-      if (data.audio_base64) {
+      if (data.audio_base64 && globalAudioManager.isValid(requestId)) {
         const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
         const audio = new Audio(audioUrl);
         audio.playbackRate = speechRate;
+        audio.onended = () => globalAudioManager.release(requestId);
+        if (!globalAudioManager.setAudio(requestId, audio)) return;
         currentAudioRef.current = audio;
         audio.play();
       }

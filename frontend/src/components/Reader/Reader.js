@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { API_BASE_URL } from "../../config";
 import "./Reader.css";
 import "../Practice/PracticeMode.css";
+import globalAudioManager from '../../globalAudioManager';
 
 const Reader = ({
   generatedText,
@@ -58,7 +59,8 @@ const Reader = ({
   const showLiveChatBadge = readProgressRatio >= 0.70 || (currentChunkIndex === -1 && !isSpeaking && textChunks && textChunks.length > 0);
 
   const startPracticeChatSession = async () => {
-    if (onStop) onStop();
+    if (onStop) onStop(); // zatrzymuje Workspace audio
+    globalAudioManager.stopAll(); // zatrzymuje wszelkie inne TTS
     setLiveChatActive(true);
     setChatOrbStatus("thinking");
     setIsChatProcessing(true);
@@ -101,6 +103,8 @@ const Reader = ({
   };
 
   const speakChatBotText = async (text) => {
+    const requestId = globalAudioManager.acquire();
+    chatAudioRef.current = null;
     setChatOrbStatus("speaking");
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
@@ -111,24 +115,45 @@ const Reader = ({
           voice: selectedVoiceURI || "en-US-BrianNeural"
         })
       });
+
+      if (!globalAudioManager.isValid(requestId)) return;
+
       const data = await response.json();
       if (data.audio_base64) {
+        if (!globalAudioManager.isValid(requestId)) return;
         const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
         const audio = new Audio(audioUrl);
-        chatAudioRef.current = audio;
         audio.onended = () => {
+          if (!globalAudioManager.isValid(requestId)) return;
+          globalAudioManager.release(requestId);
+          chatAudioRef.current = null;
           setChatOrbStatus("standby");
           startChatRecording();
         };
+        audio.onerror = () => {
+          if (!globalAudioManager.isValid(requestId)) return;
+          globalAudioManager.release(requestId);
+          chatAudioRef.current = null;
+          setChatOrbStatus("standby");
+          startChatRecording();
+        };
+        if (!globalAudioManager.setAudio(requestId, audio)) return;
+        chatAudioRef.current = audio;
         audio.play();
       } else {
-        setChatOrbStatus("standby");
-        startChatRecording();
+        if (globalAudioManager.isValid(requestId)) {
+          globalAudioManager.release(requestId);
+          setChatOrbStatus("standby");
+          startChatRecording();
+        }
       }
     } catch (err) {
       console.error("Chat TTS error:", err);
-      setChatOrbStatus("standby");
-      startChatRecording();
+      if (globalAudioManager.isValid(requestId)) {
+        globalAudioManager.release(requestId);
+        setChatOrbStatus("standby");
+        startChatRecording();
+      }
     }
   };
 
