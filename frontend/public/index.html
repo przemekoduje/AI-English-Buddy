@@ -7,7 +7,8 @@
         if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
           var path = window.location.pathname;
           if (!path.startsWith('/speakling/mobile') && !path.startsWith('/speakling/mobile/')) {
-            var target = window.location.origin + '/speakling/mobile/' + window.location.search + window.location.hash;
+            var separator = window.location.search ? '&' : '?';
+            var target = window.location.origin + '/speakling/mobile/' + window.location.search + separator + 'cb=' + Date.now() + window.location.hash;
             window.location.replace(target);
           }
         }
