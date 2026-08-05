@@ -176,6 +176,11 @@
   padding: 0 2px;
   border-bottom: 2px solid transparent;
   transition: all 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .training-sentence:hover {

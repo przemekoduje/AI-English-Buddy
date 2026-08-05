@@ -26,8 +26,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const [chatOrbStatus, setChatOrbStatus] = useState("inactive");
 
   const [translationModalData, setTranslationModalData] = useState(null);
-  const longPressTimeoutRef = useRef(null);
-  const isLongPressRef = useRef(false);
+  const blockClickRef = useRef(false);
 
   const showSentenceTranslationModal = (item, index) => {
     setTranslationModalData({
@@ -37,29 +36,23 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     });
   };
 
-  const handleSentenceStartPress = (item, index) => {
-    isLongPressRef.current = false;
-    if (longPressTimeoutRef.current) clearTimeout(longPressTimeoutRef.current);
-    longPressTimeoutRef.current = setTimeout(() => {
-      isLongPressRef.current = true;
-      showSentenceTranslationModal(item, index);
-    }, 600);
+  const handleContextMenu = (e, item, index) => {
+    e.preventDefault();
+    e.stopPropagation();
+    blockClickRef.current = true;
+    showSentenceTranslationModal(item, index);
+    setTimeout(() => {
+      blockClickRef.current = false;
+    }, 500);
   };
 
-  const handleSentenceEndPress = (e, index, lang, segmentIdx) => {
-    if (longPressTimeoutRef.current) clearTimeout(longPressTimeoutRef.current);
-    if (isLongPressRef.current) {
+  const handleSentenceClick = (e, index, lang, segmentIdx) => {
+    if (blockClickRef.current) {
       e.preventDefault();
       e.stopPropagation();
-    } else {
-      speakSentence(index, lang, segmentIdx);
+      return;
     }
-  };
-
-  const handleSentenceCancelPress = () => {
-    if (longPressTimeoutRef.current) {
-      clearTimeout(longPressTimeoutRef.current);
-    }
+    speakSentence(index, lang, segmentIdx);
   };
 
   const currentAudioRef = useRef(null);
@@ -736,12 +729,8 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                     key={index} 
                     id={`sentence-${index}`} 
                     className={`training-sentence ${index === currentIndex ? "active" : ""}`}
-                    onTouchStart={() => handleSentenceStartPress(item, index)}
-                    onTouchEnd={(e) => handleSentenceEndPress(e, index, targetLang, targetSegment)}
-                    onTouchCancel={handleSentenceCancelPress}
-                    onMouseDown={() => handleSentenceStartPress(item, index)}
-                    onMouseUp={(e) => handleSentenceEndPress(e, index, targetLang, targetSegment)}
-                    onMouseLeave={handleSentenceCancelPress}
+                    onClick={(e) => handleSentenceClick(e, index, targetLang, targetSegment)}
+                    onContextMenu={(e) => handleContextMenu(e, item, index)}
                   >
                     {item.en}{" "}
                   </span>
