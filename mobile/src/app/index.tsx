@@ -287,6 +287,7 @@ export default function HomeScreen() {
   const paragraphHeightRef = useRef<number>(0);          // Total height of the paragraph text
   const chatSessionStarted = useRef<boolean>(false);     // ensures chat starts only once
   const activePlayIndexRef = useRef<number>(-1);          // Tracks current active index in speakAll loop to prevent iOS WebKit double-triggers
+  const breakdownRowHeightsRef = useRef<{[key: number]: number}>({}); // Tracks dynamic heights/offsets for each row in breakdown mode to scroll precisely
 
   // Sentence Translation States
   const [translatedSentenceIdx, setTranslatedSentenceIdx] = useState<number | null>(null);
@@ -1991,10 +1992,14 @@ export default function HomeScreen() {
   const scrollToSentence = (index: number) => {
     if (workspaceScrollRef.current) {
       if (readMode === 'breakdown') {
-        // W trybie Breakdown każdy wiersz (zdanie + tłumaczenie) ma wysokość około 90-110px.
-        // Wykorzystujemy indeks zdania bezpośrednio do obliczenia Y w pionowym stosie.
-        const estimatedRowHeight = 90; 
-        const estimatedSentenceY = index * estimatedRowHeight;
+        // Obliczamy sumaryczną wysokość wszystkich wierszy przed wybranym indeksem
+        let estimatedSentenceY = 0;
+        const spacing = 16; // gap między elementami wynosi 16
+        for (let i = 0; i < index; i++) {
+          const rowHeight = breakdownRowHeightsRef.current[i] || 90; // backup: 90px
+          estimatedSentenceY += (rowHeight + spacing);
+        }
+        
         const absoluteY = storyCardYRef.current + estimatedSentenceY;
         const targetY = Math.max(0, absoluteY - 120);
 
@@ -3190,7 +3195,14 @@ export default function HomeScreen() {
                           const polishText = breakdownTranslations[idx] || 'Tłumaczenie...';
                           const isHighlighted = selectedSentenceIndex === idx || speakingSentenceIndex === idx || translatedSentenceIdx === idx;
                           return (
-                            <View key={idx} style={[styles.breakdownRow, isHighlighted ? styles.breakdownRowActive : null]}>
+                            <View 
+                              key={idx} 
+                              style={[styles.breakdownRow, isHighlighted ? styles.breakdownRowActive : null]}
+                              onLayout={(e) => {
+                                // Save height of each row dynamically
+                                breakdownRowHeightsRef.current[idx] = e.nativeEvent.layout.height;
+                              }}
+                            >
                               <TouchableOpacity 
                                 onPress={() => speakSentence(idx)}
                                 onLongPress={() => handleLongPressSentence(idx)}
