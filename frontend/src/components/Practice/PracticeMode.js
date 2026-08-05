@@ -43,6 +43,9 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const chatMessagesRef = useRef([]);
   const liveChatStageRef = useRef(null);
 
+  const activeTTSRequestIdRef = useRef(0);
+  const activeChatTTSRequestIdRef = useRef(0);
+
   useEffect(() => {
     if (liveChatActive && liveChatStageRef.current) {
       liveChatStageRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -52,6 +55,8 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   useEffect(() => {
     prepareContent();
     return () => {
+      activeTTSRequestIdRef.current++;
+      activeChatTTSRequestIdRef.current++;
       if (currentAudioRef.current) {
         currentAudioRef.current.pause();
         currentAudioRef.current = null;
@@ -104,6 +109,8 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   };
 
   const speakSentence = async (index, lang = "en", segmentIdx = -1) => {
+    const requestId = ++activeTTSRequestIdRef.current;
+
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
@@ -146,11 +153,15 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
         })
       });
 
+      if (requestId !== activeTTSRequestIdRef.current) {
+        return;
+      }
+
       if (!response.ok) throw new Error("TTS generation failed");
       const data = await response.json();
       if (!data.audio_base64) throw new Error("No audio data returned");
 
-      if (isPausedRef.current) {
+      if (requestId !== activeTTSRequestIdRef.current || isPausedRef.current) {
         return;
       }
 
@@ -159,12 +170,13 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       audio.playbackRate = rate;
 
       audio.onplay = () => {
+        if (requestId !== activeTTSRequestIdRef.current) return;
         setIsSpeaking(true);
         setIsPaused(false);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         
         const updateProgress = () => {
-          if (!currentAudioRef.current || currentAudioRef.current.paused) return;
+          if (!currentAudioRef.current || currentAudioRef.current.paused || requestId !== activeTTSRequestIdRef.current) return;
           const duration = currentAudioRef.current.duration || (textToSpeak.length * 0.085);
           if (duration > 0) {
             const newProgress = Math.min((currentAudioRef.current.currentTime / duration) * 100, 100);
@@ -179,11 +191,13 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       };
 
       audio.onpause = () => {
+        if (requestId !== activeTTSRequestIdRef.current) return;
         setIsPaused(true);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       };
 
       audio.onended = () => {
+        if (requestId !== activeTTSRequestIdRef.current) return;
         setIsSpeaking(false);
         setIsPaused(false);
         setProgress(100);
@@ -192,6 +206,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       };
 
       audio.onerror = () => {
+        if (requestId !== activeTTSRequestIdRef.current) return;
         setIsSpeaking(false);
         setIsPaused(false);
         setProgress(0);
@@ -203,9 +218,11 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       audio.play();
 
     } catch (err) {
-      console.error("Error playing practice voice:", err);
-      setIsSpeaking(false);
-      setProgress(0);
+      if (requestId === activeTTSRequestIdRef.current) {
+        console.error("Error playing practice voice:", err);
+        setIsSpeaking(false);
+        setProgress(0);
+      }
     }
   };
 
@@ -365,6 +382,8 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const showLiveChatBadge = readProgressRatio >= 0.70;
 
   const startPracticeChatSession = async () => {
+    activeTTSRequestIdRef.current++;
+    activeChatTTSRequestIdRef.current++;
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
@@ -416,6 +435,8 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   };
 
   const speakChatBotText = async (textToSpeak) => {
+    const requestId = ++activeChatTTSRequestIdRef.current;
+
     if (chatAudioRef.current) {
       chatAudioRef.current.pause();
       chatAudioRef.current = null;
@@ -430,26 +451,40 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
           voice: selectedVoiceURI || "en-US-BrianNeural"
         })
       });
+
+      if (requestId !== activeChatTTSRequestIdRef.current) {
+        return;
+      }
+
       const data = await res.json();
       if (data.audio_base64) {
+        if (requestId !== activeChatTTSRequestIdRef.current) {
+          return;
+        }
         const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
         const audio = new Audio(audioUrl);
         chatAudioRef.current = audio;
         audio.onended = () => {
+          if (requestId !== activeChatTTSRequestIdRef.current) return;
           chatAudioRef.current = null;
           startChatRecording();
         };
         audio.onerror = () => {
+          if (requestId !== activeChatTTSRequestIdRef.current) return;
           chatAudioRef.current = null;
           setChatOrbStatus("inactive");
         };
         audio.play();
       } else {
-        setChatOrbStatus("inactive");
+        if (requestId === activeChatTTSRequestIdRef.current) {
+          setChatOrbStatus("inactive");
+        }
       }
     } catch (e) {
-      console.error("TTS chat error:", e);
-      setChatOrbStatus("inactive");
+      if (requestId === activeChatTTSRequestIdRef.current) {
+        console.error("TTS chat error:", e);
+        setChatOrbStatus("inactive");
+      }
     }
   };
 
@@ -581,6 +616,8 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   };
 
   const changePhase = (newPhase) => {
+    activeTTSRequestIdRef.current++;
+    activeChatTTSRequestIdRef.current++;
     setPhase(newPhase);
     setSubPhase(1);
     setCurrentIndex(0);

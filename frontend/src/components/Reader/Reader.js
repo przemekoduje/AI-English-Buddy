@@ -374,7 +374,7 @@ const Reader = ({
         </div>
       )}
 
-      <div className="story-typography" onMouseUp={handleTextSelectionWrapper}>
+      <div className="story-typography" onMouseUp={handleTextSelectionWrapper} onTouchEnd={handleTextSelectionWrapper}>
         {textChunks.map((chunk, index) => {
           const isCurrentReading = index === currentChunkIndex;
           
@@ -413,6 +413,7 @@ const Reader = ({
               className="sentence-hover-popup-wrapper" 
               onClick={(e) => e.stopPropagation()}
               onMouseUp={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
             >
               <span className="sentence-hover-popup">

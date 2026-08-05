@@ -179,6 +179,7 @@ function Workspace({
   const contextMenuRef = useRef(null);
   const activeSelectionRangeRef = useRef(null);
   const activeSelectionTextRef = useRef(null);
+  const activeTTSRequestIdRef = useRef(0);
   // Tracks whether story playback was active when a word tooltip was opened
   const wasPlayingBeforeTooltipRef = useRef(false);
   // Tracks the chunk index at pause-for-tooltip moment
@@ -277,6 +278,16 @@ function Workspace({
   useEffect(() => {
     loadVocabulary();
   }, [loadVocabulary]);
+
+  useEffect(() => {
+    return () => {
+      activeTTSRequestIdRef.current++;
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -854,6 +865,8 @@ function Workspace({
   };
 
   const speakChunk = async (index, single = false) => {
+    const requestId = ++activeTTSRequestIdRef.current;
+
     if (index >= textChunks.length) {
       handleStop();
       return;
@@ -892,11 +905,15 @@ function Workspace({
         })
       });
 
+      if (requestId !== activeTTSRequestIdRef.current) {
+        return;
+      }
+
       if (!response.ok) throw new Error("Failed to generate audio");
       const data = await response.json();
       if (!data.audio_base64) throw new Error("No audio data returned");
 
-      if (wasPlayingBeforeTooltipRef.current || isPausedRef.current) {
+      if (requestId !== activeTTSRequestIdRef.current || wasPlayingBeforeTooltipRef.current || isPausedRef.current) {
         return;
       }
 
@@ -905,6 +922,7 @@ function Workspace({
       audio.playbackRate = speechRate;
 
       audio.onended = () => {
+        if (requestId !== activeTTSRequestIdRef.current) return;
         if (single) {
           handleStop();
         } else {
@@ -913,14 +931,17 @@ function Workspace({
       };
 
       audio.onerror = () => {
+        if (requestId !== activeTTSRequestIdRef.current) return;
         handleStop();
       };
 
       currentAudioRef.current = audio;
       audio.play();
     } catch (err) {
-      console.error("Error generating/playing speech:", err);
-      handleStop();
+      if (requestId === activeTTSRequestIdRef.current) {
+        console.error("Error generating/playing speech:", err);
+        handleStop();
+      }
     }
   };
   speakChunkRef.current = speakChunk;
@@ -950,6 +971,7 @@ function Workspace({
   handlePlaybackRef.current = handlePlayback;
 
   const handleStop = () => {
+    activeTTSRequestIdRef.current++;
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
@@ -972,12 +994,27 @@ function Workspace({
     }
   };
 
-  const handleTextSelection = () => {
+  const handleTextSelection = (e) => {
     const selection = window.getSelection();
     const text = selection.toString().trim();
     if (text && selection.rangeCount > 0) {
-      activeSelectionRangeRef.current = selection.getRangeAt(0).cloneRange();
+      const range = selection.getRangeAt(0).cloneRange();
+      activeSelectionRangeRef.current = range;
       activeSelectionTextRef.current = text;
+
+      const isTouch = e && (e.type === 'touchend' || (e.nativeEvent && e.nativeEvent.type === 'touchend'));
+      const isMobileDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || ('ontouchstart' in window);
+
+      if (isTouch || isMobileDevice) {
+        setTimeout(() => {
+          const currentSel = window.getSelection();
+          if (currentSel && currentSel.toString().trim() === text) {
+            triggerSelectionTranslation(text, range);
+            activeSelectionRangeRef.current = null;
+            activeSelectionTextRef.current = null;
+          }
+        }, 150);
+      }
     } else {
       activeSelectionRangeRef.current = null;
       activeSelectionTextRef.current = null;
