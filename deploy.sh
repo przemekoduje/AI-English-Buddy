@@ -13,14 +13,14 @@ cd ..
 echo "=== 2. Budowanie aplikacji przeglądarkowej (React Web) ==="
 REACT_APP_API_URL="" npm run build --prefix frontend
 
-echo "=== 3. Łączenie buildów (kopiowanie wersji mobilnej do podfolderu /mobile) ==="
-rm -rf frontend/build/mobile
-mkdir -p frontend/build/mobile
-cp -r mobile/dist/* frontend/build/mobile/
+echo "=== 3. Łączenie buildów (kopiowanie wersji mobilnej do podfolderu /speakling/mobile) ==="
+rm -rf frontend/build/speakling/mobile
+mkdir -p frontend/build/speakling/mobile
+cp -r mobile/dist/* frontend/build/speakling/mobile/
 
 echo "=== 4. Publikacja połączonej aplikacji na Firebase Hosting ==="
 npx firebase-tools deploy --only hosting
 
 echo "=== WDRUŻENIE ZAKOŃCZONE SUKCESEM! ==="
-echo "Adres główny (Desktop): https://ai-english-buddy-150e5.web.app"
-echo "Adres mobilny (wersja dedykowana): https://ai-english-buddy-150e5.web.app/mobile/"
+echo "Adres główny (Desktop): https://przemokoduje.com/speakling"
+echo "Adres mobilny (wersja dedykowana): https://przemokoduje.com/speakling/mobile/"

@@ -2209,6 +2209,9 @@ export default function HomeScreen() {
       setIsSpeaking(true);
       prefetchCache.current = {}; // Reset cache
 
+      // Ref to track currently active sentence index in the playing loop
+      // to completely prevent Safari iOS microtask multi-fire bug.
+      const activePlayIndexRef = { current: 0 };
       let currentIdx = 0;
 
       const fetchSentenceBase64 = async (idx: number): Promise<string> => {
@@ -2260,6 +2263,10 @@ export default function HomeScreen() {
         // Auto-scroll to current sentence
         scrollToSentence(currentIdx);
 
+        // Update the active loop index ref to current index
+        activePlayIndexRef.current = currentIdx;
+        const targetIdx = currentIdx;
+
         try {
           if (readMode === 'breakdown') {
             if (breakdownSpeechPhase === 'polish') {
@@ -2269,17 +2276,17 @@ export default function HomeScreen() {
                 const uriPl = await fetchAudioUri(polishText, 'pl-PL-MarekNeural');
                 const { sound: soundPl } = await Audio.Sound.createAsync({ uri: uriPl }, { shouldPlay: true });
                 soundRef.current = soundPl;
-                let hasFinishedPl = false;
                 soundPl.setOnPlaybackStatusUpdate(async (status) => {
-                  if (status.isLoaded && status.didJustFinish && !hasFinishedPl) {
-                    hasFinishedPl = true;
-                    soundPl.unloadAsync().catch(() => {});
-                    if (soundRef.current === soundPl) {
-                      soundRef.current = null;
-                    }
-                    if (speakingRef.current) {
+                  if (status.isLoaded && status.didJustFinish) {
+                    if (activePlayIndexRef.current === targetIdx && speakingRef.current) {
+                      // Lock and advance index
+                      activePlayIndexRef.current = -1; 
+                      soundPl.unloadAsync().catch(() => {});
+                      if (soundRef.current === soundPl) {
+                        soundRef.current = null;
+                      }
                       currentIdx++;
-                      playNext();
+                      setTimeout(playNext, 100);
                     }
                   }
                 });
@@ -2290,17 +2297,16 @@ export default function HomeScreen() {
               const uriEn = await fetchAudioUri(sentenceList[currentIdx], selectedVoice || 'en-US-BrianNeural');
               const { sound: soundEn } = await Audio.Sound.createAsync({ uri: uriEn }, { shouldPlay: true });
               soundRef.current = soundEn;
-              let hasFinishedEn = false;
               soundEn.setOnPlaybackStatusUpdate(async (statusEn) => {
-                if (statusEn.isLoaded && statusEn.didJustFinish && !hasFinishedEn) {
-                  hasFinishedEn = true;
-                  soundEn.unloadAsync().catch(() => {});
-                  if (soundRef.current === soundEn) {
-                    soundRef.current = null;
-                  }
-                  if (speakingRef.current) {
+                if (statusEn.isLoaded && statusEn.didJustFinish) {
+                  if (activePlayIndexRef.current === targetIdx && speakingRef.current) {
+                    activePlayIndexRef.current = -1;
+                    soundEn.unloadAsync().catch(() => {});
+                    if (soundRef.current === soundEn) {
+                      soundRef.current = null;
+                    }
                     currentIdx++;
-                    playNext();
+                    setTimeout(playNext, 100);
                   }
                 }
               });
@@ -2314,25 +2320,26 @@ export default function HomeScreen() {
             fetchSentenceBase64(currentIdx + 1).catch(() => {});
           }
           const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
-          let hasFinished = false;
+          soundRef.current = sound;
           sound.setOnPlaybackStatusUpdate(async (status) => {
-            if (status.isLoaded && status.didJustFinish && !hasFinished) {
-              hasFinished = true;
-              sound.unloadAsync().catch(() => {});
-              if (soundRef.current === sound) {
-                soundRef.current = null;
-              }
-              if (speakingRef.current) {
+            if (status.isLoaded && status.didJustFinish) {
+              if (activePlayIndexRef.current === targetIdx && speakingRef.current) {
+                activePlayIndexRef.current = -1;
+                sound.unloadAsync().catch(() => {});
+                if (soundRef.current === sound) {
+                  soundRef.current = null;
+                }
                 currentIdx++;
-                playNext();
+                setTimeout(playNext, 100);
               }
             }
           });
         } catch (playErr) {
           console.log('Error playing in speakAll sequence', playErr);
-          if (speakingRef.current) {
+          if (activePlayIndexRef.current === targetIdx && speakingRef.current) {
+            activePlayIndexRef.current = -1;
             currentIdx++;
-            playNext();
+            setTimeout(playNext, 100);
           }
         }
       };

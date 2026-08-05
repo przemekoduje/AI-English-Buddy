@@ -13,16 +13,16 @@ Write-Host "=== 2. Budowanie aplikacji przeglądarkowej (React Web) ==="
 $env:REACT_APP_API_URL=""
 npm run build --prefix frontend
 
-Write-Host "=== 3. Łączenie buildów (kopiowanie wersji mobilnej do podfolderu /mobile) ==="
-if (Test-Path frontend/build/mobile) {
-    Remove-Item -Recurse -Force frontend/build/mobile
+Write-Host "=== 3. Łączenie buildów (kopiowanie wersji mobilnej do podfolderu /speakling/mobile) ==="
+if (Test-Path frontend/build/speakling/mobile) {
+    Remove-Item -Recurse -Force frontend/build/speakling/mobile
 }
-New-Item -ItemType Directory -Force -Path frontend/build/mobile
-Copy-Item -Recurse -Force mobile/dist/* frontend/build/mobile/
+New-Item -ItemType Directory -Force -Path frontend/build/speakling/mobile
+Copy-Item -Recurse -Force mobile/dist/* frontend/build/speakling/mobile/
 
 Write-Host "=== 4. Publikacja połączonej aplikacji na Firebase Hosting ==="
 npx firebase-tools deploy --only hosting
 
 Write-Host "=== WDRUŻENIE ZAKOŃCZONE SUKCESEM! ===" -ForegroundColor Green
-Write-Host "Adres główny (Desktop): https://ai-english-buddy-150e5.web.app"
-Write-Host "Adres mobilny (wersja dedykowana): https://ai-english-buddy-150e5.web.app/mobile/"
+Write-Host "Adres główny (Desktop): https://przemokoduje.com/speakling"
+Write-Host "Adres mobilny (wersja dedykowana): https://przemokoduje.com/speakling/mobile/"
