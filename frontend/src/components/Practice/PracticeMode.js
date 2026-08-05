@@ -25,6 +25,43 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const [isChatRecording, setIsChatRecording] = useState(false);
   const [chatOrbStatus, setChatOrbStatus] = useState("inactive");
 
+  const [translationModalData, setTranslationModalData] = useState(null);
+  const longPressTimeoutRef = useRef(null);
+  const isLongPressRef = useRef(false);
+
+  const showSentenceTranslationModal = (item, index) => {
+    setTranslationModalData({
+      en: item.en,
+      pl: item.pl,
+      index: index
+    });
+  };
+
+  const handleSentenceStartPress = (item, index) => {
+    isLongPressRef.current = false;
+    if (longPressTimeoutRef.current) clearTimeout(longPressTimeoutRef.current);
+    longPressTimeoutRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      showSentenceTranslationModal(item, index);
+    }, 600);
+  };
+
+  const handleSentenceEndPress = (e, index, lang, segmentIdx) => {
+    if (longPressTimeoutRef.current) clearTimeout(longPressTimeoutRef.current);
+    if (isLongPressRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+    } else {
+      speakSentence(index, lang, segmentIdx);
+    }
+  };
+
+  const handleSentenceCancelPress = () => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+    }
+  };
+
   const currentAudioRef = useRef(null);
   const progressIntervalRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -691,11 +728,25 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
           <div className="training-area">
             <div className="training-text-scroll">
-              {masteryData.map((item, index) => (
-                <span key={index} id={`sentence-${index}`} className={`training-sentence ${index === currentIndex ? "active" : ""}`} onClick={() => speakSentence(index, phase >= 2 ? "en" : currentLang, phase === 2 ? 0 : -1)}>
-                  {item.en}{" "}
-                </span>
-              ))}
+              {masteryData.map((item, index) => {
+                const targetLang = phase >= 2 ? "en" : currentLang;
+                const targetSegment = phase === 2 ? 0 : -1;
+                return (
+                  <span 
+                    key={index} 
+                    id={`sentence-${index}`} 
+                    className={`training-sentence ${index === currentIndex ? "active" : ""}`}
+                    onTouchStart={() => handleSentenceStartPress(item, index)}
+                    onTouchEnd={(e) => handleSentenceEndPress(e, index, targetLang, targetSegment)}
+                    onTouchCancel={handleSentenceCancelPress}
+                    onMouseDown={() => handleSentenceStartPress(item, index)}
+                    onMouseUp={(e) => handleSentenceEndPress(e, index, targetLang, targetSegment)}
+                    onMouseLeave={handleSentenceCancelPress}
+                  >
+                    {item.en}{" "}
+                  </span>
+                );
+              })}
             </div>
 
             <div className="sentence-controller">
@@ -918,6 +969,37 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
            <button className="step-btn active" onClick={() => changePhase(phase < 4 ? phase + 1 : phase)}>Next Phase →</button>
         </footer>
       </div>
+      {translationModalData && (
+        <div className="modal-overlay" style={{ zIndex: 11000 }} onClick={() => setTranslationModalData(null)}>
+          <div className="modal-content sentence-translation-modal glass-panel" onClick={(e) => e.stopPropagation()}>
+            <h3>Tłumaczenie zdania</h3>
+            <div className="sentence-modal-body" style={{ margin: '1.5rem 0', textAlign: 'left' }}>
+              <p className="english-sentence" style={{ fontWeight: '600', fontSize: '1.1rem', color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
+                {translationModalData.en}
+              </p>
+              <p className="polish-sentence" style={{ color: 'var(--text-secondary)', fontSize: '1rem', fontStyle: 'italic' }}>
+                {translationModalData.pl}
+              </p>
+            </div>
+            <div className="modal-actions" style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <button 
+                className="btn-primary listen-btn" 
+                onClick={() => speakSentence(translationModalData.index, "en")}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                </svg>
+                Odsłuchaj
+              </button>
+              <button className="btn-secondary" onClick={() => setTranslationModalData(null)}>
+                Zamknij
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
