@@ -286,6 +286,7 @@ export default function HomeScreen() {
   const storyCardYRef = useRef<number>(0);               // Y offset of storyTextCard in the ScrollView
   const paragraphHeightRef = useRef<number>(0);          // Total height of the paragraph text
   const chatSessionStarted = useRef<boolean>(false);     // ensures chat starts only once
+  const activePlayIndexRef = useRef<number>(-1);          // Tracks current active index in speakAll loop to prevent iOS WebKit double-triggers
 
   // Sentence Translation States
   const [translatedSentenceIdx, setTranslatedSentenceIdx] = useState<number | null>(null);
@@ -2187,6 +2188,7 @@ export default function HomeScreen() {
 
   const stopSpeech = async () => {
     speakingRef.current = false;
+    activePlayIndexRef.current = -1; // Zablokuj dalsze wyzwalanie kolejnych zdań
     if (soundRef.current) {
       try {
         await soundRef.current.stopAsync();
@@ -2209,9 +2211,7 @@ export default function HomeScreen() {
       setIsSpeaking(true);
       prefetchCache.current = {}; // Reset cache
 
-      // Ref to track currently active sentence index in the playing loop
-      // to completely prevent Safari iOS microtask multi-fire bug.
-      const activePlayIndexRef = { current: 0 };
+      activePlayIndexRef.current = 0;
       let currentIdx = 0;
 
       const fetchSentenceBase64 = async (idx: number): Promise<string> => {
