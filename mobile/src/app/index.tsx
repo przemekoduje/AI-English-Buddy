@@ -1989,26 +1989,37 @@ export default function HomeScreen() {
 
   // Auto-scroll to active sentence using text proportion (since inline Text onLayout is unreliable)
   const scrollToSentence = (index: number) => {
-    if (workspaceScrollRef.current && paragraphHeightRef.current > 0) {
-      // Calculate how many characters are before this sentence
-      const charsBefore = sentences.slice(0, index).join(' ').length;
-      const totalChars = sentences.join(' ').length;
-      
-      const ratio = totalChars > 0 ? charsBefore / totalChars : 0;
-      
-      // Approximate Y offset of the sentence within the paragraph
-      const estimatedSentenceY = ratio * paragraphHeightRef.current;
-      
-      // Absolute Y = storyCard offset + estimated sentence offset
-      const absoluteY = storyCardYRef.current + estimatedSentenceY;
-      const targetY = Math.max(0, absoluteY - 100);
-      
-      console.log(`[AutoScroll] idx=${index}, ratio=${ratio.toFixed(2)}, estY=${estimatedSentenceY}, absoluteY=${absoluteY}, scrolling to targetY=${targetY}`);
-      
-      workspaceScrollRef.current.scrollTo({
-        y: targetY,
-        animated: true,
-      });
+    if (workspaceScrollRef.current) {
+      if (readMode === 'breakdown') {
+        // W trybie Breakdown każdy wiersz (zdanie + tłumaczenie) ma wysokość około 90-110px.
+        // Wykorzystujemy indeks zdania bezpośrednio do obliczenia Y w pionowym stosie.
+        const estimatedRowHeight = 90; 
+        const estimatedSentenceY = index * estimatedRowHeight;
+        const absoluteY = storyCardYRef.current + estimatedSentenceY;
+        const targetY = Math.max(0, absoluteY - 120);
+
+        console.log(`[AutoScroll Breakdown] idx=${index}, estY=${estimatedSentenceY}, absoluteY=${absoluteY}, scrolling to targetY=${targetY}`);
+        workspaceScrollRef.current.scrollTo({
+          y: targetY,
+          animated: true,
+        });
+      } else if (paragraphHeightRef.current > 0) {
+        // W trybie "Cały tekst" (zwykły akapit)
+        const charsBefore = sentences.slice(0, index).join(' ').length;
+        const totalChars = sentences.join(' ').length;
+        const ratio = totalChars > 0 ? charsBefore / totalChars : 0;
+        
+        // Przybliżona wysokość Y
+        const estimatedSentenceY = ratio * paragraphHeightRef.current;
+        const absoluteY = storyCardYRef.current + estimatedSentenceY;
+        const targetY = Math.max(0, absoluteY - 100);
+        
+        console.log(`[AutoScroll Paragraph] idx=${index}, ratio=${ratio.toFixed(2)}, estY=${estimatedSentenceY}, absoluteY=${absoluteY}, scrolling to targetY=${targetY}`);
+        workspaceScrollRef.current.scrollTo({
+          y: targetY,
+          animated: true,
+        });
+      }
     }
   };
 
