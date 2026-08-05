@@ -189,6 +189,8 @@ function Workspace({
   const isSpeakingRef = useRef(false);
   const isPausedRef = useRef(false);
   const currentChunkIndexRef = useRef(-1);
+  // Mutex blokujący równoległe wywołania speakChunk
+  const isChunkFetchingRef = useRef(false);
   
   // Telemetry & summary states
   const [activityLog, setActivityLog] = useState([]);
@@ -866,11 +868,16 @@ function Workspace({
   };
 
   const speakChunk = async (index, single = false) => {
+    // Jeśli fetch jest w toku — blokuj. Pozwala na start gdy poprzednie się skończyło.
+    if (isChunkFetchingRef.current) return;
+    isChunkFetchingRef.current = true;
+
     // Zajmij globalny slot — anuluje poprzednie odtwarzanie z dowolnego źródła
     const requestId = globalAudioManager.acquire();
-    activeTTSRequestIdRef.current = requestId; // trzymamy lokalnie dla kompatybilności
+    activeTTSRequestIdRef.current = requestId;
 
     if (index >= textChunks.length) {
+      isChunkFetchingRef.current = false;
       handleStop();
       return;
     }
@@ -904,19 +911,26 @@ function Workspace({
         })
       });
 
-      if (!globalAudioManager.isValid(requestId)) return;
+      if (!globalAudioManager.isValid(requestId)) {
+        isChunkFetchingRef.current = false;
+        return;
+      }
 
       if (!response.ok) throw new Error("Failed to generate audio");
       const data = await response.json();
       if (!data.audio_base64) throw new Error("No audio data returned");
 
-      if (!globalAudioManager.isValid(requestId) || wasPlayingBeforeTooltipRef.current || isPausedRef.current) return;
+      if (!globalAudioManager.isValid(requestId) || wasPlayingBeforeTooltipRef.current || isPausedRef.current) {
+        isChunkFetchingRef.current = false;
+        return;
+      }
 
       const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
       const audio = new Audio(audioUrl);
       audio.playbackRate = speechRate;
 
       audio.onended = () => {
+        isChunkFetchingRef.current = false;
         if (!globalAudioManager.isValid(requestId)) return;
         globalAudioManager.release(requestId);
         if (single) {
@@ -927,15 +941,29 @@ function Workspace({
       };
 
       audio.onerror = () => {
+        isChunkFetchingRef.current = false;
         if (!globalAudioManager.isValid(requestId)) return;
         globalAudioManager.release(requestId);
         handleStop();
       };
 
-      if (!globalAudioManager.setAudio(requestId, audio)) return;
+      if (!globalAudioManager.setAudio(requestId, audio)) {
+        isChunkFetchingRef.current = false;
+        return;
+      }
       currentAudioRef.current = audio;
-      audio.play();
+
+      try {
+        await audio.play();
+      } catch (playErr) {
+        if (playErr.name !== 'AbortError') {
+          console.warn("Chunk play error:", playErr);
+        }
+        isChunkFetchingRef.current = false;
+        currentAudioRef.current = null;
+      }
     } catch (err) {
+      isChunkFetchingRef.current = false;
       if (globalAudioManager.isValid(requestId)) {
         console.error("Error generating/playing speech:", err);
         globalAudioManager.release(requestId);
@@ -972,6 +1000,7 @@ function Workspace({
   const handleStop = () => {
     // Zatrzymuje WSZYSTKIE aktywne audio w całej aplikacji
     globalAudioManager.stopAll();
+    isChunkFetchingRef.current = false; // resetuj mutex
     activeTTSRequestIdRef.current = globalAudioManager.currentRequestId;
     currentAudioRef.current = null;
     setIsSpeaking(false);
