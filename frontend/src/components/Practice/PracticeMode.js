@@ -210,14 +210,15 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       };
 
       audio.onpause = () => {
+        isTTSActiveRef.current = false; // zawsze zwalniaj mutex przy pauzie
         if (!globalAudioManager.isValid(requestId)) return;
         setIsPaused(true);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       };
 
       audio.onended = () => {
+        isTTSActiveRef.current = false; // zawsze zwalniaj mutex przy końcu
         if (!globalAudioManager.isValid(requestId)) return;
-        isTTSActiveRef.current = false; // zwolnij mutex
         setIsSpeaking(false);
         setIsPaused(false);
         setProgress(100);
