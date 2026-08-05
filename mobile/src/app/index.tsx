@@ -2269,12 +2269,18 @@ export default function HomeScreen() {
                 const uriPl = await fetchAudioUri(polishText, 'pl-PL-MarekNeural');
                 const { sound: soundPl } = await Audio.Sound.createAsync({ uri: uriPl }, { shouldPlay: true });
                 soundRef.current = soundPl;
+                let hasFinishedPl = false;
                 soundPl.setOnPlaybackStatusUpdate(async (status) => {
-                  if (status.isLoaded && status.didJustFinish) {
-                    soundPl.unloadAsync();
-                    soundRef.current = null;
-                    currentIdx++;
-                    playNext();
+                  if (status.isLoaded && status.didJustFinish && !hasFinishedPl) {
+                    hasFinishedPl = true;
+                    soundPl.unloadAsync().catch(() => {});
+                    if (soundRef.current === soundPl) {
+                      soundRef.current = null;
+                    }
+                    if (speakingRef.current) {
+                      currentIdx++;
+                      playNext();
+                    }
                   }
                 });
                 return;
@@ -2284,12 +2290,18 @@ export default function HomeScreen() {
               const uriEn = await fetchAudioUri(sentenceList[currentIdx], selectedVoice || 'en-US-BrianNeural');
               const { sound: soundEn } = await Audio.Sound.createAsync({ uri: uriEn }, { shouldPlay: true });
               soundRef.current = soundEn;
+              let hasFinishedEn = false;
               soundEn.setOnPlaybackStatusUpdate(async (statusEn) => {
-                if (statusEn.isLoaded && statusEn.didJustFinish) {
-                  soundEn.unloadAsync();
-                  soundRef.current = null;
-                  currentIdx++;
-                  playNext();
+                if (statusEn.isLoaded && statusEn.didJustFinish && !hasFinishedEn) {
+                  hasFinishedEn = true;
+                  soundEn.unloadAsync().catch(() => {});
+                  if (soundRef.current === soundEn) {
+                    soundRef.current = null;
+                  }
+                  if (speakingRef.current) {
+                    currentIdx++;
+                    playNext();
+                  }
                 }
               });
               return;
@@ -2302,19 +2314,26 @@ export default function HomeScreen() {
             fetchSentenceBase64(currentIdx + 1).catch(() => {});
           }
           const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
-          soundRef.current = sound;
+          let hasFinished = false;
           sound.setOnPlaybackStatusUpdate(async (status) => {
-            if (status.isLoaded && status.didJustFinish) {
-              sound.unloadAsync();
-              soundRef.current = null;
-              currentIdx++;
-              playNext();
+            if (status.isLoaded && status.didJustFinish && !hasFinished) {
+              hasFinished = true;
+              sound.unloadAsync().catch(() => {});
+              if (soundRef.current === sound) {
+                soundRef.current = null;
+              }
+              if (speakingRef.current) {
+                currentIdx++;
+                playNext();
+              }
             }
           });
         } catch (playErr) {
           console.log('Error playing in speakAll sequence', playErr);
-          currentIdx++;
-          playNext();
+          if (speakingRef.current) {
+            currentIdx++;
+            playNext();
+          }
         }
       };
 
