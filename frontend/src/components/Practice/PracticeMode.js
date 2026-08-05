@@ -27,6 +27,9 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
   const [translationModalData, setTranslationModalData] = useState(null);
   const blockClickRef = useRef(false);
+  const longPressTimeoutRef = useRef(null);
+  const touchStartPosRef = useRef({ x: 0, y: 0 });
+  const isLongPressActiveRef = useRef(false);
 
   const showSentenceTranslationModal = (item, index) => {
     setTranslationModalData({
@@ -39,11 +42,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const handleContextMenu = (e, item, index) => {
     e.preventDefault();
     e.stopPropagation();
-    blockClickRef.current = true;
     showSentenceTranslationModal(item, index);
-    setTimeout(() => {
-      blockClickRef.current = false;
-    }, 500);
   };
 
   const handleSentenceClick = (e, index, lang, segmentIdx) => {
@@ -53,6 +52,55 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       return;
     }
     speakSentence(index, lang, segmentIdx);
+  };
+
+  const handleSentenceTouchStart = (e, item, index) => {
+    const touch = e.touches[0];
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+    isLongPressActiveRef.current = false;
+    
+    if (longPressTimeoutRef.current) clearTimeout(longPressTimeoutRef.current);
+    
+    longPressTimeoutRef.current = setTimeout(() => {
+      isLongPressActiveRef.current = true;
+      showSentenceTranslationModal(item, index);
+    }, 550);
+  };
+
+  const handleSentenceTouchMove = (e) => {
+    if (!longPressTimeoutRef.current) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartPosRef.current.x;
+    const dy = touch.clientY - touchStartPosRef.current.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist > 15) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  };
+
+  const handleSentenceTouchEnd = (e, index, lang, segmentIdx) => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+    
+    if (isLongPressActiveRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+    } else {
+      speakSentence(index, lang, segmentIdx);
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
+  const handleSentenceTouchCancel = () => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
   };
 
   const currentAudioRef = useRef(null);
@@ -731,6 +779,10 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                     className={`training-sentence ${index === currentIndex ? "active" : ""}`}
                     onClick={(e) => handleSentenceClick(e, index, targetLang, targetSegment)}
                     onContextMenu={(e) => handleContextMenu(e, item, index)}
+                    onTouchStart={(e) => handleSentenceTouchStart(e, item, index)}
+                    onTouchMove={handleSentenceTouchMove}
+                    onTouchEnd={(e) => handleSentenceTouchEnd(e, index, targetLang, targetSegment)}
+                    onTouchCancel={handleSentenceTouchCancel}
                   >
                     {item.en}{" "}
                   </span>
