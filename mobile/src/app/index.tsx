@@ -2276,8 +2276,11 @@ export default function HomeScreen() {
                 const uriPl = await fetchAudioUri(polishText, 'pl-PL-MarekNeural');
                 const { sound: soundPl } = await Audio.Sound.createAsync({ uri: uriPl }, { shouldPlay: true });
                 soundRef.current = soundPl;
+                let hasFinishedPl = false;
                 soundPl.setOnPlaybackStatusUpdate(async (status) => {
-                  if (status.isLoaded && status.didJustFinish) {
+                  if (!status.isLoaded) return;
+                  if (status.didJustFinish && !hasFinishedPl) {
+                    hasFinishedPl = true;
                     if (activePlayIndexRef.current === targetIdx && speakingRef.current) {
                       // Lock and advance index
                       activePlayIndexRef.current = -1; 
@@ -2286,7 +2289,7 @@ export default function HomeScreen() {
                         soundRef.current = null;
                       }
                       currentIdx++;
-                      setTimeout(playNext, 100);
+                      setTimeout(playNext, 50);
                     }
                   }
                 });
@@ -2297,8 +2300,11 @@ export default function HomeScreen() {
               const uriEn = await fetchAudioUri(sentenceList[currentIdx], selectedVoice || 'en-US-BrianNeural');
               const { sound: soundEn } = await Audio.Sound.createAsync({ uri: uriEn }, { shouldPlay: true });
               soundRef.current = soundEn;
+              let hasFinishedEn = false;
               soundEn.setOnPlaybackStatusUpdate(async (statusEn) => {
-                if (statusEn.isLoaded && statusEn.didJustFinish) {
+                if (!statusEn.isLoaded) return;
+                if (statusEn.didJustFinish && !hasFinishedEn) {
+                  hasFinishedEn = true;
                   if (activePlayIndexRef.current === targetIdx && speakingRef.current) {
                     activePlayIndexRef.current = -1;
                     soundEn.unloadAsync().catch(() => {});
@@ -2306,7 +2312,7 @@ export default function HomeScreen() {
                       soundRef.current = null;
                     }
                     currentIdx++;
-                    setTimeout(playNext, 100);
+                    setTimeout(playNext, 50);
                   }
                 }
               });
@@ -2321,16 +2327,21 @@ export default function HomeScreen() {
           }
           const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
           soundRef.current = sound;
+          
+          let hasFinished = false;
           sound.setOnPlaybackStatusUpdate(async (status) => {
-            if (status.isLoaded && status.didJustFinish) {
-              if (activePlayIndexRef.current === targetIdx && speakingRef.current) {
-                activePlayIndexRef.current = -1;
-                sound.unloadAsync().catch(() => {});
-                if (soundRef.current === sound) {
-                  soundRef.current = null;
-                }
+            if (!status.isLoaded) return;
+            
+            if (status.didJustFinish && !hasFinished) {
+              hasFinished = true;
+              activePlayIndexRef.current = -1;
+              sound.unloadAsync().catch(() => {});
+              if (soundRef.current === sound) {
+                soundRef.current = null;
+              }
+              if (speakingRef.current) {
                 currentIdx++;
-                setTimeout(playNext, 100);
+                setTimeout(playNext, 50);
               }
             }
           });
