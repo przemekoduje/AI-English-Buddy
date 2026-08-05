@@ -131,7 +131,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     if (index < 0 || index >= masteryData.length) {
       setIsSpeaking(false);
       setIsPaused(false);
-      isTTSActiveRef.current = false;
       return;
     }
 
