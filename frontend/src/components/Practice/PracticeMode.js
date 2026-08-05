@@ -62,8 +62,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const liveChatStageRef = useRef(null);
 
   // globalAudioManager zastępuje activeTTSRequestIdRef i activeChatTTSRequestIdRef
-  // Mutex blokujący równoległe wywołania TTS
-  const isTTSActiveRef = useRef(false);
 
   useEffect(() => {
     if (liveChatActive && liveChatStageRef.current) {
@@ -75,7 +73,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     prepareContent();
     return () => {
       globalAudioManager.stopAll();
-      isTTSActiveRef.current = false;
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       currentAudioRef.current = null;
       chatAudioRef.current = null;
@@ -122,10 +119,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   };
 
   const speakSentence = async (index, lang = "en", segmentIdx = -1) => {
-    // MUTEX: jeśli TTS aktywne (fetch lub odtwarzanie) — blokuj nowe wywołanie
-    if (isTTSActiveRef.current) return;
-    isTTSActiveRef.current = true;
-
     // Zajmij globalny slot — atomowo zatrzymuje poprzednie audio
     const requestId = globalAudioManager.acquire();
 
@@ -171,7 +164,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
       // Sprawdź po fetch czy nie wywołano stopAll() w międzyczasie
       if (!globalAudioManager.isValid(requestId)) {
-        isTTSActiveRef.current = false;
         return;
       }
 
@@ -180,7 +172,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       if (!data.audio_base64) throw new Error("No audio data returned");
 
       if (!globalAudioManager.isValid(requestId)) {
-        isTTSActiveRef.current = false;
         return;
       }
 
@@ -210,14 +201,12 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       };
 
       audio.onpause = () => {
-        isTTSActiveRef.current = false; // zawsze zwalniaj mutex przy pauzie
         if (!globalAudioManager.isValid(requestId)) return;
         setIsPaused(true);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       };
 
       audio.onended = () => {
-        isTTSActiveRef.current = false; // zawsze zwalniaj mutex przy końcu
         if (!globalAudioManager.isValid(requestId)) return;
         setIsSpeaking(false);
         setIsPaused(false);
@@ -228,7 +217,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       };
 
       audio.onerror = () => {
-        isTTSActiveRef.current = false; // zwolnij mutex zawsze przy błędzie
         if (!globalAudioManager.isValid(requestId)) return;
         setIsSpeaking(false);
         setIsPaused(false);
@@ -239,7 +227,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       };
 
       if (!globalAudioManager.setAudio(requestId, audio)) {
-        isTTSActiveRef.current = false;
         return;
       }
       currentAudioRef.current = audio;
@@ -252,12 +239,10 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
         if (playErr.name !== 'AbortError') {
           console.warn("Audio play error:", playErr);
         }
-        isTTSActiveRef.current = false;
         currentAudioRef.current = null;
       }
 
     } catch (err) {
-      isTTSActiveRef.current = false; // zawsze zwalniaj mutex przy wyjątku
       if (globalAudioManager.isValid(requestId)) {
         console.error("Error playing practice voice:", err);
         setIsSpeaking(false);
@@ -385,18 +370,15 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
         setIsPaused(false);
         isPausedRef.current = false;
         setIsSpeaking(true);
-        isTTSActiveRef.current = true;
       } else {
         currentAudioRef.current.pause();
         setIsPaused(true);
         isPausedRef.current = true;
-        isTTSActiveRef.current = false; // pauza = zwalnia mutex
       }
     } else if (isSpeaking) {
       setIsPaused(true);
       isPausedRef.current = true;
       setIsSpeaking(false);
-      isTTSActiveRef.current = false;
     } else {
       const targetSegment = phase === 2 ? (currentSegmentIndex === -1 ? 0 : currentSegmentIndex) : -1;
       speakSentence(currentIndex === -1 ? 0 : currentIndex, currentLang, targetSegment);
@@ -428,7 +410,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
   const startPracticeChatSession = async () => {
     globalAudioManager.stopAll();
-    isTTSActiveRef.current = false; // resetuj mutex
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     currentAudioRef.current = null;
     chatAudioRef.current = null;
@@ -658,7 +639,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const changePhase = (newPhase) => {
     // Zatrzymaj wszelkie odtwarzanie globalnie
     globalAudioManager.stopAll();
-    isTTSActiveRef.current = false; // resetuj mutex
     currentAudioRef.current = null;
     chatAudioRef.current = null;
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
