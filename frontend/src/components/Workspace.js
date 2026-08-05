@@ -952,6 +952,7 @@ function Workspace({
         return;
       }
       currentAudioRef.current = audio;
+      isChunkFetchingRef.current = false; // zwolnij blokadę fetchowania PRZED odtwarzaniem i przejściem do następnego kroku
 
       try {
         await audio.play();
