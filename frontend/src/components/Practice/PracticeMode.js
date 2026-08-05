@@ -511,7 +511,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
         };
         if (!globalAudioManager.setAudio(requestId, audio)) return;
         chatAudioRef.current = audio;
-        audio.play();
+        try { await audio.play(); } catch (playErr) { if (playErr.name !== 'AbortError') console.warn("Chat play error:", playErr); }
       } else {
         if (globalAudioManager.isValid(requestId)) {
           globalAudioManager.release(requestId);

@@ -977,7 +977,7 @@ function Workspace({
     if (!generatedText || textChunks.length === 0) return;
     if (currentAudioRef.current) {
       if (isPausedRef.current || currentAudioRef.current.paused) {
-        currentAudioRef.current.play();
+        currentAudioRef.current.play().catch(() => {});
         setIsPaused(false);
         isPausedRef.current = false;
       } else {
@@ -1160,9 +1160,11 @@ function Workspace({
 
   const handleSpeakWord = async (word) => {
     if (!word) return;
-    // Keep a reference to the paused story audio so we can restore it after word TTS finishes
-    const storyAudio = currentAudioRef.current;
-    const storyWasPaused = storyAudio ? storyAudio.paused : true;
+    // Zajmij globalny slot — zatrzymuje również czytanie historii
+    const requestId = globalAudioManager.acquire();
+    isChunkFetchingRef.current = false; // przerywa również speakChunk
+    currentAudioRef.current = null;
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
         method: "POST",
@@ -1172,21 +1174,16 @@ function Workspace({
           voice: selectedVoiceURI || "en-US-BrianNeural"
         })
       });
+      if (!globalAudioManager.isValid(requestId)) return;
       if (!response.ok) throw new Error("Failed to generate audio");
       const data = await response.json();
-      if (data.audio_base64) {
+      if (data.audio_base64 && globalAudioManager.isValid(requestId)) {
         const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
         const wordAudio = new Audio(audioUrl);
-        // Temporarily swap so we can play the word pronunciation
-        if (storyAudio && !storyWasPaused) storyAudio.pause();
-        wordAudio.play();
-        // After word pronunciation ends, restore story audio ref (do NOT auto-resume — user controls that)
-        wordAudio.onended = () => {
-          // Restore story audio reference so play/pause buttons still work
-          currentAudioRef.current = storyAudio;
-        };
-        // Temporarily point ref at word audio; don't lose story audio
-        // We store word audio separately and keep story audio ref intact
+        wordAudio.onended = () => globalAudioManager.release(requestId);
+        if (!globalAudioManager.setAudio(requestId, wordAudio)) return;
+        currentAudioRef.current = wordAudio;
+        wordAudio.play().catch(() => {});
       }
     } catch (err) {
       console.error("Błąd TTS dla wyrazu:", err);
@@ -1345,6 +1342,7 @@ function Workspace({
     if (!selectedText) return;
     const requestId = globalAudioManager.acquire();
     activeTTSRequestIdRef.current = requestId;
+    isChunkFetchingRef.current = false;
     currentAudioRef.current = null;
 
     setActivityLog(prev => [
@@ -1373,7 +1371,7 @@ function Workspace({
         audio.onended = () => globalAudioManager.release(requestId);
         if (!globalAudioManager.setAudio(requestId, audio)) return;
         currentAudioRef.current = audio;
-        audio.play();
+        audio.play().catch(() => {});
       }
     } catch (err) {
       console.error("Error speaking selected text:", err);
@@ -1892,10 +1890,9 @@ function Workspace({
               timestamp: Date.now()
             }
           ]);
-          if (currentAudioRef.current) {
-            currentAudioRef.current.pause();
-            currentAudioRef.current = null;
-          }
+          const requestId = globalAudioManager.acquire();
+          isChunkFetchingRef.current = false;
+          currentAudioRef.current = null;
           try {
             const response = await fetch(`${API_BASE_URL}/api/tts`, {
               method: "POST",
@@ -1905,12 +1902,15 @@ function Workspace({
                 voice: selectedVoiceURI || "en-US-BrianNeural"
               })
             });
+            if (!globalAudioManager.isValid(requestId)) return;
             const data = await response.json();
-            if (data.audio_base64) {
+            if (data.audio_base64 && globalAudioManager.isValid(requestId)) {
               const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
               const audio = new Audio(audioUrl);
+              audio.onended = () => globalAudioManager.release(requestId);
+              if (!globalAudioManager.setAudio(requestId, audio)) return;
               currentAudioRef.current = audio;
-              audio.play();
+              audio.play().catch(() => {});
             }
           } catch (err) {
             console.error("Error speaking word:", err);

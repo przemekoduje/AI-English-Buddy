@@ -139,7 +139,7 @@ const Reader = ({
         };
         if (!globalAudioManager.setAudio(requestId, audio)) return;
         chatAudioRef.current = audio;
-        audio.play();
+        try { await audio.play(); } catch (playErr) { if (playErr.name !== 'AbortError') console.warn("Reader chat play error:", playErr); }
       } else {
         if (globalAudioManager.isValid(requestId)) {
           globalAudioManager.release(requestId);
