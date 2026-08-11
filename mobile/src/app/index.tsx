@@ -2628,6 +2628,73 @@ export default function HomeScreen() {
   };
 
   const startRecordingAnswer = async () => {
+    if (Platform.OS === 'web') {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        (window as any)._storyChatStream = stream;
+
+        let options = { mimeType: "audio/webm" };
+        if (typeof MediaRecorder !== 'undefined' && !MediaRecorder.isTypeSupported("audio/webm")) {
+          options = { mimeType: "audio/mp4" };
+        }
+
+        let mediaRecorder: any;
+        try {
+          mediaRecorder = new MediaRecorder(stream, options);
+        } catch (e) {
+          mediaRecorder = new MediaRecorder(stream);
+        }
+
+        (window as any)._storyChatRecorder = mediaRecorder;
+        const chunks: Blob[] = [];
+        (window as any)._storyChatChunks = chunks;
+        (window as any)._storyChatLocalTranscript = "";
+
+        // Start Web speech recognition for answer if supported
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognition) {
+          try {
+            const rec = new SpeechRecognition();
+            rec.lang = "en-US";
+            rec.continuous = true;
+            rec.interimResults = false;
+            rec.onresult = (event: any) => {
+              let finalTranscript = "";
+              for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                  finalTranscript += event.results[i][0].transcript + " ";
+                }
+              }
+              if (finalTranscript.trim()) {
+                (window as any)._storyChatLocalTranscript = (((window as any)._storyChatLocalTranscript || "") + " " + finalTranscript.trim()).trim();
+                console.log("Story Chat Web Local SpeechRecognition:", (window as any)._storyChatLocalTranscript);
+              }
+            };
+            (window as any)._storyChatRecognition = rec;
+            rec.start();
+          } catch (e) {
+            console.warn("Failed to initialize SpeechRecognition for story chat:", e);
+          }
+        }
+
+        mediaRecorder.ondataavailable = (e: any) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+        mediaRecorder.onstop = () => {
+          const mimeType = mediaRecorder.mimeType || "audio/webm";
+          const audioBlob = new Blob(chunks, { type: mimeType });
+          (window as any)._lastStoryChatBlob = audioBlob;
+        };
+
+        mediaRecorder.start();
+        setIsRecordingAnswer(true);
+      } catch (err: any) {
+        console.error('Failed to start recording on web:', err);
+        Alert.alert('Błąd', 'Nie udało się rozpocząć nagrywania: ' + err.message);
+      }
+      return;
+    }
+
     try {
       const permission = await Audio.requestPermissionsAsync();
       if (permission.status !== 'granted') {
@@ -2652,24 +2719,69 @@ export default function HomeScreen() {
   };
 
   const sendVoiceAnswerToChat = async () => {
-    if (!recordingObject) return;
     setIsRecordingAnswer(false);
     setIsProcessingChat(true);
     try {
-      await recordingObject.stopAndUnloadAsync();
-      const uri = recordingObject.getURI();
-      setRecordingObject(null);
+      let audioFile: any = null;
 
-      if (!uri) {
-        Alert.alert('Błąd', 'Brak nagrania audio.');
-        setIsProcessingChat(false);
-        return;
+      if (Platform.OS === 'web') {
+        const mediaRecorder = (window as any)._storyChatRecorder;
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          const stopPromise = new Promise<void>((resolve) => {
+            mediaRecorder.onstop = () => {
+              const mType = mediaRecorder.mimeType || "audio/webm";
+              const chunks = (window as any)._storyChatChunks || [];
+              const audioBlob = new Blob(chunks, { type: mType });
+              (window as any)._lastStoryChatBlob = audioBlob;
+              resolve();
+            };
+          });
+          
+          if ((window as any)._storyChatRecognition) {
+            try { (window as any)._storyChatRecognition.stop(); } catch (e) {}
+          }
+          mediaRecorder.stop();
+          await stopPromise;
+        }
+
+        const audioBlob = (window as any)._lastStoryChatBlob;
+        if (!audioBlob) {
+          Alert.alert('Błąd', 'Brak nagrania audio.');
+          setIsProcessingChat(false);
+          return;
+        }
+        audioFile = audioBlob;
+
+        // Clean up tracks
+        const stream = (window as any)._storyChatStream;
+        if (stream) {
+          stream.getTracks().forEach((track: any) => track.stop());
+          (window as any)._storyChatStream = null;
+        }
+        (window as any)._storyChatRecorder = null;
+      } else {
+        if (!recordingObject) return;
+        await recordingObject.stopAndUnloadAsync();
+        const uri = recordingObject.getURI();
+        setRecordingObject(null);
+
+        if (!uri) {
+          Alert.alert('Błąd', 'Brak nagrania audio.');
+          setIsProcessingChat(false);
+          return;
+        }
+
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+        });
+
+        audioFile = {
+          uri: uri,
+          name: 'answer.m4a',
+          type: 'audio/m4a',
+        };
       }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-      });
 
       const historyForAPI = chatMessages.map(msg => ({
         sender: msg.sender,
@@ -2679,11 +2791,22 @@ export default function HomeScreen() {
       const formData = new FormData();
       formData.append('story_text', generatedText);
       formData.append('history', JSON.stringify(historyForAPI));
-      formData.append('audio', {
-        uri: uri,
-        name: 'answer.m4a',
-        type: 'audio/m4a',
-      } as any);
+
+      if (Platform.OS === 'web') {
+        const mimeType = audioFile.type || "audio/webm";
+        const fileExt = mimeType.includes("mp4") ? "mp4" : "webm";
+        formData.append('audio', audioFile, `answer.${fileExt}`);
+        
+        const localTranscript = (window as any)._storyChatLocalTranscript;
+        if (localTranscript) {
+          formData.append('transcription', localTranscript);
+        }
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          formData.append('skip_tts', 'true');
+        }
+      } else {
+        formData.append('audio', audioFile as any);
+      }
 
       const response = await customFetch(`${backendUrl}/api/stories/chat-next`, {
         method: 'POST',
@@ -2705,7 +2828,7 @@ export default function HomeScreen() {
         const userMsg = {
           id: String(Date.now()) + '_user',
           sender: 'user',
-          text: result.user_transcription || '...',
+          text: result.user_transcription || (window as any)._storyChatLocalTranscript || '...',
           evaluation: result.user_evaluation,
         };
 
@@ -3343,8 +3466,10 @@ export default function HomeScreen() {
                       {chatMessages.map((msg) => {
                         const isBot = msg.sender === 'bot';
                         return (
-                          <View
+                          <TouchableOpacity
                             key={msg.id}
+                            disabled={!isBot}
+                            onPress={() => speakBotText(msg.text)}
                             style={[
                               styles.chatBubbleContainer,
                               isBot ? styles.chatBubbleContainerBot : styles.chatBubbleContainerUser
@@ -3360,7 +3485,7 @@ export default function HomeScreen() {
                                 styles.chatBubbleText,
                                 isBot ? styles.chatBubbleTextBot : styles.chatBubbleTextUser
                               ]}>
-                                {msg.text}
+                                {isBot ? "🔊 " : ""}{msg.text}
                               </Text>
 
                               {/* Ocenianie wypowiedzi użytkownika */}
@@ -3379,7 +3504,7 @@ export default function HomeScreen() {
                                 </View>
                               )}
                             </View>
-                          </View>
+                          </TouchableOpacity>
                         );
                       })}
                     </ScrollView>
