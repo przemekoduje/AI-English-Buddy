@@ -3783,23 +3783,41 @@ def chat_next():
 
     if not transcription and 'audio' in request.files:
         audio_file = request.files['audio']
-        HF_TOKEN = os.getenv("HF_API_TOKEN")
-        API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+        
+        # Try OpenAI Whisper first
+        if openai_client:
+            try:
+                audio_file.seek(0)
+                transcription_response = openai_client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=(audio_file.filename or "answer.webm", audio_file.stream, audio_file.content_type or "audio/webm"),
+                    language="en"
+                )
+                transcription = transcription_response.text.strip()
+                print(f"DEBUG chat-next: OpenAI Transcription = '{transcription}'")
+            except Exception as e:
+                print(f"OpenAI Whisper error in chat-next: {e}")
 
-        try:
-            audio_data = audio_file.read()
-            asr_headers = headers.copy()
-            asr_headers["Content-Type"] = get_audio_content_type(audio_file)
-            
-            response = requests.post(API_URL, headers=asr_headers, data=audio_data, timeout=30)
-            if response.status_code == 200:
-                transcription_result = response.json()
-                transcription = transcription_result.get("text", "").strip()
-            else:
-                print(f"Whisper error: {response.status_code} - {response.text}")
-        except Exception as e:
-            print(f"Whisper error in chat: {e}")
+        # Fallback to Hugging Face if OpenAI failed or is not available
+        if not transcription:
+            HF_TOKEN = os.getenv("HF_API_TOKEN")
+            API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
+            headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+
+            try:
+                audio_file.seek(0)
+                audio_data = audio_file.read()
+                asr_headers = headers.copy()
+                asr_headers["Content-Type"] = get_audio_content_type(audio_file)
+                
+                response = requests.post(API_URL, headers=asr_headers, data=audio_data, timeout=30)
+                if response.status_code == 200:
+                    transcription_result = response.json()
+                    transcription = transcription_result.get("text", "").strip()
+                else:
+                    print(f"Whisper error: {response.status_code} - {response.text}")
+            except Exception as e:
+                print(f"Whisper error in chat: {e}")
 
     if 'audio' in request.files and not transcription:
         bot_response = "I didn't quite catch that, but don't worry! I'm here and ready to help you practice your English about this story whenever you're ready."
@@ -3960,24 +3978,23 @@ def chat_free():
         audio_file = request.files['audio']
         print("DEBUG chat-free: Found 'audio' in request.files", flush=True)
         
-        # Use OpenAI Whisper API if available and requested
-        if ai_mode in ['openai_full', 'hybrid']:
-            if openai_client:
-                print("DEBUG chat-free: Using OpenAI Whisper API for transcription...", flush=True)
-                try:
-                    audio_file.seek(0)
-                    transcription_response = openai_client.audio.transcriptions.create(
-                        model="whisper-1",
-                        file=(audio_file.filename or "user_speech.m4a", audio_file.stream, audio_file.content_type or "audio/m4a"),
-                        language="en"
-                    )
-                    transcription = transcription_response.text.strip()
-                    print(f"DEBUG chat-free: OpenAI Transcription = '{transcription}'", flush=True)
-                except Exception as e:
-                    print(f"OpenAI Whisper error in chat-free: {e}", flush=True)
-            else:
-                print("DEBUG chat-free: OpenAI Whisper requested but openai_client is not configured.", flush=True)
-                
+        # Use OpenAI Whisper API if available
+        if openai_client:
+            print("DEBUG chat-free: Using OpenAI Whisper API for transcription...", flush=True)
+            try:
+                audio_file.seek(0)
+                transcription_response = openai_client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=(audio_file.filename or "user_speech.webm", audio_file.stream, audio_file.content_type or "audio/webm"),
+                    language="en"
+                )
+                transcription = transcription_response.text.strip()
+                print(f"DEBUG chat-free: OpenAI Transcription = '{transcription}'", flush=True)
+            except Exception as e:
+                print(f"OpenAI Whisper error in chat-free: {e}", flush=True)
+        else:
+            print("DEBUG chat-free: OpenAI Whisper fallback skipped because openai_client is not configured.", flush=True)
+            
         # Fallback to Hugging Face
         if not transcription:
             print("DEBUG chat-free: Using Hugging Face Whisper API for transcription...", flush=True)
