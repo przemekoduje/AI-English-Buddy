@@ -477,7 +477,9 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     if ('speechSynthesis' in window) {
       setChatOrbStatus("speaking");
       try {
-        window.speechSynthesis.cancel();
+        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+          window.speechSynthesis.cancel();
+        }
         const utterance = new SpeechSynthesisUtterance(textToSpeak);
         utterance.lang = "en-US";
         

@@ -2540,7 +2540,9 @@ export default function HomeScreen() {
 
       if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
         try {
-          window.speechSynthesis.cancel();
+          if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+            window.speechSynthesis.cancel();
+          }
           const utterance = new SpeechSynthesisUtterance(text);
           utterance.lang = "en-US";
           

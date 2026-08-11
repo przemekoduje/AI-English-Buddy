@@ -4,7 +4,10 @@
     <meta charset="utf-8" />
     <script>
       (function() {
-        if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        var isMobileDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || 
+                             window.innerWidth < 768 || 
+                             (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+        if (isMobileDevice) {
           var path = window.location.pathname;
           if (!path.startsWith('/speakling/mobile') && !path.startsWith('/speakling/mobile/')) {
             var separator = window.location.search ? '&' : '?';

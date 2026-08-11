@@ -119,7 +119,9 @@ const Reader = ({
     if ('speechSynthesis' in window) {
       setChatOrbStatus("speaking");
       try {
-        window.speechSynthesis.cancel();
+        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+          window.speechSynthesis.cancel();
+        }
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = "en-US";
         
