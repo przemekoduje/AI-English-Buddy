@@ -1123,8 +1123,21 @@ export default function HomeScreen() {
         try {
           const utterance = new SpeechSynthesisUtterance(text);
           const voices = window.speechSynthesis.getVoices();
-          const englishVoice = voices.find(v => v.lang.startsWith('en'));
-          if (englishVoice) utterance.voice = englishVoice;
+          const enVoices = voices.filter(v => v.lang.startsWith('en'));
+          const maleNames = ['david', 'george', 'james', 'richard', 'daniel', 'arthur', 'gordon', 'aaron', 'male'];
+          const premiumKeywords = ['natural', 'neural', 'google', 'microsoft'];
+          enVoices.sort((a, b) => {
+            const aName = a.name.toLowerCase();
+            const bName = b.name.toLowerCase();
+            const aIsMale = maleNames.some(name => aName.includes(name));
+            const bIsMale = maleNames.some(name => bName.includes(name));
+            if (aIsMale !== bIsMale) return aIsMale ? -1 : 1;
+            const aIsPremium = premiumKeywords.some(keyword => aName.includes(keyword));
+            const bIsPremium = premiumKeywords.some(keyword => bName.includes(keyword));
+            if (aIsPremium !== bIsPremium) return aIsPremium ? -1 : 1;
+            return 0;
+          });
+          if (enVoices.length > 0) utterance.voice = enVoices[0];
           
           setIsVoiceTutorBotSpeaking(true);
           voiceTutorIsBotSpeakingRef.current = true;
@@ -2525,9 +2538,22 @@ export default function HomeScreen() {
           utterance.lang = "en-US";
           
           const voices = window.speechSynthesis.getVoices();
-          const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural') || v.name.includes('Microsoft')));
-          if (englishVoice) {
-            utterance.voice = englishVoice;
+          const enVoices = voices.filter(v => v.lang.startsWith('en'));
+          const maleNames = ['david', 'george', 'james', 'richard', 'daniel', 'arthur', 'gordon', 'aaron', 'male'];
+          const premiumKeywords = ['natural', 'neural', 'google', 'microsoft'];
+          enVoices.sort((a, b) => {
+            const aName = a.name.toLowerCase();
+            const bName = b.name.toLowerCase();
+            const aIsMale = maleNames.some(name => aName.includes(name));
+            const bIsMale = maleNames.some(name => bName.includes(name));
+            if (aIsMale !== bIsMale) return aIsMale ? -1 : 1;
+            const aIsPremium = premiumKeywords.some(keyword => aName.includes(keyword));
+            const bIsPremium = premiumKeywords.some(keyword => bName.includes(keyword));
+            if (aIsPremium !== bIsPremium) return aIsPremium ? -1 : 1;
+            return 0;
+          });
+          if (enVoices.length > 0) {
+            utterance.voice = enVoices[0];
           }
 
           utterance.onend = () => {
