@@ -3819,6 +3819,15 @@ def chat_next():
             except Exception as e:
                 print(f"Whisper error in chat: {e}")
 
+    # Usunięcie typowych halucynacji Whisper dla ciszy/szumów
+    whisper_hallucinations = [
+        "dziękuję", "dziękuję.", "dziękuję za uwagę", "dziękuję za uwagę.", 
+        "dziękuję za obejrzenie", "dziękuję za obejrzenie.", "napisy stworzone przez", 
+        "napisy", "dzięki", "dzięki za obejrzenie"
+    ]
+    if transcription.lower().strip() in whisper_hallucinations:
+        transcription = ""
+
     if 'audio' in request.files and not transcription:
         bot_response = "I didn't quite catch that, but don't worry! I'm here and ready to help you practice your English about this story whenever you're ready."
         return jsonify({
@@ -4019,6 +4028,15 @@ def chat_free():
                     print(f"Whisper error in chat-free: {response.status_code} - {response.text}", flush=True)
             except Exception as e:
                 print(f"Whisper error in chat-free: {e}", flush=True)
+
+    # Usunięcie typowych halucynacji Whisper dla ciszy/szumów
+    whisper_hallucinations = [
+        "dziękuję", "dziękuję.", "dziękuję za uwagę", "dziękuję za uwagę.", 
+        "dziękuję za obejrzenie", "dziękuję za obejrzenie.", "napisy stworzone przez", 
+        "napisy", "dzięki", "dzięki za obejrzenie"
+    ]
+    if transcription.lower().strip() in whisper_hallucinations:
+        transcription = ""
 
     if 'audio' in request.files and not transcription:
         bot_response = "I didn't quite catch that, but don't worry! I'm here and ready to help you practice your English whenever you're ready. Feel free to speak when you are ready."
