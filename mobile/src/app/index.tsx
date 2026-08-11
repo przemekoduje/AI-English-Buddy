@@ -419,6 +419,8 @@ export default function HomeScreen() {
   const webAudioContextRef = useRef<any>(null);
   const webAnalyserRef = useRef<any>(null);
   const webAnimationFrameRef = useRef<any>(null);
+  const webRecognitionRef = useRef<any>(null);
+  const webLocalTranscriptRef = useRef<string>("");
 
   useEffect(() => {
     voiceTutorIsBotSpeakingRef.current = isVoiceTutorBotSpeaking;
@@ -460,6 +462,9 @@ export default function HomeScreen() {
 
   const stopVoiceTutorRecordingLocally = async () => {
     if (Platform.OS === 'web') {
+      if (webRecognitionRef.current) {
+        try { webRecognitionRef.current.stop(); } catch (e) {}
+      }
       if (webMediaRecorderRef.current && webMediaRecorderRef.current.state !== 'inactive') {
         try {
           webMediaRecorderRef.current.stop();
@@ -550,6 +555,37 @@ export default function HomeScreen() {
         // Request microphone permission
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         webStreamRef.current = stream;
+        webLocalTranscriptRef.current = "";
+
+        // Start local browser speech recognition if supported
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognition) {
+          try {
+            const rec = new SpeechRecognition();
+            rec.lang = "en-US";
+            rec.continuous = true;
+            rec.interimResults = false;
+            rec.onresult = (event: any) => {
+              let finalTranscript = "";
+              for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                  finalTranscript += event.results[i][0].transcript + " ";
+                }
+              }
+              if (finalTranscript.trim()) {
+                webLocalTranscriptRef.current = (webLocalTranscriptRef.current + " " + finalTranscript.trim()).trim();
+                console.log("Mobile Web Local SpeechRecognition transcript so far:", webLocalTranscriptRef.current);
+              }
+            };
+            rec.onerror = (err: any) => {
+              console.warn("Mobile Web Local SpeechRecognition error:", err.error);
+            };
+            webRecognitionRef.current = rec;
+            rec.start();
+          } catch (e) {
+            console.warn("Failed to initialize SpeechRecognition on mobile web:", e);
+          }
+        }
 
         // Configure AudioContext & Analyser for metering/VAD
         const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -805,6 +841,10 @@ export default function HomeScreen() {
         const mediaRecorder = webMediaRecorderRef.current;
         webMediaRecorderRef.current = null;
         
+        if (webRecognitionRef.current) {
+          try { webRecognitionRef.current.stop(); } catch (e) {}
+        }
+        
         if (webStreamRef.current) {
           webStreamRef.current.getTracks().forEach((track: any) => track.stop());
           webStreamRef.current = null;
@@ -887,6 +927,15 @@ export default function HomeScreen() {
       formData.append("voice", selectedVoice || "en-US-BrianNeural");
       formData.append("ai_mode", aiMode);
 
+      if (Platform.OS === 'web') {
+        if (webLocalTranscriptRef.current) {
+          formData.append("transcription", webLocalTranscriptRef.current);
+        }
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          formData.append("skip_tts", "true");
+        }
+      }
+
       const response = await fetch(`${backendUrl}/api/chat-free`, {
         method: "POST",
         headers: {
@@ -911,7 +960,7 @@ export default function HomeScreen() {
       const userMsg = {
         id: userMsgId,
         sender: "user",
-        text: result.transcription || "(Brak transkrypcji)",
+        text: result.transcription || webLocalTranscriptRef.current || "(Brak transkrypcji)",
         evaluation: result.user_evaluation,
       };
 
@@ -2468,6 +2517,34 @@ export default function HomeScreen() {
     try {
       await stopSpeech();
       setIsBotSpeaking(true);
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = "en-US";
+          
+          const voices = window.speechSynthesis.getVoices();
+          const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural') || v.name.includes('Microsoft')));
+          if (englishVoice) {
+            utterance.voice = englishVoice;
+          }
+
+          utterance.onend = () => {
+            setIsBotSpeaking(false);
+          };
+
+          utterance.onerror = (e) => {
+            console.warn("SpeechSynthesis error:", e);
+            setIsBotSpeaking(false);
+          };
+
+          window.speechSynthesis.speak(utterance);
+          return;
+        } catch (err) {
+          console.warn("Local SpeechSynthesis failed in speakBotText, trying API fallback:", err);
+        }
+      }
 
       const response = await customFetch(`${backendUrl}/api/tts`, {
         method: 'POST',
