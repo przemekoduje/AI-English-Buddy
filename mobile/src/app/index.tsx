@@ -282,16 +282,17 @@ export default function HomeScreen() {
   const soundRef = useRef<Audio.Sound | null>(null);
   const webAudioRef = useRef<any>(null);
 
-  const unlockWebAudio = () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  const unlockExpoAVAudio = () => {
+    if (Platform.OS === 'web') {
       try {
-        if (!webAudioRef.current) {
-          webAudioRef.current = new Audio();
-        }
-        webAudioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA";
-        webAudioRef.current.play().catch((e: any) => console.log("Web audio unlock silent play caught:", e));
+        Audio.Sound.createAsync(
+          { uri: "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA" },
+          { shouldPlay: true }
+        ).then(({ sound }) => {
+          sound.unloadAsync();
+        }).catch((e: any) => console.log("Unlock Expo AV caught:", e));
       } catch (err) {
-        console.warn("Error unlocking web audio:", err);
+        console.warn("Error unlocking Expo AV:", err);
       }
     }
   };
@@ -2162,7 +2163,7 @@ export default function HomeScreen() {
 
   // TTS — single sentence
   const speakSentence = async (index: number) => {
-    unlockWebAudio();
+    unlockExpoAVAudio();
     try {
       await stopSpeech();
       speakingRef.current = true;
@@ -2303,7 +2304,7 @@ export default function HomeScreen() {
   };
 
   const speakAll = async (sentenceList: string[]) => {
-    unlockWebAudio();
+    unlockExpoAVAudio();
     if (sentenceList.length === 0) return;
     try {
       await stopSpeech();
@@ -2653,7 +2654,7 @@ export default function HomeScreen() {
   };
 
   const startRecordingAnswer = async () => {
-    unlockWebAudio();
+    unlockExpoAVAudio();
     if (Platform.OS === 'web') {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -3501,7 +3502,7 @@ export default function HomeScreen() {
                             key={msg.id}
                             disabled={!isBot}
                             onPress={() => {
-                              unlockWebAudio();
+                              unlockExpoAVAudio();
                               speakBotText(msg.text);
                             }}
                             style={[
