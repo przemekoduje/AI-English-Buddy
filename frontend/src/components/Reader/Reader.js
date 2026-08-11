@@ -58,6 +58,7 @@ const Reader = ({
   const showLiveChatBadge = readProgressRatio >= 0.70 || (currentChunkIndex === -1 && !isSpeaking && textChunks && textChunks.length > 0);
 
   const startPracticeChatSession = async () => {
+    unlockDesktopAudio();
     if (onStop) onStop();
     setLiveChatActive(true);
     setChatOrbStatus("thinking");
@@ -109,7 +110,7 @@ const Reader = ({
     }
   };
 
-  const unlockDesktopAudio = () => {
+  function unlockDesktopAudio() {
     try {
       if (!chatAudioRef.current) {
         chatAudioRef.current = new Audio();
@@ -119,7 +120,7 @@ const Reader = ({
     } catch (err) {
       console.warn("Error unlocking desktop audio in Reader:", err);
     }
-  };
+  }
 
   const speakChatBotText = async (text) => {
     const safetyTimer = setTimeout(() => {

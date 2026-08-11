@@ -2162,6 +2162,7 @@ export default function HomeScreen() {
 
   // TTS — single sentence
   const speakSentence = async (index: number) => {
+    unlockWebAudio();
     try {
       await stopSpeech();
       speakingRef.current = true;
@@ -2302,6 +2303,7 @@ export default function HomeScreen() {
   };
 
   const speakAll = async (sentenceList: string[]) => {
+    unlockWebAudio();
     if (sentenceList.length === 0) return;
     try {
       await stopSpeech();
@@ -3520,7 +3522,10 @@ export default function HomeScreen() {
                           <TouchableOpacity
                             key={msg.id}
                             disabled={!isBot}
-                            onPress={() => speakBotText(msg.text)}
+                            onPress={() => {
+                              unlockWebAudio();
+                              speakBotText(msg.text);
+                            }}
                             style={[
                               styles.chatBubbleContainer,
                               isBot ? styles.chatBubbleContainerBot : styles.chatBubbleContainerUser

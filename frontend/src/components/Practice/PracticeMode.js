@@ -399,6 +399,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const showLiveChatBadge = readProgressRatio >= 0.70;
 
   const startPracticeChatSession = async () => {
+    unlockDesktopAudio();
     activeTTSRequestIdRef.current++;
     activeChatTTSRequestIdRef.current++;
     if (currentAudioRef.current) {
@@ -460,7 +461,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     }
   };
 
-  const unlockDesktopAudio = () => {
+  function unlockDesktopAudio() {
     try {
       if (!chatAudioRef.current) {
         chatAudioRef.current = new Audio();
@@ -470,7 +471,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     } catch (err) {
       console.warn("Error unlocking desktop audio:", err);
     }
-  };
+  }
 
   const speakChatBotText = async (textToSpeak) => {
     const requestId = ++activeChatTTSRequestIdRef.current;
