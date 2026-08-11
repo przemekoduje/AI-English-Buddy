@@ -280,6 +280,21 @@ export default function HomeScreen() {
   const [breakdownSpeechPhase, setBreakdownSpeechPhase] = useState<'polish' | 'english'>('polish');
   const speakingRef = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
+  const webAudioRef = useRef<any>(null);
+
+  const unlockWebAudio = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        if (!webAudioRef.current) {
+          webAudioRef.current = new Audio();
+        }
+        webAudioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA";
+        webAudioRef.current.play().catch((e: any) => console.log("Web audio unlock silent play caught:", e));
+      } catch (err) {
+        console.warn("Error unlocking web audio:", err);
+      }
+    }
+  };
   const prefetchCache = useRef<{[key: number]: string}>({});
   const chatScrollRef = useRef<ScrollView>(null);
   const workspaceScrollRef = useRef<ScrollView>(null);
@@ -2276,6 +2291,11 @@ export default function HomeScreen() {
       }
       soundRef.current = null;
     }
+    if (Platform.OS === 'web' && webAudioRef.current) {
+      try {
+        webAudioRef.current.pause();
+      } catch (e) {}
+    }
     await Speech.stop();
     setSpeakingSentenceIndex(null);
     setIsSpeaking(false);
@@ -2528,6 +2548,7 @@ export default function HomeScreen() {
 
   const speakBotText = async (text: string) => {
     try {
+      unlockWebAudio();
       await stopSpeech();
       setIsBotSpeaking(true);
 
@@ -2537,51 +2558,6 @@ export default function HomeScreen() {
         console.warn("SpeechSynthesis safety timeout triggered");
         setIsBotSpeaking(false);
       }, safetyDelay);
-
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        try {
-          if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-            window.speechSynthesis.cancel();
-          }
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = "en-US";
-          
-          const voices = window.speechSynthesis.getVoices();
-          const enVoices = voices.filter(v => v.lang.startsWith('en'));
-          const maleNames = ['david', 'george', 'james', 'richard', 'daniel', 'arthur', 'gordon', 'aaron', 'male'];
-          const premiumKeywords = ['natural', 'neural', 'google', 'microsoft'];
-          enVoices.sort((a, b) => {
-            const aName = a.name.toLowerCase();
-            const bName = b.name.toLowerCase();
-            const aIsMale = maleNames.some(name => aName.includes(name));
-            const bIsMale = maleNames.some(name => bName.includes(name));
-            if (aIsMale !== bIsMale) return aIsMale ? -1 : 1;
-            const aIsPremium = premiumKeywords.some(keyword => aName.includes(keyword));
-            const bIsPremium = premiumKeywords.some(keyword => bName.includes(keyword));
-            if (aIsPremium !== bIsPremium) return aIsPremium ? -1 : 1;
-            return 0;
-          });
-          if (enVoices.length > 0) {
-            utterance.voice = enVoices[0];
-          }
-
-          utterance.onend = () => {
-            clearTimeout(safetyTimer);
-            setIsBotSpeaking(false);
-          };
-
-          utterance.onerror = (e) => {
-            console.warn("SpeechSynthesis error:", e);
-            clearTimeout(safetyTimer);
-            setIsBotSpeaking(false);
-          };
-
-          window.speechSynthesis.speak(utterance);
-          return;
-        } catch (err) {
-          console.warn("Local SpeechSynthesis failed in speakBotText, trying API fallback:", err);
-        }
-      }
 
       const response = await customFetch(`${backendUrl}/api/tts`, {
         method: 'POST',
@@ -2601,21 +2577,43 @@ export default function HomeScreen() {
       }
 
       const uri = `data:audio/mpeg;base64,${data.audio_base64}`;
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: true }
-      );
-      
-      soundRef.current = sound;
-      
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
+
+      if (Platform.OS === 'web') {
+        if (!webAudioRef.current) {
+          webAudioRef.current = new Audio();
+        }
+        webAudioRef.current.src = uri;
+        webAudioRef.current.onended = () => {
           clearTimeout(safetyTimer);
           setIsBotSpeaking(false);
-          sound.unloadAsync();
-          soundRef.current = null;
-        }
-      });
+        };
+        webAudioRef.current.onerror = (e: any) => {
+          console.warn("Web HTML5 Audio playback error:", e);
+          clearTimeout(safetyTimer);
+          setIsBotSpeaking(false);
+        };
+        webAudioRef.current.play().catch((errPlay: any) => {
+          console.error("Web audio playback failed:", errPlay);
+          clearTimeout(safetyTimer);
+          setIsBotSpeaking(false);
+        });
+      } else {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri },
+          { shouldPlay: true }
+        );
+        
+        soundRef.current = sound;
+        
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded && status.didJustFinish) {
+            clearTimeout(safetyTimer);
+            setIsBotSpeaking(false);
+            sound.unloadAsync();
+            soundRef.current = null;
+          }
+        });
+      }
     } catch (err: any) {
       console.log('Error playing bot speech', err);
       setIsBotSpeaking(false);
@@ -2675,6 +2673,7 @@ export default function HomeScreen() {
   };
 
   const startRecordingAnswer = async () => {
+    unlockWebAudio();
     if (Platform.OS === 'web') {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });

@@ -460,8 +460,22 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     }
   };
 
+  const unlockDesktopAudio = () => {
+    try {
+      if (!chatAudioRef.current) {
+        chatAudioRef.current = new Audio();
+      }
+      chatAudioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA";
+      chatAudioRef.current.play().catch(e => console.log("Unlock audio catch:", e));
+    } catch (err) {
+      console.warn("Error unlocking desktop audio:", err);
+    }
+  };
+
   const speakChatBotText = async (textToSpeak) => {
     const requestId = ++activeChatTTSRequestIdRef.current;
+
+    unlockDesktopAudio();
 
     if (chatAudioRef.current) {
       chatAudioRef.current.pause();
@@ -474,55 +488,6 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       startChatRecording();
     }, Math.max(4000, textToSpeak.split(/\s+/).length * 500 + 2000));
 
-    if ('speechSynthesis' in window) {
-      setChatOrbStatus("speaking");
-      try {
-        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-          window.speechSynthesis.cancel();
-        }
-        const utterance = new SpeechSynthesisUtterance(textToSpeak);
-        utterance.lang = "en-US";
-        
-        const voices = window.speechSynthesis.getVoices();
-        const enVoices = voices.filter(v => v.lang.startsWith('en'));
-        const maleNames = ['david', 'george', 'james', 'richard', 'daniel', 'arthur', 'gordon', 'aaron', 'male'];
-        const premiumKeywords = ['natural', 'neural', 'google', 'microsoft'];
-        enVoices.sort((a, b) => {
-          const aName = a.name.toLowerCase();
-          const bName = b.name.toLowerCase();
-          const aIsMale = maleNames.some(name => aName.includes(name));
-          const bIsMale = maleNames.some(name => bName.includes(name));
-          if (aIsMale !== bIsMale) return aIsMale ? -1 : 1;
-          const aIsPremium = premiumKeywords.some(keyword => aName.includes(keyword));
-          const bIsPremium = premiumKeywords.some(keyword => bName.includes(keyword));
-          if (aIsPremium !== bIsPremium) return aIsPremium ? -1 : 1;
-          return 0;
-        });
-        if (enVoices.length > 0) {
-          utterance.voice = enVoices[0];
-        }
-
-        utterance.onend = () => {
-          clearTimeout(safetyTimer);
-          if (requestId !== activeChatTTSRequestIdRef.current) return;
-          startChatRecording();
-        };
-
-        utterance.onerror = (e) => {
-          console.warn("SpeechSynthesis error:", e);
-          clearTimeout(safetyTimer);
-          if (requestId !== activeChatTTSRequestIdRef.current) return;
-          setChatOrbStatus("inactive");
-        };
-
-        window.speechSynthesis.speak(utterance);
-        return;
-      } catch (err) {
-        console.warn("Local SpeechSynthesis failed in chat, trying API fallback:", err);
-      }
-    }
-
-    clearTimeout(safetyTimer);
     setChatOrbStatus("speaking");
     try {
       const res = await fetch(`${API_BASE_URL}/api/tts`, {
@@ -535,34 +500,46 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       });
 
       if (requestId !== activeChatTTSRequestIdRef.current) {
+        clearTimeout(safetyTimer);
         return;
       }
 
       const data = await res.json();
       if (data.audio_base64) {
         if (requestId !== activeChatTTSRequestIdRef.current) {
+          clearTimeout(safetyTimer);
           return;
         }
         const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
-        const audio = new Audio(audioUrl);
-        chatAudioRef.current = audio;
-        audio.onended = () => {
+        if (!chatAudioRef.current) {
+          chatAudioRef.current = new Audio();
+        }
+        chatAudioRef.current.src = audioUrl;
+        chatAudioRef.current.onended = () => {
+          clearTimeout(safetyTimer);
           if (requestId !== activeChatTTSRequestIdRef.current) return;
           chatAudioRef.current = null;
           startChatRecording();
         };
-        audio.onerror = () => {
+        chatAudioRef.current.onerror = () => {
+          clearTimeout(safetyTimer);
           if (requestId !== activeChatTTSRequestIdRef.current) return;
           chatAudioRef.current = null;
           setChatOrbStatus("inactive");
         };
-        audio.play();
+        chatAudioRef.current.play().catch(e => {
+          console.error("Audio playback error:", e);
+          clearTimeout(safetyTimer);
+          setChatOrbStatus("inactive");
+        });
       } else {
+        clearTimeout(safetyTimer);
         if (requestId === activeChatTTSRequestIdRef.current) {
           setChatOrbStatus("inactive");
         }
       }
     } catch (e) {
+      clearTimeout(safetyTimer);
       if (requestId === activeChatTTSRequestIdRef.current) {
         console.error("TTS chat error:", e);
         setChatOrbStatus("inactive");
@@ -684,6 +661,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   };
 
   const handleOrbClickInChat = () => {
+    unlockDesktopAudio();
     if (chatOrbStatus === "speaking") {
       if (chatAudioRef.current) {
         chatAudioRef.current.pause();

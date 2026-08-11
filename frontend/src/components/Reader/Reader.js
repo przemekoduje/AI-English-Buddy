@@ -109,6 +109,18 @@ const Reader = ({
     }
   };
 
+  const unlockDesktopAudio = () => {
+    try {
+      if (!chatAudioRef.current) {
+        chatAudioRef.current = new Audio();
+      }
+      chatAudioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA";
+      chatAudioRef.current.play().catch(e => console.log("Unlock audio catch:", e));
+    } catch (err) {
+      console.warn("Error unlocking desktop audio in Reader:", err);
+    }
+  };
+
   const speakChatBotText = async (text) => {
     const safetyTimer = setTimeout(() => {
       console.warn("Safety timeout triggered for speakChatBotText in Reader");
@@ -116,55 +128,13 @@ const Reader = ({
       startChatRecording();
     }, Math.max(4000, text.split(/\s+/).length * 500 + 2000));
 
-    if ('speechSynthesis' in window) {
-      setChatOrbStatus("speaking");
-      try {
-        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-          window.speechSynthesis.cancel();
-        }
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "en-US";
-        
-        const voices = window.speechSynthesis.getVoices();
-        const enVoices = voices.filter(v => v.lang.startsWith('en'));
-        const maleNames = ['david', 'george', 'james', 'richard', 'daniel', 'arthur', 'gordon', 'aaron', 'male'];
-        const premiumKeywords = ['natural', 'neural', 'google', 'microsoft'];
-        enVoices.sort((a, b) => {
-          const aName = a.name.toLowerCase();
-          const bName = b.name.toLowerCase();
-          const aIsMale = maleNames.some(name => aName.includes(name));
-          const bIsMale = maleNames.some(name => bName.includes(name));
-          if (aIsMale !== bIsMale) return aIsMale ? -1 : 1;
-          const aIsPremium = premiumKeywords.some(keyword => aName.includes(keyword));
-          const bIsPremium = premiumKeywords.some(keyword => bName.includes(keyword));
-          if (aIsPremium !== bIsPremium) return aIsPremium ? -1 : 1;
-          return 0;
-        });
-        if (enVoices.length > 0) {
-          utterance.voice = enVoices[0];
-        }
+    unlockDesktopAudio();
 
-        utterance.onend = () => {
-          clearTimeout(safetyTimer);
-          setChatOrbStatus("standby");
-          startChatRecording();
-        };
-
-        utterance.onerror = (e) => {
-          console.warn("SpeechSynthesis error:", e);
-          clearTimeout(safetyTimer);
-          setChatOrbStatus("standby");
-          startChatRecording();
-        };
-
-        window.speechSynthesis.speak(utterance);
-        return;
-      } catch (err) {
-        console.warn("Local SpeechSynthesis failed in Reader chat, trying API fallback:", err);
-      }
+    if (chatAudioRef.current) {
+      chatAudioRef.current.pause();
+      chatAudioRef.current = null;
     }
 
-    clearTimeout(safetyTimer);
     setChatOrbStatus("speaking");
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
@@ -178,18 +148,35 @@ const Reader = ({
       const data = await response.json();
       if (data.audio_base64) {
         const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
-        const audio = new Audio(audioUrl);
-        chatAudioRef.current = audio;
-        audio.onended = () => {
+        if (!chatAudioRef.current) {
+          chatAudioRef.current = new Audio();
+        }
+        chatAudioRef.current.src = audioUrl;
+        chatAudioRef.current.onended = () => {
+          clearTimeout(safetyTimer);
+          chatAudioRef.current = null;
           setChatOrbStatus("standby");
           startChatRecording();
         };
-        audio.play();
+        chatAudioRef.current.onerror = () => {
+          clearTimeout(safetyTimer);
+          chatAudioRef.current = null;
+          setChatOrbStatus("standby");
+          startChatRecording();
+        };
+        chatAudioRef.current.play().catch(e => {
+          console.error("Audio playback error:", e);
+          clearTimeout(safetyTimer);
+          setChatOrbStatus("standby");
+          startChatRecording();
+        });
       } else {
+        clearTimeout(safetyTimer);
         setChatOrbStatus("standby");
         startChatRecording();
       }
     } catch (err) {
+      clearTimeout(safetyTimer);
       console.error("Chat TTS error:", err);
       setChatOrbStatus("standby");
       startChatRecording();
@@ -307,6 +294,7 @@ const Reader = ({
   };
 
   const handleOrbClickInChat = () => {
+    unlockDesktopAudio();
     if (chatOrbStatus === "speaking") {
       if (chatAudioRef.current) {
         chatAudioRef.current.pause();
