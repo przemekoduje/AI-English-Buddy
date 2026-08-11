@@ -101,6 +101,12 @@ const Reader = ({
   };
 
   const speakChatBotText = async (text) => {
+    const safetyTimer = setTimeout(() => {
+      console.warn("Safety timeout triggered for speakChatBotText in Reader");
+      setChatOrbStatus("standby");
+      startChatRecording();
+    }, Math.max(4000, text.split(/\s+/).length * 500 + 2000));
+
     if ('speechSynthesis' in window) {
       setChatOrbStatus("speaking");
       try {
@@ -109,18 +115,33 @@ const Reader = ({
         utterance.lang = "en-US";
         
         const voices = window.speechSynthesis.getVoices();
-        const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural') || v.name.includes('Microsoft')));
-        if (englishVoice) {
-          utterance.voice = englishVoice;
+        const enVoices = voices.filter(v => v.lang.startsWith('en'));
+        const maleNames = ['david', 'george', 'james', 'richard', 'daniel', 'arthur', 'gordon', 'aaron', 'male'];
+        const premiumKeywords = ['natural', 'neural', 'google', 'microsoft'];
+        enVoices.sort((a, b) => {
+          const aName = a.name.toLowerCase();
+          const bName = b.name.toLowerCase();
+          const aIsMale = maleNames.some(name => aName.includes(name));
+          const bIsMale = maleNames.some(name => bName.includes(name));
+          if (aIsMale !== bIsMale) return aIsMale ? -1 : 1;
+          const aIsPremium = premiumKeywords.some(keyword => aName.includes(keyword));
+          const bIsPremium = premiumKeywords.some(keyword => bName.includes(keyword));
+          if (aIsPremium !== bIsPremium) return aIsPremium ? -1 : 1;
+          return 0;
+        });
+        if (enVoices.length > 0) {
+          utterance.voice = enVoices[0];
         }
 
         utterance.onend = () => {
+          clearTimeout(safetyTimer);
           setChatOrbStatus("standby");
           startChatRecording();
         };
 
         utterance.onerror = (e) => {
           console.warn("SpeechSynthesis error:", e);
+          clearTimeout(safetyTimer);
           setChatOrbStatus("standby");
           startChatRecording();
         };
@@ -132,6 +153,7 @@ const Reader = ({
       }
     }
 
+    clearTimeout(safetyTimer);
     setChatOrbStatus("speaking");
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
@@ -644,8 +666,11 @@ const Reader = ({
                 <div className="live-chat-msg bot-msg">
                   <div className="msg-avatar">AI</div>
                   <div className="msg-content">
-                    <div className="msg-bubble thinking-bubble">
-                      <span className="dot-anim">.</span><span className="dot-anim">.</span><span className="dot-anim">.</span>
+                    <div className="msg-bubble thinking-bubble" style={{ padding: '16px', lineHeight: '1.5' }}>
+                      <strong>Lektor przygotowuje się do rozmowy z Tobą...</strong>
+                      <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '6px' }}>
+                        AI analizuje tekst opowiadania, aby przygotować pytania. Pierwsze wybudzenie serwera po przerwie może zająć kilka sekund (zimny start).
+                      </div>
                     </div>
                   </div>
                 </div>
