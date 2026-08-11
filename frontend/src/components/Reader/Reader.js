@@ -65,6 +65,7 @@ const Reader = ({
     setChatMessages([]);
     chatMessagesRef.current = [];
 
+    const startTime = Date.now();
     try {
       const formData = new FormData();
       formData.append('story_text', generatedText || "");
@@ -79,6 +80,14 @@ const Reader = ({
       });
 
       const result = await response.json();
+
+      // Gwarantujemy, że loader wstepny bedzie widoczny przynajmniej 2 sekundy (2000ms)
+      const elapsedTime = Date.now() - startTime;
+      const remainingTime = 2000 - elapsedTime;
+      if (remainingTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, remainingTime));
+      }
+
       if (response.ok && result.bot_response) {
         const botMsg = {
           id: String(Date.now()),

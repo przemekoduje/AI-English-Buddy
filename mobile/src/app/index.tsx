@@ -2624,6 +2624,7 @@ export default function HomeScreen() {
     if (!user) return;
     setIsProcessingChat(true);
     setChatMessages([]);
+    const startTime = Date.now();
     try {
       const formData = new FormData();
       formData.append('story_text', storyText);
@@ -2643,6 +2644,13 @@ export default function HomeScreen() {
         result = JSON.parse(responseText);
       } catch (e) {
         throw new Error(`Serwer zwrócił niepoprawny format (nie-JSON). Status: ${response.status}. Odpowiedź: ${responseText.substring(0, 100)}`);
+      }
+
+      // Gwarantujemy, że loader wstepny bedzie widoczny przynajmniej 2 sekundy (2000ms)
+      const elapsedTime = Date.now() - startTime;
+      const remainingTime = 2000 - elapsedTime;
+      if (remainingTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, remainingTime));
       }
 
       if (response.ok && result.bot_response) {
