@@ -2550,7 +2550,6 @@ export default function HomeScreen() {
 
   const speakBotText = async (text: string) => {
     try {
-      unlockWebAudio();
       await stopSpeech();
       setIsBotSpeaking(true);
 
@@ -2580,42 +2579,21 @@ export default function HomeScreen() {
 
       const uri = `data:audio/mpeg;base64,${data.audio_base64}`;
 
-      if (Platform.OS === 'web') {
-        if (!webAudioRef.current) {
-          webAudioRef.current = new Audio();
+      const { sound } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: true }
+      );
+      
+      soundRef.current = sound;
+      
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          clearTimeout(safetyTimer);
+          setIsBotSpeaking(false);
+          sound.unloadAsync();
+          soundRef.current = null;
         }
-        webAudioRef.current.src = uri;
-        webAudioRef.current.onended = () => {
-          clearTimeout(safetyTimer);
-          setIsBotSpeaking(false);
-        };
-        webAudioRef.current.onerror = (e: any) => {
-          console.warn("Web HTML5 Audio playback error:", e);
-          clearTimeout(safetyTimer);
-          setIsBotSpeaking(false);
-        };
-        webAudioRef.current.play().catch((errPlay: any) => {
-          console.error("Web audio playback failed:", errPlay);
-          clearTimeout(safetyTimer);
-          setIsBotSpeaking(false);
-        });
-      } else {
-        const { sound } = await Audio.Sound.createAsync(
-          { uri },
-          { shouldPlay: true }
-        );
-        
-        soundRef.current = sound;
-        
-        sound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded && status.didJustFinish) {
-            clearTimeout(safetyTimer);
-            setIsBotSpeaking(false);
-            sound.unloadAsync();
-            soundRef.current = null;
-          }
-        });
-      }
+      });
     } catch (err: any) {
       console.log('Error playing bot speech', err);
       setIsBotSpeaking(false);
