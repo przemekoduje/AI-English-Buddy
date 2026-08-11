@@ -2912,21 +2912,44 @@ export default function HomeScreen() {
               {/* Main Stage */}
               <View style={styles.voiceTutorStage}>
                 
-                {/* Outlined Microphone Button — DISABLED (coming soon) */}
+                {/* Outlined Microphone Button — Clickable */}
                 <View style={{ alignItems: 'center' }}>
-                  <View
-                    style={[styles.voiceOrbButton, { opacity: 0.4 }]}
+                  <TouchableOpacity
+                    style={[
+                      styles.voiceOrbButton,
+                      isVoiceTutorActive ? { opacity: 1.0 } : { opacity: 0.8 }
+                    ]}
+                    onPress={isVoiceTutorActive ? handleEndVoiceTutorSession : handleStartVoiceTutorSession}
                   >
                     <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
-                      <Path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" stroke="#9CA3AF" strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
-                      <Path d="M19 10v1a7 7 0 0 1-14 0v-1" stroke="#9CA3AF" strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
-                      <Path d="M12 18v3" stroke="#9CA3AF" strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
-                      <Path d="M9 21h6" stroke="#9CA3AF" strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
+                      <Path 
+                        d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" 
+                        stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} 
+                        strokeWidth={1.5} 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        fill={isVoiceTutorActive ? "#1A73E8" : "none"}
+                      />
+                      <Path d="M19 10v1a7 7 0 0 1-14 0v-1" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                      <Path d="M12 18v3" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                      <Path d="M9 21h6" stroke={isVoiceTutorActive ? "#1A73E8" : "#9CA3AF"} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                     </Svg>
-                  </View>
-                  <View style={{ backgroundColor: '#F3F4F6', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 4, marginTop: 10 }}>
-                    <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500', letterSpacing: 0.5 }}>wkrótce</Text>
-                  </View>
+                  </TouchableOpacity>
+                  {!isVoiceTutorActive ? (
+                    <TouchableOpacity 
+                      onPress={handleStartVoiceTutorSession}
+                      style={{ backgroundColor: '#1A73E8', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 4, marginTop: 10 }}
+                    >
+                      <Text style={{ fontSize: 12, color: '#FFFFFF', fontWeight: '500', letterSpacing: 0.5 }}>Połącz</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity 
+                      onPress={handleEndVoiceTutorSession}
+                      style={{ backgroundColor: '#EA4335', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 4, marginTop: 10 }}
+                    >
+                      <Text style={{ fontSize: 12, color: '#FFFFFF', fontWeight: '500', letterSpacing: 0.5 }}>Rozłącz</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {/* Status label (large, light sans-serif) */}
