@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { API_BASE_URL } from "../../config";
 import "./Reader.css";
 import "../Practice/PracticeMode.css";
-import globalAudioManager from '../../globalAudioManager';
 
 const Reader = ({
   generatedText,
@@ -59,8 +58,7 @@ const Reader = ({
   const showLiveChatBadge = readProgressRatio >= 0.70 || (currentChunkIndex === -1 && !isSpeaking && textChunks && textChunks.length > 0);
 
   const startPracticeChatSession = async () => {
-    if (onStop) onStop(); // zatrzymuje Workspace audio
-    globalAudioManager.stopAll(); // zatrzymuje wszelkie inne TTS
+    if (onStop) onStop();
     setLiveChatActive(true);
     setChatOrbStatus("thinking");
     setIsChatProcessing(true);
@@ -103,8 +101,37 @@ const Reader = ({
   };
 
   const speakChatBotText = async (text) => {
-    const requestId = globalAudioManager.acquire();
-    chatAudioRef.current = null;
+    if ('speechSynthesis' in window) {
+      setChatOrbStatus("speaking");
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "en-US";
+        
+        const voices = window.speechSynthesis.getVoices();
+        const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural') || v.name.includes('Microsoft')));
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+        }
+
+        utterance.onend = () => {
+          setChatOrbStatus("standby");
+          startChatRecording();
+        };
+
+        utterance.onerror = (e) => {
+          console.warn("SpeechSynthesis error:", e);
+          setChatOrbStatus("standby");
+          startChatRecording();
+        };
+
+        window.speechSynthesis.speak(utterance);
+        return;
+      } catch (err) {
+        console.warn("Local SpeechSynthesis failed in Reader chat, trying API fallback:", err);
+      }
+    }
+
     setChatOrbStatus("speaking");
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
@@ -115,45 +142,24 @@ const Reader = ({
           voice: selectedVoiceURI || "en-US-BrianNeural"
         })
       });
-
-      if (!globalAudioManager.isValid(requestId)) return;
-
       const data = await response.json();
       if (data.audio_base64) {
-        if (!globalAudioManager.isValid(requestId)) return;
         const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
         const audio = new Audio(audioUrl);
-        audio.onended = () => {
-          if (!globalAudioManager.isValid(requestId)) return;
-          globalAudioManager.release(requestId);
-          chatAudioRef.current = null;
-          setChatOrbStatus("standby");
-          startChatRecording();
-        };
-        audio.onerror = () => {
-          if (!globalAudioManager.isValid(requestId)) return;
-          globalAudioManager.release(requestId);
-          chatAudioRef.current = null;
-          setChatOrbStatus("standby");
-          startChatRecording();
-        };
-        if (!globalAudioManager.setAudio(requestId, audio)) return;
         chatAudioRef.current = audio;
-        try { await audio.play(); } catch (playErr) { if (playErr.name !== 'AbortError') console.warn("Reader chat play error:", playErr); }
-      } else {
-        if (globalAudioManager.isValid(requestId)) {
-          globalAudioManager.release(requestId);
+        audio.onended = () => {
           setChatOrbStatus("standby");
           startChatRecording();
-        }
-      }
-    } catch (err) {
-      console.error("Chat TTS error:", err);
-      if (globalAudioManager.isValid(requestId)) {
-        globalAudioManager.release(requestId);
+        };
+        audio.play();
+      } else {
         setChatOrbStatus("standby");
         startChatRecording();
       }
+    } catch (err) {
+      console.error("Chat TTS error:", err);
+      setChatOrbStatus("standby");
+      startChatRecording();
     }
   };
 

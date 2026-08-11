@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from '../../config';
 import "./PracticeMode.css";
-import globalAudioManager from '../../globalAudioManager';
 
 const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActivity }) => {
   const [phase, setPhase] = useState(1);
@@ -61,7 +60,8 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const chatMessagesRef = useRef([]);
   const liveChatStageRef = useRef(null);
 
-  // globalAudioManager zastępuje activeTTSRequestIdRef i activeChatTTSRequestIdRef
+  const activeTTSRequestIdRef = useRef(0);
+  const activeChatTTSRequestIdRef = useRef(0);
 
   useEffect(() => {
     if (liveChatActive && liveChatStageRef.current) {
@@ -72,10 +72,17 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   useEffect(() => {
     prepareContent();
     return () => {
-      globalAudioManager.stopAll();
+      activeTTSRequestIdRef.current++;
+      activeChatTTSRequestIdRef.current++;
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-      currentAudioRef.current = null;
-      chatAudioRef.current = null;
+      if (chatAudioRef.current) {
+        chatAudioRef.current.pause();
+        chatAudioRef.current = null;
+      }
       if (chatRecognitionRef.current) {
         try { chatRecognitionRef.current.stop(); } catch (e) {}
       }
@@ -119,14 +126,16 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   };
 
   const speakSentence = async (index, lang = "en", segmentIdx = -1) => {
-    // Zajmij globalny slot — atomowo zatrzymuje poprzednie audio
-    const requestId = globalAudioManager.acquire();
+    const requestId = ++activeTTSRequestIdRef.current;
 
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     setProgress(0);
     setIsPaused(false);
     isPausedRef.current = false;
-    currentAudioRef.current = null;
 
     if (index < 0 || index >= masteryData.length) {
       setIsSpeaking(false);
@@ -161,8 +170,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
         })
       });
 
-      // Sprawdź po fetch czy nie wywołano stopAll() w międzyczasie
-      if (!globalAudioManager.isValid(requestId)) {
+      if (requestId !== activeTTSRequestIdRef.current) {
         return;
       }
 
@@ -170,7 +178,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       const data = await response.json();
       if (!data.audio_base64) throw new Error("No audio data returned");
 
-      if (!globalAudioManager.isValid(requestId)) {
+      if (requestId !== activeTTSRequestIdRef.current || isPausedRef.current) {
         return;
       }
 
@@ -179,13 +187,13 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       audio.playbackRate = rate;
 
       audio.onplay = () => {
-        if (!globalAudioManager.isValid(requestId)) return;
+        if (requestId !== activeTTSRequestIdRef.current) return;
         setIsSpeaking(true);
         setIsPaused(false);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         
         const updateProgress = () => {
-          if (!currentAudioRef.current || currentAudioRef.current.paused || !globalAudioManager.isValid(requestId)) return;
+          if (!currentAudioRef.current || currentAudioRef.current.paused || requestId !== activeTTSRequestIdRef.current) return;
           const duration = currentAudioRef.current.duration || (textToSpeak.length * 0.085);
           if (duration > 0) {
             const newProgress = Math.min((currentAudioRef.current.currentTime / duration) * 100, 100);
@@ -200,53 +208,37 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       };
 
       audio.onpause = () => {
-        if (!globalAudioManager.isValid(requestId)) return;
+        if (requestId !== activeTTSRequestIdRef.current) return;
         setIsPaused(true);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       };
 
       audio.onended = () => {
-        if (!globalAudioManager.isValid(requestId)) return;
+        if (requestId !== activeTTSRequestIdRef.current) return;
         setIsSpeaking(false);
         setIsPaused(false);
         setProgress(100);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-        globalAudioManager.release(requestId);
         currentAudioRef.current = null;
       };
 
       audio.onerror = () => {
-        if (!globalAudioManager.isValid(requestId)) return;
+        if (requestId !== activeTTSRequestIdRef.current) return;
         setIsSpeaking(false);
         setIsPaused(false);
         setProgress(0);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-        globalAudioManager.release(requestId);
         currentAudioRef.current = null;
       };
 
-      if (!globalAudioManager.setAudio(requestId, audio)) {
-        return;
-      }
       currentAudioRef.current = audio;
-
-      // play() zwraca Promise — obsługujemy błąd interrupted by pause
-      try {
-        await audio.play();
-      } catch (playErr) {
-        // Jeśli audio zostało zapauzowane zanim zdążyło zaczac grac (np. stopAll) — to OK
-        if (playErr.name !== 'AbortError') {
-          console.warn("Audio play error:", playErr);
-        }
-        currentAudioRef.current = null;
-      }
+      audio.play();
 
     } catch (err) {
-      if (globalAudioManager.isValid(requestId)) {
+      if (requestId === activeTTSRequestIdRef.current) {
         console.error("Error playing practice voice:", err);
         setIsSpeaking(false);
         setProgress(0);
-        globalAudioManager.release(requestId);
       }
     }
   };
@@ -365,9 +357,8 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const handleTogglePlayPause = () => {
     if (currentAudioRef.current) {
       if (isPaused || currentAudioRef.current.paused) {
-        currentAudioRef.current.play().catch(() => {});
+        currentAudioRef.current.play();
         setIsPaused(false);
-        isPausedRef.current = false;
         setIsSpeaking(true);
       } else {
         currentAudioRef.current.pause();
@@ -408,10 +399,13 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const showLiveChatBadge = readProgressRatio >= 0.70;
 
   const startPracticeChatSession = async () => {
-    globalAudioManager.stopAll();
+    activeTTSRequestIdRef.current++;
+    activeChatTTSRequestIdRef.current++;
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    currentAudioRef.current = null;
-    chatAudioRef.current = null;
     setIsSpeaking(false);
     setIsPaused(false);
 
@@ -458,8 +452,44 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   };
 
   const speakChatBotText = async (textToSpeak) => {
-    const requestId = globalAudioManager.acquire();
-    chatAudioRef.current = null;
+    const requestId = ++activeChatTTSRequestIdRef.current;
+
+    if (chatAudioRef.current) {
+      chatAudioRef.current.pause();
+      chatAudioRef.current = null;
+    }
+
+    if ('speechSynthesis' in window) {
+      setChatOrbStatus("speaking");
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.lang = "en-US";
+        
+        const voices = window.speechSynthesis.getVoices();
+        const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural') || v.name.includes('Microsoft')));
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+        }
+
+        utterance.onend = () => {
+          if (requestId !== activeChatTTSRequestIdRef.current) return;
+          startChatRecording();
+        };
+
+        utterance.onerror = (e) => {
+          console.warn("SpeechSynthesis error:", e);
+          if (requestId !== activeChatTTSRequestIdRef.current) return;
+          setChatOrbStatus("inactive");
+        };
+
+        window.speechSynthesis.speak(utterance);
+        return;
+      } catch (err) {
+        console.warn("Local SpeechSynthesis failed in chat, trying API fallback:", err);
+      }
+    }
+
     setChatOrbStatus("speaking");
     try {
       const res = await fetch(`${API_BASE_URL}/api/tts`, {
@@ -471,38 +501,37 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
         })
       });
 
-      if (!globalAudioManager.isValid(requestId)) return;
+      if (requestId !== activeChatTTSRequestIdRef.current) {
+        return;
+      }
 
       const data = await res.json();
       if (data.audio_base64) {
-        if (!globalAudioManager.isValid(requestId)) return;
+        if (requestId !== activeChatTTSRequestIdRef.current) {
+          return;
+        }
         const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
         const audio = new Audio(audioUrl);
+        chatAudioRef.current = audio;
         audio.onended = () => {
-          if (!globalAudioManager.isValid(requestId)) return;
-          globalAudioManager.release(requestId);
+          if (requestId !== activeChatTTSRequestIdRef.current) return;
           chatAudioRef.current = null;
           startChatRecording();
         };
         audio.onerror = () => {
-          if (!globalAudioManager.isValid(requestId)) return;
-          globalAudioManager.release(requestId);
+          if (requestId !== activeChatTTSRequestIdRef.current) return;
           chatAudioRef.current = null;
           setChatOrbStatus("inactive");
         };
-        if (!globalAudioManager.setAudio(requestId, audio)) return;
-        chatAudioRef.current = audio;
-        try { await audio.play(); } catch (playErr) { if (playErr.name !== 'AbortError') console.warn("Chat play error:", playErr); }
+        audio.play();
       } else {
-        if (globalAudioManager.isValid(requestId)) {
-          globalAudioManager.release(requestId);
+        if (requestId === activeChatTTSRequestIdRef.current) {
           setChatOrbStatus("inactive");
         }
       }
     } catch (e) {
-      if (globalAudioManager.isValid(requestId)) {
+      if (requestId === activeChatTTSRequestIdRef.current) {
         console.error("TTS chat error:", e);
-        globalAudioManager.release(requestId);
         setChatOrbStatus("inactive");
       }
     }
@@ -636,22 +665,27 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   };
 
   const changePhase = (newPhase) => {
-    // Zatrzymaj wszelkie odtwarzanie globalnie
-    globalAudioManager.stopAll();
-    currentAudioRef.current = null;
-    chatAudioRef.current = null;
-    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    if (chatMediaRecorderRef.current && isChatRecording) {
-      try { stopChatRecording(); } catch (e) {}
-    }
+    activeTTSRequestIdRef.current++;
+    activeChatTTSRequestIdRef.current++;
     setPhase(newPhase);
     setSubPhase(1);
     setCurrentIndex(0);
     setCurrentSegmentIndex(newPhase === 2 ? 0 : -1);
     setIsSpeaking(false);
     setIsPaused(false);
-    isPausedRef.current = false;
     setEvaluation(null);
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    if (chatAudioRef.current) {
+      chatAudioRef.current.pause();
+      chatAudioRef.current = null;
+    }
+    if (chatMediaRecorderRef.current && isChatRecording) {
+      try { stopChatRecording(); } catch (e) {}
+    }
     setLiveChatActive(false);
     setChatOrbStatus("inactive");
   };

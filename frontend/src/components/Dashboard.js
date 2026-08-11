@@ -26,6 +26,8 @@ function Dashboard({ user }) {
   const currentAudioRef = useRef(null);
   const streamRef = useRef(null);
   const transcriptScrollRef = useRef(null); // Ref for scroll container
+  const recognitionRef = useRef(null);
+  const localTranscriptRef = useRef("");
 
   // VAD state refs
   const audioContextRef = useRef(null);
@@ -78,6 +80,11 @@ function Dashboard({ user }) {
   };
 
   const stopRecordingLocally = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       try {
         mediaRecorderRef.current.stop();
@@ -220,10 +227,41 @@ function Dashboard({ user }) {
     audioChunksRef.current = [];
     isUserSpeakingRef.current = false;
     setUserIsSpeakingState(false);
+    localTranscriptRef.current = "";
 
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
+    }
+
+    // Start local browser speech recognition if supported
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        const rec = new SpeechRecognition();
+        rec.lang = "en-US";
+        rec.continuous = true;
+        rec.interimResults = false;
+        rec.onresult = (event) => {
+          let finalTranscript = "";
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript + " ";
+            }
+          }
+          if (finalTranscript.trim()) {
+            localTranscriptRef.current = (localTranscriptRef.current + " " + finalTranscript.trim()).trim();
+            console.log("Local SpeechRecognition transcript so far:", localTranscriptRef.current);
+          }
+        };
+        rec.onerror = (err) => {
+          console.warn("Local SpeechRecognition error:", err.error);
+        };
+        recognitionRef.current = rec;
+        rec.start();
+      } catch (e) {
+        console.warn("Failed to initialize SpeechRecognition:", e);
+      }
     }
 
     try {
@@ -262,6 +300,13 @@ function Dashboard({ user }) {
   };
 
   const stopRecording = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.warn("Failed to stop SpeechRecognition:", e);
+      }
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       try {
         mediaRecorderRef.current.stop();
@@ -273,9 +318,42 @@ function Dashboard({ user }) {
   };
 
   // Play audio response from Tutor
+  // Play audio response from Tutor
   const playTutorAudio = async (text, cachedBase64) => {
     stopAudio();
     setIsBotSpeaking(true);
+
+    // If no base64 was generated/returned and SpeechSynthesis is supported, play it locally
+    if (!cachedBase64 && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "en-US";
+        
+        const voices = window.speechSynthesis.getVoices();
+        const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural') || v.name.includes('Microsoft')));
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+        }
+
+        utterance.onend = () => {
+          setIsBotSpeaking(false);
+          startRecording();
+        };
+
+        utterance.onerror = (e) => {
+          console.warn("SpeechSynthesis error:", e);
+          setIsBotSpeaking(false);
+          startRecording();
+        };
+
+        window.speechSynthesis.speak(utterance);
+        return;
+      } catch (err) {
+        console.warn("Local SpeechSynthesis failed, trying fallback:", err);
+      }
+    }
+
     try {
       let base64_data = cachedBase64;
       if (!base64_data) {
@@ -403,6 +481,12 @@ function Dashboard({ user }) {
       formData.append("audio", audioBlob, "user_speech.webm");
       formData.append("history", JSON.stringify(historyForApi));
       formData.append("voice", "en-US-BrianNeural");
+      if (localTranscriptRef.current) {
+        formData.append("transcription", localTranscriptRef.current);
+      }
+      if ('speechSynthesis' in window) {
+        formData.append("skip_tts", "true");
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/chat-free`, {
         method: "POST",
@@ -421,7 +505,7 @@ function Dashboard({ user }) {
       const userMsg = {
         id: userMsgId,
         sender: "user",
-        text: result.transcription || "(Brak transkrypcji)",
+        text: result.transcription || localTranscriptRef.current || "(Brak transkrypcji)",
         evaluation: result.user_evaluation,
       };
 

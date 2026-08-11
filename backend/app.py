@@ -3885,29 +3885,29 @@ def chat_next():
         result["transcription"] = transcription
         result["user_transcription"] = transcription
 
-        # Automatically save detected Polish insertions into user's Vocabulary database
+        # Automatically save detected Polish insertions into user's Vocabulary database in background
         insertions = result.get("polish_insertions", [])
-        if insertions and isinstance(insertions, list) and db is not None:
+        def save_vocabulary_chat_next_bg(u_email, u_insertions):
+            if db is None or not u_insertions or not isinstance(u_insertions, list):
+                return
             try:
-                for item in insertions:
+                for item in u_insertions:
                     polish_word = item.get("polish", "").strip()
                     english_word = item.get("english", "").strip()
                     if polish_word and english_word:
-                        # Check if duplicate exists for this user
-                        query = db.collection('vocabulary').where('user_email', '==', user_email).where('original', '==', english_word)
+                        query = db.collection('vocabulary').where('user_email', '==', u_email).where('original', '==', english_word)
                         existing = query.limit(1).get()
                         
                         duplicate_found = False
                         for doc in existing:
                             duplicate_found = True
-                            # If translation changed, update it
                             if doc.to_dict().get('translated') != polish_word:
                                 db.collection('vocabulary').document(doc.id).update({'translated': polish_word})
                             break
                         
                         if not duplicate_found:
                             new_entry = {
-                                'user_email': user_email,
+                                'user_email': u_email,
                                 'original': english_word,
                                 'translated': polish_word,
                                 'story_id': 'chat-story',
@@ -3917,6 +3917,8 @@ def chat_next():
                             print(f"Automatically saved vocabulary insertion from chat-story: {english_word} -> {polish_word}")
             except Exception as vocab_err:
                 print(f"Error automatically saving vocabulary insertion from chat-story: {vocab_err}")
+
+        threading.Thread(target=save_vocabulary_chat_next_bg, args=(user_email, insertions)).start()
 
         return jsonify(result)
     except Exception as e:
@@ -4088,7 +4090,10 @@ def chat_free():
         active_client = openai_client
         active_model = "gpt-4o-mini"
     else: # free
-        if deepseek_client:
+        if openai_client:
+            active_client = openai_client
+            active_model = "gpt-4o-mini"
+        elif deepseek_client:
             active_client = deepseek_client
             active_model = "deepseek-chat"
         else:
@@ -4118,71 +4123,74 @@ def chat_free():
         result = json.loads(raw_json)
         result["transcription"] = transcription
 
-        # Automatically save detected Polish insertions into user's Vocabulary database
+        # Automatically save detected Polish insertions and vocabulary additions into user's Vocabulary database in background
         insertions = result.get("polish_insertions", [])
-        if insertions and isinstance(insertions, list) and db is not None:
-            try:
-                for item in insertions:
-                    polish_word = item.get("polish", "").strip()
-                    english_word = item.get("english", "").strip()
-                    if polish_word and english_word:
-                        # Check if duplicate exists for this user
-                        query = db.collection('vocabulary').where('user_email', '==', user_email).where('original', '==', english_word)
-                        existing = query.limit(1).get()
-                        
-                        duplicate_found = False
-                        for doc in existing:
-                            duplicate_found = True
-                            # If translation changed, update it
-                            if doc.to_dict().get('translated') != polish_word:
-                                db.collection('vocabulary').document(doc.id).update({'translated': polish_word})
-                            break
-                        
-                        if not duplicate_found:
-                            new_entry = {
-                                'user_email': user_email,
-                                'original': english_word,
-                                'translated': polish_word,
-                                'story_id': 'chat-free',
-                                'timestamp': firestore.SERVER_TIMESTAMP
-                            }
-                            db.collection('vocabulary').add(new_entry)
-                            print(f"Automatically saved vocabulary insertion: {english_word} -> {polish_word}", flush=True)
-            except Exception as vocab_err:
-                print(f"Error automatically saving vocabulary insertion: {vocab_err}", flush=True)
-
-        # Automatically save general vocabulary additions and corrections
         vocab_additions = result.get("vocabulary_additions", [])
-        if vocab_additions and isinstance(vocab_additions, list) and db is not None:
-            try:
-                for item in vocab_additions:
-                    english_word = item.get("original", "").strip()
-                    polish_explanation = item.get("translated", "").strip()
-                    if english_word and polish_explanation:
-                        # Check if duplicate exists for this user
-                        query = db.collection('vocabulary').where('user_email', '==', user_email).where('original', '==', english_word)
-                        existing = query.limit(1).get()
-                        
-                        duplicate_found = False
-                        for doc in existing:
-                            duplicate_found = True
-                            # If translation changed, update it
-                            if doc.to_dict().get('translated') != polish_explanation:
-                                db.collection('vocabulary').document(doc.id).update({'translated': polish_explanation})
-                            break
-                        
-                        if not duplicate_found:
-                            new_entry = {
-                                'user_email': user_email,
-                                'original': english_word,
-                                'translated': polish_explanation,
-                                'story_id': 'chat-free',
-                                'timestamp': firestore.SERVER_TIMESTAMP
-                            }
-                            db.collection('vocabulary').add(new_entry)
-                            print(f"Automatically saved vocabulary addition/correction: {english_word} -> {polish_explanation}", flush=True)
-            except Exception as vocab_err:
-                print(f"Error automatically saving vocabulary addition: {vocab_err}", flush=True)
+        
+        def save_vocabulary_chat_free_bg(u_email, u_insertions, u_additions):
+            if db is None:
+                return
+            # 1. Save Polish insertions
+            if u_insertions and isinstance(u_insertions, list):
+                try:
+                    for item in u_insertions:
+                        polish_word = item.get("polish", "").strip()
+                        english_word = item.get("english", "").strip()
+                        if polish_word and english_word:
+                            query = db.collection('vocabulary').where('user_email', '==', u_email).where('original', '==', english_word)
+                            existing = query.limit(1).get()
+                            
+                            duplicate_found = False
+                            for doc in existing:
+                                duplicate_found = True
+                                if doc.to_dict().get('translated') != polish_word:
+                                    db.collection('vocabulary').document(doc.id).update({'translated': polish_word})
+                                break
+                            
+                            if not duplicate_found:
+                                new_entry = {
+                                    'user_email': u_email,
+                                    'original': english_word,
+                                    'translated': polish_word,
+                                    'story_id': 'chat-free',
+                                    'timestamp': firestore.SERVER_TIMESTAMP
+                                }
+                                db.collection('vocabulary').add(new_entry)
+                                print(f"Automatically saved vocabulary insertion: {english_word} -> {polish_word}", flush=True)
+                except Exception as vocab_err:
+                    print(f"Error automatically saving vocabulary insertion: {vocab_err}", flush=True)
+
+            # 2. Save general vocabulary additions and corrections
+            if u_additions and isinstance(u_additions, list):
+                try:
+                    for item in u_additions:
+                        english_word = item.get("original", "").strip()
+                        polish_explanation = item.get("translated", "").strip()
+                        if english_word and polish_explanation:
+                            query = db.collection('vocabulary').where('user_email', '==', u_email).where('original', '==', english_word)
+                            existing = query.limit(1).get()
+                            
+                            duplicate_found = False
+                            for doc in existing:
+                                duplicate_found = True
+                                if doc.to_dict().get('translated') != polish_explanation:
+                                    db.collection('vocabulary').document(doc.id).update({'translated': polish_explanation})
+                                break
+                            
+                            if not duplicate_found:
+                                new_entry = {
+                                    'user_email': u_email,
+                                    'original': english_word,
+                                    'translated': polish_explanation,
+                                    'story_id': 'chat-free',
+                                    'timestamp': firestore.SERVER_TIMESTAMP
+                                }
+                                db.collection('vocabulary').add(new_entry)
+                                print(f"Automatically saved vocabulary addition/correction: {english_word} -> {polish_explanation}", flush=True)
+                except Exception as vocab_err:
+                    print(f"Error automatically saving vocabulary addition: {vocab_err}", flush=True)
+
+        threading.Thread(target=save_vocabulary_chat_free_bg, args=(user_email, insertions, vocab_additions)).start()
 
         # Generate TTS audio on the backend to reduce latency
         bot_reply_text = result.get("bot_response", "")
