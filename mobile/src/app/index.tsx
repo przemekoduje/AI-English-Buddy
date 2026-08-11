@@ -2531,6 +2531,13 @@ export default function HomeScreen() {
       await stopSpeech();
       setIsBotSpeaking(true);
 
+      const wordsCount = text.split(/\s+/).length;
+      const safetyDelay = Math.max(4000, wordsCount * 500 + 2000);
+      const safetyTimer = setTimeout(() => {
+        console.warn("SpeechSynthesis safety timeout triggered");
+        setIsBotSpeaking(false);
+      }, safetyDelay);
+
       if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
         try {
           window.speechSynthesis.cancel();
@@ -2557,11 +2564,13 @@ export default function HomeScreen() {
           }
 
           utterance.onend = () => {
+            clearTimeout(safetyTimer);
             setIsBotSpeaking(false);
           };
 
           utterance.onerror = (e) => {
             console.warn("SpeechSynthesis error:", e);
+            clearTimeout(safetyTimer);
             setIsBotSpeaking(false);
           };
 
@@ -2585,6 +2594,7 @@ export default function HomeScreen() {
 
       const data = await response.json();
       if (!response.ok || !data.audio_base64) {
+        clearTimeout(safetyTimer);
         throw new Error(data.error || 'Nie udało się pobrać dźwięku z serwera');
       }
 
@@ -2598,6 +2608,7 @@ export default function HomeScreen() {
       
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
+          clearTimeout(safetyTimer);
           setIsBotSpeaking(false);
           sound.unloadAsync();
           soundRef.current = null;
@@ -3472,9 +3483,14 @@ export default function HomeScreen() {
 
                 {/* Loader rozpoczynania rozmowy */}
                 {isProcessingChat && chatMessages.length === 0 && (
-                  <View style={styles.loadingQuestionsContainer}>
-                    <ActivityIndicator size="small" color="#1A73E8" />
-                    <Text style={styles.loadingQuestionsText}>Rozpoczynanie rozmowy audio z lektorem...</Text>
+                  <View style={[styles.loadingQuestionsContainer, { padding: 24, alignItems: 'center', backgroundColor: '#F8F9FA', borderRadius: 16, borderStyle: 'dashed', borderWidth: 1, borderColor: '#DADCE0', marginVertical: 16 }]}>
+                    <ActivityIndicator size="large" color="#1A73E8" />
+                    <Text style={[styles.loadingQuestionsText, { marginTop: 12, fontWeight: 'bold', fontSize: 16, color: '#1A73E8', textAlign: 'center' }]}>
+                      Lektor przygotowuje się do rozmowy z Tobą...
+                    </Text>
+                    <Text style={{ fontSize: 13, color: '#5F6368', marginTop: 8, textAlign: 'center', lineHeight: 18, paddingHorizontal: 10 }}>
+                      AI analizuje tekst opowiadania, aby przygotować pytania. Wybudzanie serwera po przerwie może potrwać kilka sekund.
+                    </Text>
                   </View>
                 )}
 
