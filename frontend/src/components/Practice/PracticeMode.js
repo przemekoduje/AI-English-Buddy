@@ -61,6 +61,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const chatMessagesRef = useRef([]);
   const liveChatStageRef = useRef(null);
   const liveChatActiveRef = useRef(false);
+  const chatHistoryEndRef = useRef(null);
 
   const activeTTSRequestIdRef = useRef(0);
   const activeChatTTSRequestIdRef = useRef(0);
@@ -70,6 +71,12 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       liveChatStageRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }, [liveChatActive]);
+
+  useEffect(() => {
+    if (chatHistoryEndRef.current) {
+      chatHistoryEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages]);
 
   useEffect(() => {
     prepareContent();
@@ -905,8 +912,53 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                   <div className="practice-live-header">
                     <div className="live-title-row">
                       <span className="live-dot-pulse active"></span>
-                      <h4>Rozmowa Audio o Lekturze (Chat Live)</h4>
+                      <h4>Rozmowa Audio (Chat Live)</h4>
                     </div>
+
+                    <div className="live-header-status-widget" onClick={handleOrbClickInChat} style={{ cursor: 'pointer' }}>
+                      <button
+                        className={`tutor-gemini-orb header-orb ${chatOrbStatus}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOrbClickInChat();
+                        }}
+                        title={
+                          chatOrbStatus === "speaking" ? "Kliknij, aby przerwać i odpowiedzieć" :
+                          chatOrbStatus === "listening" || isChatRecording ? "Kliknij, aby zakończyć nagrywanie i wysłać" :
+                          "Kliknij, aby mówić"
+                        }
+                      >
+                        <div className="orb-pulse-ring-1"></div>
+                        <div className="orb-pulse-ring-2"></div>
+                        <div className="orb-core">
+                          {chatOrbStatus === "inactive" || chatOrbStatus === "standby" ? (
+                            <svg viewBox="0 0 24 24" className="orb-mic-svg" style={{ width: '15px', height: '15px' }}>
+                              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                            </svg>
+                          ) : chatOrbStatus === "speaking" ? (
+                            <div className="orb-wave-container mini">
+                              <span className="wave-bar bar-1"></span>
+                              <span className="wave-bar bar-2"></span>
+                              <span className="wave-bar bar-3"></span>
+                            </div>
+                          ) : chatOrbStatus === "listening" || isChatRecording ? (
+                            <svg viewBox="0 0 24 24" className="orb-mic-svg" style={{ fill: '#E8EAED', width: '13px', height: '13px' }}>
+                              <rect x="6" y="6" width="12" height="12" rx="2" />
+                            </svg>
+                          ) : (
+                            <div className="spinner-small" style={{ borderTopColor: '#fff', width: '14px', height: '14px' }}></div>
+                          )}
+                        </div>
+                      </button>
+                      <div className="practice-live-status-label">
+                        {chatOrbStatus === "thinking" && "✨ AI przygotowuje pytanie..."}
+                        {chatOrbStatus === "speaking" && "AI mówi... (kliknij, by przerwać)"}
+                        {(chatOrbStatus === "listening" || isChatRecording) && "🎙️ Słucham Twojej odpowiedzi... (kliknij, by wysłać)"}
+                        {chatOrbStatus === "inactive" && "Kliknij kulę, aby odpowiedzieć głosem"}
+                      </div>
+                    </div>
+
                     <button className="close-live-chat-btn" onClick={() => {
                       liveChatActiveRef.current = false;
                       activeChatTTSRequestIdRef.current++;
@@ -920,49 +972,8 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                       setLiveChatActive(false);
                       setChatOrbStatus("inactive");
                     }}>
-                      Zakończ rozmowę
+                      Zakończ
                     </button>
-                  </div>
-
-                  <div className="practice-live-orb-container">
-                    <button
-                      className={`tutor-gemini-orb ${chatOrbStatus}`}
-                      onClick={handleOrbClickInChat}
-                      title={
-                        chatOrbStatus === "speaking" ? "Kliknij, aby przerwać i odpowiedzieć" :
-                        chatOrbStatus === "listening" || isChatRecording ? "Kliknij, aby zakończyć nagrywanie i wysłać" :
-                        "Kliknij, aby mówić"
-                      }
-                    >
-                      <div className="orb-pulse-ring-1"></div>
-                      <div className="orb-pulse-ring-2"></div>
-                      <div className="orb-core">
-                        {chatOrbStatus === "inactive" || chatOrbStatus === "standby" ? (
-                          <svg viewBox="0 0 24 24" className="orb-mic-svg">
-                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                          </svg>
-                        ) : chatOrbStatus === "speaking" ? (
-                          <div className="orb-wave-container">
-                            <span className="wave-bar bar-1"></span>
-                            <span className="wave-bar bar-2"></span>
-                            <span className="wave-bar bar-3"></span>
-                          </div>
-                        ) : chatOrbStatus === "listening" || isChatRecording ? (
-                          <svg viewBox="0 0 24 24" className="orb-mic-svg" style={{fill: '#E8EAED'}}>
-                            <rect x="6" y="6" width="12" height="12" rx="2" />
-                          </svg>
-                        ) : (
-                          <div className="spinner-small" style={{borderTopColor: '#fff', width: '28px', height: '28px'}}></div>
-                        )}
-                      </div>
-                    </button>
-                    <div className="practice-live-status-label">
-                      {chatOrbStatus === "thinking" && "✨ AI analizuje czytankę i przygotowuje pierwsze pytanie..."}
-                      {chatOrbStatus === "speaking" && "AI zadaje pytanie... (Kliknij kulę, aby przerwać i odpowiedzieć)"}
-                      {(chatOrbStatus === "listening" || isChatRecording) && "🎙️ Słucham Twojej odpowiedzi... (Mów do mikrofonu, kliknij kulę, gdy skończysz)"}
-                      {chatOrbStatus === "inactive" && "Kliknij kulę, aby odpowiedzieć głosem"}
-                    </div>
                   </div>
 
                   <div className="practice-live-chat-history">
@@ -1038,6 +1049,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                           </div>
                         </div>
                       ))}
+                      <div ref={chatHistoryEndRef} />
                     </div>
                   </div>
                 )}
