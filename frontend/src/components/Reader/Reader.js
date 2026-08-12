@@ -46,12 +46,30 @@ const Reader = ({
   const chatAudioRef = useRef(null);
   const chatMessagesRef = useRef([]);
   const liveChatStageRef = useRef(null);
+  const liveChatActiveRef = useRef(false);
+  const activeChatTTSRequestIdRef = useRef(0);
+  const chatHistoryEndRef = useRef(null);
 
   useEffect(() => {
     if (liveChatActive && liveChatStageRef.current) {
       liveChatStageRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }, [liveChatActive]);
+
+  useEffect(() => {
+    if (chatHistoryEndRef.current) {
+      chatHistoryEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+    const practiceBody = document.querySelector('.practice-body') || document.querySelector('.reader-container');
+    if (practiceBody) {
+      setTimeout(() => {
+        practiceBody.scrollTo({
+          top: practiceBody.scrollHeight,
+          behavior: 'smooth'
+        });
+      }, 100);
+    }
+  }, [chatMessages]);
 
   const readProgressRatio = textChunks && textChunks.length > 0 
     ? Math.max((currentChunkIndex + 1) / textChunks.length, (currentChunkIndex === -1 && !isSpeaking) ? 1 : 0)
@@ -61,6 +79,8 @@ const Reader = ({
   const startPracticeChatSession = async () => {
     unlockDesktopAudio();
     if (onStop) onStop();
+    liveChatActiveRef.current = true;
+    activeChatTTSRequestIdRef.current++;
     setLiveChatActive(true);
     setChatOrbStatus("thinking");
     setIsChatProcessing(true);
@@ -124,8 +144,12 @@ const Reader = ({
   }
 
   const speakChatBotText = async (text) => {
+    if (!liveChatActiveRef.current) return;
+    const requestId = ++activeChatTTSRequestIdRef.current;
+
     const safetyTimer = setTimeout(() => {
       console.warn("Safety timeout triggered for speakChatBotText in Reader");
+      if (requestId !== activeChatTTSRequestIdRef.current || !liveChatActiveRef.current) return;
       setChatOrbStatus("standby");
       startChatRecording();
     }, Math.max(4000, text.split(/\s+/).length * 500 + 2000));
@@ -147,7 +171,15 @@ const Reader = ({
           voice: selectedVoiceURI || "en-US-BrianNeural"
         })
       });
+      if (requestId !== activeChatTTSRequestIdRef.current || !liveChatActiveRef.current) {
+        clearTimeout(safetyTimer);
+        return;
+      }
       const data = await response.json();
+      if (requestId !== activeChatTTSRequestIdRef.current || !liveChatActiveRef.current) {
+        clearTimeout(safetyTimer);
+        return;
+      }
       if (data.audio_base64) {
         const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
         if (!chatAudioRef.current) {
@@ -156,12 +188,14 @@ const Reader = ({
         chatAudioRef.current.src = audioUrl;
         chatAudioRef.current.onended = () => {
           clearTimeout(safetyTimer);
+          if (requestId !== activeChatTTSRequestIdRef.current || !liveChatActiveRef.current) return;
           chatAudioRef.current = null;
           setChatOrbStatus("standby");
           startChatRecording();
         };
         chatAudioRef.current.onerror = () => {
           clearTimeout(safetyTimer);
+          if (requestId !== activeChatTTSRequestIdRef.current || !liveChatActiveRef.current) return;
           chatAudioRef.current = null;
           setChatOrbStatus("standby");
           startChatRecording();
@@ -169,16 +203,19 @@ const Reader = ({
         chatAudioRef.current.play().catch(e => {
           console.error("Audio playback error:", e);
           clearTimeout(safetyTimer);
+          if (requestId !== activeChatTTSRequestIdRef.current || !liveChatActiveRef.current) return;
           setChatOrbStatus("standby");
           startChatRecording();
         });
       } else {
         clearTimeout(safetyTimer);
+        if (requestId !== activeChatTTSRequestIdRef.current || !liveChatActiveRef.current) return;
         setChatOrbStatus("standby");
         startChatRecording();
       }
     } catch (err) {
       clearTimeout(safetyTimer);
+      if (requestId !== activeChatTTSRequestIdRef.current || !liveChatActiveRef.current) return;
       console.error("Chat TTS error:", err);
       setChatOrbStatus("standby");
       startChatRecording();
@@ -186,6 +223,7 @@ const Reader = ({
   };
 
   const startChatRecording = async () => {
+    if (!liveChatActiveRef.current) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       chatMediaRecorderRef.current = new MediaRecorder(stream);
@@ -211,6 +249,7 @@ const Reader = ({
       }
 
       chatMediaRecorderRef.current.onstop = () => {
+        if (!liveChatActiveRef.current) return;
         const blob = new Blob(chatAudioChunksRef.current, { type: 'audio/webm' });
         sendChatAnswer(blob, chatTranscriptRef.current);
       };
@@ -238,6 +277,7 @@ const Reader = ({
   };
 
   const sendChatAnswer = async (audioBlob, localTranscript = "") => {
+    if (!liveChatActiveRef.current) return;
     setIsChatProcessing(true);
     setChatOrbStatus("thinking");
     try {
@@ -262,7 +302,9 @@ const Reader = ({
         body: formData,
       });
 
+      if (!liveChatActiveRef.current) return;
       const result = await response.json();
+      if (!liveChatActiveRef.current) return;
       if (response.ok) {
         const userText = result.transcription || localTranscript || "(Nagranie audio)";
         const newMessages = [
@@ -607,59 +649,68 @@ const Reader = ({
         ) : (
           <div className="practice-live-chat-stage glass-panel">
             <div className="practice-live-header">
-              <div className="live-title-row">
+              <div className="live-title-row" onClick={handleOrbClickInChat} style={{ cursor: 'pointer' }}>
                 <span className="live-dot-pulse active"></span>
                 <h4>Rozmowa Audio o Lekturze (Chat Live)</h4>
+
+                <button
+                  className={`tutor-gemini-orb header-orb ${chatOrbStatus}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOrbClickInChat();
+                  }}
+                  title={
+                    chatOrbStatus === "speaking" ? "Kliknij, aby przerwać i odpowiedzieć" :
+                    chatOrbStatus === "listening" || isChatRecording ? "Kliknij, aby zakończyć nagrywanie i wysłać" :
+                    "Kliknij, aby mówić"
+                  }
+                >
+                  <div className="orb-pulse-ring-1"></div>
+                  <div className="orb-pulse-ring-2"></div>
+                  <div className="orb-core">
+                    {chatOrbStatus === "inactive" || chatOrbStatus === "standby" ? (
+                      <svg viewBox="0 0 24 24" className="orb-mic-svg" style={{ width: '15px', height: '15px' }}>
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                      </svg>
+                    ) : chatOrbStatus === "speaking" ? (
+                      <div className="orb-wave-container mini">
+                        <span className="wave-bar bar-1"></span>
+                        <span className="wave-bar bar-2"></span>
+                        <span className="wave-bar bar-3"></span>
+                      </div>
+                    ) : chatOrbStatus === "listening" || isChatRecording ? (
+                      <svg viewBox="0 0 24 24" className="orb-mic-svg" style={{ fill: '#E8EAED', width: '13px', height: '13px' }}>
+                        <rect x="6" y="6" width="12" height="12" rx="2" />
+                      </svg>
+                    ) : (
+                      <div className="spinner-small" style={{ borderTopColor: '#fff', width: '14px', height: '14px' }}></div>
+                    )}
+                  </div>
+                </button>
+                <div className="practice-live-status-label">
+                  {chatOrbStatus === "thinking" && "✨ AI przygotowuje pytanie..."}
+                  {chatOrbStatus === "speaking" && "AI mówi... (kliknij kulę, by przerwać)"}
+                  {(chatOrbStatus === "listening" || isChatRecording) && "🎙️ Słucham... (kliknij kulę, by wysłać)"}
+                  {chatOrbStatus === "inactive" && "Kliknij kulę, by odpowiedzieć"}
+                </div>
               </div>
+
               <button className="close-live-chat-btn" onClick={() => {
-                if (chatAudioRef.current) chatAudioRef.current.pause();
-                if (chatMediaRecorderRef.current && isChatRecording) stopChatRecording();
+                liveChatActiveRef.current = false;
+                activeChatTTSRequestIdRef.current++;
+                if (chatAudioRef.current) {
+                  chatAudioRef.current.pause();
+                  chatAudioRef.current = null;
+                }
+                if (chatMediaRecorderRef.current && isChatRecording) {
+                  stopChatRecording();
+                }
                 setLiveChatActive(false);
                 setChatOrbStatus("inactive");
               }}>
                 Zakończ rozmowę
               </button>
-            </div>
-
-            <div className="practice-live-orb-container">
-              <button
-                className={`tutor-gemini-orb ${chatOrbStatus}`}
-                onClick={handleOrbClickInChat}
-                title={
-                  chatOrbStatus === "speaking" ? "Kliknij, aby przerwać i odpowiedzieć" :
-                  chatOrbStatus === "listening" || isChatRecording ? "Kliknij, aby zakończyć nagrywanie i wysłać" :
-                  "Kliknij, aby mówić"
-                }
-              >
-                <div className="orb-pulse-ring-1"></div>
-                <div className="orb-pulse-ring-2"></div>
-                <div className="orb-core">
-                  {chatOrbStatus === "inactive" || chatOrbStatus === "standby" ? (
-                    <svg viewBox="0 0 24 24" className="orb-mic-svg">
-                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                    </svg>
-                  ) : chatOrbStatus === "speaking" ? (
-                    <div className="orb-wave-container">
-                      <span className="wave-bar bar-1"></span>
-                      <span className="wave-bar bar-2"></span>
-                      <span className="wave-bar bar-3"></span>
-                    </div>
-                  ) : chatOrbStatus === "listening" || isChatRecording ? (
-                    <svg viewBox="0 0 24 24" className="orb-mic-svg" style={{fill: '#E8EAED'}}>
-                      <rect x="6" y="6" width="12" height="12" rx="2" />
-                    </svg>
-                  ) : (
-                    <div className="spinner-small" style={{borderTopColor: '#fff', width: '28px', height: '28px'}}></div>
-                  )}
-                </div>
-              </button>
-              <div className="practice-live-status-label">
-                {chatOrbStatus === "thinking" && "✨ AI analizuje czytankę i przygotowuje pierwsze pytanie..."}
-                {chatOrbStatus === "speaking" && "AI zadaje pytanie... (Kliknij kulę, aby przerwać i odpowiedzieć)"}
-                {(chatOrbStatus === "listening" || isChatRecording) && "🎙️ Słucham Twojej odpowiedzi... (Mów do mikrofonu, kliknij kulę, gdy skończysz)"}
-                {chatOrbStatus === "inactive" && "Kliknij kulę, aby odpowiedzieć głosem"}
-              </div>
             </div>
 
             <div className="practice-live-chat-history">
@@ -676,7 +727,7 @@ const Reader = ({
                   </div>
                 </div>
               )}
-              {chatMessages.map((msg) => (
+              {chatMessages.length > 0 && chatMessages.map((msg) => (
                 <div key={msg.id} className={`live-chat-msg ${msg.sender === 'user' ? 'user-msg' : 'bot-msg'}`}>
                   <div className="msg-avatar">{msg.sender === 'user' ? 'TY' : 'AI'}</div>
                   <div className="msg-content">
@@ -704,6 +755,7 @@ const Reader = ({
                   </div>
                 </div>
               ))}
+              <div ref={chatHistoryEndRef} />
             </div>
           </div>
         )}
