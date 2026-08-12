@@ -74,7 +74,17 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
   useEffect(() => {
     if (chatHistoryEndRef.current) {
-      chatHistoryEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      chatHistoryEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+    // Double insurance: also scroll the main modal scroll container if present
+    const practiceBody = document.querySelector('.practice-body');
+    if (practiceBody) {
+      setTimeout(() => {
+        practiceBody.scrollTo({
+          top: practiceBody.scrollHeight,
+          behavior: 'smooth'
+        });
+      }, 100);
     }
   }, [chatMessages]);
 
@@ -910,12 +920,10 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
               ) : (
                 <div className="practice-live-chat-stage glass-panel">
                   <div className="practice-live-header">
-                    <div className="live-title-row">
+                    <div className="live-title-row" onClick={handleOrbClickInChat} style={{ cursor: 'pointer' }}>
                       <span className="live-dot-pulse active"></span>
-                      <h4>Rozmowa Audio (Chat Live)</h4>
-                    </div>
+                      <h4>Rozmowa Audio o Lekturze (Chat Live)</h4>
 
-                    <div className="live-header-status-widget" onClick={handleOrbClickInChat} style={{ cursor: 'pointer' }}>
                       <button
                         className={`tutor-gemini-orb header-orb ${chatOrbStatus}`}
                         onClick={(e) => {
@@ -953,9 +961,9 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                       </button>
                       <div className="practice-live-status-label">
                         {chatOrbStatus === "thinking" && "✨ AI przygotowuje pytanie..."}
-                        {chatOrbStatus === "speaking" && "AI mówi... (kliknij, by przerwać)"}
-                        {(chatOrbStatus === "listening" || isChatRecording) && "🎙️ Słucham Twojej odpowiedzi... (kliknij, by wysłać)"}
-                        {chatOrbStatus === "inactive" && "Kliknij kulę, aby odpowiedzieć głosem"}
+                        {chatOrbStatus === "speaking" && "AI mówi... (kliknij kulę, by przerwać)"}
+                        {(chatOrbStatus === "listening" || isChatRecording) && "🎙️ Słucham... (kliknij kulę, by wysłać)"}
+                        {chatOrbStatus === "inactive" && "Kliknij kulę, by odpowiedzieć"}
                       </div>
                     </div>
 
@@ -972,7 +980,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                       setLiveChatActive(false);
                       setChatOrbStatus("inactive");
                     }}>
-                      Zakończ
+                      Zakończ rozmowę
                     </button>
                   </div>
 
