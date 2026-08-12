@@ -309,6 +309,7 @@ export default function HomeScreen() {
   const [translatedSentenceIdx, setTranslatedSentenceIdx] = useState<number | null>(null);
   const [translationText, setTranslationText] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
+  const [pendingFirstQuestion, setPendingFirstQuestion] = useState<string | null>(null);
 
   // --- Media Buddy States ---
   const [customVideos, setCustomVideos] = useState<any[]>([]);
@@ -2635,13 +2636,7 @@ export default function HomeScreen() {
       }
 
       if (response.ok && result.bot_response) {
-        const botMsg = {
-          id: String(Date.now()),
-          sender: 'bot',
-          text: result.bot_response,
-        };
-        setChatMessages([botMsg]);
-        speakBotText(result.bot_response);
+        setPendingFirstQuestion(result.bot_response);
       } else {
         throw new Error(result?.error || 'Nieprawidłowa odpowiedź serwera');
       }
@@ -3480,6 +3475,33 @@ export default function HomeScreen() {
                     </Text>
                     <Text style={{ fontSize: 13, color: '#5F6368', marginTop: 8, textAlign: 'center', lineHeight: 18, paddingHorizontal: 10 }}>
                       AI analizuje tekst opowiadania, aby przygotować pytania. Wybudzanie serwera po przerwie może potrwać kilka sekund.
+                    </Text>
+                  </View>
+                )}
+
+                {/* Przycisk startu rozmowy chroniący przed blokadą autoplay */}
+                {pendingFirstQuestion !== null && (
+                  <View style={{ marginVertical: 16, alignItems: 'center', width: '100%' }}>
+                    <TouchableOpacity
+                      style={[styles.recordButton, { backgroundColor: '#1A73E8', width: '100%', paddingVertical: 16, borderRadius: 12 }]}
+                      onPress={() => {
+                        unlockExpoAVAudio();
+                        const botMsg = {
+                          id: String(Date.now()),
+                          sender: 'bot',
+                          text: pendingFirstQuestion!,
+                        };
+                        setChatMessages([botMsg]);
+                        speakBotText(pendingFirstQuestion!);
+                        setPendingFirstQuestion(null);
+                      }}
+                    >
+                      <Text style={[styles.recordButtonText, { fontSize: 16, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center' }]}>
+                        🔊 Rozpocznij rozmowę z lektorem
+                      </Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 12, color: '#5F6368', marginTop: 8, textAlign: 'center' }}>
+                      Naciśnij przycisk powyżej, aby odtworzyć pierwsze pytanie i odblokować głos lektora.
                     </Text>
                   </View>
                 )}

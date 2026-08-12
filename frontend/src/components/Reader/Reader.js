@@ -35,6 +35,7 @@ const Reader = ({
   const [liveChatActive, setLiveChatActive] = useState(false);
   const [chatOrbStatus, setChatOrbStatus] = useState("inactive"); // "inactive" | "thinking" | "speaking" | "listening" | "standby"
   const [chatMessages, setChatMessages] = useState([]);
+  const [pendingFirstQuestion, setPendingFirstQuestion] = useState(null);
   const [isChatProcessing, setIsChatProcessing] = useState(false);
   const [isChatRecording, setIsChatRecording] = useState(false);
 

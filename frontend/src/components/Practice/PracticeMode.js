@@ -21,6 +21,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const [visitedIndices, setVisitedIndices] = useState(new Set([0]));
   const [liveChatActive, setLiveChatActive] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
+  const [pendingFirstQuestion, setPendingFirstQuestion] = useState(null);
   const [isChatProcessing, setIsChatProcessing] = useState(false);
   const [isChatRecording, setIsChatRecording] = useState(false);
   const [chatOrbStatus, setChatOrbStatus] = useState("inactive");
@@ -441,14 +442,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       }
 
       if (response.ok && result.bot_response) {
-        const botMsg = {
-          id: String(Date.now()),
-          sender: 'bot',
-          text: result.bot_response,
-        };
-        setChatMessages([botMsg]);
-        chatMessagesRef.current = [botMsg];
-        speakChatBotText(result.bot_response);
+        setPendingFirstQuestion(result.bot_response);
       } else {
         alert(result.error || 'Nie udało się rozpocząć rozmowy AI');
         setChatOrbStatus("inactive");
@@ -966,6 +960,31 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                               </div>
                             </div>
                           </div>
+                        </div>
+                      )}
+                      {pendingFirstQuestion !== null && (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '20px 0', width: '100%' }}>
+                          <button
+                            className="workspace-btn generate-btn"
+                            style={{ padding: '14px 28px', fontSize: '16px', fontWeight: 'bold', width: '100%', maxWidth: '360px', backgroundColor: '#1A73E8', color: '#FFF', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                            onClick={() => {
+                              unlockDesktopAudio();
+                              const botMsg = {
+                                id: String(Date.now()),
+                                sender: 'bot',
+                                text: pendingFirstQuestion,
+                              };
+                              setChatMessages([botMsg]);
+                              chatMessagesRef.current = [botMsg];
+                              speakChatBotText(pendingFirstQuestion);
+                              setPendingFirstQuestion(null);
+                            }}
+                          >
+                            🔊 Rozpocznij rozmowę z lektorem
+                          </button>
+                          <span style={{ fontSize: '12px', color: '#6B7280', marginTop: '8px', textAlign: 'center' }}>
+                            Naciśnij przycisk powyżej, aby odtworzyć pierwsze pytanie i odblokować głos lektora.
+                          </span>
                         </div>
                       )}
                       {chatMessages.map((msg, idx) => (
