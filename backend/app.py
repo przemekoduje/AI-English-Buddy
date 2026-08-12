@@ -1904,6 +1904,16 @@ def generate_text():
         elif orig_topics or orig_details.strip():
             user_prompt += "Continue the story/series naturally following the original topics and details listed above.\n"
 
+        is_multi_part = root_data.get('multi_part') or settings.get('multi_part')
+        if is_multi_part:
+            user_prompt += (
+                "\nIMPORTANT - MULTI-PART CONTINUATION:\n"
+                "- This is a continuation of a multi-part story/serial. The parts should flow together seamlessly to make one long narrative.\n"
+                "- Carefully analyze all previous parts in history. You MUST maintain strict narrative consistency, character names, personalities, background details, tone, and prose style.\n"
+                "- Continue the story directly and seamlessly from the very last line of the previous part. Do NOT repeat introductions or summarize what already happened.\n"
+                "- Do NOT resolve the entire plot yet unless the user prompt explicitly requests a final ending/conclusion. Keep the story advancing with appropriate tension and end on a natural scene boundary, cliffhanger, or hook.\n"
+            )
+
         # Explicit instructions on following the continuation style defined by the user
         user_prompt += (
             "\nNote on Continuation Behavior:\n"
@@ -1930,6 +1940,12 @@ def generate_text():
             user_prompt += "Write an educational English story.\n"
         if custom_details.strip():
             user_prompt += f"Additionally, incorporate these details: \"{custom_details}\"\n"
+        if settings.get("multi_part"):
+            user_prompt += (
+                "\nIMPORTANT - MULTI-PART STORY (PART 1):\n"
+                "- This is the FIRST PART of a multi-part story/serial. Do NOT write a complete story or resolve the plot/conflict.\n"
+                "- Setup the characters, setting, and the primary conflict. Introduce the premise and end this first part on a cliffhanger, hook, or a natural continuation point. It should feel like Chapter 1 of a book.\n"
+            )
 
     # Scoping Level
     level = settings.get("language_level", "medium")
@@ -2026,6 +2042,7 @@ def generate_text():
             if parent_id:
                 new_story_data['parent_id'] = root_id
                 new_story_data['part_number'] = next_part_num
+                new_story_data['multi_part'] = root_data.get('multi_part', False)
                 if topics:
                     new_story_data['topics'] = topics
                 if custom_details.strip():
@@ -2034,6 +2051,7 @@ def generate_text():
                 new_story_data['part_number'] = 1
                 new_story_data['topics'] = topics
                 new_story_data['custom_details'] = custom_details
+                new_story_data['multi_part'] = settings.get('multi_part', False)
 
             doc_ref = stories_ref.add(new_story_data)
             story_id = doc_ref[1].id

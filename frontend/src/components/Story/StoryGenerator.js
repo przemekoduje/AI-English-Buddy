@@ -119,7 +119,8 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
     is_popular_science: false,
     scientific_bias: false,
     scientific_communication: false,
-    scientific_language_link: false
+    scientific_language_link: false,
+    multi_part: false
   });
 
   // Progress bar state
@@ -370,6 +371,18 @@ const StoryGenerator = ({ onGenerate, onGenerateDefault, onPasteText, isLoading,
                   disabled={isLoading}
                 />
                 <span className="checkbox-text">Based on real-world facts</span>
+              </label>
+            </div>
+
+            <div className="setting-group checkbox-group">
+              <label className="switch-label">
+                <input
+                  type="checkbox"
+                  checked={settings.multi_part || false}
+                  onChange={(e) => setSettings(prev => ({ ...prev, multi_part: e.target.checked }))}
+                  disabled={isLoading}
+                />
+                <span className="checkbox-text">Multi-part story / serial (Opowiadanie wieloczęściowe)</span>
               </label>
             </div>
 
