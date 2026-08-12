@@ -9,6 +9,7 @@ const SavedStories = ({ user, onSelectStory }) => {
   const [error, setError] = useState("");
   const [editingStoryId, setEditingStoryId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
+  const [selectedPromptStory, setSelectedPromptStory] = useState(null);
 
   const handleStartEdit = (e, storyId, currentTitle) => {
     e.stopPropagation();
@@ -193,6 +194,18 @@ const SavedStories = ({ user, onSelectStory }) => {
                     <h3 className="story-title">{story.title}</h3>
                     <div className="card-actions-wrapper" onClick={(e) => e.stopPropagation()}>
                       <button 
+                        className="prompt-info-btn" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPromptStory(story);
+                        }}
+                        title="Pokaż prompt"
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                      </button>
+                      <button 
                         className="edit-btn" 
                         onClick={(e) => handleStartEdit(e, story.id, story.title)}
                         title="Edit title"
@@ -250,6 +263,41 @@ const SavedStories = ({ user, onSelectStory }) => {
               ? "No stories match your search criteria. Try a different query." 
               : "You haven't generated any stories yet. Head over to the Practice Room to create one!"}
           </p>
+        </div>
+      )}
+
+      {selectedPromptStory && (
+        <div className="modal-overlay" onClick={() => setSelectedPromptStory(null)}>
+          <div className="modal-content prompt-modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Exact Story Prompt</h3>
+            <div className="prompt-details-body">
+              {selectedPromptStory.topics && selectedPromptStory.topics.length > 0 ? (
+                <div className="prompt-field">
+                  <span className="field-label">Selected Topics:</span>
+                  <div className="topics-tags">
+                    {selectedPromptStory.topics.map((t, idx) => (
+                      <span key={idx} className="topic-tag">{t}</span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {selectedPromptStory.custom_details ? (
+                <div className="prompt-field">
+                  <span className="field-label">Custom Instructions:</span>
+                  <pre className="prompt-text-pre">{selectedPromptStory.custom_details}</pre>
+                </div>
+              ) : (
+                (!selectedPromptStory.topics || selectedPromptStory.topics.length === 0) ? (
+                  <p className="no-prompt-info">This story was added manually or has no detailed prompt metadata.</p>
+                ) : null
+              )}
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setSelectedPromptStory(null)}>
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
