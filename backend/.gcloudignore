@@ -1,0 +1,15 @@
+# Ignore python virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Ignore cache
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore local configs / secrets (they are in Secret Manager)
+.env
+temp_audio/

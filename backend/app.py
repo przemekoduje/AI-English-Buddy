@@ -2644,7 +2644,12 @@ def generate_quiz(word_id):
 
         # Sprawdź cache
         if 'quiz' in word_data and word_data['quiz']:
-            return jsonify(word_data['quiz']), 200
+            cached_quiz = word_data['quiz']
+            # Upewnij się, że opcje mają pole 'translation'
+            options = cached_quiz.get('options', [])
+            has_translations = all(isinstance(opt, dict) and 'translation' in opt for opt in options) if options else False
+            if has_translations:
+                return jsonify(cached_quiz), 200
 
         original = word_data.get('original', '')
         translated = word_data.get('translated', '')
