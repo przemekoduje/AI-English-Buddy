@@ -2433,19 +2433,22 @@ def get_base_form(word, translation):
     try:
         system_prompt = (
             "Jesteś profesjonalnym lektorem i lingwistą języka angielskiego.\n"
-            "Otrzymasz angielskie słowo lub frazę wyciągniętą bezpośrednio z tekstu. Może ono być w dowolnej odmienionej formie (np. czas przeszły, liczba mnoga, gerund, stopień wyższy przymiotnika).\n"
-            "Twoim zadaniem jest przekształcić to słowo/frazę do jego podstawowej formy słownikowej (Base form / Lemma / Infinitive) oraz podać jego tłumaczenie na język polski w tej podstawowej formie.\n\n"
-            "Zasady:\n"
-            "1. Sprowadź angielskie słowo/frazę do formy podstawowej:\n"
-            "   - Czasowniki -> bezokolicznik (np. 'running' -> 'run', 'went' -> 'go', 'compelled' -> 'compel').\n"
-            "   - Rzeczowniki -> liczba pojedyncza (np. 'dogs' -> 'dog', 'children' -> 'child').\n"
-            "   - Przymiotniki -> stopień równy (np. 'better' -> 'good', 'tallest' -> 'tall').\n"
-            "   - Jeśli to jest phrasal verb lub gotowa fraza, sprowadź kluczowe wyrazy do formy podstawowej (np. 'looking forward to' -> 'look forward to').\n"
-            "2. Wygeneruj poprawne, naturalne polskie tłumaczenie dla tej formy podstawowej.\n"
-            "3. Zwróć dane w formacie JSON z kluczami:\n"
+            "Otrzymasz angielskie słowo lub frazę wyciągniętą bezpośrednio z tekstu oraz jego tłumaczenie. Twoim zadaniem jest przekształcenie tego słowa/frazy do jego podstawowej formy słownikowej (Base form / Lemma / Infinitive) TYLKO i WYŁĄCZNIE wtedy, gdy wynika to z odmiany przez czasy, osoby, liczby lub stopnie.\n\n"
+            "CRITICAL RULES:\n"
+            "1. Dokonuj konwersji TYLKO dla rzeczywistych odmian gramatycznych:\n"
+            "   - Czasowniki w czasach przeszłych, przyszłych lub z końcówką -ing/-s sprowadź do bezokolicznika (np. 'went' -> 'go', 'compelled' -> 'compel', 'topped' -> 'top' (jako czasownik, np. przewyższać), 'running' -> 'run').\n"
+            "   - Rzeczowniki w liczbie mnogiej sprowadź do liczby pojedynczej (np. 'children' -> 'child', 'dogs' -> 'dog').\n"
+            "   - Przymiotniki i przysłówki w stopniu wyższym lub najwyższym sprowadź do stopnia równego (np. 'colder' -> 'cold', 'best' -> 'good').\n"
+            "2. BEZWZGLĘDNY ZAKAZ upraszczania słów złożonych lub pochodnych, które stanowią osobne hasła słownikowe:\n"
+            "   - Przymiotnik 'newfound' to osobne słowo (nowo odkryty) i jego formą podstawową jest nadal 'newfound' (NIGDY nie skracaj go do 'new'!).\n"
+            "   - Słowo 'helpless' to 'helpless' (nie zmieniaj na 'help').\n"
+            "   - Słowo 'meaningful' to 'meaningful' (nie zmieniaj na 'meaning' lub 'mean').\n"
+            "3. Jeśli słowo jest już w swojej podstawowej formie słownikowej (np. przymiotnik 'newfound', czasownik 'go', rzeczownik 'dog'), zwróć je dokładnie w takiej samej postaci, bez żadnych zmian.\n"
+            "4. Dopasuj polskie tłumaczenie tak, aby odpowiadało zwróconej formie podstawowej (np. dla czasownika 'top' -> 'przewyższać/pokrywać', a nie 'góra/szczyt' jeśli w tekście był to czasownik).\n"
+            "5. Zwróć dane w formacie JSON z kluczami:\n"
             "   - 'original': słowo w formie podstawowej (str)\n"
             "   - 'translated': polskie tłumaczenie formy podstawowej (str)\n"
-            "4. Odpowiedz wyłącznie poprawnym kodem JSON bez dodatkowych komentarzy czy formatowania markdown."
+            "6. Odpowiedz wyłącznie poprawnym kodem JSON bez dodatkowych komentarzy czy formatowania markdown."
         )
 
         input_data = {
