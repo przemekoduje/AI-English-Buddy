@@ -2625,12 +2625,22 @@ def generate_quiz(word_id):
     try:
         doc_ref = db.collection('vocabulary').document(word_id)
         doc = doc_ref.get()
-        if not doc.exists:
-            return jsonify({"error": "Słowo nie istnieje"}), 404
+        word_data = None
         
-        word_data = doc.to_dict()
-        if word_data.get('user_email') != user_email:
-            return jsonify({"error": "Brak dostępu do tego słowa"}), 403
+        if doc.exists:
+            word_data = doc.to_dict()
+            if word_data.get('user_email') != user_email:
+                return jsonify({"error": "Brak dostępu do tego słowa"}), 403
+        else:
+            # Słownik wyszukuje po originalnym słowie jako fallback
+            query = db.collection('vocabulary').where('user_email', '==', user_email).where('original', '==', word_id).limit(1).get()
+            for d in query:
+                doc_ref = db.collection('vocabulary').document(d.id)
+                word_data = d.to_dict()
+                break
+
+        if not word_data:
+            return jsonify({"error": "Słowo nie istnieje"}), 404
 
         # Sprawdź cache
         if 'quiz' in word_data and word_data['quiz']:

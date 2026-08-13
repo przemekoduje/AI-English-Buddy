@@ -138,7 +138,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
       setQuizErrors(prev => ({ ...prev, [wordId]: "" }));
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(item.id)}/quiz`, {
+        const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordId)}/quiz`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -154,7 +154,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         
         // Update words state to include the new quiz
         setWords(prev => prev.map(w => {
-          if (w.id === item.id) {
+          if ((w.id && w.id === item.id) || w.original === item.original) {
             return { ...w, quiz: quizData };
           }
           return w;
