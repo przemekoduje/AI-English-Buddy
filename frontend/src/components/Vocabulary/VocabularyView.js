@@ -509,6 +509,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                               onClick={() => setSelectedAnswers(prev => ({ ...prev, [item.id || item.original]: option.text }))}
                             >
                               {option.text}
+                              {hasAnswered && option.translation && ` (${option.translation})`}
                               {hasAnswered && option.is_correct && " ➡️ PRAWIDŁOWA ODPOWIEDŹ"}
                             </button>
                           );

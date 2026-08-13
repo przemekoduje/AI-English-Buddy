@@ -2655,7 +2655,7 @@ def generate_quiz(word_id):
             "Cel quizu: Użytkownik musi wskazać jedno słowo/frazę spośród 3 podanych, którego znaczenie jest najbardziej zbliżone (synonim) do słowa głównego (Target word).\n\n"
             "Zasady:\n"
             "1. Podaj pytanie w języku polskim pytające o słowo o podobnym znaczeniu do słowa głównego, np. 'Wskaż słowo o podobnym znaczeniu do \"Compulsory\":'\n"
-            "2. Wygeneruj dokładnie 3 opcje odpowiedzi. Każda opcja musi zawierać TYLKO angielskie słowo/frazę (BEZ żadnego polskiego tłumaczenia ani nawiasów), np.:\n"
+            "2. Wygeneruj dokładnie 3 opcje odpowiedzi. Każda opcja musi zawierać TYLKO angielskie słowo/frazę (BEZ żadnego polskiego tłumaczenia ani nawiasów w kluczu 'text'), np.:\n"
             "   - Optional\n"
             "   - Mandatory\n"
             "   - Temporary\n"
@@ -2663,7 +2663,10 @@ def generate_quiz(word_id):
             "4. Pozostałe dwie opcje (dystraktory) muszą mieć inne znaczenie (mogą to być antonimy lub inne słowa, ale nie mogą być synonimami słowa głównego).\n"
             "5. Zwróć strukturę w formacie JSON z kluczami:\n"
             "   - 'question': treść pytania (str)\n"
-            "   - 'options': lista 3 obiektów, każdy z kluczami 'text' (str, zawierający wyłącznie angielskie słowo/frazę) oraz 'is_correct' (boolean).\n"
+            "   - 'options': lista 3 obiektów, każdy z kluczami:\n"
+            "       * 'text': (str, zawierający wyłącznie angielskie słowo/frazę)\n"
+            "       * 'translation': (str, zawierający krótkie polskie tłumaczenie / objaśnienie tej konkretnej opcji)\n"
+            "       * 'is_correct': (boolean)\n"
             "6. Odpowiedz wyłącznie poprawnym kodem JSON bez dodatkowych komentarzy czy formatowania markdown."
         )
 

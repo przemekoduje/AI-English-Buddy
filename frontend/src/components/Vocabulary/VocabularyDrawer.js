@@ -458,6 +458,7 @@ const VocabularyDrawer = ({ user }) => {
                                     onClick={() => setSelectedAnswers(prev => ({ ...prev, [wordId]: option.text }))}
                                   >
                                     {option.text}
+                                    {hasAnswered && option.translation && ` (${option.translation})`}
                                     {hasAnswered && option.is_correct && " ➡️ PRAWIDŁOWA ODPOWIEDŹ"}
                                   </button>
                                 );
