@@ -146,6 +146,13 @@ const WordExplanationModal = ({ wordOrPhrase, user, onClose }) => {
                 </div>
               )}
 
+              {definition.inflections && (
+                <div className="inflections-wrapper">
+                  <span className="inflections-label">Odmiany / Formy:</span>
+                  <p className="inflections-text">{definition.inflections}</p>
+                </div>
+              )}
+
               <div className="meanings-list">
                 {definition.meanings && definition.meanings.length > 0 ? (
                   definition.meanings.map((meaning, mIdx) => (

@@ -958,6 +958,7 @@ def explain_word():
         f"  \"word\": \"{text_to_explain}\",\n"
         f"  \"phonetic\": \"/IPA_pronunciation/\",\n"
         f"  \"direct_translations\": [\"tłumaczenie1\", \"tłumaczenie2\"],\n"
+        f"  \"inflections\": \"Odmiany tego słowa po polsku (dla czasowników: wypisz wszelkie formy np. go - went, gone, going, goes; dla przymiotników stopnie: np. tall - taller, tallest; dla rzeczowników nieregularna liczba mnoga: np. child - children. Jeśli słowo/fraza nie odmienia się, wstaw null)\",\n"
         f"  \"meanings\": [\n"
         f"    {{\n"
         f"      \"partOfSpeech\": \"noun\",\n"
@@ -973,7 +974,7 @@ def explain_word():
         f"  ]\n"
         f"}}\n\n"
         f"Ensure that direct_translations contains 2-4 direct, concise, single-word (or very short) translations in Polish.\n"
-        f"If the text is a phrase (multiple words) and does not have a single partOfSpeech or phonetic transcription, you can set phonetic to \"\" or \"N/A\", and partOfSpeech to \"phrase\".\n"
+        f"If the text is a phrase (multiple words) and does not have a single partOfSpeech or phonetic transcription, you can set phonetic to \"\", and partOfSpeech to \"phrase\".\n"
         f"Make sure to provide at least 1-2 meanings, and at least 1-2 high-quality example sentences for each meaning."
     )
 
@@ -2428,6 +2429,58 @@ def get_vocabulary():
         return jsonify({"error": f"Błąd podczas pobierania słownika: {e}"}), 500
 
 
+def get_base_form(word, translation):
+    try:
+        system_prompt = (
+            "Jesteś profesjonalnym lektorem i lingwistą języka angielskiego.\n"
+            "Otrzymasz angielskie słowo lub frazę wyciągniętą bezpośrednio z tekstu. Może ono być w dowolnej odmienionej formie (np. czas przeszły, liczba mnoga, gerund, stopień wyższy przymiotnika).\n"
+            "Twoim zadaniem jest przekształcić to słowo/frazę do jego podstawowej formy słownikowej (Base form / Lemma / Infinitive) oraz podać jego tłumaczenie na język polski w tej podstawowej formie.\n\n"
+            "Zasady:\n"
+            "1. Sprowadź angielskie słowo/frazę do formy podstawowej:\n"
+            "   - Czasowniki -> bezokolicznik (np. 'running' -> 'run', 'went' -> 'go', 'compelled' -> 'compel').\n"
+            "   - Rzeczowniki -> liczba pojedyncza (np. 'dogs' -> 'dog', 'children' -> 'child').\n"
+            "   - Przymiotniki -> stopień równy (np. 'better' -> 'good', 'tallest' -> 'tall').\n"
+            "   - Jeśli to jest phrasal verb lub gotowa fraza, sprowadź kluczowe wyrazy do formy podstawowej (np. 'looking forward to' -> 'look forward to').\n"
+            "2. Wygeneruj poprawne, naturalne polskie tłumaczenie dla tej formy podstawowej.\n"
+            "3. Zwróć dane w formacie JSON z kluczami:\n"
+            "   - 'original': słowo w formie podstawowej (str)\n"
+            "   - 'translated': polskie tłumaczenie formy podstawowej (str)\n"
+            "4. Odpowiedz wyłącznie poprawnym kodem JSON bez dodatkowych komentarzy czy formatowania markdown."
+        )
+
+        input_data = {
+            "word": word,
+            "translation": translation
+        }
+
+        ai_response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(input_data, ensure_ascii=False)}
+            ],
+            response_format={"type": "json_object"}
+        )
+
+        content = ai_response.choices[0].message.content.strip()
+        
+        if content.startswith("```"):
+            lines = content.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            content = "\n".join(lines).strip()
+
+        res_json = json.loads(content)
+        ret_org = res_json.get('original', word).strip()
+        ret_trans = res_json.get('translated', translation).strip()
+        return ret_org, ret_trans
+    except Exception as e:
+        print(f"Error in get_base_form: {e}")
+        return word, translation
+
+
 @app.route("/api/vocabulary", methods=['POST'])
 def add_vocabulary():
     user_email = get_user_from_request()
@@ -2441,6 +2494,9 @@ def add_vocabulary():
 
     if not original or not translated:
         return jsonify({"error": "Wyrażenie oryginalne i tłumaczenie są wymagane"}), 400
+
+    # Sprowadź do formy podstawowej za pomocą AI
+    original, translated = get_base_form(original, translated)
 
     try:
         # Sprawdź duplikaty w ramach tej samej historii

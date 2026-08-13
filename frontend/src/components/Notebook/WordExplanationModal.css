@@ -355,3 +355,29 @@
   font-size: 0.95rem;
   font-weight: 500;
 }
+
+.inflections-wrapper {
+  margin-bottom: 1.25rem;
+  background: var(--slate-50);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--primary-600);
+}
+
+.inflections-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--slate-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.inflections-text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--slate-800);
+  line-height: 1.45;
+  font-weight: 500;
+}
