@@ -17,8 +17,9 @@ const VocabularyDrawer = ({ user }) => {
   // Detail Expansion
   const [expandedWordId, setExpandedWordId] = useState(null);
 
-  // Lazy Loading Mnemonic State
-  const [loadingMnemonicIds, setLoadingMnemonicIds] = useState({});
+  // Lazy Loading Quiz State
+  const [loadingQuizIds, setLoadingQuizIds] = useState({});
+  const [selectedAnswers, setSelectedAnswers] = useState({});
 
   // Modals state
   const [showFlashcards, setShowFlashcards] = useState(false);
@@ -122,16 +123,16 @@ const VocabularyDrawer = ({ user }) => {
     }
   };
 
-  // Fetch or Generate Mnemonic (lazy)
-  const handleToggleMnemonic = async (e, item) => {
+  // Fetch or Generate Quiz (lazy)
+  const handleToggleQuiz = async (e, item) => {
     e.stopPropagation();
     const wordId = item.id || item.original;
 
-    if (item.mnemonic) return; // already loaded
+    if (item.quiz) return; // already loaded
 
-    setLoadingMnemonicIds((prev) => ({ ...prev, [wordId]: true }));
+    setLoadingQuizIds((prev) => ({ ...prev, [wordId]: true }));
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(item.id || item.original)}/mnemonic`, {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(item.id || item.original)}/quiz`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -140,20 +141,20 @@ const VocabularyDrawer = ({ user }) => {
       });
 
       if (response.ok) {
-        const mnemonicData = await response.json();
+        const quizData = await response.json();
         setWords((prev) =>
           prev.map((w) => {
             if ((w.id && w.id === item.id) || w.original === item.original) {
-              return { ...w, mnemonic: mnemonicData };
+              return { ...w, quiz: quizData };
             }
             return w;
           })
         );
       }
     } catch (err) {
-      console.error("Error loading mnemonic:", err);
+      console.error("Error loading quiz:", err);
     } finally {
-      setLoadingMnemonicIds((prev) => ({ ...prev, [wordId]: false }));
+      setLoadingQuizIds((prev) => ({ ...prev, [wordId]: false }));
     }
   };
 
@@ -427,27 +428,61 @@ const VocabularyDrawer = ({ user }) => {
                         </div>
                       )}
 
-                      {/* Mnemonic Hook */}
+                      {/* Synonym Quiz */}
                       <div className="drawer-detail-section">
-                        <span className="drawer-detail-label">Hak Pamięciowy (AI):</span>
-                        {item.mnemonic ? (
-                          <div className="drawer-mnemonic-wrapper">
-                            <p style={{ margin: 0, fontWeight: 500 }}>
-                              {item.mnemonic.mnemonic_association || item.mnemonic.association}
-                            </p>
-                            {item.mnemonic.story && (
-                              <p style={{ margin: "4px 0 0 0", opacity: 0.85, fontSize: "11px" }}>
-                                {item.mnemonic.story}
-                              </p>
+                        <span className="drawer-detail-label">Ćwiczenie (AI Quiz):</span>
+                        {item.quiz ? (
+                          <div className="drawer-quiz-wrapper">
+                            <p className="drawer-quiz-question">{item.quiz.question}</p>
+                            <div className="drawer-quiz-options">
+                              {item.quiz.options.map((option, idx) => {
+                                const isSelected = selectedAnswers[wordId] === option.text;
+                                const hasAnswered = selectedAnswers[wordId] !== undefined;
+                                
+                                let optionClass = "drawer-quiz-option";
+                                if (hasAnswered) {
+                                  if (option.is_correct) {
+                                    optionClass += " correct";
+                                  } else if (isSelected) {
+                                    optionClass += " incorrect";
+                                  } else {
+                                    optionClass += " disabled";
+                                  }
+                                }
+
+                                return (
+                                  <button
+                                    key={idx}
+                                    className={optionClass}
+                                    disabled={hasAnswered}
+                                    onClick={() => setSelectedAnswers(prev => ({ ...prev, [wordId]: option.text }))}
+                                  >
+                                    {option.text}
+                                    {hasAnswered && option.is_correct && " ➡️ PRAWIDŁOWA ODPOWIEDŹ"}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {selectedAnswers[wordId] && (
+                              <button 
+                                className="drawer-quiz-reset-btn"
+                                onClick={() => setSelectedAnswers(prev => {
+                                  const updated = { ...prev };
+                                  delete updated[wordId];
+                                  return updated;
+                                })}
+                              >
+                                Spróbuj ponownie
+                              </button>
                             )}
                           </div>
                         ) : (
                           <button
                             className="drawer-mnemonic-btn"
-                            disabled={loadingMnemonicIds[wordId]}
-                            onClick={(e) => handleToggleMnemonic(e, item)}
+                            disabled={loadingQuizIds[wordId]}
+                            onClick={(e) => handleToggleQuiz(e, item)}
                           >
-                            {loadingMnemonicIds[wordId] ? "Generowanie..." : "✨ Generuj Hak Pamięciowy"}
+                            {loadingQuizIds[wordId] ? "Generowanie..." : "✨ Generuj Quiz Synonimów"}
                           </button>
                         )}
                       </div>

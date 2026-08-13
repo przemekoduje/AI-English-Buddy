@@ -27,10 +27,11 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   // TTS State
   const [playingWord, setPlayingWord] = useState(null);
 
-  // Mnemonic Accordion State
-  const [expandedMnemonicIds, setExpandedMnemonicIds] = useState({});
-  const [loadingMnemonicIds, setLoadingMnemonicIds] = useState({});
-  const [mnemonicErrors, setMnemonicErrors] = useState({});
+  // Quiz Accordion State
+  const [expandedQuizIds, setExpandedQuizIds] = useState({});
+  const [loadingQuizIds, setLoadingQuizIds] = useState({});
+  const [quizErrors, setQuizErrors] = useState({});
+  const [selectedAnswers, setSelectedAnswers] = useState({});
 
   // Fetch vocabulary
   const fetchVocabulary = useCallback(async () => {
@@ -120,24 +121,24 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
     }
   };
 
-  // Handle Mnemonic Accordion Toggle (Lazy Loading)
-  const handleToggleMnemonic = async (item) => {
+  // Handle Quiz Accordion Toggle (Lazy Loading)
+  const handleToggleQuiz = async (item) => {
     const wordId = item.id || item.original;
-    const isExpanded = expandedMnemonicIds[wordId];
+    const isExpanded = expandedQuizIds[wordId];
 
     // Toggle expanded state
-    setExpandedMnemonicIds(prev => ({
+    setExpandedQuizIds(prev => ({
       ...prev,
       [wordId]: !isExpanded
     }));
 
-    // If expanding and mnemonic not present, fetch from API
-    if (!isExpanded && !item.mnemonic) {
-      setLoadingMnemonicIds(prev => ({ ...prev, [wordId]: true }));
-      setMnemonicErrors(prev => ({ ...prev, [wordId]: "" }));
+    // If expanding and quiz not present, fetch from API
+    if (!isExpanded && !item.quiz) {
+      setLoadingQuizIds(prev => ({ ...prev, [wordId]: true }));
+      setQuizErrors(prev => ({ ...prev, [wordId]: "" }));
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(item.id)}/mnemonic`, {
+        const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(item.id)}/quiz`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -146,26 +147,26 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         });
 
         if (!response.ok) {
-          throw new Error("Nie udało się pobrać haka pamięciowego.");
+          throw new Error("Nie udało się pobrać quizu.");
         }
 
-        const mnemonicData = await response.json();
+        const quizData = await response.json();
         
-        // Update words state to include the new mnemonic
+        // Update words state to include the new quiz
         setWords(prev => prev.map(w => {
           if (w.id === item.id) {
-            return { ...w, mnemonic: mnemonicData };
+            return { ...w, quiz: quizData };
           }
           return w;
         }));
       } catch (err) {
         console.error(err);
-        setMnemonicErrors(prev => ({
+        setQuizErrors(prev => ({
           ...prev,
-          [wordId]: err.message || "Błąd generowania mnemotechniki."
+          [wordId]: err.message || "Błąd generowania quizu."
         }));
       } finally {
-        setLoadingMnemonicIds(prev => ({ ...prev, [wordId]: false }));
+        setLoadingQuizIds(prev => ({ ...prev, [wordId]: false }));
       }
     }
   };
@@ -460,49 +461,71 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                 <p className="translated-text">{item.translated}</p>
                 {item.original.trim().split(/\s+/).length === 1 && (
                   <button 
-                    className={`mnemonic-trigger-btn ${expandedMnemonicIds[item.id || item.original] ? 'active' : ''}`}
-                    onClick={() => handleToggleMnemonic(item)}
-                    title="Pokaż skojarzenie ułatwiające zapamiętanie"
+                    className={`mnemonic-trigger-btn ${expandedQuizIds[item.id || item.original] ? 'active' : ''}`}
+                    onClick={() => handleToggleQuiz(item)}
+                    title="Ćwiczenie sprawdzające znajomość słowa"
                   >
-                    <span>Mnemotechnika</span>
+                    <span>Quiz synonimów</span>
                     <span className="bulb-icon">💡</span>
                   </button>
                 )}
               </div>
 
-              {expandedMnemonicIds[item.id || item.original] && (
+              {expandedQuizIds[item.id || item.original] && (
                 <div className="mnemonic-accordion-content">
-                  {loadingMnemonicIds[item.id || item.original] ? (
+                  {loadingQuizIds[item.id || item.original] ? (
                     <div className="mnemonic-loading">
                       <div className="spinner-mini"></div>
-                      <span>Tworzenie haka pamięciowego...</span>
+                      <span>Tworzenie quizu...</span>
                     </div>
-                  ) : mnemonicErrors[item.id || item.original] ? (
+                  ) : quizErrors[item.id || item.original] ? (
                     <div className="mnemonic-error">
-                      <span>⚠️ {mnemonicErrors[item.id || item.original]}</span>
+                      <span>⚠️ {quizErrors[item.id || item.original]}</span>
                     </div>
-                  ) : item.mnemonic ? (
-                    <div className="mnemonic-data animate-slide-down">
-                      <div className="mnemonic-section audio-anchor-section">
-                        <span className="mnemonic-label">Skojarzenie dźwiękowe:</span>
-                        <strong className="mnemonic-val anchor-val">{item.mnemonic.audio_anchor}</strong>
-                      </div>
-                      <div className="mnemonic-section">
-                        <span className="mnemonic-label">Abstrakcyjny obraz:</span>
-                        <p className="mnemonic-val">{item.mnemonic.abstract_image}</p>
-                      </div>
-                      <div className="mnemonic-section">
-                        <span className="mnemonic-label">Dynamiczna scena:</span>
-                        <p className="mnemonic-val scene-val">
-                          {item.mnemonic.dynamic_scene.split(/(\s+)/).map((word, idx) => {
-                            const isAllCapitals = /^[A-ZĘÓĄŚŁŻŹĆŃ\s\W\d_]{2,}$/.test(word.trim());
-                            if (isAllCapitals && word.trim().length > 1) {
-                              return <strong key={idx} className="bold-uppercase-term">{word}</strong>;
+                  ) : item.quiz ? (
+                    <div className="drawer-quiz-wrapper animate-slide-down">
+                      <p className="drawer-quiz-question">{item.quiz.question}</p>
+                      <div className="drawer-quiz-options">
+                        {item.quiz.options.map((option, idx) => {
+                          const isSelected = selectedAnswers[item.id || item.original] === option.text;
+                          const hasAnswered = selectedAnswers[item.id || item.original] !== undefined;
+                          
+                          let optionClass = "drawer-quiz-option";
+                          if (hasAnswered) {
+                            if (option.is_correct) {
+                              optionClass += " correct";
+                            } else if (isSelected) {
+                              optionClass += " incorrect";
+                            } else {
+                              optionClass += " disabled";
                             }
-                            return word;
-                          })}
-                        </p>
+                          }
+
+                          return (
+                            <button
+                              key={idx}
+                              className={optionClass}
+                              disabled={hasAnswered}
+                              onClick={() => setSelectedAnswers(prev => ({ ...prev, [item.id || item.original]: option.text }))}
+                            >
+                              {option.text}
+                              {hasAnswered && option.is_correct && " ➡️ PRAWIDŁOWA ODPOWIEDŹ"}
+                            </button>
+                          );
+                        })}
                       </div>
+                      {selectedAnswers[item.id || item.original] && (
+                        <button 
+                          className="drawer-quiz-reset-btn"
+                          onClick={() => setSelectedAnswers(prev => {
+                            const updated = { ...prev };
+                            delete updated[item.id || item.original];
+                            return updated;
+                          })}
+                        >
+                          Spróbuj ponownie
+                        </button>
+                      )}
                     </div>
                   ) : null}
                 </div>

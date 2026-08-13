@@ -2616,6 +2616,84 @@ def generate_mnemonic(word_id):
         return jsonify({"error": f"Błąd generowania mnemotechniki: {str(e)}"}), 500
 
 
+@app.route("/api/vocabulary/<string:word_id>/quiz", methods=['POST'])
+def generate_quiz(word_id):
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    try:
+        doc_ref = db.collection('vocabulary').document(word_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            return jsonify({"error": "Słowo nie istnieje"}), 404
+        
+        word_data = doc.to_dict()
+        if word_data.get('user_email') != user_email:
+            return jsonify({"error": "Brak dostępu do tego słowa"}), 403
+
+        # Sprawdź cache
+        if 'quiz' in word_data and word_data['quiz']:
+            return jsonify(word_data['quiz']), 200
+
+        original = word_data.get('original', '')
+        translated = word_data.get('translated', '')
+
+        system_prompt = (
+            "Jesteś zaawansowanym asystentem do nauki języka angielskiego.\n"
+            "Twoim zadaniem jest wygenerowanie pytania quizowego typu jednokrotnego wyboru (3 opcje) dla podanego angielskiego słowa lub frazy (Target word).\n"
+            "Cel quizu: Użytkownik musi wskazać jedno słowo/frazę spośród 3 podanych, którego znaczenie jest najbardziej zbliżone (synonim) do słowa głównego (Target word).\n\n"
+            "Zasady:\n"
+            "1. Podaj pytanie w języku polskim pytające o słowo o podobnym znaczeniu do słowa głównego, np. 'Wskaż słowo o podobnym znaczeniu do \"Compulsory\":'\n"
+            "2. Wygeneruj dokładnie 3 opcje odpowiedzi. Każda opcja musi zawierać angielskie słowo/frazę oraz w nawiasie jego krótkie polskie tłumaczenie / objaśnienie, np.:\n"
+            "   - Optional (opcjonalny / dobrowolny)\n"
+            "   - Mandatory (obowiązkowy / nakazany)\n"
+            "   - Temporary (tymczasowy)\n"
+            "3. Dokładnie jedna z tych opcji musi być poprawną odpowiedzią (synonimem lub słowem o bardzo zbliżonym znaczeniu do Target word).\n"
+            "4. Pozostałe dwie opcje (dystraktory) muszą mieć inne znaczenie (mogą to być antonimy lub inne słowa, ale nie mogą być synonimami słowa głównego).\n"
+            "5. Zwróć strukturę w formacie JSON z kluczami:\n"
+            "   - 'question': treść pytania (str)\n"
+            "   - 'options': lista 3 obiektów, każdy z kluczami 'text' (str, zawierający słowo angielskie i polskie tłumaczenie w nawiasie) oraz 'is_correct' (boolean).\n"
+            "6. Odpowiedz wyłącznie poprawnym kodem JSON bez dodatkowych komentarzy czy formatowania markdown."
+        )
+
+        input_data = {
+            "word": original,
+            "translation": translated
+        }
+
+        user_prompt = json.dumps(input_data, ensure_ascii=False)
+
+        ai_response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"}
+        )
+
+        content = ai_response.choices[0].message.content.strip()
+        
+        if content.startswith("```"):
+            lines = content.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            content = "\n".join(lines).strip()
+
+        quiz_json = json.loads(content)
+        
+        # Zapisz w cache
+        doc_ref.update({'quiz': quiz_json})
+
+        return jsonify(quiz_json), 200
+    except Exception as e:
+        print(f"Error generating quiz: {e}")
+        return jsonify({"error": f"Błąd generowania quizu: {str(e)}"}), 500
+
+
 # ### NOWY ENDPOINT: WYSYŁANIE SŁÓW Z NOTATNIKA NA E-MAIL ###
 @app.route("/api/send-notebook-email", methods=['POST'])
 def send_notebook_email():
