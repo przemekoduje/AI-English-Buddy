@@ -25,6 +25,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const [isChatProcessing, setIsChatProcessing] = useState(false);
   const [isChatRecording, setIsChatRecording] = useState(false);
   const [chatOrbStatus, setChatOrbStatus] = useState("inactive");
+  const [isChatPaused, setIsChatPaused] = useState(false);
 
   const [translationModalData, setTranslationModalData] = useState(null);
 
@@ -66,6 +67,12 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const activeTTSRequestIdRef = useRef(0);
   const activeChatTTSRequestIdRef = useRef(0);
 
+  const isChatPausedRef = useRef(false);
+  const chatSafetyTimerRef = useRef(null);
+  const pendingSpeakTextRef = useRef(null);
+  const pendingSpeakAudioUrlRef = useRef(null);
+  const prePauseOrbStatusRef = useRef("inactive");
+
   useEffect(() => {
     if (liveChatActive && liveChatStageRef.current) {
       liveChatStageRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -105,6 +112,9 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       }
       if (chatRecognitionRef.current) {
         try { chatRecognitionRef.current.stop(); } catch (e) {}
+      }
+      if (chatSafetyTimerRef.current) {
+        clearTimeout(chatSafetyTimerRef.current);
       }
     };
   }, []);
@@ -430,6 +440,16 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     setIsSpeaking(false);
     setIsPaused(false);
 
+    setIsChatPaused(false);
+    isChatPausedRef.current = false;
+    pendingSpeakTextRef.current = null;
+    pendingSpeakAudioUrlRef.current = null;
+    prePauseOrbStatusRef.current = "inactive";
+    if (chatSafetyTimerRef.current) {
+      clearTimeout(chatSafetyTimerRef.current);
+      chatSafetyTimerRef.current = null;
+    }
+
     liveChatActiveRef.current = true;
     setLiveChatActive(true);
     setChatOrbStatus("thinking");
@@ -489,6 +509,10 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
   const speakChatBotText = async (textToSpeak) => {
     if (!liveChatActiveRef.current) return;
+    if (isChatPausedRef.current) {
+      pendingSpeakTextRef.current = textToSpeak;
+      return;
+    }
     const requestId = ++activeChatTTSRequestIdRef.current;
 
     unlockDesktopAudio();
@@ -500,9 +524,10 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
     const safetyTimer = setTimeout(() => {
       console.warn("Safety timeout triggered for speakChatBotText");
-      if (requestId !== activeChatTTSRequestIdRef.current || !liveChatActiveRef.current) return;
+      if (requestId !== activeChatTTSRequestIdRef.current || !liveChatActiveRef.current || isChatPausedRef.current) return;
       startChatRecording();
     }, Math.max(4000, textToSpeak.split(/\s+/).length * 500 + 2000));
+    chatSafetyTimerRef.current = safetyTimer;
 
     setChatOrbStatus("speaking");
     try {
@@ -527,6 +552,11 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
           return;
         }
         const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+        if (isChatPausedRef.current) {
+          clearTimeout(safetyTimer);
+          pendingSpeakAudioUrlRef.current = audioUrl;
+          return;
+        }
         if (!chatAudioRef.current) {
           chatAudioRef.current = new Audio();
         }
@@ -534,6 +564,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
         chatAudioRef.current.onended = () => {
           clearTimeout(safetyTimer);
           if (requestId !== activeChatTTSRequestIdRef.current || !liveChatActiveRef.current) return;
+          if (isChatPausedRef.current) return;
           chatAudioRef.current = null;
           startChatRecording();
         };
@@ -565,6 +596,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
   const startChatRecording = async () => {
     if (!liveChatActiveRef.current) return;
+    if (isChatPausedRef.current) return;
     try {
       if (chatAudioRef.current) {
         chatAudioRef.current.pause();
@@ -593,6 +625,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
       chatMediaRecorderRef.current.onstop = () => {
         if (!liveChatActiveRef.current) return;
+        if (isChatPausedRef.current) return;
         const blob = new Blob(chatAudioChunksRef.current, { type: 'audio/webm' });
         sendChatAnswer(blob, chatTranscriptRef.current);
       };
@@ -668,7 +701,12 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
         ];
         setChatMessages(newMessages);
         chatMessagesRef.current = newMessages;
-        speakChatBotText(result.bot_response);
+        if (isChatPausedRef.current) {
+          pendingSpeakTextRef.current = result.bot_response;
+          setChatOrbStatus("inactive");
+        } else {
+          speakChatBotText(result.bot_response);
+        }
       } else {
         alert(result.error || "Błąd podczas oceny odpowiedzi.");
         setChatOrbStatus("inactive");
@@ -683,6 +721,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
   const handleOrbClickInChat = () => {
     unlockDesktopAudio();
+    if (isChatPausedRef.current) return;
     if (chatOrbStatus === "speaking") {
       if (chatAudioRef.current) {
         chatAudioRef.current.pause();
@@ -693,6 +732,99 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       stopChatRecording();
     } else if (chatOrbStatus === "inactive" || chatOrbStatus === "standby" || chatOrbStatus === "thinking") {
       startChatRecording();
+    }
+  };
+
+  const toggleChatPause = () => {
+    const nextPaused = !isChatPaused;
+    setIsChatPaused(nextPaused);
+    isChatPausedRef.current = nextPaused;
+
+    if (nextPaused) {
+      // PAUSING
+      prePauseOrbStatusRef.current = chatOrbStatus;
+      setChatOrbStatus("inactive");
+      if (chatAudioRef.current && !chatAudioRef.current.paused) {
+        chatAudioRef.current.pause();
+      }
+      if (chatSafetyTimerRef.current) {
+        clearTimeout(chatSafetyTimerRef.current);
+        chatSafetyTimerRef.current = null;
+      }
+      if (chatMediaRecorderRef.current && isChatRecording) {
+        stopChatRecording();
+      }
+    } else {
+      // RESUMING
+      const previousStatus = prePauseOrbStatusRef.current;
+      prePauseOrbStatusRef.current = "inactive";
+
+      if (pendingSpeakAudioUrlRef.current) {
+        const audioUrl = pendingSpeakAudioUrlRef.current;
+        pendingSpeakAudioUrlRef.current = null;
+
+        if (!chatAudioRef.current) {
+          chatAudioRef.current = new Audio();
+        }
+        chatAudioRef.current.src = audioUrl;
+        const requestId = activeChatTTSRequestIdRef.current;
+
+        const safetyTimer = setTimeout(() => {
+          if (!liveChatActiveRef.current || isChatPausedRef.current || requestId !== activeChatTTSRequestIdRef.current) return;
+          startChatRecording();
+        }, 5000);
+        chatSafetyTimerRef.current = safetyTimer;
+
+        chatAudioRef.current.onended = () => {
+          clearTimeout(safetyTimer);
+          if (!liveChatActiveRef.current || isChatPausedRef.current || requestId !== activeChatTTSRequestIdRef.current) return;
+          chatAudioRef.current = null;
+          startChatRecording();
+        };
+        chatAudioRef.current.onerror = () => {
+          clearTimeout(safetyTimer);
+          chatAudioRef.current = null;
+          setChatOrbStatus("inactive");
+        };
+
+        setChatOrbStatus("speaking");
+        chatAudioRef.current.play().catch(e => {
+          console.error("Audio playback error on resume:", e);
+          clearTimeout(safetyTimer);
+          setChatOrbStatus("inactive");
+        });
+      } else if (pendingSpeakTextRef.current) {
+        const text = pendingSpeakTextRef.current;
+        pendingSpeakTextRef.current = null;
+        speakChatBotText(text);
+      } else if (chatAudioRef.current && chatAudioRef.current.paused) {
+        const requestId = activeChatTTSRequestIdRef.current;
+        const remainingTime = Math.max(2000, (chatAudioRef.current.duration - chatAudioRef.current.currentTime) * 1000 + 2000);
+
+        const safetyTimer = setTimeout(() => {
+          if (!liveChatActiveRef.current || isChatPausedRef.current || requestId !== activeChatTTSRequestIdRef.current) return;
+          startChatRecording();
+        }, isNaN(remainingTime) ? 5000 : remainingTime);
+        chatSafetyTimerRef.current = safetyTimer;
+
+        chatAudioRef.current.onended = () => {
+          clearTimeout(safetyTimer);
+          if (!liveChatActiveRef.current || isChatPausedRef.current || requestId !== activeChatTTSRequestIdRef.current) return;
+          chatAudioRef.current = null;
+          startChatRecording();
+        };
+
+        setChatOrbStatus("speaking");
+        chatAudioRef.current.play().catch(e => {
+          console.error("Audio resume error:", e);
+          clearTimeout(safetyTimer);
+          setChatOrbStatus("inactive");
+        });
+      } else if (previousStatus === "listening") {
+        startChatRecording();
+      } else {
+        setChatOrbStatus(previousStatus);
+      }
     }
   };
 
@@ -718,6 +850,15 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     }
     if (chatMediaRecorderRef.current && isChatRecording) {
       try { stopChatRecording(); } catch (e) {}
+    }
+    setIsChatPaused(false);
+    isChatPausedRef.current = false;
+    pendingSpeakTextRef.current = null;
+    pendingSpeakAudioUrlRef.current = null;
+    prePauseOrbStatusRef.current = "inactive";
+    if (chatSafetyTimerRef.current) {
+      clearTimeout(chatSafetyTimerRef.current);
+      chatSafetyTimerRef.current = null;
     }
     setLiveChatActive(false);
     setChatOrbStatus("inactive");
@@ -921,7 +1062,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                 <div className="practice-live-chat-stage glass-panel">
                   <div className="practice-live-header">
                     <div className="live-title-row" onClick={handleOrbClickInChat} style={{ cursor: 'pointer' }}>
-                      <span className="live-dot-pulse active"></span>
+                      <span className={`live-dot-pulse active ${isChatPaused ? 'paused' : ''}`}></span>
                       <h4>Rozmowa Audio o Lekturze (Chat Live)</h4>
 
                       <button
@@ -930,7 +1071,9 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                           e.stopPropagation();
                           handleOrbClickInChat();
                         }}
+                        disabled={isChatPaused}
                         title={
+                          isChatPaused ? "Rozmowa jest wstrzymana" :
                           chatOrbStatus === "speaking" ? "Kliknij, aby przerwać i odpowiedzieć" :
                           chatOrbStatus === "listening" || isChatRecording ? "Kliknij, aby zakończyć nagrywanie i wysłać" :
                           "Kliknij, aby mówić"
@@ -939,7 +1082,11 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                         <div className="orb-pulse-ring-1"></div>
                         <div className="orb-pulse-ring-2"></div>
                         <div className="orb-core">
-                          {chatOrbStatus === "inactive" || chatOrbStatus === "standby" ? (
+                          {isChatPaused ? (
+                            <svg viewBox="0 0 24 24" className="orb-mic-svg" style={{ fill: '#E8EAED', width: '12px', height: '12px' }}>
+                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+                            </svg>
+                          ) : chatOrbStatus === "inactive" || chatOrbStatus === "standby" ? (
                             <svg viewBox="0 0 24 24" className="orb-mic-svg" style={{ width: '15px', height: '15px' }}>
                               <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
                               <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
@@ -960,28 +1107,43 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                         </div>
                       </button>
                       <div className="practice-live-status-label">
-                        {chatOrbStatus === "thinking" && "✨ AI przygotowuje pytanie..."}
-                        {chatOrbStatus === "speaking" && "AI mówi... (kliknij kulę, by przerwać)"}
-                        {(chatOrbStatus === "listening" || isChatRecording) && "🎙️ Słucham... (kliknij kulę, by wysłać)"}
-                        {chatOrbStatus === "inactive" && "Kliknij kulę, by odpowiedzieć"}
+                        {isChatPaused && "⏸️ Rozmowa wstrzymana"}
+                        {!isChatPaused && chatOrbStatus === "thinking" && "✨ AI przygotowuje pytanie..."}
+                        {!isChatPaused && chatOrbStatus === "speaking" && "AI mówi... (kliknij kulę, by przerwać)"}
+                        {!isChatPaused && (chatOrbStatus === "listening" || isChatRecording) && "🎙️ Słucham... (kliknij kulę, by wysłać)"}
+                        {!isChatPaused && chatOrbStatus === "inactive" && "Kliknij kulę, by odpowiedzieć"}
                       </div>
                     </div>
 
-                    <button className="close-live-chat-btn" onClick={() => {
-                      liveChatActiveRef.current = false;
-                      activeChatTTSRequestIdRef.current++;
-                      if (chatAudioRef.current) {
-                        chatAudioRef.current.pause();
-                        chatAudioRef.current = null;
-                      }
-                      if (chatMediaRecorderRef.current && isChatRecording) {
-                        stopChatRecording();
-                      }
-                      setLiveChatActive(false);
-                      setChatOrbStatus("inactive");
-                    }}>
-                      Zakończ rozmowę
-                    </button>
+                    <div className="live-chat-header-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button className="pause-live-chat-btn" onClick={toggleChatPause}>
+                        {isChatPaused ? "▶ Wznów" : "⏸ Pauza"}
+                      </button>
+
+                      <button className="close-live-chat-btn" onClick={() => {
+                        liveChatActiveRef.current = false;
+                        activeChatTTSRequestIdRef.current++;
+                        if (chatAudioRef.current) {
+                          chatAudioRef.current.pause();
+                          chatAudioRef.current = null;
+                        }
+                        if (chatMediaRecorderRef.current && isChatRecording) {
+                          stopChatRecording();
+                        }
+                        setLiveChatActive(false);
+                        setChatOrbStatus("inactive");
+                        setIsChatPaused(false);
+                        isChatPausedRef.current = false;
+                        pendingSpeakTextRef.current = null;
+                        pendingSpeakAudioUrlRef.current = null;
+                        if (chatSafetyTimerRef.current) {
+                          clearTimeout(chatSafetyTimerRef.current);
+                          chatSafetyTimerRef.current = null;
+                        }
+                      }}>
+                        Zakończ rozmowę
+                      </button>
+                    </div>
                   </div>
 
                   <div className="practice-live-chat-history">

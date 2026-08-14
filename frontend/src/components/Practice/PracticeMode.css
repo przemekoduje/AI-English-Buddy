@@ -817,3 +817,28 @@
     justify-content: center;
   }
 }
+
+.pause-live-chat-btn {
+  background: transparent;
+  border: 1px solid var(--slate-300, #cbd5e1);
+  color: var(--slate-600, #475569);
+  padding: 0.4rem 0.95rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.pause-live-chat-btn:hover {
+  background: #FEF3C7;
+  color: #D97706;
+  border-color: #FCD34D;
+}
+
+.live-dot-pulse.paused {
+  background-color: #F59E0B;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
+  animation: none;
+}
