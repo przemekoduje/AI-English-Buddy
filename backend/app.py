@@ -2813,7 +2813,7 @@ def check_translation():
             "4. Zidentyfikuj drobne, akceptowalne odstępstwa (np. 'można też użyć...') i krótko je skomentuj.\n"
             "5. Zwróć wyłącznie poprawny obiekt JSON z polami:\n"
             "   - 'status': 'correct' (gdy jest w pełni poprawne/idealne), 'acceptable' (gdy jest zrozumiałe i poprawne, mimo drobnych odstępstw/literówek/szyku), 'incorrect' (gdy zawiera poważne błędy uniemożliwiające zaliczenie)\n"
-            "   - 'feedback': krótkie podsumowanie w języku polskim (max 2 zdania), np. 'Doskonałe tłumaczenie!', 'Poprawnie, ale zamiast X lepiej brzmi Y.', lub 'Błąd: brakuje słowa kluczowego [word].'\n"
+            "   - 'feedback': ocena i krótki opis poprawności w języku polskim, na końcu którego ZAWSZE (niezależnie od tego, czy odpowiedź użytkownika jest w 100% poprawna, częściowo poprawna, czy błędna) dopiszesz najbardziej poprawną/standardową wersję tego zdania w nowej linii lub po kropce w formacie: 'Najbardziej poprawna wersja: [optymalne zdanie po angielsku].'\n"
         )
 
         ai_response = client.chat.completions.create(
