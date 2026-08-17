@@ -143,46 +143,54 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   const handleToggleQuiz = async (item) => {
     const wordId = item.id || item.original;
     const isExpanded = expandedQuizId === wordId;
+    const hasQuizAndExercises = item.quiz && item.quiz.extra_exercises;
 
-    // Toggle expanded state (only one card can be expanded at a time)
-    setExpandedQuizId(isExpanded ? null : wordId);
+    if (isExpanded) {
+      setExpandedQuizId(null);
+      return;
+    }
 
-    // If expanding and quiz not present or extra exercises missing, fetch from API
-    if (!isExpanded && (!item.quiz || !item.quiz.extra_exercises)) {
-      setLoadingQuizIds(prev => ({ ...prev, [wordId]: true }));
-      setQuizErrors(prev => ({ ...prev, [wordId]: "" }));
+    if (hasQuizAndExercises) {
+      setExpandedQuizId(wordId);
+      return;
+    }
 
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordId)}/quiz`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Session-Token": user?.token || "",
-          }
-        });
+    setLoadingQuizIds(prev => ({ ...prev, [wordId]: true }));
+    setQuizErrors(prev => ({ ...prev, [wordId]: "" }));
 
-        if (!response.ok) {
-          throw new Error("Nie udało się pobrać quizu.");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordId)}/quiz`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || "",
         }
+      });
 
-        const quizData = await response.json();
-        
-        // Update words state to include the new quiz
-        setWords(prev => prev.map(w => {
-          if ((w.id && w.id === item.id) || w.original === item.original) {
-            return { ...w, quiz: quizData };
-          }
-          return w;
-        }));
-      } catch (err) {
-        console.error(err);
-        setQuizErrors(prev => ({
-          ...prev,
-          [wordId]: err.message || "Błąd generowania quizu."
-        }));
-      } finally {
-        setLoadingQuizIds(prev => ({ ...prev, [wordId]: false }));
+      if (!response.ok) {
+        throw new Error("Nie udało się pobrać quizu.");
       }
+
+      const quizData = await response.json();
+      
+      setWords(prev => prev.map(w => {
+        if ((w.id && w.id === item.id) || w.original === item.original) {
+          return { ...w, quiz: quizData };
+        }
+        return w;
+      }));
+
+      // Now expand with smooth animation!
+      setExpandedQuizId(wordId);
+    } catch (err) {
+      console.error(err);
+      setQuizErrors(prev => ({
+        ...prev,
+        [wordId]: err.message || "Błąd generowania quizu."
+      }));
+      setExpandedQuizId(wordId);
+    } finally {
+      setLoadingQuizIds(prev => ({ ...prev, [wordId]: false }));
     }
   };
 
@@ -474,16 +482,21 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
               <div className="word-display-area">
                 <h3 className="original-text">{item.original}</h3>
                 <p className="translated-text">{item.translated}</p>
-                {item.original.trim().split(/\s+/).length === 1 && (
-                  <button 
-                    className={`mnemonic-trigger-btn ${expandedQuizId === (item.id || item.original) ? 'active' : ''}`}
-                    onClick={() => handleToggleQuiz(item)}
-                    title="Ćwiczenie sprawdzające znajomość słowa"
-                  >
-                    <span>Ćwiczenia (AI Quiz & Zadania)</span>
-                    <span className="bulb-icon">💡</span>
-                  </button>
-                )}
+                 {item.original.trim().split(/\s+/).length === 1 && (
+                   <button 
+                     className={`mnemonic-trigger-btn ${expandedQuizId === (item.id || item.original) ? 'active' : ''} ${loadingQuizIds[item.id || item.original] ? 'loading' : ''}`}
+                     onClick={() => handleToggleQuiz(item)}
+                     title="Ćwiczenie sprawdzające znajomość słowa"
+                     disabled={loadingQuizIds[item.id || item.original]}
+                   >
+                     <span>{loadingQuizIds[item.id || item.original] ? 'Generowanie ćwiczeń...' : 'Ćwiczenia (AI Quiz & Zadania)'}</span>
+                     {loadingQuizIds[item.id || item.original] ? (
+                       <div className="spinner-mini" style={{ width: '12px', height: '12px', display: 'inline-block', border: '2px solid rgba(0,0,0,0.1)', borderLeftColor: 'currentColor', borderRadius: '50%', animation: 'spin 0.6s linear infinite', marginLeft: '5px' }}></div>
+                     ) : (
+                       <span className="bulb-icon">💡</span>
+                     )}
+                   </button>
+                 )}
               </div>
 
               {expandedQuizId === (item.id || item.original) && (
