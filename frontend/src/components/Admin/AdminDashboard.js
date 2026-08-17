@@ -188,9 +188,15 @@ const AdminDashboard = ({ user }) => {
   let totalCompletionTokens = 0;
   let totalTtsChars = 0;
   let totalWhisperSecs = 0;
-  let totalCalls = filteredUsage.length;
+  let totalCalls = selectedEmail
+    ? (userStatsMap[selectedEmail]?.callsCount || 0)
+    : filteredUsage.length;
 
-  userStatsList.forEach(u => {
+  const usersToAggregate = selectedEmail
+    ? userStatsList.filter(u => u.email === selectedEmail)
+    : userStatsList;
+
+  usersToAggregate.forEach(u => {
     totalCostUsd += u.costUsd;
     totalCostPln += u.costPln;
     totalOpenaiTextCost += u.openaiCost;
@@ -309,9 +315,9 @@ const AdminDashboard = ({ user }) => {
             </svg>
           </div>
           <div className="stat-card-content">
-            <span className="stat-card-label">Suma kosztów (PLN)</span>
+            <span className="stat-card-label">{selectedEmail ? "Koszty użytkownika (PLN)" : "Suma kosztów (PLN)"}</span>
             <span className="stat-card-value text-glow-blue">{totalCostPln.toFixed(2)} PLN</span>
-            <span className="stat-card-subtext">~{totalCostUsd.toFixed(2)} USD</span>
+            <span className="stat-card-subtext">{selectedEmail ? `Konto: ${selectedEmail}` : `~${totalCostUsd.toFixed(2)} USD`}</span>
           </div>
         </div>
 
@@ -322,9 +328,9 @@ const AdminDashboard = ({ user }) => {
             </svg>
           </div>
           <div className="stat-card-content">
-            <span className="stat-card-label">Łączna liczba zapytań</span>
+            <span className="stat-card-label">{selectedEmail ? "Zapytania użytkownika" : "Łączna liczba zapytań"}</span>
             <span className="stat-card-value text-glow-purple">{totalCalls} zapytania</span>
-            <span className="stat-card-subtext">Wszystkie usługi AI</span>
+            <span className="stat-card-subtext">{selectedEmail ? "Dla wybranego konta" : "Wszystkie usługi AI"}</span>
           </div>
         </div>
 
@@ -340,7 +346,7 @@ const AdminDashboard = ({ user }) => {
           <div className="stat-card-content">
             <span className="stat-card-label">Zarejestrowani użytkownicy</span>
             <span className="stat-card-value text-glow-green">{stats.users.length}</span>
-            <span className="stat-card-subtext">Aktywne konta w Firestore</span>
+            <span className="stat-card-subtext">{selectedEmail ? `Wybrano: ${selectedEmail.split('@')[0]}` : "Aktywne konta w Firestore"}</span>
           </div>
         </div>
       </div>
@@ -348,7 +354,7 @@ const AdminDashboard = ({ user }) => {
       {/* Service Breakdown */}
       <div className="admin-breakdown-row">
         <div className="admin-breakdown-card glass-panel">
-          <h3>Szczegółowy podział kosztów</h3>
+          <h3>Szczegółowy podział kosztów {selectedEmail ? `(${selectedEmail})` : "(Wszyscy)"}</h3>
           <div className="breakdown-list">
             
             <div className="breakdown-item">
