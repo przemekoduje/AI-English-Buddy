@@ -15,6 +15,8 @@ import AdminDashboard from './components/Admin/AdminDashboard';
 
 function App() {
   const [currentView, setCurrentView] = useState(() => {
+    const savedView = localStorage.getItem("buddy_current_view");
+    if (savedView) return savedView;
     return window.innerWidth <= 768 ? 'dashboard' : 'workspace';
   });
   const [user, setUser] = useState(() => {
@@ -99,6 +101,7 @@ function App() {
       }
     }
     localStorage.removeItem("buddy_user");
+    localStorage.removeItem("buddy_current_view");
     setUser(null);
     setGeneratedText("");
     setCurrentStoryTitle("");
@@ -107,6 +110,7 @@ function App() {
 
   const handleNavigate = (view) => {
     setCurrentView(view);
+    localStorage.setItem("buddy_current_view", view);
   };
 
   const getPageTitle = () => {

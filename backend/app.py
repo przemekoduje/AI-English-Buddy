@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import base64
 from dotenv import load_dotenv # Upewnij się, że to jest na górze!
