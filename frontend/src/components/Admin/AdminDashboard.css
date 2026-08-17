@@ -211,11 +211,25 @@
   align-items: center;
 }
 
+.admin-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.admin-search-icon {
+  position: absolute;
+  left: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
 .admin-search-input {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #ffffff;
-  padding: 8px 16px;
+  padding: 8px 36px 8px 32px;
   border-radius: 8px;
   font-size: 14px;
   outline: none;
@@ -226,6 +240,24 @@
 .admin-search-input:focus {
   border-color: rgba(0, 242, 254, 0.5);
   background: rgba(255, 255, 255, 0.08);
+}
+
+.admin-search-clear {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.admin-search-clear:hover {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .admin-sort-select {
@@ -284,6 +316,65 @@
 .current-user-row:hover {
   background: rgba(0, 242, 254, 0.05) !important;
 }
+
+.selected-user-row {
+  background: rgba(0, 242, 254, 0.08) !important;
+  outline: 1px solid rgba(0, 242, 254, 0.25);
+}
+
+/* Email Pills */
+.email-pills-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0 16px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 4px;
+}
+
+.email-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.email-pill:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.email-pill-active {
+  background: rgba(0, 242, 254, 0.15) !important;
+  border-color: rgba(0, 242, 254, 0.45) !important;
+  color: #00f2fe !important;
+}
+
+.email-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.email-pill-cost {
+  font-size: 11px;
+  opacity: 0.7;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
 
 .user-email-cell {
   display: flex;

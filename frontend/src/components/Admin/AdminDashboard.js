@@ -7,6 +7,7 @@ const AdminDashboard = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEmail, setSelectedEmail] = useState(null);
   const [sortBy, setSortBy] = useState('cost_desc'); // cost_desc, email, vocab_desc, stories_desc
 
   useEffect(() => {
@@ -160,9 +161,11 @@ const AdminDashboard = ({ user }) => {
   });
 
   // Filter & Sort
-  const filteredUsers = userStatsList.filter(u => 
-    u.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUsers = userStatsList.filter(u => {
+    const matchesSearch = u.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSelected = selectedEmail ? u.email === selectedEmail : true;
+    return matchesSearch && matchesSelected;
+  });
 
   filteredUsers.sort((a, b) => {
     if (sortBy === 'cost_desc') return b.costUsd - a.costUsd;
@@ -171,6 +174,12 @@ const AdminDashboard = ({ user }) => {
     if (sortBy === 'stories_desc') return b.storiesCount - a.storiesCount;
     return 0;
   });
+
+  // All unique emails sorted by cost for pills
+  const allUsersSorted = [...userStatsList].sort((a, b) => b.costUsd - a.costUsd);
+  const emailsMatchingSearch = allUsersSorted.filter(u =>
+    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="admin-dashboard-container animate-fade-in">
@@ -284,13 +293,22 @@ const AdminDashboard = ({ user }) => {
         <div className="users-card-header">
           <h3>Statystyki i koszty użytkowników</h3>
           <div className="users-controls">
-            <input 
-              type="text" 
-              placeholder="Filtruj po e-mailu..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="admin-search-input"
-            />
+            <div className="admin-search-wrapper">
+              <svg className="admin-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input 
+                type="text" 
+                placeholder="Szukaj e-maila..." 
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setSelectedEmail(null); }}
+                className="admin-search-input"
+              />
+              {searchQuery && (
+                <button className="admin-search-clear" onClick={() => setSearchQuery('')}>✕</button>
+              )}
+            </div>
             <select 
               value={sortBy} 
               onChange={(e) => setSortBy(e.target.value)}
@@ -302,6 +320,27 @@ const AdminDashboard = ({ user }) => {
               <option value="stories_desc">Sortuj: Najwięcej historii</option>
             </select>
           </div>
+        </div>
+        {/* Email pills */}
+        <div className="email-pills-container">
+          <button
+            className={`email-pill ${selectedEmail === null ? 'email-pill-active' : ''}`}
+            onClick={() => { setSelectedEmail(null); setSearchQuery(''); }}
+          >
+            Wszyscy ({userStatsList.length})
+          </button>
+          {emailsMatchingSearch.map(u => (
+            <button
+              key={u.email}
+              className={`email-pill ${selectedEmail === u.email ? 'email-pill-active' : ''}`}
+              onClick={() => setSelectedEmail(prev => prev === u.email ? null : u.email)}
+              title={`${u.costPln.toFixed(2)} PLN | ${u.callsCount} zapytań`}
+            >
+              <span className="email-pill-dot" style={{ background: `hsl(${Math.abs(u.email.split('').reduce((a,c) => a + c.charCodeAt(0), 0)) % 360}, 70%, 60%)` }} />
+              {u.email.split('@')[0]}
+              <span className="email-pill-cost">{u.costPln.toFixed(2)} PLN</span>
+            </button>
+          ))}
         </div>
 
         <div className="table-responsive">
@@ -325,7 +364,15 @@ const AdminDashboard = ({ user }) => {
                 </tr>
               ) : (
                 filteredUsers.map(u => (
-                  <tr key={u.email} className={u.email === user.email ? 'current-user-row' : ''}>
+                  <tr
+                    key={u.email}
+                    className={[
+                      u.email === user.email ? 'current-user-row' : '',
+                      selectedEmail === u.email ? 'selected-user-row' : ''
+                    ].filter(Boolean).join(' ')}
+                    onClick={() => setSelectedEmail(prev => prev === u.email ? null : u.email)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <td>
                       <div className="user-email-cell">
                         <strong>{u.email}</strong>
