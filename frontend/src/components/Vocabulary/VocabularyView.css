@@ -293,10 +293,9 @@
 
 /* ── Vocabulary Grid ─────────────────────────────────────── */
 .vocab-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
-  align-items: start;
+  display: block;
+  column-width: 280px;
+  column-gap: 1rem;
 }
 
 .vocab-word-card {
@@ -304,12 +303,15 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 1.25rem;
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 1rem;
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+  width: 100%;
+  margin-bottom: 1rem;
+  break-inside: avoid;
 }
 
 .vocab-word-card:hover {
