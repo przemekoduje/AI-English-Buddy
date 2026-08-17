@@ -2710,7 +2710,14 @@ def generate_quiz(word_id):
             # Upewnij się, że opcje mają pole 'translation' oraz dodatkowe ćwiczenia istnieją
             options = cached_quiz.get('options', [])
             has_translations = all(isinstance(opt, dict) and 'translation' in opt for opt in options) if options else False
-            has_extra_exercises = 'extra_exercises' in cached_quiz
+            has_extra_exercises = (
+                'extra_exercises' in cached_quiz and
+                isinstance(cached_quiz['extra_exercises'], dict) and
+                'pl_to_en' in cached_quiz['extra_exercises'] and
+                'en_blank' in cached_quiz['extra_exercises'] and
+                cached_quiz['extra_exercises']['pl_to_en'] and
+                cached_quiz['extra_exercises']['en_blank']
+            )
             if has_translations and has_extra_exercises:
                 return jsonify(cached_quiz), 200
 
