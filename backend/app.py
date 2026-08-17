@@ -2783,6 +2783,56 @@ def generate_quiz(word_id):
         return jsonify({"error": f"Błąd generowania quizu i ćwiczeń: {str(e)}"}), 500
 
 
+@app.route("/api/vocabulary/check-translation", methods=['POST'])
+def check_translation():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    data = request.get_json(silent=True) or {}
+    target_word = data.get('target_word', '')
+    sentence_pl = data.get('sentence_pl', '')
+    correct_en = data.get('correct_en', '')
+    user_translation = data.get('user_translation', '')
+
+    if not target_word or not sentence_pl or not user_translation:
+        return jsonify({"error": "Brakujące parametry"}), 400
+
+    try:
+        system_prompt = (
+            "Jesteś życzliwym i profesjonalnym nauczycielem języka angielskiego.\n"
+            "Oceń tłumaczenie użytkownika z języka polskiego na angielski.\n\n"
+            f"Słowo kluczowe (Target word): {target_word}\n"
+            f"Zdanie po polsku: {sentence_pl}\n"
+            f"Oczekiwane tłumaczenie (wzorzec): {correct_en}\n"
+            f"Tłumaczenie użytkownika: {user_translation}\n\n"
+            "Zasady oceny:\n"
+            "1. Tłumaczenie nie musi być identyczne z wzorcem. Angielski dopuszcza inne szyki i synonimy. Jeśli sens jest zachowany, uznaj za poprawne.\n"
+            "2. Sprawdź, czy użytkownik użył słowa kluczowego (Target word) lub jego prawidłowo odmienionej formy. Jeśli słowo kluczowe zostało pominięte bez dobrego powodu leksykalnego, wskaż to.\n"
+            "3. Zidentyfikuj ewentualne poważne (karygodne) błędy gramatyczne lub leksykalne i opisz je z szacunkiem.\n"
+            "4. Zidentyfikuj drobne, akceptowalne odstępstwa (np. 'można też użyć...') i krótko je skomentuj.\n"
+            "5. Zwróć wyłącznie poprawny obiekt JSON z polami:\n"
+            "   - 'status': 'correct' (gdy jest w pełni poprawne/idealne), 'acceptable' (gdy jest zrozumiałe i poprawne, mimo drobnych odstępstw/literówek/szyku), 'incorrect' (gdy zawiera poważne błędy uniemożliwiające zaliczenie)\n"
+            "   - 'feedback': krótkie podsumowanie w języku polskim (max 2 zdania), np. 'Doskonałe tłumaczenie!', 'Poprawnie, ale zamiast X lepiej brzmi Y.', lub 'Błąd: brakuje słowa kluczowego [word].'\n"
+        )
+
+        ai_response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Oceń: {user_translation}"}
+            ],
+            response_format={"type": "json_object"}
+        )
+
+        content = ai_response.choices[0].message.content.strip()
+        result_json = json.loads(content)
+        return jsonify(result_json), 200
+    except Exception as e:
+        print(f"Error checking translation: {e}")
+        return jsonify({"error": f"Błąd sprawdzania tłumaczenia: {str(e)}"}), 500
+
+
 # ### NOWY ENDPOINT: WYSYŁANIE SŁÓW Z NOTATNIKA NA E-MAIL ###
 @app.route("/api/send-notebook-email", methods=['POST'])
 def send_notebook_email():

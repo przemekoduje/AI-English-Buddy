@@ -24,7 +24,8 @@ const VocabularyDrawer = ({ user }) => {
   // Additional Exercises State
   const [activeExerciseTabs, setActiveExerciseTabs] = useState({}); // wordId -> 'synonyms' | 'pl_to_en' | 'en_blank'
   const [plToEnAnswers, setPlToEnAnswers] = useState({}); // wordId -> { 0: '', 1: '', 2: '' }
-  const [plToEnChecked, setPlToEnChecked] = useState({}); // wordId -> { 0: boolean, 1: boolean, 2: boolean }
+  const [plToEnChecked, setPlToEnChecked] = useState({}); // wordId -> { 0: {correct, status, feedback}, ... }
+  const [checkingPlToEn, setCheckingPlToEn] = useState({}); // wordId -> { 0: boolean, ... }
   const [enBlankAnswers, setEnBlankAnswers] = useState({}); // wordId -> { 0: '', 1: '', 2: '' }
   const [enBlankChecked, setEnBlankChecked] = useState({}); // wordId -> { 0: boolean, 1: boolean, 2: boolean }
 
@@ -456,7 +457,7 @@ const VocabularyDrawer = ({ user }) => {
                                 className={`exercise-tab-btn ${(!activeExerciseTabs[wordId] || activeExerciseTabs[wordId] === 'synonyms') ? 'active' : ''}`}
                                 onClick={() => setActiveExerciseTabs(prev => ({ ...prev, [wordId]: 'synonyms' }))}
                               >
-                                Synonimy (Quiz)
+                                Synonimy
                               </button>
                               {item.quiz.extra_exercises && (
                                 <>
@@ -472,7 +473,7 @@ const VocabularyDrawer = ({ user }) => {
                                     className={`exercise-tab-btn ${activeExerciseTabs[wordId] === 'en_blank' ? 'active' : ''}`}
                                     onClick={() => setActiveExerciseTabs(prev => ({ ...prev, [wordId]: 'en_blank' }))}
                                   >
-                                    Luki (EN)
+                                    Luki EN
                                   </button>
                                 </>
                               )}
@@ -532,18 +533,77 @@ const VocabularyDrawer = ({ user }) => {
                               <div className="extra-exercise-container">
                                 {item.quiz.extra_exercises.pl_to_en.map((ex, idx) => {
                                   const currentVal = (plToEnAnswers[wordId] && plToEnAnswers[wordId][idx]) || '';
-                                  const isChecked = plToEnChecked[wordId] && plToEnChecked[wordId][idx] !== undefined;
-                                  const isCorrect = isChecked && plToEnChecked[wordId][idx];
+                                  const feedbackObj = plToEnChecked[wordId] && plToEnChecked[wordId][idx];
+                                  const isChecked = feedbackObj !== undefined;
+                                  const isCorrect = isChecked && (feedbackObj.status === 'correct' || feedbackObj.status === 'acceptable');
+                                  const isChecking = checkingPlToEn[wordId] && checkingPlToEn[wordId][idx];
 
-                                  const handleCheck = () => {
-                                    const cleanUser = cleanStringForComparison(currentVal);
-                                    const cleanCorrect = cleanStringForComparison(ex.correct_en);
-                                    const correct = cleanUser === cleanCorrect;
-                                    setPlToEnChecked(prev => ({
+                                  const handleCheck = async () => {
+                                    if (!currentVal.trim()) return;
+                                    setCheckingPlToEn(prev => ({
                                       ...prev,
-                                      [wordId]: { ...(prev[wordId] || {}), [idx]: correct }
+                                      [wordId]: { ...(prev[wordId] || {}), [idx]: true }
                                     }));
+                                    try {
+                                      const response = await fetch(`${API_BASE_URL}/api/vocabulary/check-translation`, {
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                          "X-Session-Token": user?.token || "",
+                                        },
+                                        body: JSON.stringify({
+                                          target_word: item.original,
+                                          sentence_pl: ex.sentence_pl,
+                                          correct_en: ex.correct_en,
+                                          user_translation: currentVal
+                                        })
+                                      });
+                                      if (response.ok) {
+                                        const result = await response.json();
+                                        setPlToEnChecked(prev => ({
+                                          ...prev,
+                                          [wordId]: { 
+                                            ...(prev[wordId] || {}), 
+                                            [idx]: {
+                                              correct: result.status === 'correct' || result.status === 'acceptable',
+                                              status: result.status,
+                                              feedback: result.feedback
+                                            } 
+                                          }
+                                        }));
+                                      } else {
+                                        throw new Error("API check failed");
+                                      }
+                                    } catch (e) {
+                                      console.error(e);
+                                      const cleanUser = cleanStringForComparison(currentVal);
+                                      const cleanCorrect = cleanStringForComparison(ex.correct_en);
+                                      const correct = cleanUser === cleanCorrect;
+                                      setPlToEnChecked(prev => ({
+                                        ...prev,
+                                        [wordId]: { 
+                                          ...(prev[wordId] || {}), 
+                                          [idx]: {
+                                            correct,
+                                            status: correct ? 'correct' : 'incorrect',
+                                            feedback: correct ? '✓ OK!' : `✗ Spróbuj ponownie. Wzór: "${ex.correct_en}"`
+                                          } 
+                                        }
+                                      }));
+                                    } finally {
+                                      setCheckingPlToEn(prev => ({
+                                        ...prev,
+                                        [wordId]: { ...(prev[wordId] || {}), [idx]: false }
+                                      }));
+                                    }
                                   };
+
+                                  let inputClass = "exercise-input";
+                                  if (isChecked) {
+                                    if (feedbackObj.status === 'correct') inputClass += " correct";
+                                    else if (feedbackObj.status === 'acceptable') inputClass += " acceptable-input";
+                                    else inputClass += " incorrect";
+                                  }
 
                                   return (
                                     <div key={idx} className="exercise-item">
@@ -552,23 +612,32 @@ const VocabularyDrawer = ({ user }) => {
                                         <input
                                           type="text"
                                           placeholder="Wpisz wersję angielską..."
-                                          className={`exercise-input ${isChecked ? (isCorrect ? 'correct' : 'incorrect') : ''}`}
+                                          className={inputClass}
                                           value={currentVal}
                                           onChange={(e) => setPlToEnAnswers(prev => ({
                                             ...prev,
                                             [wordId]: { ...(prev[wordId] || {}), [idx]: e.target.value }
                                           }))}
-                                          disabled={isChecked}
+                                          disabled={isChecked || isChecking}
                                         />
                                         {!isChecked && (
-                                          <button className="exercise-check-btn" onClick={handleCheck}>
-                                            Sprawdź
+                                          <button 
+                                            className="exercise-check-btn" 
+                                            onClick={handleCheck}
+                                            disabled={isChecking || !currentVal.trim()}
+                                          >
+                                            {isChecking ? "Sprawdzanie..." : "Sprawdź"}
                                           </button>
                                         )}
                                       </div>
                                       {isChecked && (
-                                        <div className={`exercise-feedback ${isCorrect ? 'correct' : 'incorrect'}`}>
-                                          {isCorrect ? '✓ OK!' : `✗ Poprawnie: "${ex.correct_en}"`}
+                                        <div className={`exercise-feedback ${feedbackObj.status}`}>
+                                          {feedbackObj.feedback}
+                                          {!isCorrect && (
+                                            <div style={{ marginTop: '0.15rem', color: 'var(--gray-500)', fontSize: '0.7rem' }}>
+                                              Wzór: "{ex.correct_en}"
+                                            </div>
+                                          )}
                                         </div>
                                       )}
                                     </div>

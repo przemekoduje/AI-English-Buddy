@@ -742,7 +742,16 @@
   color: #28a745;
 }
 
+.exercise-feedback.acceptable {
+  color: #d97706;
+}
+
 .exercise-feedback.incorrect {
   color: #dc3545;
+}
+
+.exercise-input.acceptable-input {
+  border-color: #d97706;
+  background-color: #fffbeb;
 }
 
