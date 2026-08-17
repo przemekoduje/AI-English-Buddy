@@ -560,3 +560,93 @@
     width: 100%;
   }
 }
+
+/* ── Date Filter Card ────────────────────────────────────────── */
+.admin-filter-card {
+  padding: 16px 24px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid var(--gray-200, #e8eaed);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  margin-bottom: 24px;
+}
+
+.filter-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-700, #5f6368);
+  margin-bottom: 12px;
+}
+
+.filter-buttons-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-btn {
+  background: var(--gray-50, #f8f9fa);
+  border: 1px solid var(--gray-300, #e0e0e0);
+  color: var(--gray-700, #5f6368);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-btn:hover {
+  background: var(--gray-100, #f1f3f4);
+  border-color: var(--gray-400, #dadce0);
+  color: var(--gray-900, #202124);
+}
+
+.filter-btn.active {
+  background: #e8f0fe;
+  border-color: #1a73e8;
+  color: #1a73e8;
+  font-weight: 600;
+}
+
+.custom-date-inputs {
+  display: flex;
+  gap: 20px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--gray-200, #e8eaed);
+  align-items: center;
+}
+
+.date-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-input-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-600, #5f6368);
+}
+
+.admin-date-input {
+  background: var(--gray-50, #f8f9fa);
+  border: 1px solid var(--gray-300, #e0e0e0);
+  color: var(--gray-900, #202124);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.admin-date-input:focus {
+  border-color: #1a73e8;
+  background: #ffffff;
+}
+

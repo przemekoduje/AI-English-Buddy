@@ -9,6 +9,9 @@ const AdminDashboard = ({ user }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [sortBy, setSortBy] = useState('cost_desc'); // cost_desc, email, vocab_desc, stories_desc
+  const [dateFilter, setDateFilter] = useState('all_time'); // all_time, this_month, last_2_weeks, first_half_month, custom
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -59,6 +62,46 @@ const AdminDashboard = ({ user }) => {
 
   if (!stats) return null;
 
+  const getFilteredUsage = () => {
+    if (!stats || !stats.usage) return [];
+    
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    
+    let startLimit = null;
+    let endLimit = null;
+
+    if (dateFilter === 'this_month') {
+      startLimit = new Date(currentYear, currentMonth, 1);
+    } else if (dateFilter === 'last_2_weeks') {
+      startLimit = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    } else if (dateFilter === 'first_half_month') {
+      startLimit = new Date(currentYear, currentMonth, 1);
+      endLimit = new Date(currentYear, currentMonth, 15, 23, 59, 59, 999);
+    } else if (dateFilter === 'custom') {
+      if (startDate) {
+        startLimit = new Date(startDate);
+        startLimit.setHours(0,0,0,0);
+      }
+      if (endDate) {
+        endLimit = new Date(endDate);
+        endLimit.setHours(23,59,59,999);
+      }
+    }
+
+    return stats.usage.filter(log => {
+      if (!log.timestamp) return true;
+      const logDate = new Date(log.timestamp);
+      
+      if (startLimit && logDate < startLimit) return false;
+      if (endLimit && logDate > endLimit) return false;
+      return true;
+    });
+  };
+
+  const filteredUsage = getFilteredUsage();
+
   // Process data per user
   const userStatsMap = {};
 
@@ -83,7 +126,7 @@ const AdminDashboard = ({ user }) => {
   });
 
   // If there are entries in usage for unregistered/deleted users, let's create a placeholder
-  stats.usage.forEach(log => {
+  filteredUsage.forEach(log => {
     const email = log.user_email;
     if (!userStatsMap[email]) {
       userStatsMap[email] = {
@@ -145,7 +188,7 @@ const AdminDashboard = ({ user }) => {
   let totalCompletionTokens = 0;
   let totalTtsChars = 0;
   let totalWhisperSecs = 0;
-  let totalCalls = stats.usage.length;
+  let totalCalls = filteredUsage.length;
 
   userStatsList.forEach(u => {
     totalCostUsd += u.costUsd;
@@ -186,6 +229,74 @@ const AdminDashboard = ({ user }) => {
       <div className="admin-header-row">
         <h2>Konsola Administratora</h2>
         <div className="admin-badge">AI Cost Tracker</div>
+      </div>
+
+      {/* Date Range Filters */}
+      <div className="admin-filter-card glass-panel animate-fade-in">
+        <div className="filter-card-title">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+          <strong>Okres wyświetlania kosztów i zapytań:</strong>
+        </div>
+        <div className="filter-buttons-row">
+          <button 
+            className={`filter-btn ${dateFilter === 'all_time' ? 'active' : ''}`}
+            onClick={() => setDateFilter('all_time')}
+          >
+            Cały czas
+          </button>
+          <button 
+            className={`filter-btn ${dateFilter === 'this_month' ? 'active' : ''}`}
+            onClick={() => setDateFilter('this_month')}
+          >
+            Bieżący miesiąc
+          </button>
+          <button 
+            className={`filter-btn ${dateFilter === 'last_2_weeks' ? 'active' : ''}`}
+            onClick={() => setDateFilter('last_2_weeks')}
+          >
+            Ostatnie 2 tygodnie
+          </button>
+          <button 
+            className={`filter-btn ${dateFilter === 'first_half_month' ? 'active' : ''}`}
+            onClick={() => setDateFilter('first_half_month')}
+          >
+            Pierwsze 2 tygodnie miesiąca
+          </button>
+          <button 
+            className={`filter-btn ${dateFilter === 'custom' ? 'active' : ''}`}
+            onClick={() => setDateFilter('custom')}
+          >
+            Niestandardowy zakres...
+          </button>
+        </div>
+        
+        {dateFilter === 'custom' && (
+          <div className="custom-date-inputs animate-fade-in">
+            <div className="date-input-group">
+              <label>Od:</label>
+              <input 
+                type="date" 
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)} 
+                className="admin-date-input"
+              />
+            </div>
+            <div className="date-input-group">
+              <label>Do:</label>
+              <input 
+                type="date" 
+                value={endDate} 
+                onChange={(e) => setEndDate(e.target.value)} 
+                className="admin-date-input"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Overview Cards */}
