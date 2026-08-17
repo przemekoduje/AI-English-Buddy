@@ -33,6 +33,23 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   const [quizErrors, setQuizErrors] = useState({});
   const [selectedAnswers, setSelectedAnswers] = useState({});
 
+  // Additional Exercises State
+  const [activeExerciseTabs, setActiveExerciseTabs] = useState({}); // wordId -> 'synonyms' | 'pl_to_en' | 'en_blank'
+  const [plToEnAnswers, setPlToEnAnswers] = useState({}); // wordId -> { 0: '', 1: '', 2: '' }
+  const [plToEnChecked, setPlToEnChecked] = useState({}); // wordId -> { 0: boolean, 1: boolean, 2: boolean }
+  const [enBlankAnswers, setEnBlankAnswers] = useState({}); // wordId -> { 0: '', 1: '', 2: '' }
+  const [enBlankChecked, setEnBlankChecked] = useState({}); // wordId -> { 0: boolean, 1: boolean, 2: boolean }
+
+  const cleanStringForComparison = (str) => {
+    if (!str) return "";
+    return str
+      .toLowerCase()
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?\"']/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+
   // Fetch vocabulary
   const fetchVocabulary = useCallback(async () => {
     setLoading(true);
@@ -132,8 +149,8 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
       [wordId]: !isExpanded
     }));
 
-    // If expanding and quiz not present, fetch from API
-    if (!isExpanded && !item.quiz) {
+    // If expanding and quiz not present or extra exercises missing, fetch from API
+    if (!isExpanded && (!item.quiz || !item.quiz.extra_exercises)) {
       setLoadingQuizIds(prev => ({ ...prev, [wordId]: true }));
       setQuizErrors(prev => ({ ...prev, [wordId]: "" }));
 
@@ -476,7 +493,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                   {loadingQuizIds[item.id || item.original] ? (
                     <div className="mnemonic-loading">
                       <div className="spinner-mini"></div>
-                      <span>Tworzenie quizu...</span>
+                      <span>Tworzenie quizu i ćwiczeń...</span>
                     </div>
                   ) : quizErrors[item.id || item.original] ? (
                     <div className="mnemonic-error">
@@ -484,48 +501,226 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                     </div>
                   ) : item.quiz ? (
                     <div className="drawer-quiz-wrapper animate-slide-down">
-                      <p className="drawer-quiz-question">{item.quiz.question}</p>
-                      <div className="drawer-quiz-options">
-                        {item.quiz.options.map((option, idx) => {
-                          const isSelected = selectedAnswers[item.id || item.original] === option.text;
-                          const hasAnswered = selectedAnswers[item.id || item.original] !== undefined;
-                          
-                          let optionClass = "drawer-quiz-option";
-                          if (hasAnswered) {
-                            if (option.is_correct) {
-                              optionClass += " correct";
-                            } else if (isSelected) {
-                              optionClass += " incorrect";
-                            } else {
-                              optionClass += " disabled";
-                            }
-                          }
-
-                          return (
-                            <button
-                              key={idx}
-                              className={optionClass}
-                              disabled={hasAnswered}
-                              onClick={() => setSelectedAnswers(prev => ({ ...prev, [item.id || item.original]: option.text }))}
-                            >
-                              {option.text}
-                              {hasAnswered && option.translation && ` (${option.translation})`}
-                              {hasAnswered && option.is_correct && " ➡️ PRAWIDŁOWA ODPOWIEDŹ"}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {selectedAnswers[item.id || item.original] && (
-                        <button 
-                          className="drawer-quiz-reset-btn"
-                          onClick={() => setSelectedAnswers(prev => {
-                            const updated = { ...prev };
-                            delete updated[item.id || item.original];
-                            return updated;
-                          })}
+                      {/* Tabs */}
+                      <div className="exercises-tabs">
+                        <button
+                          type="button"
+                          className={`exercise-tab-btn ${(!activeExerciseTabs[item.id || item.original] || activeExerciseTabs[item.id || item.original] === 'synonyms') ? 'active' : ''}`}
+                          onClick={() => setActiveExerciseTabs(prev => ({ ...prev, [item.id || item.original]: 'synonyms' }))}
                         >
-                          Spróbuj ponownie
+                          Synonimy (Quiz)
                         </button>
+                        {item.quiz.extra_exercises && (
+                          <>
+                            <button
+                              type="button"
+                              className={`exercise-tab-btn ${activeExerciseTabs[item.id || item.original] === 'pl_to_en' ? 'active' : ''}`}
+                              onClick={() => setActiveExerciseTabs(prev => ({ ...prev, [item.id || item.original]: 'pl_to_en' }))}
+                            >
+                              Tłumaczenie PL ➡️ EN
+                            </button>
+                            <button
+                              type="button"
+                              className={`exercise-tab-btn ${activeExerciseTabs[item.id || item.original] === 'en_blank' ? 'active' : ''}`}
+                              onClick={() => setActiveExerciseTabs(prev => ({ ...prev, [item.id || item.original]: 'en_blank' }))}
+                            >
+                              Uzupełnij luki (EN)
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Content: Synonyms */}
+                      {(!activeExerciseTabs[item.id || item.original] || activeExerciseTabs[item.id || item.original] === 'synonyms') && (
+                        <div className="synonyms-quiz-container">
+                          <p className="drawer-quiz-question">{item.quiz.question}</p>
+                          <div className="drawer-quiz-options">
+                            {item.quiz.options.map((option, idx) => {
+                              const isSelected = selectedAnswers[item.id || item.original] === option.text;
+                              const hasAnswered = selectedAnswers[item.id || item.original] !== undefined;
+                              
+                              let optionClass = "drawer-quiz-option";
+                              if (hasAnswered) {
+                                if (option.is_correct) {
+                                  optionClass += " correct";
+                                } else if (isSelected) {
+                                  optionClass += " incorrect";
+                                } else {
+                                  optionClass += " disabled";
+                                }
+                              }
+
+                              return (
+                                <button
+                                  key={idx}
+                                  className={optionClass}
+                                  disabled={hasAnswered}
+                                  onClick={() => setSelectedAnswers(prev => ({ ...prev, [item.id || item.original]: option.text }))}
+                                >
+                                  {option.text}
+                                  {hasAnswered && option.translation && ` (${option.translation})`}
+                                  {hasAnswered && option.is_correct && " ➡️ PRAWIDŁOWA ODPOWIEDŹ"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {selectedAnswers[item.id || item.original] && (
+                            <button 
+                              className="drawer-quiz-reset-btn"
+                              onClick={() => setSelectedAnswers(prev => {
+                                const updated = { ...prev };
+                                delete updated[item.id || item.original];
+                                return updated;
+                              })}
+                            >
+                              Spróbuj ponownie
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Content: PL to EN translation */}
+                      {activeExerciseTabs[item.id || item.original] === 'pl_to_en' && item.quiz.extra_exercises && (
+                        <div className="extra-exercise-container">
+                          {item.quiz.extra_exercises.pl_to_en.map((ex, idx) => {
+                            const wordId = item.id || item.original;
+                            const currentVal = (plToEnAnswers[wordId] && plToEnAnswers[wordId][idx]) || '';
+                            const isChecked = plToEnChecked[wordId] && plToEnChecked[wordId][idx] !== undefined;
+                            const isCorrect = isChecked && plToEnChecked[wordId][idx];
+
+                            const handleCheck = () => {
+                              const cleanUser = cleanStringForComparison(currentVal);
+                              const cleanCorrect = cleanStringForComparison(ex.correct_en);
+                              const correct = cleanUser === cleanCorrect;
+                              setPlToEnChecked(prev => ({
+                                ...prev,
+                                [wordId]: { ...(prev[wordId] || {}), [idx]: correct }
+                              }));
+                            };
+
+                            return (
+                              <div key={idx} className="exercise-item">
+                                <span className="exercise-sentence">PL: {ex.sentence_pl}</span>
+                                <div className="exercise-input-wrapper">
+                                  <input
+                                    type="text"
+                                    placeholder="Wpisz wersję angielską..."
+                                    className={`exercise-input ${isChecked ? (isCorrect ? 'correct' : 'incorrect') : ''}`}
+                                    value={currentVal}
+                                    onChange={(e) => setPlToEnAnswers(prev => ({
+                                      ...prev,
+                                      [wordId]: { ...(prev[wordId] || {}), [idx]: e.target.value }
+                                    }))}
+                                    disabled={isChecked}
+                                  />
+                                  {!isChecked && (
+                                    <button className="exercise-check-btn" onClick={handleCheck}>
+                                      Sprawdź
+                                    </button>
+                                  )}
+                                </div>
+                                {isChecked && (
+                                  <div className={`exercise-feedback ${isCorrect ? 'correct' : 'incorrect'}`}>
+                                    {isCorrect ? '✓ Świetnie!' : `✗ Poprawna wersja: "${ex.correct_en}"`}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {(plToEnChecked[item.id || item.original] && Object.keys(plToEnChecked[item.id || item.original]).length > 0) && (
+                            <button
+                              className="drawer-quiz-reset-btn"
+                              onClick={() => {
+                                setPlToEnAnswers(prev => {
+                                  const updated = { ...prev };
+                                  delete updated[item.id || item.original];
+                                  return updated;
+                                });
+                                setPlToEnChecked(prev => {
+                                  const updated = { ...prev };
+                                  delete updated[item.id || item.original];
+                                  return updated;
+                                });
+                              }}
+                            >
+                              Resetuj ćwiczenie
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Content: EN blank fill */}
+                      {activeExerciseTabs[item.id || item.original] === 'en_blank' && item.quiz.extra_exercises && (
+                        <div className="extra-exercise-container">
+                          {item.quiz.extra_exercises.en_blank.map((ex, idx) => {
+                            const wordId = item.id || item.original;
+                            const currentVal = (enBlankAnswers[wordId] && enBlankAnswers[wordId][idx]) || '';
+                            const isChecked = enBlankChecked[wordId] && enBlankChecked[wordId][idx] !== undefined;
+                            const isCorrect = isChecked && enBlankChecked[wordId][idx];
+
+                            const handleCheck = () => {
+                              const cleanUser = cleanStringForComparison(currentVal);
+                              const cleanCorrect = cleanStringForComparison(ex.correct_word);
+                              const correct = cleanUser === cleanCorrect;
+                              setEnBlankChecked(prev => ({
+                                ...prev,
+                                [wordId]: { ...(prev[wordId] || {}), [idx]: correct }
+                              }));
+                            };
+
+                            const parts = ex.sentence_en.split("___");
+
+                            return (
+                              <div key={idx} className="exercise-item">
+                                <div className="exercise-sentence-en-blank">
+                                  <span>{parts[0]}</span>
+                                  <input
+                                    type="text"
+                                    placeholder="wpisz..."
+                                    className={`exercise-input-blank ${isChecked ? (isCorrect ? 'correct' : 'incorrect') : ''}`}
+                                    value={currentVal}
+                                    onChange={(e) => setEnBlankAnswers(prev => ({
+                                      ...prev,
+                                      [wordId]: { ...(prev[wordId] || {}), [idx]: e.target.value }
+                                    }))}
+                                    disabled={isChecked}
+                                    style={{ width: `${Math.max(80, ex.correct_word.length * 9)}px` }}
+                                  />
+                                  <span>{parts[1]}</span>
+                                  {!isChecked && (
+                                    <button className="exercise-check-btn" onClick={handleCheck} style={{ marginLeft: 'auto' }}>
+                                      Sprawdź
+                                    </button>
+                                  )}
+                                </div>
+                                {isChecked && (
+                                  <div className={`exercise-feedback ${isCorrect ? 'correct' : 'incorrect'}`}>
+                                    {isCorrect ? '✓ Świetnie!' : `✗ Brakujące słowo: "${ex.correct_word}"`}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {(enBlankChecked[item.id || item.original] && Object.keys(enBlankChecked[item.id || item.original]).length > 0) && (
+                            <button
+                              className="drawer-quiz-reset-btn"
+                              onClick={() => {
+                                setEnBlankAnswers(prev => {
+                                  const updated = { ...prev };
+                                  delete updated[item.id || item.original];
+                                  return updated;
+                                });
+                                setEnBlankChecked(prev => {
+                                  const updated = { ...prev };
+                                  delete updated[item.id || item.original];
+                                  return updated;
+                                });
+                              }}
+                            >
+                              Resetuj ćwiczenie
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   ) : null}

@@ -2707,10 +2707,11 @@ def generate_quiz(word_id):
         # Sprawdź cache
         if 'quiz' in word_data and word_data['quiz']:
             cached_quiz = word_data['quiz']
-            # Upewnij się, że opcje mają pole 'translation'
+            # Upewnij się, że opcje mają pole 'translation' oraz dodatkowe ćwiczenia istnieją
             options = cached_quiz.get('options', [])
             has_translations = all(isinstance(opt, dict) and 'translation' in opt for opt in options) if options else False
-            if has_translations:
+            has_extra_exercises = 'extra_exercises' in cached_quiz
+            if has_translations and has_extra_exercises:
                 return jsonify(cached_quiz), 200
 
         original = word_data.get('original', '')
@@ -2718,23 +2719,31 @@ def generate_quiz(word_id):
 
         system_prompt = (
             "Jesteś zaawansowanym asystentem do nauki języka angielskiego.\n"
-            "Twoim zadaniem jest wygenerowanie pytania quizowego typu jednokrotnego wyboru (3 opcje) dla podanego angielskiego słowa lub frazy (Target word).\n"
-            "Cel quizu: Użytkownik musi wskazać jedno słowo/frazę spośród 3 podanych, którego znaczenie jest najbardziej zbliżone (synonim) do słowa głównego (Target word).\n\n"
+            "Twoim zadaniem jest wygenerowanie pytania quizowego typu jednokrotnego wyboru (3 opcje) dla podanego angielskiego słowa lub frazy (Target word), oraz dodatkowych ćwiczeń.\n\n"
+            "Cel quizu synonimów: Użytkownik musi wskazać jedno słowo/frazę spośród 3 podanych, którego znaczenie jest najbardziej zbliżone (synonim) do słowa głównego (Target word).\n"
+            "Cel dodatkowych ćwiczeń:\n"
+            "1. Wygenerowanie 3 zdań po polsku, które użytkownik musi przetłumaczyć na angielski. Zdania te muszą być naturalne i ich poprawne tłumaczenie na angielski musi zawierać dane słowo główne (Target word).\n"
+            "2. Wygenerowanie 3 zdań po angielsku z luką '___' (dokładnie trzy podkreślenia), w którą należy wpisać słowo główne (Target word).\n\n"
             "Zasady:\n"
             "1. Podaj pytanie w języku polskim pytające o słowo o podobnym znaczeniu do słowa głównego, np. 'Wskaż słowo o podobnym znaczeniu do \"Compulsory\":'\n"
-            "2. Wygeneruj dokładnie 3 opcje odpowiedzi. Każda opcja musi zawierać TYLKO angielskie słowo/frazę (BEZ żadnego polskiego tłumaczenia ani nawiasów w kluczu 'text'), np.:\n"
-            "   - Optional\n"
-            "   - Mandatory\n"
-            "   - Temporary\n"
+            "2. Wygeneruj dokładnie 3 opcje odpowiedzi. Każda opcja musi zawierać TYLKO angielskie słowo/frazę (BEZ żadnego polskiego tłumaczenia ani nawiasów w kluczu 'text').\n"
             "3. Dokładnie jedna z tych opcji musi być poprawną odpowiedzią (synonimem lub słowem o bardzo zbliżonym znaczeniu do Target word).\n"
-            "4. Pozostałe dwie opcje (dystraktory) muszą mieć inne znaczenie (mogą to być antonimy lub inne słowa, ale nie mogą być synonimami słowa głównego).\n"
-            "5. Zwróć strukturę w formacie JSON z kluczami:\n"
+            "4. Pozostałe dwie opcje (dystraktory) muszą mieć inne znaczenie.\n"
+            "5. W 'extra_exercises' stwórz obiekt z dwoma kluczami:\n"
+            "   - 'pl_to_en': lista dokładnie 3 obiektów, każdy z kluczami:\n"
+            "       * 'sentence_pl': naturalne zdanie po polsku (str)\n"
+            "       * 'correct_en': poprawne tłumaczenie na angielski zawierające słowo główne (str)\n"
+            "   - 'en_blank': lista dokładnie 3 obiektów, każdy z kluczami:\n"
+            "       * 'sentence_en': zdanie po angielsku z luką '___' w miejscu słowa głównego (str)\n"
+            "       * 'correct_word': słowo główne, które należy wpisać w lukę (str)\n"
+            "6. Zwróć strukturę w formacie JSON z kluczami:\n"
             "   - 'question': treść pytania (str)\n"
             "   - 'options': lista 3 obiektów, każdy z kluczami:\n"
-            "       * 'text': (str, zawierający wyłącznie angielskie słowo/frazę)\n"
-            "       * 'translation': (str, zawierający krótkie polskie tłumaczenie / objaśnienie tej konkretnej opcji)\n"
+            "       * 'text': (str)\n"
+            "       * 'translation': (str, tłumaczenie tej opcji na polski)\n"
             "       * 'is_correct': (boolean)\n"
-            "6. Odpowiedz wyłącznie poprawnym kodem JSON bez dodatkowych komentarzy czy formatowania markdown."
+            "   - 'extra_exercises': obiekt z ćwiczeniami (jak wyżej)\n"
+            "7. Odpowiedz wyłącznie poprawnym kodem JSON bez dodatkowych komentarzy czy formatowania markdown."
         )
 
         input_data = {
@@ -2771,7 +2780,7 @@ def generate_quiz(word_id):
         return jsonify(quiz_json), 200
     except Exception as e:
         print(f"Error generating quiz: {e}")
-        return jsonify({"error": f"Błąd generowania quizu: {str(e)}"}), 500
+        return jsonify({"error": f"Błąd generowania quizu i ćwiczeń: {str(e)}"}), 500
 
 
 # ### NOWY ENDPOINT: WYSYŁANIE SŁÓW Z NOTATNIKA NA E-MAIL ###
