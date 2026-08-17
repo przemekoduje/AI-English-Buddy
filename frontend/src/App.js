@@ -44,9 +44,33 @@ function App() {
     }
   }, [user]);
 
-  const [generatedText, setGeneratedText] = useState("");
-  const [currentStoryTitle, setCurrentStoryTitle] = useState("");
-  const [currentStoryId, setCurrentStoryId] = useState(null);
+  const [generatedText, setGeneratedText] = useState(() => {
+    return localStorage.getItem("buddy_generated_text") || "";
+  });
+  const [currentStoryTitle, setCurrentStoryTitle] = useState(() => {
+    return localStorage.getItem("buddy_current_story_title") || "";
+  });
+  const [currentStoryId, setCurrentStoryId] = useState(() => {
+    const id = localStorage.getItem("buddy_current_story_id");
+    return id ? JSON.parse(id) : null;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("buddy_generated_text", generatedText);
+  }, [generatedText]);
+
+  useEffect(() => {
+    localStorage.setItem("buddy_current_story_title", currentStoryTitle);
+  }, [currentStoryTitle]);
+
+  useEffect(() => {
+    if (currentStoryId !== null) {
+      localStorage.setItem("buddy_current_story_id", JSON.stringify(currentStoryId));
+    } else {
+      localStorage.removeItem("buddy_current_story_id");
+    }
+  }, [currentStoryId]);
+
   const [externalFlashcardsWords, setExternalFlashcardsWords] = useState([]);
 
   const [customAlert, setCustomAlert] = useState(null);
@@ -102,6 +126,9 @@ function App() {
     }
     localStorage.removeItem("buddy_user");
     localStorage.removeItem("buddy_current_view");
+    localStorage.removeItem("buddy_generated_text");
+    localStorage.removeItem("buddy_current_story_title");
+    localStorage.removeItem("buddy_current_story_id");
     setUser(null);
     setGeneratedText("");
     setCurrentStoryTitle("");
