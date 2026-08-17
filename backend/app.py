@@ -689,6 +689,87 @@ else:
 
 import secrets
 
+def log_api_usage(user_email, service, feature, model, prompt_tokens=0, completion_tokens=0, quantity=0):
+    if not user_email:
+        return
+    try:
+        from datetime import datetime
+        cost_usd = 0.0
+        if service == 'openai':
+            if 'gpt-4o-mini' in model:
+                cost_usd = (prompt_tokens * 0.00000015) + (completion_tokens * 0.0000006)
+            elif 'gpt-4o' in model:
+                cost_usd = (prompt_tokens * 0.0000025) + (completion_tokens * 0.00001)
+            elif 'whisper' in model:
+                cost_usd = quantity * 0.0001
+            elif 'tts' in model:
+                cost_usd = quantity * 0.000015
+        elif service == 'deepseek':
+            if 'deepseek-chat' in model:
+                cost_usd = (prompt_tokens * 0.00000014) + (completion_tokens * 0.00000028)
+
+        cost_pln = cost_usd * 4.0
+
+        usage_data = {
+            'user_email': user_email,
+            'timestamp': firestore.SERVER_TIMESTAMP if ('firestore' in globals() and firestore) else datetime.utcnow(),
+            'service': service,
+            'feature': feature,
+            'model': model,
+            'prompt_tokens': prompt_tokens,
+            'completion_tokens': completion_tokens,
+            'total_tokens': prompt_tokens + completion_tokens,
+            'quantity': quantity,
+            'cost_usd': cost_usd,
+            'cost_pln': cost_pln
+        }
+
+        if 'db' in globals() and db is not None:
+            if hasattr(db, 'collection'):
+                db.collection('api_usage').add(usage_data)
+            else:
+                import uuid
+                mock_db.write_doc('api_usage', str(uuid.uuid4()), usage_data)
+        else:
+            if 'mock_db' in globals() and mock_db is not None:
+                import uuid
+                mock_db.write_doc('api_usage', str(uuid.uuid4()), usage_data)
+    except Exception as e:
+        print(f"Error logging API usage: {e}", flush=True)
+
+
+def track_chat_completion(user_email, feature, messages, response_format=None, custom_client=None, custom_model=None, **kwargs):
+    active_c = custom_client or client
+    active_m = custom_model or MODEL_NAME
+    
+    service = 'openai'
+    if 'deepseek' in str(type(active_c)) or active_m == 'deepseek-chat':
+        service = 'deepseek'
+        
+    ai_response = active_c.chat.completions.create(
+        model=active_m,
+        messages=messages,
+        response_format=response_format,
+        **kwargs
+    )
+    
+    try:
+        usage = getattr(ai_response, 'usage', None)
+        if usage and user_email:
+            log_api_usage(
+                user_email=user_email,
+                service=service,
+                feature=feature,
+                model=active_m,
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens
+            )
+    except Exception as e:
+        print(f"Error logging chat completion: {e}", flush=True)
+        
+    return ai_response
+
+
 def hash_password(password):
     # Standard, secure salt and sha256
     salt = "ai_buddy_secret_salt_123!"
@@ -724,6 +805,85 @@ def get_user_from_request():
     except Exception as e:
         print(f"Błąd weryfikacji sesji: {e}")
     return None
+
+
+def is_admin(email):
+    if not email:
+        return False
+    if email == 'przemek.rakotny@gmail.com':
+        return True
+    try:
+        user_ref = db.collection('users').document(email).get()
+        if user_ref.exists:
+            user_data = user_ref.to_dict()
+            return user_data.get("role") == "admin"
+    except Exception as e:
+        print(f"Error checking admin role: {e}")
+    return False
+
+
+@app.route("/api/admin/verify", methods=['GET'])
+def admin_verify():
+    user_email = get_user_from_request()
+    if not user_email or not is_admin(user_email):
+        return jsonify({"is_admin": False}), 403
+    return jsonify({"is_admin": True}), 200
+
+
+@app.route("/api/admin/stats", methods=['GET'])
+def admin_stats():
+    user_email = get_user_from_request()
+    if not user_email or not is_admin(user_email):
+        return jsonify({"error": "Brak uprawnień"}), 403
+
+    try:
+        users_list = []
+        users_docs = db.collection('users').get()
+        for doc in users_docs:
+            u_data = doc.to_dict()
+            users_list.append({
+                'email': u_data.get('email'),
+                'created_at': str(u_data.get('created_at', ''))
+            })
+
+        usage_list = []
+        usage_docs = db.collection('api_usage').get()
+        for doc in usage_docs:
+            us_data = doc.to_dict()
+            if 'timestamp' in us_data and us_data['timestamp']:
+                # Handle Firestore datetime vs mock ISO string
+                if hasattr(us_data['timestamp'], 'isoformat'):
+                    us_data['timestamp'] = us_data['timestamp'].isoformat()
+                else:
+                    us_data['timestamp'] = str(us_data['timestamp'])
+            usage_list.append(us_data)
+
+        vocab_counts = {}
+        vocab_docs = db.collection('vocabulary').get()
+        for doc in vocab_docs:
+            v_data = doc.to_dict()
+            u_email = v_data.get('user_email')
+            if u_email:
+                vocab_counts[u_email] = vocab_counts.get(u_email, 0) + 1
+
+        story_counts = {}
+        story_docs = db.collection('stories').get()
+        for doc in story_docs:
+            s_data = doc.to_dict()
+            u_email = s_data.get('user_email')
+            if u_email:
+                story_counts[u_email] = story_counts.get(u_email, 0) + 1
+
+        return jsonify({
+            'users': users_list,
+            'usage': usage_list,
+            'vocab_counts': vocab_counts,
+            'story_counts': story_counts
+        }), 200
+    except Exception as e:
+        print(f"Error fetching admin stats: {e}")
+        return jsonify({"error": f"Błąd pobierania statystyk: {str(e)}"}), 500
+
 
 @app.route("/api/register", methods=['POST'])
 def register():
@@ -1614,6 +1774,15 @@ def get_youtube_transcript():
                             file=audio_file,
                             response_format="srt"
                         )
+                        # Log usage
+                        duration = info.get('duration', 0) if 'info' in locals() else 0
+                        log_api_usage(
+                            user_email=user_email,
+                            service="openai",
+                            feature="youtube_transcription",
+                            model="whisper-1",
+                            quantity=duration
+                        )
                     if srt_text:
                         formatted = parse_srt(srt_text)
                         print(f"Successfully transcribed video audio using OpenAI Whisper API.", flush=True)
@@ -2432,7 +2601,7 @@ def get_vocabulary():
         return jsonify({"error": f"Błąd podczas pobierania słownika: {e}"}), 500
 
 
-def get_base_form(word, translation):
+def get_base_form(word, translation, user_email=None):
     try:
         system_prompt = (
             "Jesteś profesjonalnym lektorem i lingwistą języka angielskiego.\n"
@@ -2459,8 +2628,9 @@ def get_base_form(word, translation):
             "translation": translation
         }
 
-        ai_response = client.chat.completions.create(
-            model=MODEL_NAME,
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            feature="get_base_form",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(input_data, ensure_ascii=False)}
@@ -2502,7 +2672,7 @@ def add_vocabulary():
         return jsonify({"error": "Wyrażenie oryginalne i tłumaczenie są wymagane"}), 400
 
     # Sprowadź do formy podstawowej za pomocą AI
-    original, translated = get_base_form(original, translated)
+    original, translated = get_base_form(original, translated, user_email)
 
     try:
         # Sprawdź duplikaty w ramach tej samej historii
@@ -2646,8 +2816,9 @@ def generate_mnemonic(word_id):
         print(f"Word: {original} | Trans: {translated}")
         print(f"User Prompt: {user_prompt}")
 
-        ai_response = client.chat.completions.create(
-            model=MODEL_NAME,
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            feature="mnemonic",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -2760,8 +2931,9 @@ def generate_quiz(word_id):
 
         user_prompt = json.dumps(input_data, ensure_ascii=False)
 
-        ai_response = client.chat.completions.create(
-            model=MODEL_NAME,
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            feature="quiz",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -2823,8 +2995,9 @@ def check_translation():
             "   - 'feedback': ocena i krótki opis poprawności w języku polskim, na końcu którego ZAWSZE (niezależnie od tego, czy odpowiedź użytkownika jest w 100% poprawna, częściowo poprawna, czy błędna) dopiszesz najbardziej poprawną/standardową wersję tego zdania w nowej linii lub po kropce w formacie: 'Najbardziej poprawna wersja: [optymalne zdanie po angielsku].'\n"
         )
 
-        ai_response = client.chat.completions.create(
-            model=MODEL_NAME,
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            feature="check_translation",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Oceń: {user_translation}"}
@@ -3479,8 +3652,9 @@ def evaluate_mastery():
              return jsonify({"error": "AI Evaluation service is currently unavailable (missing API key)."}), 500
 
         print(f"Starting AI evaluation for: {original_text[:20]}...")
-        ai_response = client.chat.completions.create(
-            model=MODEL_NAME,
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            feature="mastery_evaluate",
             messages=[{"role": "user", "content": evaluation_prompt}],
             response_format={"type": "json_object"}
         )
@@ -3676,7 +3850,7 @@ def get_voice_pair(selected_voice):
             
     return en_voice, pl_voice
 
-def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
+def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_email=None):
     if "Neural" not in voice:
         voice = "en-US-BrianNeural"
         
@@ -3704,6 +3878,14 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
                     input=full_clean_text
                 )
                 audio_data = response.read()
+                # Log usage
+                log_api_usage(
+                    user_email=user_email,
+                    service="openai",
+                    feature="tts",
+                    model="tts-1",
+                    quantity=len(full_clean_text)
+                )
                 return base64.b64encode(audio_data).decode('utf-8')
             except Exception as e:
                 print(f"OpenAI TTS error, falling back to Edge TTS: {e}", flush=True)
@@ -3756,7 +3938,16 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
                     voice=openai_voice,
                     input=segment_text
                 )
-                return response.read()
+                audio_data = response.read()
+                # Log usage
+                log_api_usage(
+                    user_email=user_email,
+                    service="openai",
+                    feature="tts",
+                    model="tts-1",
+                    quantity=len(segment_text)
+                )
+                return audio_data
             except Exception as e:
                 print(f"OpenAI TTS segment error: {e}, falling back to Edge TTS...", flush=True)
                 
@@ -3784,6 +3975,7 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free"):
 
 @app.route("/api/tts", methods=['GET', 'POST'])
 def get_tts_audio():
+    user_email = get_user_from_request()
     if request.method == 'POST':
         data = request.get_json() or {}
         text = data.get("text", "")
@@ -3795,7 +3987,7 @@ def get_tts_audio():
     if not text:
         return jsonify({"error": "Brak parametru text"}), 400
 
-    base64_data = generate_tts_base64(text, voice)
+    base64_data = generate_tts_base64(text, voice, user_email=user_email)
     if not base64_data:
         return jsonify({"error": "Błąd generowania mowy"}), 500
     return jsonify({"audio_base64": base64_data})
@@ -3831,8 +4023,9 @@ def generate_story_questions():
         return jsonify({"error": "Serwis AI nie jest dostępny (brak klucza API)."}), 500
 
     try:
-        ai_response = client.chat.completions.create(
-            model=MODEL_NAME,
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            feature="story_questions",
             messages=[{"role": "user", "content": prompt}]
         )
         raw_content = ai_response.choices[0].message.content.strip()
@@ -3951,8 +4144,9 @@ def evaluate_story_answer():
         return jsonify({"error": "AI Evaluation service is currently unavailable."}), 500
 
     try:
-        ai_response = client.chat.completions.create(
-            model=MODEL_NAME,
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            feature="story_evaluate_answer",
             messages=[{"role": "user", "content": prompt}]
         )
         raw_json = ai_response.choices[0].message.content.strip()
@@ -4036,6 +4230,21 @@ def chat_next():
                     language="en"
                 )
                 transcription = transcription_response.text.strip()
+                # Log usage
+                try:
+                    audio_file.seek(0, 2)
+                    file_size = audio_file.tell()
+                    audio_file.seek(0)
+                    estimated_duration = max(1.0, file_size / 6000.0)
+                except:
+                    estimated_duration = 5.0
+                log_api_usage(
+                    user_email=user_email,
+                    service="openai",
+                    feature="story_chat_next_whisper",
+                    model="whisper-1",
+                    quantity=estimated_duration
+                )
                 print(f"DEBUG chat-next: OpenAI Transcription = '{transcription}'")
             except Exception as e:
                 print(f"OpenAI Whisper error in chat-next: {e}")
@@ -4134,8 +4343,9 @@ def chat_next():
         return jsonify({"error": "AI client is currently unavailable."}), 500
 
     try:
-        ai_response = client.chat.completions.create(
-            model=MODEL_NAME,
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            feature="story_chat_next",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -4240,6 +4450,21 @@ def chat_free():
                     language="en"
                 )
                 transcription = transcription_response.text.strip()
+                # Log usage
+                try:
+                    audio_file.seek(0, 2)
+                    file_size = audio_file.tell()
+                    audio_file.seek(0)
+                    estimated_duration = max(1.0, file_size / 6000.0)
+                except:
+                    estimated_duration = 5.0
+                log_api_usage(
+                    user_email=user_email,
+                    service="openai",
+                    feature="chat_free_whisper",
+                    model="whisper-1",
+                    quantity=estimated_duration
+                )
                 print(f"DEBUG chat-free: OpenAI Transcription = '{transcription}'", flush=True)
             except Exception as e:
                 print(f"OpenAI Whisper error in chat-free: {e}", flush=True)
@@ -4283,7 +4508,7 @@ def chat_free():
     if 'audio' in request.files and not transcription:
         bot_response = "I didn't quite catch that, but don't worry! I'm here and ready to help you practice your English whenever you're ready. Feel free to speak when you are ready."
         print(f"DEBUG chat-free: Pre-generating TTS base64 for fallback voice '{voice}'...", flush=True)
-        audio_base64 = generate_tts_base64(bot_response, voice=voice, ai_mode=ai_mode)
+        audio_base64 = generate_tts_base64(bot_response, voice=voice, ai_mode=ai_mode, user_email=user_email)
         return jsonify({
             "user_evaluation": None,
             "bot_response": bot_response,
@@ -4381,12 +4606,15 @@ def chat_free():
         return jsonify({"error": "AI client is currently unavailable."}), 500
 
     try:
-        ai_response = active_client.chat.completions.create(
-            model=active_model,
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            feature="chat_free",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
-            ]
+            ],
+            custom_client=active_client,
+            custom_model=active_model
         )
         raw_json = ai_response.choices[0].message.content.strip()
         if raw_json.startswith("```"):
@@ -4473,7 +4701,7 @@ def chat_free():
         bot_reply_text = result.get("bot_response", "")
         if bot_reply_text:
             print(f"DEBUG chat-free: Pre-generating TTS base64 for voice '{voice}' and mode '{ai_mode}'...", flush=True)
-            result["audio_base64"] = generate_tts_base64(bot_reply_text, voice=voice, ai_mode=ai_mode)
+            result["audio_base64"] = generate_tts_base64(bot_reply_text, voice=voice, ai_mode=ai_mode, user_email=user_email)
             # Clean up the tags for the UI display
             cleaned_reply_text = bot_reply_text.replace("[PL]", "").replace("[EN]", "")
             # Merge any double spaces resulting from tag removal
@@ -4540,8 +4768,9 @@ def generate_chat_summary():
     user_prompt = f"Chat History:\n{json.dumps(history, indent=2, ensure_ascii=False)}"
 
     try:
-        ai_response = client.chat.completions.create(
-            model=MODEL_NAME,
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            feature="chat_free_summary",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}

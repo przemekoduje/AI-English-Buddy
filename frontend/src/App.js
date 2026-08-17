@@ -11,6 +11,7 @@ import VocabularyDrawer from './components/Vocabulary/VocabularyDrawer';
 import MediaBuddy from './components/Media/MediaBuddy';
 import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
+import AdminDashboard from './components/Admin/AdminDashboard';
 
 function App() {
   const [currentView, setCurrentView] = useState(() => {
@@ -20,6 +21,26 @@ function App() {
     const stored = localStorage.getItem("buddy_user");
     return stored ? JSON.parse(stored) : null;
   });
+
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (user && user.token) {
+      fetch(`${API_BASE_URL}/api/admin/verify`, {
+        headers: { "X-Session-Token": user.token }
+      })
+      .then(res => {
+        if (res.ok) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      })
+      .catch(() => setIsAdmin(false));
+    } else {
+      setIsAdmin(false);
+    }
+  }, [user]);
 
   const [generatedText, setGeneratedText] = useState("");
   const [currentStoryTitle, setCurrentStoryTitle] = useState("");
@@ -95,6 +116,7 @@ function App() {
       case 'stories': return 'Saved Stories';
       case 'notebook': return 'My Vocabulary';
       case 'media': return 'Media Buddy';
+      case 'admin': return 'Panel Administratora';
       default: return 'Speakling';
     }
   };
@@ -105,7 +127,7 @@ function App() {
 
   return (
     <div className="App mission-layout">
-      <Sidebar currentView={currentView} onNavigate={handleNavigate} user={user} onLogout={handleLogout} />
+      <Sidebar currentView={currentView} onNavigate={handleNavigate} user={user} onLogout={handleLogout} isAdmin={isAdmin} />
       
       <main className="main-content">
         {currentView !== 'workspace' && <TopBar title={getPageTitle()} />}
@@ -129,6 +151,10 @@ function App() {
             />
           ) : currentView === 'media' ? (
             <MediaBuddy 
+              user={user}
+            />
+          ) : currentView === 'admin' ? (
+            <AdminDashboard 
               user={user}
             />
           ) : (

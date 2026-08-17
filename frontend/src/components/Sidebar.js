@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import logoImg from '../assets/logo.png';
 import './Sidebar.css';
 
-const Sidebar = ({ currentView, onNavigate, user, onLogout }) => {
+const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const stored = localStorage.getItem('buddy_sidebar_collapsed');
     return stored ? JSON.parse(stored) : false;
@@ -90,6 +90,18 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout }) => {
       )
     },
   ];
+
+  if (isAdmin) {
+    menuItems.push({
+      id: 'admin',
+      label: 'Admin Panel',
+      icon: (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+      )
+    });
+  }
 
   return (
     <aside className={`mission-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
