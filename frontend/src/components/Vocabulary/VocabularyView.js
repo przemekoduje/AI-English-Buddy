@@ -28,7 +28,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   const [playingWord, setPlayingWord] = useState(null);
 
   // Quiz Accordion State
-  const [expandedQuizIds, setExpandedQuizIds] = useState({});
+  const [expandedQuizId, setExpandedQuizId] = useState(null);
   const [loadingQuizIds, setLoadingQuizIds] = useState({});
   const [quizErrors, setQuizErrors] = useState({});
   const [selectedAnswers, setSelectedAnswers] = useState({});
@@ -142,13 +142,10 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   // Handle Quiz Accordion Toggle (Lazy Loading)
   const handleToggleQuiz = async (item) => {
     const wordId = item.id || item.original;
-    const isExpanded = expandedQuizIds[wordId];
+    const isExpanded = expandedQuizId === wordId;
 
-    // Toggle expanded state
-    setExpandedQuizIds(prev => ({
-      ...prev,
-      [wordId]: !isExpanded
-    }));
+    // Toggle expanded state (only one card can be expanded at a time)
+    setExpandedQuizId(isExpanded ? null : wordId);
 
     // If expanding and quiz not present or extra exercises missing, fetch from API
     if (!isExpanded && (!item.quiz || !item.quiz.extra_exercises)) {
@@ -479,7 +476,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                 <p className="translated-text">{item.translated}</p>
                 {item.original.trim().split(/\s+/).length === 1 && (
                   <button 
-                    className={`mnemonic-trigger-btn ${expandedQuizIds[item.id || item.original] ? 'active' : ''}`}
+                    className={`mnemonic-trigger-btn ${expandedQuizId === (item.id || item.original) ? 'active' : ''}`}
                     onClick={() => handleToggleQuiz(item)}
                     title="Ćwiczenie sprawdzające znajomość słowa"
                   >
@@ -489,7 +486,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                 )}
               </div>
 
-              {expandedQuizIds[item.id || item.original] && (
+              {expandedQuizId === (item.id || item.original) && (
                 <div className="mnemonic-accordion-content">
                   {loadingQuizIds[item.id || item.original] ? (
                     <div className="mnemonic-loading">
