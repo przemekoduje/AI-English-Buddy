@@ -416,6 +416,19 @@ function MediaBuddy({ user }) {
   const handlePlayerStateChange = (state) => {
     if (state === 1) { // PLAYING
       setIsPlaying(true);
+
+      // Auto-scroll on desktop when video starts playing
+      // so the video and dictionary are clearly visible
+      if (window.innerWidth >= 1024) {
+        const videoElement = document.querySelector('.media-workspace-grid');
+        if (videoElement) {
+          const targetY = videoElement.getBoundingClientRect().top + window.scrollY - 80;
+          if (Math.abs(window.scrollY - targetY) > 50) {
+            window.scrollTo({ top: targetY, behavior: 'smooth' });
+          }
+        }
+      }
+
       clearTrackingTimer();
       timerRef.current = setInterval(() => {
         if (playerRef.current && typeof playerRef.current.getCurrentTime === "function") {
