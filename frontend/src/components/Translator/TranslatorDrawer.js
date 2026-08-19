@@ -7,6 +7,7 @@ const TranslatorDrawer = ({ user }) => {
   const [sourceText, setSourceText] = useState("");
   const [translatedText, setTranslatedText] = useState("");
   const [isTranslating, setIsTranslating] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const debounceTimerRef = useRef(null);
 
   const handleOpenDrawer = () => setIsOpen(true);
@@ -51,6 +52,36 @@ const TranslatorDrawer = ({ user }) => {
       setTranslatedText("Błąd połączenia z serwerem.");
     } finally {
       setIsTranslating(false);
+    }
+  };
+
+  const handlePlayTTS = async (textToPlay) => {
+    if (!textToPlay || isPlaying) return;
+    setIsPlaying(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || "",
+        },
+        body: JSON.stringify({
+          text: textToPlay,
+          voice: "en-US-BrianNeural", // Lepszy domyślny męski głos dla ang.
+        }),
+      });
+      if (!response.ok) throw new Error("TTS failed");
+      const data = await response.json();
+      if (data.audio_base64) {
+        const audio = new Audio("data:audio/mp3;base64," + data.audio_base64);
+        audio.play();
+        audio.onended = () => setIsPlaying(false);
+      } else {
+        setIsPlaying(false);
+      }
+    } catch (err) {
+      console.error("Błąd odtwarzania TTS:", err);
+      setIsPlaying(false);
     }
   };
 
@@ -121,12 +152,27 @@ const TranslatorDrawer = ({ user }) => {
                 </button>
               )}
             </div>
-            <textarea
-              className="translator-input"
-              placeholder="Wpisz lub wklej tekst do przetłumaczenia..."
-              value={sourceText}
-              onChange={handleSourceChange}
-            />
+            <div className="translator-input-container">
+              <textarea
+                className="translator-input"
+                placeholder="Wpisz lub wklej tekst do przetłumaczenia..."
+                value={sourceText}
+                onChange={handleSourceChange}
+              />
+              {sourceText && (
+                <button 
+                  className={`translator-tts-btn ${isPlaying ? "playing" : ""}`}
+                  onClick={() => handlePlayTTS(sourceText)}
+                  title="Odtwórz tekst"
+                  disabled={isPlaying}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="translator-divider">
