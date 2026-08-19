@@ -4256,19 +4256,7 @@ export default function HomeScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => {
-            setCurrentView('media');
-            // Pause pronunciation or speech tutor if switching to media
-            stopVoiceTutorAudio();
-          }}
-        >
-          <MediaIcon color={currentView === 'media' ? '#1A73E8' : '#5F6368'} />
-          <Text style={[styles.navText, currentView === 'media' ? styles.navTextActive : null]}>
-            Media
-          </Text>
-        </TouchableOpacity>
+
 
         <TouchableOpacity
           style={styles.navItem}
