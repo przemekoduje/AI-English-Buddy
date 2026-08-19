@@ -2618,10 +2618,11 @@ def get_base_form(word, translation, user_email=None):
             "   - Słowo 'meaningful' to 'meaningful' (nie zmieniaj na 'meaning' lub 'mean').\n"
             "3. Jeśli słowo jest już w swojej podstawowej formie słownikowej (np. przymiotnik 'newfound', czasownik 'go', rzeczownik 'dog'), zwróć je dokładnie w takiej samej postaci, bez żadnych zmian.\n"
             "4. Dopasuj polskie tłumaczenie tak, aby odpowiadało zwróconej formie podstawowej (np. dla czasownika 'top' -> 'przewyższać/pokrywać', a nie 'góra/szczyt' jeśli w tekście był to czasownik).\n"
-            "5. Zwróć dane w formacie JSON z kluczami:\n"
-            "   - 'original': słowo w formie podstawowej (str)\n"
+            "5. BEZWZGLĘDNY ZAKAZ SKRACANIA FRAZ I ZDAŃ: Jeśli otrzymasz frazę składającą się z wielu słów (np. całe zdanie), NIE skracaj jej do pojedynczego słowa. Zwróć całą frazę w niezmienionej postaci lub z delikatnie poprawioną gramatyką bazową.\n"
+            "6. Zwróć dane w formacie JSON z kluczami:\n"
+            "   - 'original': słowo/fraza w formie podstawowej (str)\n"
             "   - 'translated': polskie tłumaczenie formy podstawowej (str)\n"
-            "6. Odpowiedz wyłącznie poprawnym kodem JSON bez dodatkowych komentarzy czy formatowania markdown."
+            "7. Odpowiedz wyłącznie poprawnym kodem JSON bez dodatkowych komentarzy czy formatowania markdown."
         )
 
         input_data = {
@@ -2672,8 +2673,9 @@ def add_vocabulary():
     if not original or not translated:
         return jsonify({"error": "Wyrażenie oryginalne i tłumaczenie są wymagane"}), 400
 
-    # Sprowadź do formy podstawowej za pomocą AI
-    original, translated = get_base_form(original, translated, user_email)
+    # Sprowadź do formy podstawowej za pomocą AI (tylko dla pojedynczych słów lub krótkich fraz, max 3 słowa)
+    if len(original.split()) <= 3:
+        original, translated = get_base_form(original, translated, user_email)
 
     try:
         # Sprawdź duplikaty w ramach tej samej historii
