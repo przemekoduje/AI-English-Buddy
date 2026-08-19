@@ -130,10 +130,12 @@ const TranslatorDrawer = ({ user }) => {
           </div>
 
           <div className="translator-divider">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24">
-              <path d="M7 11L12 16L17 11" />
-              <path d="M7 13L12 18L17 13" opacity="0.5" />
-            </svg>
+            <div className="translator-divider-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                <path d="M7 11L12 16L17 11" />
+                <path d="M7 13L12 18L17 13" opacity="0.3" />
+              </svg>
+            </div>
           </div>
 
           <div className="translator-box output-box">

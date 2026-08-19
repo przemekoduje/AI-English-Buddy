@@ -140,8 +140,14 @@
   display: flex;
   flex-direction: column;
   min-height: 200px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
   overflow: hidden;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.translator-box:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 4px 24px rgba(var(--primary-rgb), 0.1);
 }
 
 .translator-box-header {
@@ -154,11 +160,15 @@
 }
 
 .lang-label {
-  font-weight: 600;
-  font-size: var(--text-sm);
+  font-weight: 700;
+  font-size: 0.75rem;
   color: var(--primary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  background: var(--primary-light, rgba(var(--primary-rgb), 0.1));
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
 }
 
 .clear-btn {
@@ -194,7 +204,8 @@
   border: none;
   resize: none;
   padding: 1rem;
-  font-size: var(--text-md);
+  font-size: 1.1rem;
+  line-height: 1.5;
   font-family: var(--font-main);
   color: var(--gray-900);
   background: transparent;
@@ -203,20 +214,26 @@
 
 .translator-input::placeholder {
   color: var(--gray-400);
+  font-weight: 300;
 }
 
 .translator-output {
   flex: 1;
   padding: 1rem;
-  font-size: var(--text-md);
+  font-size: 1.1rem;
+  line-height: 1.5;
   color: var(--gray-900);
-  background: var(--surface-50);
+  background: linear-gradient(180deg, var(--surface-50) 0%, transparent 100%);
   overflow-y: auto;
+}
+
+.translator-output p {
+  margin: 0;
 }
 
 .placeholder-text {
   color: var(--gray-400);
-  font-style: italic;
+  font-weight: 300;
   margin: 0;
 }
 
@@ -225,5 +242,30 @@
   justify-content: center;
   align-items: center;
   padding: 0.5rem 0;
-  color: var(--gray-400);
+  position: relative;
+}
+
+.translator-divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.translator-divider-icon {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gray-500);
+  z-index: 1;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
