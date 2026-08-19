@@ -111,7 +111,7 @@ const TranslatorDrawer = ({ user }) => {
         <div className="translator-drawer-body">
           <div className="translator-box">
             <div className="translator-box-header">
-              <span className="lang-label">Auto (EN/PL)</span>
+              <span className="translator-lang-label">Auto (EN/PL)</span>
               {sourceText && (
                 <button className="clear-btn" onClick={handleClear} title="Wyczyść tekst">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
@@ -140,14 +140,14 @@ const TranslatorDrawer = ({ user }) => {
 
           <div className="translator-box output-box">
             <div className="translator-box-header">
-              <span className="lang-label">Tłumaczenie</span>
-              {isTranslating && <span className="mini-loader">Tłumaczenie...</span>}
+              <span className="translator-lang-label">Tłumaczenie</span>
+              {isTranslating && <span className="translator-mini-loader">Tłumaczenie...</span>}
             </div>
             <div className="translator-output">
               {translatedText ? (
                 <p>{translatedText}</p>
               ) : (
-                <p className="placeholder-text">Tłumaczenie pojawi się tutaj.</p>
+                <p className="translator-placeholder-text">Tłumaczenie pojawi się tutaj.</p>
               )}
             </div>
           </div>
