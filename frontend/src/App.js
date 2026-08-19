@@ -8,6 +8,7 @@ import SavedStories from './components/Story/SavedStories';
 import Auth from './components/Auth/Auth';
 import VocabularyView from './components/Vocabulary/VocabularyView';
 import VocabularyDrawer from './components/Vocabulary/VocabularyDrawer';
+import TranslatorDrawer from './components/Translator/TranslatorDrawer';
 import MediaBuddy from './components/Media/MediaBuddy';
 import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
@@ -214,7 +215,12 @@ function App() {
         </div>
       )}
 
-      {currentView !== 'notebook' && <VocabularyDrawer user={user} />}
+      {currentView !== 'notebook' && (
+        <>
+          <VocabularyDrawer user={user} />
+          <TranslatorDrawer user={user} />
+        </>
+      )}
 
       {customAlert && (
         <div className="modal-overlay" style={{ zIndex: 10000 }}>

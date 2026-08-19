@@ -1,0 +1,229 @@
+/* ============================================================
+   TranslatorDrawer.css — Slide-out Sidebar & Floating Tab
+   ============================================================ */
+
+/* ── Floating Pull-out Button ──────────────────────────────── */
+.translator-drawer-trigger {
+  position: fixed;
+  right: 0;
+  top: calc(50% + 140px); /* Poniżej Vocabulary Drawer */
+  transform: translateY(-50%);
+  z-index: 990;
+  background: var(--surface-100);
+  color: var(--primary);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  padding: 0.85rem 0.6rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all var(--transition-fast);
+}
+
+.translator-drawer-trigger.hidden {
+  right: -100px;
+}
+
+.translator-drawer-trigger:hover {
+  background: var(--surface-200);
+  padding-right: 0.85rem;
+  box-shadow: var(--shadow-lg);
+}
+
+.translator-drawer-trigger .trigger-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.translator-drawer-trigger .trigger-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-family: var(--font-display);
+  font-size: var(--text-label-sm);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-top: 0.2rem;
+}
+
+/* ── Backdrop Overlay ─────────────────────────────────────── */
+.translator-drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  transition: opacity var(--transition-soft);
+}
+
+/* ── Sliding Panel ────────────────────────────────────────── */
+.translator-drawer-container {
+  position: fixed;
+  top: 0;
+  right: -420px;
+  width: min(420px, 100vw);
+  height: 100vh;
+  background: var(--surface);
+  box-shadow: var(--shadow-xl);
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  transition: right var(--transition-soft);
+  border-left: 1px solid var(--border);
+  font-family: var(--font-main);
+  color: var(--gray-900);
+}
+
+.translator-drawer-container.open {
+  right: 0;
+}
+
+/* ── Header ───────────────────────────────────────────────── */
+.translator-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-50);
+}
+
+.translator-drawer-header h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--gray-900);
+  margin: 0;
+}
+
+.translator-drawer-close {
+  background: transparent;
+  border: none;
+  color: var(--gray-500);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.translator-drawer-close:hover {
+  background: var(--surface-100);
+  color: var(--danger);
+}
+
+/* ── Body (Translator UI) ─────────────────────────────────── */
+.translator-drawer-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  overflow-y: auto;
+  gap: 0.5rem;
+  background: var(--background);
+}
+
+.translator-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.translator-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--surface-100);
+  background: var(--surface-50);
+}
+
+.lang-label {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.clear-btn {
+  background: transparent;
+  border: none;
+  color: var(--gray-400);
+  cursor: pointer;
+  padding: 0.2rem;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.clear-btn:hover {
+  color: var(--gray-700);
+}
+
+.mini-loader {
+  font-size: var(--text-xs);
+  color: var(--gray-500);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+.translator-input {
+  flex: 1;
+  width: 100%;
+  border: none;
+  resize: none;
+  padding: 1rem;
+  font-size: var(--text-md);
+  font-family: var(--font-main);
+  color: var(--gray-900);
+  background: transparent;
+  outline: none;
+}
+
+.translator-input::placeholder {
+  color: var(--gray-400);
+}
+
+.translator-output {
+  flex: 1;
+  padding: 1rem;
+  font-size: var(--text-md);
+  color: var(--gray-900);
+  background: var(--surface-50);
+  overflow-y: auto;
+}
+
+.placeholder-text {
+  color: var(--gray-400);
+  font-style: italic;
+  margin: 0;
+}
+
+.translator-divider {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.5rem 0;
+  color: var(--gray-400);
+}
