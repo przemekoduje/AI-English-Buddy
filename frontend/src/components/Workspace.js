@@ -1015,21 +1015,36 @@ function Workspace({
     const text = selection.toString().trim();
     if (text && selection.rangeCount > 0) {
       const range = selection.getRangeAt(0).cloneRange();
-      activeSelectionRangeRef.current = range;
-      activeSelectionTextRef.current = text;
 
       const isTouch = e && (e.type === 'touchend' || (e.nativeEvent && e.nativeEvent.type === 'touchend'));
       const isMobileDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || ('ontouchstart' in window);
 
-      if (isTouch || isMobileDevice) {
-        setTimeout(() => {
-          const currentSel = window.getSelection();
-          if (currentSel && currentSel.toString().trim() === text) {
-            triggerSelectionTranslation(text, range);
-            activeSelectionRangeRef.current = null;
-            activeSelectionTextRef.current = null;
-          }
-        }, 150);
+      const wordCount = text.split(/\s+/).length;
+
+      if (!isTouch && !isMobileDevice && wordCount > 1) {
+        const rect = range.getBoundingClientRect();
+        setSelectedText(text);
+        setMenuPosition({
+          top: rect.bottom + window.scrollY,
+          left: rect.left + window.scrollX + rect.width / 2,
+        });
+        setMenuVisible(true);
+        activeSelectionRangeRef.current = null;
+        activeSelectionTextRef.current = null;
+      } else {
+        activeSelectionRangeRef.current = range;
+        activeSelectionTextRef.current = text;
+
+        if (isTouch || isMobileDevice) {
+          setTimeout(() => {
+            const currentSel = window.getSelection();
+            if (currentSel && currentSel.toString().trim() === text) {
+              triggerSelectionTranslation(text, range);
+              activeSelectionRangeRef.current = null;
+              activeSelectionTextRef.current = null;
+            }
+          }, 150);
+        }
       }
     } else {
       activeSelectionRangeRef.current = null;
