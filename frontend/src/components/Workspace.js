@@ -1058,7 +1058,7 @@ function Workspace({
         const rect = range.getBoundingClientRect();
         setSelectedText(text);
         setMenuPosition({
-          top: rect.bottom + window.scrollY,
+          top: rect.top + window.scrollY - 10,
           left: rect.left + window.scrollX + rect.width / 2,
         });
         setMenuVisible(true);
@@ -1297,7 +1297,36 @@ function Workspace({
       }
     ]);
     const textToTranslate = selectedText;
+    const preTranslated = contextMenuTranslation;
     setMenuVisible(false);
+
+    if (preTranslated && preTranslated !== "Brak tłumaczenia" && preTranslated !== "Błąd połączenia") {
+      const newEntry = { original: textToTranslate, translated: preTranslated };
+      setNotebookWords(prev => {
+        if (!prev.some(e => e.original === newEntry.original)) {
+          return [newEntry, ...prev];
+        }
+        return prev;
+      });
+      setTimeout(() => {
+        const scrollArea = document.querySelector(".notebook-scroll-area");
+        if (scrollArea) scrollArea.scrollTo({ top: 0, behavior: "smooth" });
+      }, 100);
+      try {
+        await fetch(`${API_BASE_URL}/api/vocabulary`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user.token
+          },
+          body: JSON.stringify({ original: textToTranslate, translated: preTranslated, story_id: currentStoryId })
+        });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+      } catch (err) {
+        console.error("Błąd zapisywania frazy:", err);
+      }
+      return;
+    }
 
     // Dodanie optymistyczne z komunikatem oczekiwania
     const tempEntry = { original: textToTranslate, translated: "Tłumaczenie..." };
@@ -1627,7 +1656,16 @@ function Workspace({
       )}
 
       {menuVisible && (
-        <div ref={contextMenuRef} className="context-menu" style={{ top: menuPosition.top, left: menuPosition.left }}>
+        <div 
+          ref={contextMenuRef} 
+          className="context-menu" 
+          style={{ 
+            top: menuPosition.top, 
+            left: menuPosition.left, 
+            transform: 'translate(-50%, -100%)' 
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <div className="context-menu-translation-box" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", marginBottom: "4px", fontSize: "0.95rem", fontWeight: "500", color: "var(--slate-800)", whiteSpace: "pre-line", minHeight: "40px", display: "flex", alignItems: "center" }}>
             {isContextMenuTranslating ? (
               <span className="tooltip-loading-spinner" style={{ width: 16, height: 16, display: "inline-block" }} />
