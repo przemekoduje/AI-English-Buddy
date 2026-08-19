@@ -147,6 +147,8 @@ function Workspace({
   const [translationContent, setTranslationContent] = useState({ original: "", translated: "" });
   const [textChunks, setTextChunks] = useState([]);
   const [currentChunkIndex, setCurrentChunkIndex] = useState(-1);
+  const [contextMenuTranslation, setContextMenuTranslation] = useState("");
+  const [isContextMenuTranslating, setIsContextMenuTranslating] = useState(false);
   const [playSingle, setPlaySingle] = useState(false);
   const [showVoiceControls, setShowVoiceControls] = useState(false);
   const [showFlashcards, setShowFlashcards] = useState(false);
@@ -504,6 +506,37 @@ function Workspace({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showPracticeMode, showPracticeModal, showTranslationModal, explanationWord, showWordTooltip, showFlashcards, showSummaryModal]);
+
+  useEffect(() => {
+    if (menuVisible && selectedText) {
+      const fetchTranslation = async () => {
+        setContextMenuTranslation("");
+        setIsContextMenuTranslating(true);
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/translate`, {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              "X-Session-Token": user.token
+            },
+            body: JSON.stringify({ text: selectedText }),
+          });
+          const data = await response.json();
+          if (data.translation) {
+            setContextMenuTranslation(data.translation);
+          } else {
+            setContextMenuTranslation("Brak tłumaczenia");
+          }
+        } catch (err) {
+          console.error("Błąd tłumaczenia w menu kontekstowym:", err);
+          setContextMenuTranslation("Błąd połączenia");
+        } finally {
+          setIsContextMenuTranslating(false);
+        }
+      };
+      fetchTranslation();
+    }
+  }, [menuVisible, selectedText, user.token]);
 
   const pauseAudioForTooltip = useCallback(() => {
     const audio = currentAudioRef.current;
@@ -1595,17 +1628,14 @@ function Workspace({
 
       {menuVisible && (
         <div ref={contextMenuRef} className="context-menu" style={{ top: menuPosition.top, left: menuPosition.left }}>
+          <div className="context-menu-translation-box" style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", marginBottom: "4px", fontSize: "0.95rem", fontWeight: "500", color: "var(--slate-800)", whiteSpace: "pre-line", minHeight: "40px", display: "flex", alignItems: "center" }}>
+            {isContextMenuTranslating ? (
+              <span className="tooltip-loading-spinner" style={{ width: 16, height: 16, display: "inline-block" }} />
+            ) : (
+              <span>{contextMenuTranslation}</span>
+            )}
+          </div>
           <div className="context-menu-actions">
-            <button className="ctx-translate-btn" onClick={handleTranslate}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M5 8l6 6"/>
-                <path d="M4 6h7M2 12h4"/>
-                <path d="M12 4l-2 8"/>
-                <rect x="12" y="12" width="10" height="8" rx="1"/>
-                <path d="M15 16h4M17 14v4"/>
-              </svg>
-              Tłumacz
-            </button>
             <button className="ctx-speak-btn" onClick={handleSpeakSelectedText}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
