@@ -6,13 +6,6 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "redirects": [
-      {
-        "source": "/",
-        "destination": "/speakling",
-        "type": 302
-      }
-    ],
     "rewrites": [
       {
         "source": "/api/**",
@@ -20,6 +13,26 @@
           "serviceId": "ai-english-buddy-backend",
           "region": "europe-west1"
         }
+      },
+      {
+        "source": "/speakling/mobile/**",
+        "destination": "/speakling/mobile/index.html"
+      },
+      {
+        "source": "/speakling",
+        "destination": "/speakling.html"
+      },
+      {
+        "source": "/speakling/**",
+        "destination": "/speakling.html"
+      },
+      {
+        "source": "/keepgoals",
+        "destination": "/keepgoals/index.html"
+      },
+      {
+        "source": "/keepgoals/**",
+        "destination": "/keepgoals/index.html"
       },
       {
         "source": "**",

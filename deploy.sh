@@ -18,9 +18,16 @@ rm -rf frontend/build/speakling/mobile
 mkdir -p frontend/build/speakling/mobile
 cp -r mobile/dist/* frontend/build/speakling/mobile/
 
+echo "=== 3b. Konfiguracja Portalu Głównego przemokoduje.com ==="
+cp frontend/build/index.html frontend/build/speakling.html
+if [ -f "portal/index.html" ]; then
+  cp portal/index.html frontend/build/index.html
+fi
+
 echo "=== 4. Publikacja połączonej aplikacji na Firebase Hosting ==="
 npx firebase-tools deploy --only hosting
 
-echo "=== WDRUŻENIE ZAKOŃCZONE SUKCESEM! ==="
-echo "Adres główny (Desktop): https://przemokoduje.com/speakling"
-echo "Adres mobilny (wersja dedykowana): https://przemokoduje.com/speakling/mobile/"
+echo "=== WDROŻENIE ZAKOŃCZONE SUKCESEM! ==="
+echo "Portal główny: https://przemokoduje.com/"
+echo "Speakling Desktop: https://przemokoduje.com/speakling"
+echo "Speakling Mobile: https://przemokoduje.com/speakling/mobile/"

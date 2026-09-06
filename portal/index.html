@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>przemokoduje.com — Ekosystem Inteligentnych Aplikacji AI</title>
+  <meta name="description" content="Autorskie aplikacje i narzędzia AI od przemokoduje.com: Speakling (trener języka angielskiego) oraz KeepGoals (zarządzanie celami, notatkami i czasem)." />
+  <link rel="icon" type="image/png" href="https://przemokoduje.com/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg-dark: #07090e;
+      --card-bg: rgba(16, 22, 36, 0.65);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover-border: rgba(255, 255, 255, 0.2);
+      --text-main: #f3f4f6;
+      --text-muted: #94a3b8;
+      --speakling-accent: #8b5cf6;
+      --speakling-glow: rgba(139, 92, 246, 0.25);
+      --keepgoals-accent: #10b981;
+      --keepgoals-glow: rgba(16, 185, 129, 0.25);
+      --soon-accent: #f59e0b;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* Tło z dynamicznymi poświatami */
+    .bg-mesh {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: -1;
+      pointer-events: none;
+      background: 
+        radial-gradient(circle at 15% 20%, rgba(139, 92, 246, 0.13) 0%, transparent 45%),
+        radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 50% 80%, rgba(59, 130, 246, 0.08) 0%, transparent 50%);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Nawigacja górna */
+    header {
+      padding: 28px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(12px);
+    }
+
+    .nav-wrapper {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #6366f1 0%, #10b981 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+    }
+
+    .logo-text {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-text span {
+      background: linear-gradient(90deg, #818cf8, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .system-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #34d399;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    /* Hero Section */
+    .hero {
+      text-align: center;
+      padding: 72px 0 54px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 18px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 24px;
+    }
+
+    .hero-title {
+      font-size: clamp(32px, 5vw, 54px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.15;
+      margin-bottom: 18px;
+      background: linear-gradient(180deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(16px, 2vw, 19px);
+      color: var(--text-muted);
+      max-width: 680px;
+      margin: 0 auto;
+      font-weight: 400;
+    }
+
+    /* Grid z aplikacjami */
+    .apps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 28px;
+      margin-bottom: 72px;
+    }
+
+    .app-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 36px 32px;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .app-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+
+    .app-card:hover {
+      transform: translateY(-6px);
+      border-color: var(--card-hover-border);
+    }
+
+    /* Karta Speakling */
+    .card-speakling:hover {
+      box-shadow: 0 20px 40px -15px var(--speakling-glow);
+    }
+    .card-speakling::before {
+      background: linear-gradient(90deg, #8b5cf6, #c084fc);
+    }
+    .card-speakling:hover::before {
+      opacity: 1;
+    }
+
+    /* Karta KeepGoals */
+    .card-keepgoals:hover {
+      box-shadow: 0 20px 40px -15px var(--keepgoals-glow);
+    }
+    .card-keepgoals::before {
+      background: linear-gradient(90deg, #10b981, #6ee7b7);
+    }
+    .card-keepgoals:hover::before {
+      opacity: 1;
+    }
+
+    /* Karta Soon */
+    .card-soon {
+      opacity: 0.8;
+      border-style: dashed;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+
+    .app-badge-icon {
+      width: 58px;
+      height: 58px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+    }
+
+    .icon-speakling {
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.2);
+    }
+
+    .icon-keepgoals {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.2);
+    }
+
+    .icon-soon {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .card-tag {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 5px 12px;
+      border-radius: 9999px;
+    }
+
+    .tag-active {
+      background: rgba(139, 92, 246, 0.15);
+      color: #c084fc;
+      border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+
+    .tag-new {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .tag-soon {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .app-title {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+      color: #fff;
+    }
+
+    .app-headline {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+
+    .headline-speakling {
+      color: #a78bfa;
+    }
+
+    .headline-keepgoals {
+      color: #34d399;
+    }
+
+    .headline-soon {
+      color: #fbbf24;
+    }
+
+    .app-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      line-height: 1.55;
+    }
+
+    .features-list {
+      list-style: none;
+      margin-bottom: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .features-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #cbd5e1;
+    }
+
+    .feature-check {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .check-speakling {
+      background: rgba(139, 92, 246, 0.2);
+      color: #c084fc;
+    }
+
+    .check-keepgoals {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+    }
+
+    .check-soon {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+    }
+
+    .feature-check svg {
+      width: 11px;
+      height: 11px;
+      stroke-width: 3;
+    }
+
+    .card-footer {
+      margin-top: auto;
+    }
+
+    .btn-launch {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 14px 20px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.25s ease;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-speakling {
+      background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(124, 58, 237, 0.3);
+    }
+
+    .btn-speakling:hover {
+      background: linear-gradient(135deg, #8b5cf6 0%, #4f46e5 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(124, 58, 237, 0.45);
+    }
+
+    .btn-keepgoals {
+      background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-keepgoals:hover {
+      background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.45);
+    }
+
+    .btn-soon {
+      background: rgba(255, 255, 255, 0.05);
+      color: #64748b;
+      cursor: not-allowed;
+    }
+
+    /* Sekcja Technologii */
+    .tech-stack {
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 48px 0;
+      text-align: center;
+    }
+
+    .tech-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #64748b;
+      margin-bottom: 24px;
+    }
+
+    .tech-badges {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .tech-badge {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      padding: 8px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Stopka */
+    footer {
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 32px 0;
+      margin-top: auto;
+      text-align: center;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    footer a {
+      color: #94a3b8;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    footer a:hover {
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-mesh"></div>
+
+  <!-- Nawigacja górna -->
+  <header>
+    <div class="container nav-wrapper">
+      <a href="/" class="logo">
+        <div class="logo-icon">p</div>
+        <div class="logo-text">przemo<span>koduje</span></div>
+      </a>
+      <div class="system-status">
+        <span class="status-dot"></span>
+        Wszystkie systemy aktywne
+      </div>
+    </div>
+  </header>
+
+  <!-- Główna zawartość -->
+  <main class="container">
+    <section class="hero">
+      <div class="hero-badge">
+        <span>⚡ Ekosystem Inteligentnych Narzędzi AI</span>
+      </div>
+      <h1 class="hero-title">Aplikacje, które rewolucjonizują<br/>Twoją codzienną produktywność</h1>
+      <p class="hero-subtitle">
+        Autorskie systemy napędzane zaawansowanymi modelami sztucznej inteligencji. Wybierz narzędzie i zacznij działać sprawniej.
+      </p>
+    </section>
+
+    <!-- Kafle z aplikacjami -->
+    <section class="apps-grid">
+      
+      <!-- Karta Speakling -->
+      <div class="app-card card-speakling">
+        <div class="card-header">
+          <div class="app-badge-icon icon-speakling">🎓</div>
+          <span class="card-tag tag-active">Dostępna • v1.4</span>
+        </div>
+        <h2 class="app-title">Speakling</h2>
+        <div class="app-headline headline-speakling">Twój inteligentny trener języka angielskiego AI</div>
+        <p class="app-desc">
+          Przełam barierę językową i rozwijaj płynność dzięki interaktywnym konwersacjom głosowym w czasie rzeczywistym, inteligentnym fiszkom i analizie wymowy.
+        </p>
+        <ul class="features-list">
+          <li>
+            <span class="feature-check check-speakling">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            Płynne rozmowy głosowe w czasie rzeczywistym
+          </li>
+          <li>
+            <span class="feature-check check-speakling">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            Inteligentny słownik i spersonalizowane historie
+          </li>
+          <li>
+            <span class="feature-check check-speakling">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            Wersja desktopowa oraz dedykowana mobilna (PWA)
+          </li>
+        </ul>
+        <div class="card-footer">
+          <a href="/speakling" class="btn-launch btn-speakling">
+            <span>Uruchom Speakling</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Karta KeepGoals -->
+      <div class="app-card card-keepgoals">
+        <div class="card-header">
+          <div class="app-badge-icon icon-keepgoals">🎯</div>
+          <span class="card-tag tag-new">Nowość • v2.0</span>
+        </div>
+        <h2 class="app-title">KeepGoals</h2>
+        <div class="app-headline headline-keepgoals">Inteligentne notatki, cele i zarządzanie czasem</div>
+        <p class="app-desc">
+          System nowej generacji zamieniający nagrania audio i wideo w ustrukturyzowane notatki, plany strategiczne, delegowane zadania oraz kalendarz celów.
+        </p>
+        <ul class="features-list">
+          <li>
+            <span class="feature-check check-keepgoals">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            Transkrypcja audio/wideo z automatyczną analizą AI
+          </li>
+          <li>
+            <span class="feature-check check-keepgoals">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            Oś czasu projektów, kamienie milowe i cele
+          </li>
+          <li>
+            <span class="feature-check check-keepgoals">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            Delegowanie zadań z dedykowanym podsumowaniem AI
+          </li>
+        </ul>
+        <div class="card-footer">
+          <a href="/keepgoals" class="btn-launch btn-keepgoals">
+            <span>Uruchom KeepGoals</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Karta Wkrótce -->
+      <div class="app-card card-soon">
+        <div class="card-header">
+          <div class="app-badge-icon icon-soon">🛠️</div>
+          <span class="card-tag tag-soon">W budowie</span>
+        </div>
+        <h2 class="app-title">Kolejne projekty</h2>
+        <div class="app-headline headline-soon">Rozszerzenie ekosystemu AI</div>
+        <p class="app-desc">
+          Pracujemy nad kolejnymi specjalistycznymi narzędziami integrującymi automatyzacje, systemy agentowe i asystentów branżowych.
+        </p>
+        <ul class="features-list">
+          <li>
+            <span class="feature-check check-soon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            Fachowiec AI — asystent techniczny i inspekcji
+          </li>
+          <li>
+            <span class="feature-check check-soon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            Autonomiczne agenty wielozadaniowe
+          </li>
+          <li>
+            <span class="feature-check check-soon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </span>
+            Wspólne konto i ekosystem przemokoduje
+          </li>
+        </ul>
+        <div class="card-footer">
+          <button class="btn-launch btn-soon" disabled>
+            <span>Wkrótce dostępne</span>
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Sekcja Technologii -->
+    <section class="tech-stack">
+      <div class="tech-title">Nowoczesny stos technologiczny & Infrastruktura chmurowa</div>
+      <div class="tech-badges">
+        <div class="tech-badge"><span>⚡</span> FastAPI & Python 3.11</div>
+        <div class="tech-badge"><span>⚛️</span> React 19 & Vite</div>
+        <div class="tech-badge"><span>☁️</span> Google Cloud Run</div>
+        <div class="tech-badge"><span>🔥</span> Firebase Hosting & Firestore</div>
+        <div class="tech-badge"><span>✨</span> Google Gemini & OpenAI</div>
+        <div class="tech-badge"><span>🚀</span> Groq High-Speed LLM</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Stopka -->
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 <a href="https://przemokoduje.com">przemokoduje.com</a>. Wszelkie prawa zastrzeżone.</p>
+    </div>
+  </footer>
+</body>
+</html>
