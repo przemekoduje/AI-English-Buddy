@@ -2077,6 +2077,13 @@ def generate_text():
                 user_prompt += f"- Refinement details: \"{refined_details}\"\n"
         elif orig_topics or orig_details.strip():
             user_prompt += "Continue the story/series naturally following the original topics and details listed above.\n"
+        else:
+            user_prompt += (
+                "No original prompt or topics were provided for this text (it may be a pasted external text). "
+                "Carefully read the provided history above. You MUST continue it seamlessly, maintaining the EXACT SAME characters (if any exist in the text), "
+                "the EXACT SAME setting, tone, and subject matter. Do not change the topic. "
+                "Continue EXACTLY according to the guidelines entered in the form input (if any are provided) before creating this continuation.\n"
+            )
 
         is_multi_part = root_data.get('multi_part') or settings.get('multi_part')
         if is_multi_part:
