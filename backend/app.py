@@ -994,8 +994,13 @@ PREDEFINED_TOPICS = [
     "Biography", "Business", "Psychology", "Art", "Music", "Travel"
 ]
 
-def query_deepseek(prompt_text):
-    if not API_TOKEN:
+# --- FAST IN-MEMORY CACHES FOR COST & SPEED OPTIMIZATION ---
+TRANSLATION_CACHE = {}
+EXPLAIN_WORD_CACHE = {}
+BASE_FORM_CACHE = {}
+
+def query_deepseek(prompt_text, max_tokens=350):
+    if not API_TOKEN and not (client and not isinstance(client, MockOpenAIClient)):
         mock_content = generate_mock_ai_content(prompt_text)
         return {
             "choices": [
@@ -1006,19 +1011,54 @@ def query_deepseek(prompt_text):
                 }
             ]
         }
+    
+    # Użycie aktywnego klienta OpenAI / DeepSeek przez SDK
+    if client and not isinstance(client, MockOpenAIClient):
+        try:
+            kwargs = {
+                "model": MODEL_NAME,
+                "messages": [{"role": "user", "content": prompt_text}]
+            }
+            if max_tokens:
+                kwargs["max_tokens"] = max_tokens
+            res = client.chat.completions.create(**kwargs)
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": res.choices[0].message.content or ""
+                        }
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": res.usage.prompt_tokens if res.usage else 0,
+                    "completion_tokens": res.usage.completion_tokens if res.usage else 0,
+                    "total_tokens": res.usage.total_tokens if res.usage else 0
+                }
+            }
+        except Exception as e:
+            print(f"Błąd OpenAI completions w query_deepseek: {e}")
+            raise
+
     payload = {
         "model": MODEL_NAME,
         "messages": [
             {"role": "user", "content": prompt_text}
         ]
     }
-    response = requests.post(API_URL, headers=headers, json=payload)
+    if max_tokens:
+        payload["max_tokens"] = max_tokens
+    req_headers = {
+        "Authorization": f"Bearer {API_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    response = requests.post(API_URL, headers=req_headers, json=payload, timeout=20)
     response.raise_for_status()
     return response.json()
 
 
-def query_deepseek_with_system(system_prompt, user_prompt):
-    if not API_TOKEN:
+def query_deepseek_with_system(system_prompt, user_prompt, max_tokens=500):
+    if not API_TOKEN and not (client and not isinstance(client, MockOpenAIClient)):
         mock_content = generate_mock_ai_content(user_prompt, system_prompt)
         return {
             "choices": [
@@ -1029,6 +1069,38 @@ def query_deepseek_with_system(system_prompt, user_prompt):
                 }
             ]
         }
+
+    # Użycie aktywnego klienta OpenAI / DeepSeek przez SDK
+    if client and not isinstance(client, MockOpenAIClient):
+        try:
+            kwargs = {
+                "model": MODEL_NAME,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+            }
+            if max_tokens:
+                kwargs["max_tokens"] = max_tokens
+            res = client.chat.completions.create(**kwargs)
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": res.choices[0].message.content or ""
+                        }
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": res.usage.prompt_tokens if res.usage else 0,
+                    "completion_tokens": res.usage.completion_tokens if res.usage else 0,
+                    "total_tokens": res.usage.total_tokens if res.usage else 0
+                }
+            }
+        except Exception as e:
+            print(f"Błąd OpenAI completions w query_deepseek_with_system: {e}")
+            raise
+
     payload = {
         "model": MODEL_NAME,
         "messages": [
@@ -1036,7 +1108,13 @@ def query_deepseek_with_system(system_prompt, user_prompt):
             {"role": "user", "content": user_prompt}
         ]
     }
-    response = requests.post(API_URL, headers=headers, json=payload)
+    if max_tokens:
+        payload["max_tokens"] = max_tokens
+    req_headers = {
+        "Authorization": f"Bearer {API_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    response = requests.post(API_URL, headers=req_headers, json=payload, timeout=25)
     response.raise_for_status()
     return response.json()
 
@@ -1047,41 +1125,37 @@ def get_topics():
 
 @app.route("/api/translate", methods=['POST'])
 def translate_text():
-    data = request.get_json()
+    data = request.get_json() or {}
     text_to_translate = data.get("text")
     context_sentence = data.get("context")
     if not text_to_translate:
         return jsonify({"error": "Brak tekstu do tłumaczenia"}), 400
 
+    # 1. Sprawdź pamięć podręczną (0 tokenów, 0 kosztu, odpowiedź natychmiastowa)
+    cache_key = f"{text_to_translate.strip().lower()}__#__{context_sentence.strip().lower() if context_sentence else ''}"
+    if cache_key in TRANSLATION_CACHE:
+        return jsonify({"translation": TRANSLATION_CACHE[cache_key]})
+
+    # Zoptymalizowany, zwięzły prompt (60% mniej tokenów wejściowych)
     if context_sentence:
         translation_prompt = (
-            f"You are a precise English-to-Polish translator and lexicographer.\n"
-            f"Translate the English word or phrase '{text_to_translate}' into Polish, "
-            f"ensuring it perfectly fits the grammatical form and meaning in the context of this sentence:\n"
+            f"Translate the English word/phrase '{text_to_translate}' to Polish in context:\n"
             f"\"{context_sentence}\"\n\n"
-            f"CRITICAL RULE FOR AUXILIARY VERBS & GRAMMATICAL OPERATORS:\n"
-            f"- If the word functions purely as an auxiliary verb or grammatical operator in this context (e.g., 'had' in Past Perfect, 'has/have' in Present Perfect, 'do/does/did' in negatives/questions, 'will/would' for future/conditional) and doesn't have a direct literal translation, write its grammatical role in Polish on the first line (e.g., 'czasownik posiłkowy (Past Perfect)' or 'operator gramatyczny').\n"
-            f"- On the second line, list its other common, distinct lexical meanings in Polish (e.g., 'mieć, posiadać').\n\n"
-            f"Otherwise, provide the exact contextual translation first on the first line. Do not prefix it with any label.\n"
-            f"If the word or phrase has other common, distinct meanings in Polish, list them on the second line separated only by commas, like:\n"
-            f"meaning1, meaning2\n"
-            f"Do not include any prefix like 'Inne znaczenia' or 'Other meanings'. Just the comma-separated meanings.\n"
-            f"If there are no other common meanings, do not include the second line.\n"
-            f"Respond ONLY with the translation text, without any markdown formatting, code blocks, or extra text."
+            f"Rules:\n"
+            f"1. Line 1: Exact contextual Polish translation. (If it's purely a grammatical auxiliary with no literal translation, state its role, e.g. 'czasownik posiłkowy (Past Perfect)').\n"
+            f"2. Line 2: (Optional) 2-4 other common distinct Polish meanings separated by commas (e.g. 'mieć, posiadać'). No prefix labels.\n"
+            f"Respond ONLY with the translation lines, without markdown formatting or extra text."
         )
     else:
         translation_prompt = (
-            f"Translate the English word or phrase '{text_to_translate}' into Polish.\n"
-            f"Provide the most common translation first on the first line. Do not prefix it with any label.\n"
-            f"If the word or phrase has other common, distinct meanings in Polish, list them on the second line separated only by commas, like:\n"
-            f"meaning1, meaning2\n"
-            f"Do not include any prefix like 'Inne znaczenia' or 'Other meanings'. Just the comma-separated meanings.\n"
-            f"If there are no other common meanings, do not include the second line.\n"
-            f"Respond ONLY with the translation text, without any markdown formatting, code blocks, or extra text."
+            f"Translate the English word/phrase '{text_to_translate}' to Polish.\n"
+            f"1. Line 1: Most common Polish translation. No prefix.\n"
+            f"2. Line 2: (Optional) 2-4 other common distinct Polish meanings separated by commas. No prefix.\n"
+            f"Respond ONLY with the translation lines, without markdown formatting or extra text."
         )
     
     try:
-        output_data = query_deepseek(translation_prompt)
+        output_data = query_deepseek(translation_prompt, max_tokens=80)
         translated_text = output_data['choices'][0]['message']['content']
         
         translated_text = translated_text.strip()
@@ -1097,11 +1171,18 @@ def translate_text():
                 cleaned_lines.append(line)
         translated_text = "\n".join(cleaned_lines)
 
+        # Zapisz w pamięci podręcznej (zabezpieczenie limitu rozmiaru)
+        if len(TRANSLATION_CACHE) > 5000:
+            TRANSLATION_CACHE.clear()
+        TRANSLATION_CACHE[cache_key] = translated_text
+
         return jsonify({"translation": translated_text})
     except (KeyError, IndexError) as e:
-        return jsonify({"error": "Nie udało się przetłumaczyć tekstu", "details": str(e), "api_response": output_data}), 500
+        return jsonify({"error": "Nie udało się przetłumaczyć tekstu", "details": str(e)}), 500
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"Błąd połączenia z DeepSeek API: {str(e)}"}), 500
+        return jsonify({"error": f"Błąd połączenia z API: {str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"Błąd podczas tłumaczenia: {str(e)}"}), 500
 
 @app.route("/api/explain-word", methods=['POST'])
 def explain_word():
@@ -1111,8 +1192,14 @@ def explain_word():
 
     data = request.get_json() or {}
     text_to_explain = data.get("text")
+    context_sentence = data.get("context", "")
     if not text_to_explain:
         return jsonify({"error": "Brak tekstu do wyjaśnienia"}), 400
+
+    # 1. Sprawdź pamięć podręczną (0 tokenów, 0 kosztu)
+    cache_key = f"{text_to_explain.strip().lower()}__#__{context_sentence.strip().lower() if context_sentence else ''}"
+    if cache_key in EXPLAIN_WORD_CACHE:
+        return jsonify(EXPLAIN_WORD_CACHE[cache_key])
 
     explain_prompt = (
         f"Provide a detailed dictionary entry for the English word or phrase '{text_to_explain}'.\n"
@@ -1143,7 +1230,7 @@ def explain_word():
     )
 
     try:
-        output_data = query_deepseek(explain_prompt)
+        output_data = query_deepseek(explain_prompt, max_tokens=450)
         content = output_data['choices'][0]['message']['content'].strip()
 
         # Clean markdown code blocks if present
@@ -1156,14 +1243,22 @@ def explain_word():
         content = content.strip()
 
         parsed_json = json.loads(content)
+
+        # Zapisz w pamięci podręcznej
+        if len(EXPLAIN_WORD_CACHE) > 2000:
+            EXPLAIN_WORD_CACHE.clear()
+        EXPLAIN_WORD_CACHE[cache_key] = parsed_json
+
         return jsonify(parsed_json)
     except json.JSONDecodeError as e:
-        print(f"Błąd parsowania JSON z DeepSeek w explain-word: {content}. Error: {e}")
+        print(f"Błąd parsowania JSON z AI w explain-word: {content}. Error: {e}")
         return jsonify({"error": "AI zwróciło nieprawidłowy format słownika.", "raw_content": content}), 500
     except (KeyError, IndexError) as e:
         return jsonify({"error": "Nie udało się wyjaśnić tekstu", "details": str(e)}), 500
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"Błąd połączenia z DeepSeek API: {str(e)}"}), 500
+        return jsonify({"error": f"Błąd połączenia z API: {str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"Błąd połączenia z AI: {str(e)}"}), 500
 
 @app.route("/api/media/explain-joke", methods=['POST'])
 def explain_joke():
@@ -2610,6 +2705,10 @@ def get_vocabulary():
 
 
 def get_base_form(word, translation, user_email=None):
+    cache_key = f"{str(word).strip().lower()}__#__{str(translation).strip().lower()}"
+    if cache_key in BASE_FORM_CACHE:
+        return BASE_FORM_CACHE[cache_key]
+
     try:
         system_prompt = (
             "Jesteś profesjonalnym lektorem i lingwistą języka angielskiego.\n"
@@ -2644,7 +2743,8 @@ def get_base_form(word, translation, user_email=None):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(input_data, ensure_ascii=False)}
             ],
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
+            max_tokens=90
         )
 
         content = ai_response.choices[0].message.content.strip()
@@ -2660,6 +2760,11 @@ def get_base_form(word, translation, user_email=None):
         res_json = json.loads(content)
         ret_org = res_json.get('original', word).strip()
         ret_trans = res_json.get('translated', translation).strip()
+
+        if len(BASE_FORM_CACHE) > 2000:
+            BASE_FORM_CACHE.clear()
+        BASE_FORM_CACHE[cache_key] = (ret_org, ret_trans)
+
         return ret_org, ret_trans
     except Exception as e:
         print(f"Error in get_base_form: {e}")
