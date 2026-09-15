@@ -111,6 +111,7 @@ function MediaBuddy({ user }) {
   // Interaction states
   const [selectedWord, setSelectedWord] = useState("");
   const [wordTranslation, setWordTranslation] = useState("");
+  const [wordSentenceTranslation, setWordSentenceTranslation] = useState("");
   const [isTranslating, setIsTranslating] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -653,6 +654,7 @@ function MediaBuddy({ user }) {
     latestWordRef.current = word;
     setSelectedWord(word);
     setWordTranslation("");
+    setWordSentenceTranslation("");
     setIsTranslating(true);
     setIsSaved(false);
 
@@ -669,8 +671,10 @@ function MediaBuddy({ user }) {
       if (response.ok) {
         const data = await response.json();
         setWordTranslation(data.translation || "Brak tłumaczenia");
+        setWordSentenceTranslation(data.sentence_translation || "");
       } else {
         setWordTranslation("Błąd tłumaczenia");
+        setWordSentenceTranslation("");
       }
     } catch (err) {
       if (latestWordRef.current !== word) return;
@@ -1229,6 +1233,11 @@ function MediaBuddy({ user }) {
                 ) : (
                   <>
                     <p className="translated-text">{wordTranslation}</p>
+                    {wordSentenceTranslation && (
+                      <p className="translated-sentence-text" style={{ fontSize: "0.85rem", fontStyle: "italic", color: "var(--slate-500)", marginTop: "4px", marginBottom: "8px", lineHeight: "1.35" }}>
+                        {wordSentenceTranslation}
+                      </p>
+                    )}
                     <button
                       className={`btn-save-vocabulary ${isSaved ? "saved" : ""}`}
                       onClick={handleSaveWord}

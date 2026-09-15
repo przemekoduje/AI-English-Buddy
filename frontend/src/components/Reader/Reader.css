@@ -496,6 +496,18 @@ input[type="range"] {
   white-space: pre-line;
 }
 
+.word-translation-tooltip .tooltip-sentence-translation {
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--slate-600, #5F6368);
+  line-height: 1.35;
+  margin-top: 4px;
+  margin-bottom: 6px;
+  padding-top: 5px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.12);
+  word-wrap: break-word;
+}
+
 .word-translation-tooltip .tooltip-actions {
   display: flex;
   flex-wrap: wrap;

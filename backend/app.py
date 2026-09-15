@@ -1134,22 +1134,37 @@ def translate_text():
     # 1. Sprawdź pamięć podręczną (0 tokenów, 0 kosztu, odpowiedź natychmiastowa)
     cache_key = f"{text_to_translate.strip().lower()}__#__{context_sentence.strip().lower() if context_sentence else ''}"
     if cache_key in TRANSLATION_CACHE:
-        return jsonify({"translation": TRANSLATION_CACHE[cache_key]})
+        cached = TRANSLATION_CACHE[cache_key]
+        if isinstance(cached, dict):
+            return jsonify(cached)
+        return jsonify({"translation": cached, "sentence_translation": ""})
 
     is_phrase = len(text_to_translate.strip().split()) > 1
+    has_context = bool(context_sentence and context_sentence.strip() and context_sentence.strip().lower() != text_to_translate.strip().lower())
 
-    if is_phrase:
-        if context_sentence:
+    if has_context:
+        if is_phrase:
             translation_prompt = (
-                f"Translate the English phrase '{text_to_translate}' to Polish in the context of this sentence:\n"
-                f"\"{context_sentence}\"\n\n"
+                f"You are an English-to-Polish translator.\n"
+                f"Translate the phrase '{text_to_translate}' and its context sentence to Polish.\n"
+                f"Sentence: \"{context_sentence}\"\n\n"
                 f"Rules:\n"
-                f"1. Translate ONLY the specified phrase '{text_to_translate}', not the whole sentence.\n"
-                f"2. Provide ONLY a single, natural Polish translation on ONE line.\n"
-                f"3. Do NOT provide synonyms, alternate versions, explanations, or multiple lines.\n"
-                f"Respond ONLY with the translation text."
+                f"1. Line 1: Exact Polish translation of the phrase '{text_to_translate}'.\n"
+                f"2. Line 2: Natural Polish translation of the entire sentence.\n"
+                f"Respond ONLY with these 2 lines, without prefixes or labels."
             )
         else:
+            translation_prompt = (
+                f"You are an English-to-Polish translator.\n"
+                f"Translate the word '{text_to_translate}' and its context sentence to Polish.\n"
+                f"Sentence: \"{context_sentence}\"\n\n"
+                f"Rules:\n"
+                f"1. Line 1: Exact contextual Polish translation of the word '{text_to_translate}' (and optionally 1-2 common synonyms separated by commas).\n"
+                f"2. Line 2: Natural Polish translation of the entire sentence.\n"
+                f"Respond ONLY with these 2 lines, without prefixes or labels."
+            )
+    else:
+        if is_phrase:
             translation_prompt = (
                 f"Translate the English phrase or sentence to Polish:\n"
                 f"\"{text_to_translate}\"\n\n"
@@ -1157,16 +1172,6 @@ def translate_text():
                 f"1. Provide ONLY a single, natural Polish translation on ONE line.\n"
                 f"2. Do NOT provide synonyms, alternate versions, explanations, or multiple lines.\n"
                 f"Respond ONLY with the translation text."
-            )
-    else:
-        if context_sentence:
-            translation_prompt = (
-                f"Translate the English word '{text_to_translate}' to Polish in context:\n"
-                f"\"{context_sentence}\"\n\n"
-                f"Rules:\n"
-                f"1. Line 1: Exact contextual Polish translation. (If it's purely a grammatical auxiliary with no literal translation, state its role, e.g. 'czasownik posiłkowy (Past Perfect)').\n"
-                f"2. Line 2: (Optional) 2-4 other common distinct Polish meanings separated by commas (e.g. 'mieć, posiadać'). No prefix labels.\n"
-                f"Respond ONLY with the translation lines, without markdown formatting or extra text."
             )
         else:
             translation_prompt = (
@@ -1177,33 +1182,43 @@ def translate_text():
             )
     
     try:
-        output_data = query_deepseek(translation_prompt, max_tokens=80)
+        output_data = query_deepseek(translation_prompt, max_tokens=120)
         translated_text = output_data['choices'][0]['message']['content']
         
         translated_text = translated_text.strip()
         lines = [line.strip() for line in translated_text.split('\n') if line.strip()]
         cleaned_lines = []
         for line in lines:
-            if line.lower().startswith("translation:"):
-                line = line[len("translation:"):].strip()
-            if line.lower().startswith("polish:"):
-                line = line[len("polish:"):].strip()
+            for prefix in ['line 1:', 'line 2:', 'translation:', 'polish:']:
+                if line.lower().startswith(prefix):
+                    line = line[len(prefix):].strip()
             line = line.strip('\'" \t\n\r.?!')
             if line:
                 cleaned_lines.append(line)
         
-        # Dla całej frazy/zdania zwracamy wyłącznie 1 czyste tłumaczenie (bez dublujących synonimów w 2. linii)
-        if is_phrase and cleaned_lines:
-            translated_text = cleaned_lines[0]
+        sentence_translation = ""
+        if has_context and len(cleaned_lines) > 1:
+            word_translation = cleaned_lines[0]
+            sentence_translation = cleaned_lines[1]
+        elif cleaned_lines:
+            if is_phrase:
+                word_translation = cleaned_lines[0]
+            else:
+                word_translation = "\n".join(cleaned_lines)
         else:
-            translated_text = "\n".join(cleaned_lines)
+            word_translation = ""
+
+        result = {
+            "translation": word_translation,
+            "sentence_translation": sentence_translation
+        }
 
         # Zapisz w pamięci podręcznej (zabezpieczenie limitu rozmiaru)
         if len(TRANSLATION_CACHE) > 5000:
             TRANSLATION_CACHE.clear()
-        TRANSLATION_CACHE[cache_key] = translated_text
+        TRANSLATION_CACHE[cache_key] = result
 
-        return jsonify({"translation": translated_text})
+        return jsonify(result)
     except (KeyError, IndexError) as e:
         return jsonify({"error": "Nie udało się przetłumaczyć tekstu", "details": str(e)}), 500
     except requests.exceptions.RequestException as e:

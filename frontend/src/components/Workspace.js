@@ -175,6 +175,7 @@ function Workspace({
   const [activeWordId, setActiveWordId] = useState(null);
   const [activeWordHighlight, setActiveWordHighlight] = useState(null);
   const [wordTooltipTranslation, setWordTooltipTranslation] = useState("");
+  const [wordTooltipSentenceTranslation, setWordTooltipSentenceTranslation] = useState("");
   const [wordTooltipLoading, setWordTooltipLoading] = useState(false);
   const [showWordTooltip, setShowWordTooltip] = useState(false);
   
@@ -619,8 +620,10 @@ function Workspace({
       const data = await response.json();
       if (data.translation) {
         setWordTooltipTranslation(data.translation);
+        setWordTooltipSentenceTranslation(data.sentence_translation || "");
       } else {
         setWordTooltipTranslation("Brak tłumaczenia");
+        setWordTooltipSentenceTranslation("");
       }
     } catch (err) {
       console.error("Błąd tłumaczenia zaznaczenia:", err);
@@ -1119,6 +1122,7 @@ function Workspace({
     setActiveWordHighlight(null);
     setActiveWordId(null);
     setWordTooltipTranslation("");
+    setWordTooltipSentenceTranslation("");
     resumeAudioAfterTooltip();
   }, [resumeAudioAfterTooltip]);
 
@@ -1184,8 +1188,10 @@ function Workspace({
       const data = await response.json();
       if (data.translation) {
         setWordTooltipTranslation(data.translation);
+        setWordTooltipSentenceTranslation(data.sentence_translation || "");
       } else {
         setWordTooltipTranslation("Brak tłumaczenia");
+        setWordTooltipSentenceTranslation("");
       }
     } catch (err) {
       console.error("Błąd tłumaczenia słowa:", err);
@@ -2081,6 +2087,11 @@ function Workspace({
               <>
                 <div className="tooltip-original">{activeWordHighlight.word}</div>
                 <div className="tooltip-translation">{wordTooltipTranslation}</div>
+                {wordTooltipSentenceTranslation && (
+                  <div className="tooltip-sentence-translation">
+                    {wordTooltipSentenceTranslation}
+                  </div>
+                )}
                 <div className="tooltip-actions">
                   <button className="tooltip-btn read-btn" onClick={() => handleSpeakWord(activeWordHighlight.word)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
