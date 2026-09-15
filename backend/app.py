@@ -1136,23 +1136,45 @@ def translate_text():
     if cache_key in TRANSLATION_CACHE:
         return jsonify({"translation": TRANSLATION_CACHE[cache_key]})
 
-    # Zoptymalizowany, zwięzły prompt (60% mniej tokenów wejściowych)
-    if context_sentence:
-        translation_prompt = (
-            f"Translate the English word/phrase '{text_to_translate}' to Polish in context:\n"
-            f"\"{context_sentence}\"\n\n"
-            f"Rules:\n"
-            f"1. Line 1: Exact contextual Polish translation. (If it's purely a grammatical auxiliary with no literal translation, state its role, e.g. 'czasownik posiłkowy (Past Perfect)').\n"
-            f"2. Line 2: (Optional) 2-4 other common distinct Polish meanings separated by commas (e.g. 'mieć, posiadać'). No prefix labels.\n"
-            f"Respond ONLY with the translation lines, without markdown formatting or extra text."
-        )
+    is_phrase = len(text_to_translate.strip().split()) > 1
+
+    if is_phrase:
+        if context_sentence:
+            translation_prompt = (
+                f"Translate the English phrase '{text_to_translate}' to Polish in the context of this sentence:\n"
+                f"\"{context_sentence}\"\n\n"
+                f"Rules:\n"
+                f"1. Translate ONLY the specified phrase '{text_to_translate}', not the whole sentence.\n"
+                f"2. Provide ONLY a single, natural Polish translation on ONE line.\n"
+                f"3. Do NOT provide synonyms, alternate versions, explanations, or multiple lines.\n"
+                f"Respond ONLY with the translation text."
+            )
+        else:
+            translation_prompt = (
+                f"Translate the English phrase or sentence to Polish:\n"
+                f"\"{text_to_translate}\"\n\n"
+                f"Rules:\n"
+                f"1. Provide ONLY a single, natural Polish translation on ONE line.\n"
+                f"2. Do NOT provide synonyms, alternate versions, explanations, or multiple lines.\n"
+                f"Respond ONLY with the translation text."
+            )
     else:
-        translation_prompt = (
-            f"Translate the English word/phrase '{text_to_translate}' to Polish.\n"
-            f"1. Line 1: Most common Polish translation. No prefix.\n"
-            f"2. Line 2: (Optional) 2-4 other common distinct Polish meanings separated by commas. No prefix.\n"
-            f"Respond ONLY with the translation lines, without markdown formatting or extra text."
-        )
+        if context_sentence:
+            translation_prompt = (
+                f"Translate the English word '{text_to_translate}' to Polish in context:\n"
+                f"\"{context_sentence}\"\n\n"
+                f"Rules:\n"
+                f"1. Line 1: Exact contextual Polish translation. (If it's purely a grammatical auxiliary with no literal translation, state its role, e.g. 'czasownik posiłkowy (Past Perfect)').\n"
+                f"2. Line 2: (Optional) 2-4 other common distinct Polish meanings separated by commas (e.g. 'mieć, posiadać'). No prefix labels.\n"
+                f"Respond ONLY with the translation lines, without markdown formatting or extra text."
+            )
+        else:
+            translation_prompt = (
+                f"Translate the English word '{text_to_translate}' to Polish.\n"
+                f"1. Line 1: Most common Polish translation. No prefix.\n"
+                f"2. Line 2: (Optional) 2-4 other common distinct Polish meanings separated by commas. No prefix.\n"
+                f"Respond ONLY with the translation lines, without markdown formatting or extra text."
+            )
     
     try:
         output_data = query_deepseek(translation_prompt, max_tokens=80)
@@ -1169,7 +1191,12 @@ def translate_text():
             line = line.strip('\'" \t\n\r.?!')
             if line:
                 cleaned_lines.append(line)
-        translated_text = "\n".join(cleaned_lines)
+        
+        # Dla całej frazy/zdania zwracamy wyłącznie 1 czyste tłumaczenie (bez dublujących synonimów w 2. linii)
+        if is_phrase and cleaned_lines:
+            translated_text = cleaned_lines[0]
+        else:
+            translated_text = "\n".join(cleaned_lines)
 
         # Zapisz w pamięci podręcznej (zabezpieczenie limitu rozmiaru)
         if len(TRANSLATION_CACHE) > 5000:
