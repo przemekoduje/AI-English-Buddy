@@ -1367,20 +1367,60 @@ def explain_joke():
         print(f"Błąd połączenia w explain-joke: {e}")
         return jsonify({"error": f"Błąd połączenia z DeepSeek API: {str(e)}"}), 500
 
+ENGLISH_ABBREVIATIONS = {
+    'mr.', 'mrs.', 'ms.', 'dr.', 'prof.', 'sr.', 'jr.', 'vs.', 'e.g.', 'i.e.',
+    'etc.', 'st.', 'u.s.', 'u.k.', 'gen.', 'gov.', 'jan.', 'feb.', 'mar.', 'apr.',
+    'jun.', 'jul.', 'aug.', 'sept.', 'oct.', 'nov.', 'dec.', 'a.m.', 'p.m.', 'no.', 'vol.'
+}
+
+def is_sentence_end_backend(text):
+    if not text:
+        return False
+    trimmed = text.strip()
+    if not trimmed:
+        return False
+    if (trimmed.startswith('(') and trimmed.endswith(')')) or (trimmed.startswith('[') and trimmed.endswith(']')):
+        return True
+    stripped = trimmed.rstrip('\"\'’”)]')
+    if not stripped:
+        return False
+    if stripped[-1] in ('.', '?', '!'):
+        words = stripped.split()
+        if words and words[-1].lower() in ENGLISH_ABBREVIATIONS:
+            return False
+        return True
+    return False
+
+def split_into_complete_sentences_backend(text):
+    pattern = r'(.+?[.?!][\"\'’”\)]?)(?:\s+(?=[A-Z0-9\"\'“\(])|$)'
+    matches = re.findall(pattern, text)
+    if not matches:
+        return [text.strip()] if text.strip() else []
+    sentences = []
+    curr = ""
+    for m in matches:
+        candidate = (curr + " " + m).strip() if curr else m.strip()
+        stripped = candidate.rstrip('\"\'’”)]')
+        if stripped and stripped[-1] in ('.', '?', '!'):
+            words = stripped.split()
+            if words and words[-1].lower() in ENGLISH_ABBREVIATIONS:
+                curr = candidate
+                continue
+        sentences.append(candidate)
+        curr = ""
+    if curr:
+        if sentences:
+            sentences[-1] = sentences[-1] + " " + curr
+        else:
+            sentences.append(curr)
+    return sentences
+
 def aggregate_transcript(entries):
     if not entries:
         return []
         
     aggregated = []
     current_entry = None
-    
-    # Common conjunctions and relative pronouns in English to avoid splitting clauses
-    CONJUNCTIONS = {
-        "and", "but", "or", "so", "because", "although", "though", "even", 
-        "if", "when", "while", "since", "until", "unless", "before", "after",
-        "that", "which", "who", "whom", "whose", "where", "as", "than", 
-        "yet", "for", "nor"
-    }
 
     for entry in entries:
         text = entry['text'].strip()
@@ -1415,53 +1455,10 @@ def aggregate_transcript(entries):
             }
         else:
             prev_text = current_entry['text']
-            gap = start - current_entry['end']
             
-            # 1. Terminal punctuation check (accounting for trailing quotes/parentheses)
-            trimmed_prev = prev_text.strip().rstrip(')"\'')
-            ends_with_punc = trimmed_prev[-1] in ('.', '?', '!') if trimmed_prev else False
-            
-            # 2. Conjunctions check to avoid splitting clauses
-            # Extract words
-            prev_words = re.findall(r'\b\w+\b', prev_text.lower())
-            next_words = re.findall(r'\b\w+\b', text.lower())
-            
-            prev_ends_with_conjunction = prev_words[-1] in CONJUNCTIONS if prev_words else False
-            next_starts_with_conjunction = next_words[0] in CONJUNCTIONS if next_words else False
-            
-            # 3. Capitalization check
-            starts_with_cap = text[0].isupper() if text else False
-            is_just_I = text == 'I' or text.startswith('I ')
-            
-            # 4. Comma check
-            ends_with_comma = trimmed_prev[-1] in (',', ';', ':', '-') if trimmed_prev else False
-            
-            # Word counts
-            prev_word_count = len(prev_text.split())
-            
-            # Decision rules:
-            # - If previous ends with punctuation: split.
-            # - If gap is huge (> 1.5 seconds): split.
-            # - If previous ends in comma/conjunction or next starts with conjunction: do NOT split.
-            # - If it's a huge sentence (> 20 words): split to keep readability.
-            # - If starts with cap (not 'I'), and there's a decent pause (> 0.5s): split.
-            # - Otherwise: do NOT split (merge).
-            
-            should_split = False
-            if ends_with_punc:
-                should_split = True
-            elif gap > 1.5:
-                should_split = True
-            elif prev_ends_with_conjunction or next_starts_with_conjunction:
-                should_split = False
-            elif ends_with_comma:
-                should_split = False
-            elif prev_word_count > 20:
-                should_split = True
-            elif starts_with_cap and not is_just_I and gap > 0.5:
-                should_split = True
-            elif prev_word_count > 12 and gap > 0.8:
-                should_split = True
+            # Podział wyłącznie na granicy pełnego zdania (kropka, pytajnik, wykrzyknik)
+            # NIGDY nie dzielimy ani nie urywamy zdania w połowie!
+            should_split = is_sentence_end_backend(prev_text)
                 
             if should_split:
                 aggregated.append(current_entry)
@@ -1480,8 +1477,36 @@ def aggregate_transcript(entries):
 
     if current_entry:
         aggregated.append(current_entry)
+
+    # Druga faza: upewnienie się, że każdy segment to dokładnie jedno pełne zdanie.
+    # Wielo-zdaniowe bloki dzielimy z proporcjonalnymi znacznikami czasu.
+    final_aggregated = []
+    for item in aggregated:
+        sents = split_into_complete_sentences_backend(item['text'])
+        if len(sents) <= 1:
+            final_aggregated.append({
+                "start": round(item['start'], 2),
+                "end": round(item['end'], 2),
+                "text": item['text'].strip()
+            })
+        else:
+            total_chars = sum(len(s) for s in sents)
+            if total_chars == 0:
+                final_aggregated.append(item)
+                continue
+            duration = max(0.0, item['end'] - item['start'])
+            c_start = item['start']
+            for s in sents:
+                frac = len(s) / total_chars
+                c_end = round(c_start + frac * duration, 2)
+                final_aggregated.append({
+                    "start": round(c_start, 2),
+                    "end": c_end,
+                    "text": s.strip()
+                })
+                c_start = c_end
         
-    return aggregated
+    return final_aggregated
 
 def semantic_group_transcript(entries):
     if not entries:
@@ -1575,7 +1600,7 @@ def semantic_group_transcript(entries):
             except Exception as fut_err:
                 print(f"Błąd krytyczny wątku w chunk {idx}: {fut_err}")
                 
-    return grouped_results
+    return aggregate_transcript(grouped_results)
 
 
 def parse_srt(srt_text):
@@ -1782,7 +1807,7 @@ def get_youtube_transcript_rapidapi():
         try:
             aggregated = semantic_group_transcript(formatted)
         except Exception:
-            aggregated = formatted
+            aggregated = aggregate_transcript(formatted)
 
         return jsonify({
             "video_id": video_id,
@@ -1998,7 +2023,7 @@ def get_youtube_transcript():
         return jsonify({
             "video_id": video_id,
             "title": video_title,
-            "transcript": formatted
+            "transcript": aggregate_transcript(formatted)
         })
 
 @app.route("/api/media/transcript/debug", methods=['GET'])

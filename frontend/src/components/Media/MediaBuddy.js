@@ -4,25 +4,26 @@ import "./MediaBuddy.css";
 import PronunciationPracticeModal from "../Notebook/PronunciationPracticeModal";
 import WordExplanationModal from "../Notebook/WordExplanationModal";
 import transcriptsData from "./transcripts.json";
+import { ensureCompleteSentences } from "./sentenceGrouping";
 
 const CURATED_VIDEOS = [
   {
     id: "james_veitch_spam",
     title: "James Veitch - Replying to Spam Email",
     youtubeId: "_QdPW8JrYzQ",
-    transcript: transcriptsData.james_veitch_spam
+    transcript: ensureCompleteSentences(transcriptsData.james_veitch_spam)
   },
   {
     id: "james_veitch_unsubscribe",
     title: "James Veitch - The Agony of Unsubscribing",
     youtubeId: "Dceyy0cX6J4",
-    transcript: transcriptsData.james_veitch_unsubscribe
+    transcript: ensureCompleteSentences(transcriptsData.james_veitch_unsubscribe)
   },
   {
     id: "jeff_allen_teenagers",
     title: "Jeff Allen - Teenagers (Dry Bar Comedy)",
     youtubeId: "cqjhCC4sP4Q",
-    transcript: transcriptsData.jeff_allen_teenagers
+    transcript: ensureCompleteSentences(transcriptsData.jeff_allen_teenagers)
   }
 ];
 
@@ -133,7 +134,12 @@ function MediaBuddy({ user }) {
   const [customVideos, setCustomVideos] = useState(() => {
     try {
       const saved = localStorage.getItem("media_buddy_custom_videos");
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return parsed.map((v) => ({
+        ...v,
+        transcript: ensureCompleteSentences(v.transcript)
+      }));
     } catch (e) {
       console.error("Failed to load custom videos from localStorage", e);
       return [];
@@ -758,7 +764,10 @@ function MediaBuddy({ user }) {
     if (currentVideo && currentVideo.id === vid.id) return;
     setIsLoadingCustom(true);
     setTimeout(() => {
-      setCurrentVideo(vid);
+      setCurrentVideo({
+        ...vid,
+        transcript: ensureCompleteSentences(vid.transcript)
+      });
       setIsLoadingCustom(false);
     }, 600);
   };
@@ -798,7 +807,7 @@ function MediaBuddy({ user }) {
           id: `custom_${videoId}`,
           title: title,
           youtubeId: videoId,
-          transcript: staticTranscript
+          transcript: ensureCompleteSentences(staticTranscript)
         };
 
         setCustomVideos(prev => {
@@ -836,7 +845,7 @@ function MediaBuddy({ user }) {
           id: `custom_${videoId}`,
           title: data.title || `Własne wideo (${videoId})`,
           youtubeId: videoId,
-          transcript: data.transcript
+          transcript: ensureCompleteSentences(data.transcript)
         };
 
         if (!customVideos.some(v => v.youtubeId === videoId)) {
