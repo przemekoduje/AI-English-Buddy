@@ -1415,6 +1415,12 @@ def split_into_complete_sentences_backend(text):
             sentences.append(curr)
     return sentences
 
+ENGLISH_SENTENCE_STARTERS = {
+    'so', 'and', 'but', 'because', 'now', 'then', 'well', 'however',
+    'if', 'when', 'while', 'you know', 'i mean', 'right', 'we', 'i',
+    'they', 'he', 'she', 'it', 'that', 'this', 'there', 'what', 'how', 'why'
+}
+
 def aggregate_transcript(entries):
     if not entries:
         return []
@@ -1438,6 +1444,11 @@ def aggregate_transcript(entries):
         
         if is_sound_effect:
             if current_entry:
+                sent = current_entry['text'].strip()
+                sent = sent[:1].upper() + sent[1:]
+                if not re.search(r'[.?!]["\'’”\)]?$', sent):
+                    sent += "."
+                current_entry['text'] = sent
                 aggregated.append(current_entry)
                 current_entry = None
             aggregated.append({
@@ -1455,12 +1466,30 @@ def aggregate_transcript(entries):
             }
         else:
             prev_text = current_entry['text']
+            prev_words = prev_text.split()
+            prev_word_count = len(prev_words)
+            gap = start - current_entry['end']
+            next_first_word = text.split()[0].lower() if text.split() else ""
+            ends_with_punc = is_sentence_end_backend(prev_text)
             
-            # Podział wyłącznie na granicy pełnego zdania (kropka, pytajnik, wykrzyknik)
-            # NIGDY nie dzielimy ani nie urywamy zdania w połowie!
-            should_split = is_sentence_end_backend(prev_text)
+            should_split = False
+            if ends_with_punc:
+                should_split = True
+            elif gap >= 0.5 and prev_word_count >= 6:
+                should_split = True
+            elif prev_word_count >= 12 and next_first_word in ENGLISH_SENTENCE_STARTERS:
+                should_split = True
+            elif prev_word_count >= 18:
+                should_split = True
+            elif (current_entry['end'] - current_entry['start']) >= 8.5 and prev_word_count >= 8:
+                should_split = True
                 
             if should_split:
+                sent = current_entry['text'].strip()
+                sent = sent[:1].upper() + sent[1:]
+                if not re.search(r'[.?!]["\'’”\)]?$', sent):
+                    sent += "."
+                current_entry['text'] = sent
                 aggregated.append(current_entry)
                 current_entry = {
                     "start": start,
@@ -1468,7 +1497,7 @@ def aggregate_transcript(entries):
                     "text": text
                 }
             else:
-                current_entry['end'] = end
+                current_entry['end'] = max(current_entry['end'], end)
                 # Check for hyphenated end or apostrophes
                 if prev_text.endswith('-') or text.startswith('\''):
                     current_entry['text'] = prev_text + text
@@ -1476,6 +1505,11 @@ def aggregate_transcript(entries):
                     current_entry['text'] = prev_text + " " + text
 
     if current_entry:
+        sent = current_entry['text'].strip()
+        sent = sent[:1].upper() + sent[1:]
+        if not re.search(r'[.?!]["\'’”\)]?$', sent):
+            sent += "."
+        current_entry['text'] = sent
         aggregated.append(current_entry)
 
     # Druga faza: upewnienie się, że każdy segment to dokładnie jedno pełne zdanie.

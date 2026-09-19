@@ -2,7 +2,13 @@
  * sentenceGrouping.js
  * 
  * Moduł zapewniający, że podział transkrypcji na segmenty/karty fraz w Media Buddy
- * następuje wyłącznie na poziomie pełnych zdań – nigdy nie urywa ani nie dzieli zdań.
+ * następuje wyłącznie na poziomie pełnych, czytelnych zdań.
+ * 
+ * 1. Gdy transkrypcja posiada interpunkcję: łączy segmenty w pełne zdania (od kropki do kropki),
+ *    nigdy nie urywając zdań w połowie.
+ * 2. Gdy transkrypcja NIE posiada interpunkcji (np. automatyczne napisy YouTube z mowy na żywo):
+ *    zapobiega złączeniu całego wideo w jedno gigantyczne zdanie – dzieli mowę na naturalne jednostki myśli/zdania
+ *    (na podstawie pauz w mowie, spójników i limitu długości 12-18 słów), dodając wielką literę i kropkę.
  */
 
 // Typowe skróty w języku angielskim zakończone kropką, które NIE kończą zdania
@@ -10,6 +16,13 @@ export const ABBREVIATIONS = new Set([
   "mr.", "mrs.", "ms.", "dr.", "prof.", "sr.", "jr.", "vs.", "e.g.", "i.e.",
   "etc.", "st.", "u.s.", "u.k.", "gen.", "gov.", "jan.", "feb.", "mar.", "apr.",
   "jun.", "jul.", "aug.", "sept.", "oct.", "nov.", "dec.", "a.m.", "p.m.", "no.", "vol."
+]);
+
+// Typowe słowa rozpoczynające nowe zdanie lub myśl w naturalnej mowie
+export const SENTENCE_STARTERS = new Set([
+  "so", "and", "but", "because", "now", "then", "well", "however",
+  "if", "when", "while", "you know", "i mean", "right", "we", "i",
+  "they", "he", "she", "it", "that", "this", "there", "what", "how", "why"
 ]);
 
 /**
@@ -101,6 +114,8 @@ export const splitBlockIntoSentences = (text) => {
  * 2. Żadne zdanie nie jest urywane ani dzielone na części.
  * 3. Segmenty urwane w połowie zdania są łączone w spójną całość.
  * 4. Bloki zawierające wiele zdań są rozdzielane z proporcjonalnymi znacznikami czasu.
+ * 5. Dla mowy bez interpunkcji (YouTube auto-captions) dzieli mowę na naturalne jednostki (12-18 słów/pauza),
+ *    dzięki czemu całe wideo NIE łączy się w jedno gigantyczne zdanie!
  */
 export const ensureCompleteSentences = (rawTranscript) => {
   if (!Array.isArray(rawTranscript) || rawTranscript.length === 0) {
@@ -118,7 +133,7 @@ export const ensureCompleteSentences = (rawTranscript) => {
 
   if (cleaned.length === 0) return [];
 
-  // Krok 1: Łączenie kolejnych segmentów aż do momentu napotkania znaku końca zdania
+  // Krok 1: Łączenie kolejnych segmentów
   const mergedBlocks = [];
   let current = null;
 
@@ -130,26 +145,67 @@ export const ensureCompleteSentences = (rawTranscript) => {
       current = {
         start: seg.start,
         end: seg.end,
-        text: text
+        text: text,
+        wordCount: text.split(/\s+/).length
       };
     } else {
-      current.end = seg.end;
-      // Łączenie słów z uwzględnieniem łączników i apostrofów
-      if (current.text.endsWith("-") || text.startsWith("'")) {
-        current.text = `${current.text}${text}`;
-      } else {
-        current.text = `${current.text} ${text}`;
-      }
-    }
+      const prevWordCount = current.wordCount;
+      const gap = seg.start - current.end;
+      const nextFirstWord = text.split(/\s+/)[0].toLowerCase();
+      const endsPunc = isSentenceEnd(current.text);
 
-    if (isSentenceEnd(current.text)) {
-      mergedBlocks.push(current);
-      current = null;
+      let shouldSplit = false;
+      if (endsPunc) {
+        // Jawne zakończenie zdania interpunkcją (kropka, pytajnik, wykrzyknik)
+        shouldSplit = true;
+      } else if (gap >= 0.5 && prevWordCount >= 6) {
+        // Naturalna pauza w mowie po co najmniej 6 słowach
+        shouldSplit = true;
+      } else if (prevWordCount >= 12 && SENTENCE_STARTERS.has(nextFirstWord)) {
+        // Nowa fraza/myśl rozpoczynająca się od spójnika lub zaimka po min. 12 słowach
+        shouldSplit = true;
+      } else if (prevWordCount >= 18) {
+        // Bezpieczny limit słów dla niepunktowanej mowy
+        shouldSplit = true;
+      } else if (current.end - current.start >= 8.5 && prevWordCount >= 8) {
+        // Bezpieczny limit czasu trwania pojedynczej karty (8.5s)
+        shouldSplit = true;
+      }
+
+      if (shouldSplit) {
+        let sent = current.text.trim();
+        sent = sent.charAt(0).toUpperCase() + sent.slice(1);
+        if (!/[.?!]["'”’)]?$/.test(sent)) {
+          sent += ".";
+        }
+        current.text = sent;
+        mergedBlocks.push(current);
+        current = {
+          start: seg.start,
+          end: seg.end,
+          text: text,
+          wordCount: text.split(/\s+/).length
+        };
+      } else {
+        current.end = Math.max(current.end, seg.end);
+        if (current.text.endsWith("-") || text.startsWith("'")) {
+          current.text = `${current.text}${text}`;
+        } else {
+          current.text = `${current.text} ${text}`;
+        }
+        current.wordCount = current.text.split(/\s+/).length;
+      }
     }
   }
 
-  // Jeśli cokolwiek zostało na końcu (np. film zakończył się bez kropki), zachowaj jako ostatnie zdanie
+  // Zamknięcie ostatniego bloku
   if (current) {
+    let sent = current.text.trim();
+    sent = sent.charAt(0).toUpperCase() + sent.slice(1);
+    if (!/[.?!]["'”’)]?$/.test(sent)) {
+      sent += ".";
+    }
+    current.text = sent;
     mergedBlocks.push(current);
   }
 
