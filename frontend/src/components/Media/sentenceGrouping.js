@@ -6,9 +6,11 @@
  * 
  * 1. Gdy transkrypcja posiada interpunkcję: łączy segmenty w pełne zdania (od kropki do kropki),
  *    nigdy nie urywając zdań w połowie.
- * 2. Gdy transkrypcja NIE posiada interpunkcji (np. automatyczne napisy YouTube z mowy na żywo):
- *    zapobiega złączeniu całego wideo w jedno gigantyczne zdanie – dzieli mowę na naturalne jednostki myśli/zdania
- *    (na podstawie pauz w mowie, spójników i limitu długości 12-18 słów), dodając wielką literę i kropkę.
+ * 2. Gdy transkrypcja NIE posiada interpunkcji (np. automatyczne napisy YouTube z mowy na żywo)
+ *    lub gdy transkrypcja została wcześniej zapisana jako 1 gigantyczny blok tekstu:
+ *    inteligentnie dzieli tekst na naturalne, kompletne jednostki wypowiedzi (10-18 słów),
+ *    dopasowując granice do spójników i zaimków, wielkich liter i kropek,
+ *    dzięki czemu całe wideo NIGDY nie łączy się w jedno gigantyczne zdanie!
  */
 
 // Typowe skróty w języku angielskim zakończone kropką, które NIE kończą zdania
@@ -18,11 +20,14 @@ export const ABBREVIATIONS = new Set([
   "jun.", "jul.", "aug.", "sept.", "oct.", "nov.", "dec.", "a.m.", "p.m.", "no.", "vol."
 ]);
 
-// Typowe słowa rozpoczynające nowe zdanie lub myśl w naturalnej mowie
+// Typowe słowa rozpoczynające nowe zdanie lub myśl w naturalnej mowie angielskiej
 export const SENTENCE_STARTERS = new Set([
-  "so", "and", "but", "because", "now", "then", "well", "however",
-  "if", "when", "while", "you know", "i mean", "right", "we", "i",
-  "they", "he", "she", "it", "that", "this", "there", "what", "how", "why"
+  "so", "and", "but", "because", "or", "well", "now", "then", "also", "actually",
+  "in fact", "plus", "anyway", "meanwhile", "however", "if", "when", "while",
+  "although", "though", "since", "after", "before", "unless", "until", "as",
+  "i", "you", "we", "they", "he", "she", "it", "there", "that", "this", "these",
+  "those", "what", "why", "how", "where", "who", "which", "you know", "i mean",
+  "right", "okay", "sure", "yeah", "yes", "no"
 ]);
 
 /**
@@ -57,8 +62,68 @@ export const isSentenceEnd = (text) => {
 };
 
 /**
+ * Dzieli długą, niepunktowaną frazę (np. > 18-20 słów) na naturalne, pełne jednostki zdań/myśli
+ * o optymalnej długości 10-18 słów. Zapewnia wielką literę na początku i kropkę na końcu.
+ */
+export const splitLongUnpunctuatedClause = (text) => {
+  if (!text) return [];
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  
+  if (words.length <= 20) {
+    let s = words.join(" ");
+    s = s.charAt(0).toUpperCase() + s.slice(1);
+    if (!/[.?!]["'”’)]?$/.test(s)) s += ".";
+    return [s];
+  }
+
+  const results = [];
+  let currentWords = [];
+
+  for (let i = 0; i < words.length; i++) {
+    currentWords.push(words[i]);
+    const count = currentWords.length;
+    const remaining = words.length - (i + 1);
+
+    if (count >= 10 && remaining >= 4) {
+      const nextWord = (words[i + 1] || "").toLowerCase().replace(/[^a-z']/g, "");
+      const nextTwoWords = words[i + 2] 
+        ? `${nextWord} ${(words[i + 2] || "").toLowerCase().replace(/[^a-z']/g, "")}` 
+        : "";
+
+      const isStarter = SENTENCE_STARTERS.has(nextWord) || SENTENCE_STARTERS.has(nextTwoWords);
+
+      // Dzielimy, jeśli osiągnięto min. 10 słów i kolejne słowo to spójnik/zaimek,
+      // lub bezwzględnie przy osiągnięciu 18 słów
+      if ((count >= 10 && isStarter) || count >= 18) {
+        let sent = currentWords.join(" ").trim();
+        sent = sent.charAt(0).toUpperCase() + sent.slice(1);
+        if (!/[.?!]["'”’)]?$/.test(sent)) sent += ".";
+        results.push(sent);
+        currentWords = [];
+      }
+    }
+  }
+
+  if (currentWords.length > 0) {
+    let sent = currentWords.join(" ").trim();
+    if (results.length > 0 && currentWords.length < 5) {
+      let prev = results[results.length - 1];
+      if (prev.endsWith(".")) prev = prev.slice(0, -1);
+      results[results.length - 1] = `${prev} ${sent}.`;
+    } else {
+      sent = sent.charAt(0).toUpperCase() + sent.slice(1);
+      if (!/[.?!]["'”’)]?$/.test(sent)) sent += ".";
+      results.push(sent);
+    }
+  }
+
+  return results;
+};
+
+/**
  * Dzieli pojedynczy blok tekstu zawierający wiele zdań na tablicę pojedynczych, pełnych zdań.
- * Respektuje skróty i cudzysłowy.
+ * Respektuje skróty, cudzysłowy i automatycznie dzieli długie niepunktowane ciągi mowy.
  */
 export const splitBlockIntoSentences = (text) => {
   if (!text) return [];
@@ -74,37 +139,48 @@ export const splitBlockIntoSentences = (text) => {
     if (match[1]) matches.push(match[1].trim());
   }
 
-  if (matches.length === 0) {
-    return [trimmed];
-  }
-
-  // Weryfikacja pod kątem skrótów (np. Mr. Smith nie powinno być dzielone)
-  const sentences = [];
-  let buffer = "";
-  for (const m of matches) {
-    const candidate = buffer ? `${buffer} ${m}` : m;
-    const stripped = candidate.replace(/["'”’)\]]+$/, "");
-    if (stripped && (stripped.endsWith(".") || stripped.endsWith("?") || stripped.endsWith("!"))) {
-      const words = stripped.split(/\s+/);
-      const lastWord = words[words.length - 1].toLowerCase();
-      if (ABBREVIATIONS.has(lastWord)) {
-        buffer = candidate;
-        continue;
+  const rawPieces = matches.length === 0 ? [trimmed] : [];
+  if (matches.length > 0) {
+    let buffer = "";
+    for (const m of matches) {
+      const candidate = buffer ? `${buffer} ${m}` : m;
+      const stripped = candidate.replace(/["'”’)\]]+$/, "");
+      if (stripped && (stripped.endsWith(".") || stripped.endsWith("?") || stripped.endsWith("!"))) {
+        const words = stripped.split(/\s+/);
+        const lastWord = words[words.length - 1].toLowerCase();
+        if (ABBREVIATIONS.has(lastWord)) {
+          buffer = candidate;
+          continue;
+        }
+      }
+      rawPieces.push(candidate);
+      buffer = "";
+    }
+    if (buffer) {
+      if (rawPieces.length > 0) {
+        rawPieces[rawPieces.length - 1] += ` ${buffer}`;
+      } else {
+        rawPieces.push(buffer);
       }
     }
-    sentences.push(candidate);
-    buffer = "";
   }
 
-  if (buffer) {
-    if (sentences.length > 0) {
-      sentences[sentences.length - 1] = `${sentences[sentences.length - 1]} ${buffer}`;
+  // Weryfikujemy każdy fragment: jeśli fragment nie ma interpunkcji i przekracza 20 słów,
+  // dzielimy go na czytelne jednostki zdań
+  const finalSentences = [];
+  for (const piece of rawPieces) {
+    const words = piece.split(/\s+/).filter(Boolean);
+    if (words.length > 20) {
+      finalSentences.push(...splitLongUnpunctuatedClause(piece));
     } else {
-      sentences.push(buffer);
+      let s = piece.trim();
+      s = s.charAt(0).toUpperCase() + s.slice(1);
+      if (!/[.?!]["'”’)]?$/.test(s)) s += ".";
+      finalSentences.push(s);
     }
   }
 
-  return sentences;
+  return finalSentences;
 };
 
 /**
@@ -114,8 +190,8 @@ export const splitBlockIntoSentences = (text) => {
  * 2. Żadne zdanie nie jest urywane ani dzielone na części.
  * 3. Segmenty urwane w połowie zdania są łączone w spójną całość.
  * 4. Bloki zawierające wiele zdań są rozdzielane z proporcjonalnymi znacznikami czasu.
- * 5. Dla mowy bez interpunkcji (YouTube auto-captions) dzieli mowę na naturalne jednostki (12-18 słów/pauza),
- *    dzięki czemu całe wideo NIE łączy się w jedno gigantyczne zdanie!
+ * 5. Dla mowy bez interpunkcji oraz wideo scalanego w 1 gigantyczny blok:
+ *    rozkłada treść na naturalne karty zdań (10-18 słów) z proporcjonalnym czasem!
  */
 export const ensureCompleteSentences = (rawTranscript) => {
   if (!Array.isArray(rawTranscript) || rawTranscript.length === 0) {
@@ -133,7 +209,7 @@ export const ensureCompleteSentences = (rawTranscript) => {
 
   if (cleaned.length === 0) return [];
 
-  // Krok 1: Łączenie kolejnych segmentów
+  // Krok 1: Łączenie kolejnych segmentów (lub rozbijanie segmentów, jeśli segment jest już długi)
   const mergedBlocks = [];
   let current = null;
 
@@ -209,8 +285,7 @@ export const ensureCompleteSentences = (rawTranscript) => {
     mergedBlocks.push(current);
   }
 
-  // Krok 2: Upewnienie się, że jeśli scalony blok zawiera wiele pełnych zdań,
-  // zostanie on rozbity na pojedyncze zdania z proporcjonalnymi znacznikami czasu
+  // Krok 2: Rozbicie bloków na pojedyncze zdania z proporcjonalnymi znacznikami czasu
   const finalSentences = [];
   for (const block of mergedBlocks) {
     const sents = splitBlockIntoSentences(block.text);
@@ -218,7 +293,7 @@ export const ensureCompleteSentences = (rawTranscript) => {
       finalSentences.push({
         start: Math.round(block.start * 100) / 100,
         end: Math.round(block.end * 100) / 100,
-        text: block.text.replace(/\s+/g, " ").trim()
+        text: (sents[0] || block.text).replace(/\s+/g, " ").trim()
       });
     } else {
       const totalChars = sents.reduce((acc, s) => acc + s.length, 0);
@@ -238,7 +313,34 @@ export const ensureCompleteSentences = (rawTranscript) => {
     }
   }
 
-  return finalSentences;
+  // Krok 3: Dodatkowy filtr bezpieczeństwa gwarantujący, że żaden segment nie przekracza dopuszczalnej długości
+  const polishedSentences = [];
+  for (const item of finalSentences) {
+    const words = item.text.split(/\s+/).filter(Boolean);
+    if (words.length > 22) {
+      const parts = splitLongUnpunctuatedClause(item.text);
+      if (parts.length > 1) {
+        const totalChars = parts.reduce((acc, s) => acc + s.length, 0);
+        const duration = Math.max(0, item.end - item.start);
+        let cStart = item.start;
+        for (let k = 0; k < parts.length; k++) {
+          const p = parts[k].replace(/\s+/g, " ").trim();
+          const frac = totalChars > 0 ? p.length / totalChars : 1 / parts.length;
+          const cEnd = k === parts.length - 1 ? item.end : cStart + frac * duration;
+          polishedSentences.push({
+            start: Math.round(cStart * 100) / 100,
+            end: Math.round(cEnd * 100) / 100,
+            text: p
+          });
+          cStart = cEnd;
+        }
+        continue;
+      }
+    }
+    polishedSentences.push(item);
+  }
+
+  return polishedSentences;
 };
 
 export default ensureCompleteSentences;

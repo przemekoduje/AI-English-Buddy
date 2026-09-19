@@ -312,6 +312,52 @@ function MediaBuddy({ user }) {
     }
   }, [customVideos]);
 
+  // Automatyczna migracja i normalizacja customVideos z localStorage do pełnych zdań
+  useEffect(() => {
+    if (Array.isArray(customVideos) && customVideos.length > 0) {
+      let changed = false;
+      const updated = customVideos.map((v) => {
+        if (!Array.isArray(v.transcript) || v.transcript.length === 0) return v;
+        const needsSplit = v.transcript.length === 1 ||
+          v.transcript.some(t => !t.text || t.text.split(/\s+/).length > 22 || (t.end - t.start > 25));
+        if (needsSplit) {
+          const resegmented = ensureCompleteSentences(v.transcript);
+          if (resegmented.length !== v.transcript.length) {
+            changed = true;
+            return {
+              ...v,
+              transcript: resegmented
+            };
+          }
+        }
+        return v;
+      });
+
+      if (changed) {
+        setCustomVideos(updated);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Automatyczna weryfikacja currentVideo - jeśli zawiera gigantyczny blok, natychmiast go rozbijamy
+  useEffect(() => {
+    if (currentVideo && Array.isArray(currentVideo.transcript) && currentVideo.transcript.length > 0) {
+      const needsSplit = currentVideo.transcript.length === 1 || 
+        currentVideo.transcript.some(t => !t.text || t.text.split(/\s+/).length > 22 || (t.end - t.start > 25));
+      
+      if (needsSplit) {
+        const resegmented = ensureCompleteSentences(currentVideo.transcript);
+        if (resegmented.length !== currentVideo.transcript.length) {
+          setCurrentVideo(prev => ({
+            ...prev,
+            transcript: resegmented
+          }));
+        }
+      }
+    }
+  }, [currentVideo]);
+
   const handleDeleteCustomVideo = (e, videoId) => {
     e.stopPropagation();
     const updated = customVideos.filter((v) => v.id !== videoId);
@@ -761,15 +807,16 @@ function MediaBuddy({ user }) {
   };
 
   const handleSelectVideo = (vid) => {
-    if (currentVideo && currentVideo.id === vid.id) return;
+    const formattedTranscript = ensureCompleteSentences(vid.transcript);
+    if (currentVideo && currentVideo.id === vid.id && currentVideo.transcript && currentVideo.transcript.length === formattedTranscript.length) return;
     setIsLoadingCustom(true);
     setTimeout(() => {
       setCurrentVideo({
         ...vid,
-        transcript: ensureCompleteSentences(vid.transcript)
+        transcript: formattedTranscript
       });
       setIsLoadingCustom(false);
-    }, 600);
+    }, 300);
   };
 
   const fetchAndLoadVideo = async (videoId) => {
@@ -811,15 +858,13 @@ function MediaBuddy({ user }) {
         };
 
         setCustomVideos(prev => {
-          if (!prev.some(v => v.youtubeId === videoId)) {
-            return [...prev, staticVid];
-          }
-          return prev;
+          const filtered = prev.filter(v => v.youtubeId !== videoId);
+          return [staticVid, ...filtered];
         });
         setCurrentVideo(staticVid);
         setCustomUrl("");
         setIsLoadingCustom(false);
-      }, 800);
+      }, 500);
       return;
     }
 
@@ -831,7 +876,7 @@ function MediaBuddy({ user }) {
 
       const response = await fetch(endpoint, {
         headers: {
-          "X-Session-Token": user.token
+          "X-Session-Token": user ? user.token : ""
         }
       });
       if (response.ok) {
@@ -848,9 +893,10 @@ function MediaBuddy({ user }) {
           transcript: ensureCompleteSentences(data.transcript)
         };
 
-        if (!customVideos.some(v => v.youtubeId === videoId)) {
-          setCustomVideos([...customVideos, newCustomVid]);
-        }
+        setCustomVideos(prev => {
+          const filtered = prev.filter(v => v.youtubeId !== videoId);
+          return [newCustomVid, ...filtered];
+        });
         setCurrentVideo(newCustomVid);
         setCustomUrl("");
       } else {

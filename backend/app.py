@@ -1391,35 +1391,107 @@ def is_sentence_end_backend(text):
         return True
     return False
 
-def split_into_complete_sentences_backend(text):
-    pattern = r'(.+?[.?!][\"\'’”\)]?)(?:\s+(?=[A-Z0-9\"\'“\(])|$)'
-    matches = re.findall(pattern, text)
-    if not matches:
-        return [text.strip()] if text.strip() else []
-    sentences = []
-    curr = ""
-    for m in matches:
-        candidate = (curr + " " + m).strip() if curr else m.strip()
-        stripped = candidate.rstrip('\"\'’”)]')
-        if stripped and stripped[-1] in ('.', '?', '!'):
-            words = stripped.split()
-            if words and words[-1].lower() in ENGLISH_ABBREVIATIONS:
-                curr = candidate
-                continue
-        sentences.append(candidate)
-        curr = ""
-    if curr:
-        if sentences:
-            sentences[-1] = sentences[-1] + " " + curr
-        else:
-            sentences.append(curr)
-    return sentences
-
 ENGLISH_SENTENCE_STARTERS = {
-    'so', 'and', 'but', 'because', 'now', 'then', 'well', 'however',
-    'if', 'when', 'while', 'you know', 'i mean', 'right', 'we', 'i',
-    'they', 'he', 'she', 'it', 'that', 'this', 'there', 'what', 'how', 'why'
+    'so', 'and', 'but', 'because', 'or', 'well', 'now', 'then', 'also', 'actually',
+    'in fact', 'plus', 'anyway', 'meanwhile', 'however', 'if', 'when', 'while',
+    'although', 'though', 'since', 'after', 'before', 'unless', 'until', 'as',
+    'i', 'you', 'we', 'they', 'he', 'she', 'it', 'there', 'that', 'this', 'these',
+    'those', 'what', 'why', 'how', 'where', 'who', 'which', 'you know', 'i mean',
+    'right', 'okay', 'sure', 'yeah', 'yes', 'no'
 }
+
+def split_long_unpunctuated_clause_backend(text):
+    if not text:
+        return []
+    words = text.strip().split()
+    if not words:
+        return []
+    if len(words) <= 20:
+        s = " ".join(words)
+        s = s[:1].upper() + s[1:]
+        if not re.search(r'[.?!]["\'’”\)]?$', s):
+            s += "."
+        return [s]
+
+    results = []
+    curr_words = []
+
+    for i in range(len(words)):
+        curr_words.append(words[i])
+        count = len(curr_words)
+        remaining = len(words) - (i + 1)
+
+        if count >= 10 and remaining >= 4:
+            next_word = re.sub(r"[^a-z']", "", (words[i + 1] or "").lower())
+            next_two = (next_word + " " + re.sub(r"[^a-z']", "", (words[i + 2] or "").lower())) if i + 2 < len(words) else ""
+            is_starter = next_word in ENGLISH_SENTENCE_STARTERS or next_two in ENGLISH_SENTENCE_STARTERS
+
+            if (count >= 10 and is_starter) or count >= 18:
+                sent = " ".join(curr_words).strip()
+                sent = sent[:1].upper() + sent[1:]
+                if not re.search(r'[.?!]["\'’”\)]?$', sent):
+                    sent += "."
+                results.append(sent)
+                curr_words = []
+
+    if curr_words:
+        sent = " ".join(curr_words).strip()
+        if results and len(curr_words) < 5:
+            prev = results[-1]
+            if prev.endswith('.'):
+                prev = prev[:-1]
+            results[-1] = f"{prev} {sent}."
+        else:
+            sent = sent[:1].upper() + sent[1:]
+            if not re.search(r'[.?!]["\'’”\)]?$', sent):
+                sent += "."
+            results.append(sent)
+
+    return results
+
+def split_into_complete_sentences_backend(text):
+    if not text:
+        return []
+    trimmed = text.strip()
+    if not trimmed:
+        return []
+
+    pattern = r'(.+?[.?!][\"\'’”\)]?)(?:\s+(?=[A-Z0-9\"\'“\(])|$)'
+    matches = re.findall(pattern, trimmed)
+    raw_pieces = []
+    if not matches:
+        raw_pieces = [trimmed]
+    else:
+        curr = ""
+        for m in matches:
+            candidate = (curr + " " + m).strip() if curr else m.strip()
+            stripped = candidate.rstrip('\"\'’”)]')
+            if stripped and stripped[-1] in ('.', '?', '!'):
+                words = stripped.split()
+                if words and words[-1].lower() in ENGLISH_ABBREVIATIONS:
+                    curr = candidate
+                    continue
+            raw_pieces.append(candidate)
+            curr = ""
+        if curr:
+            if raw_pieces:
+                raw_pieces[-1] = raw_pieces[-1] + " " + curr
+            else:
+                raw_pieces.append(curr)
+                
+    final_sentences = []
+    for piece in raw_pieces:
+        words = piece.split()
+        if len(words) > 20:
+            final_sentences.extend(split_long_unpunctuated_clause_backend(piece))
+        else:
+            s = piece.strip()
+            s = s[:1].upper() + s[1:]
+            if not re.search(r'[.?!]["\'’”\)]?$', s):
+                s += "."
+            final_sentences.append(s)
+
+    return final_sentences
 
 def aggregate_transcript(entries):
     if not entries:
