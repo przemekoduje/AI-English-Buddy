@@ -5006,9 +5006,7 @@ def chat_free():
 
 @app.route("/api/chat-free/summary", methods=['POST'])
 def generate_chat_summary():
-    user_email = get_user_from_request()
-    if not user_email:
-        return jsonify({"error": "Brak autoryzacji"}), 401
+    user_email = get_user_from_request() or "guest@speakling.ai"
         
     data = request.get_json() or {}
     history = data.get("history", [])
@@ -5142,9 +5140,54 @@ def get_live_config():
             {"id": "gemini-2.5-flash-native-audio-latest", "name": "Gemini 2.5 Flash Native Audio (Zalecany - najszybszy)"},
             {"id": "gemini-3.8-live", "name": "Gemini 3.8 Live (Nowa generacja)"},
             {"id": "gemini-3.1-flash-live-preview", "name": "Gemini 3.1 Flash Live"},
-            {"id": "gemini-2.5-flash-native-audio-preview-09-2025", "name": "Gemini 2.5 Flash Preview"}
         ]
     })
+
+
+@app.route("/api/live/transcribe", methods=['POST'])
+def live_transcribe():
+    """Transcribes an audio turn (WAV / PCM) from Gemini Live for display in the chat transcript."""
+    audio_file = request.files.get('audio')
+    if not audio_file:
+        return jsonify({"text": ""}), 200
+
+    audio_bytes = audio_file.read()
+    if not audio_bytes or len(audio_bytes) < 300:
+        return jsonify({"text": ""}), 200
+
+    text = ""
+    try:
+        from io import BytesIO
+        audio_stream = BytesIO(audio_bytes)
+        audio_stream.name = "turn.wav"
+        res = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_stream,
+            language="en"
+        )
+        text = res.text.strip() if res and hasattr(res, 'text') else ""
+    except Exception as e:
+        print(f"OpenAI Whisper error in live_transcribe: {e}", flush=True)
+        try:
+            HF_TOKEN = os.getenv("HF_TOKEN")
+            if HF_TOKEN:
+                API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
+                headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+                hf_res = requests.post(API_URL, headers=headers, data=audio_bytes, timeout=8)
+                if hf_res.ok:
+                    text = hf_res.json().get("text", "").strip()
+        except Exception as hf_err:
+            print(f"HF Whisper error in live_transcribe: {hf_err}", flush=True)
+
+    # Filter out typical Whisper hallucinations for silence/noise
+    whisper_hallucinations = [
+        "thank you", "thanks for watching", "subtitles by", "amara.org",
+        "you", "bye", "see you next time", "thank you for watching", "subscribe"
+    ]
+    if text.lower().strip().rstrip(".!?") in whisper_hallucinations and len(audio_bytes) < 6000:
+        text = ""
+
+    return jsonify({"text": text}), 200
 
 @app.route("/api/live/save-key", methods=['POST'])
 def save_live_key():

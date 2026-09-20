@@ -63,6 +63,11 @@ function Dashboard({ user }) {
   const geminiLiveRef = useRef(null);
   const videoElementRef = useRef(null);
   const transcriptScrollRef = useRef(null);
+  const chatMessagesRef = useRef(chatMessages);
+
+  useEffect(() => {
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages]);
 
   // Classic Mode Refs
   const mediaRecorderRef = useRef(null);
@@ -220,6 +225,7 @@ function Dashboard({ user }) {
         provider: activeProvider,
         model: activeModel,
         voiceName: activeVoice,
+        apiBaseUrl: API_BASE_URL,
         systemInstruction:
           "You are Speakling, a friendly, charismatic and encouraging native English tutor. Help the student practice conversational English naturally. Keep responses lively, spoken and concise (1-3 sentences) so the conversation flows seamlessly back and forth.",
         onStatusChange: (status) => {
@@ -770,10 +776,12 @@ function Dashboard({ user }) {
     }
 
     setIsChatActive(false);
-    setShowTranscript(false);
+
+    // Pobieramy historię z refa, aby uniknąć problemu z przestarzałym domknięciem stanu
+    const messagesToSummarize = chatMessagesRef.current || [];
 
     // Generowanie podsumowania, jeśli są jakiekolwiek wiadomości
-    if (chatMessages.length > 0) {
+    if (messagesToSummarize.length > 0) {
       setIsGeneratingSummary(true);
       try {
         const response = await fetch(`${API_BASE_URL}/api/chat-free/summary`, {
@@ -783,7 +791,7 @@ function Dashboard({ user }) {
             "X-Session-Token": user?.token || "",
           },
           body: JSON.stringify({
-            history: chatMessages.map((msg) => ({
+            history: messagesToSummarize.map((msg) => ({
               sender: msg.sender,
               text: msg.text,
             })),
@@ -793,14 +801,19 @@ function Dashboard({ user }) {
         if (response.ok) {
           const summaryData = await response.json();
           setVoiceSummary(summaryData);
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          console.error("Błąd tworzenia podsumowania:", errData);
+          setErrorMessage(errData.error || "Serwer nie mógł przygotować podsumowania rozmowy.");
         }
       } catch (err) {
         console.error("Błąd podczas tworzenia podsumowania sesji:", err);
+        setErrorMessage("Błąd połączenia z serwerem podczas generowania podsumowania.");
       } finally {
         setIsGeneratingSummary(false);
       }
     } else {
-      setChatMessages([]);
+      setErrorMessage("Rozmowa była zbyt krótka, aby wygenerować podsumowanie. Porozmawiaj chwilę z lektorem i spróbuj ponownie!");
     }
   };
 
@@ -992,6 +1005,20 @@ function Dashboard({ user }) {
             </div>
           )}
 
+          {/* Przycisk zakończenia rozmowy i przejścia do podsumowania */}
+          {isChatActive && (
+            <div className="tutor-active-call-controls animate-fade-in">
+              <button
+                type="button"
+                className="btn-end-call-prominent"
+                onClick={handleEndSession}
+                title="Zakończ rozmowę i wygeneruj raport postępów"
+              >
+                <span className="end-call-icon">🛑</span> Zakończ rozmowę i zobacz podsumowanie
+              </button>
+            </div>
+          )}
+
           {/* Controls Bar: Camera Toggle & Transcript Button */}
           <div className="tutor-action-buttons-row">
             {/* Multimodal Camera Button */}
@@ -1010,7 +1037,7 @@ function Dashboard({ user }) {
             )}
 
             {/* Toggle Transcript button */}
-            {isChatActive && chatMessages.length > 0 && (
+            {chatMessages.length > 0 && (
               <button 
                 className={`tutor-transcript-toggle-btn ${showTranscript ? "active" : ""}`}
                 onClick={() => setShowTranscript(!showTranscript)}
@@ -1022,7 +1049,7 @@ function Dashboard({ user }) {
         </div>
 
         {/* Side Transcript Section */}
-        {isChatActive && chatMessages.length > 0 && (
+        {(isChatActive || isGeneratingSummary || showTranscript) && chatMessages.length > 0 && (
           <div className={`tutor-side-transcript glass-panel ${showTranscript ? "open" : ""}`}>
             <div className="side-transcript-header-row">
               <h3 className="side-transcript-header">Zapis rozmowy na żywo</h3>

@@ -1222,3 +1222,53 @@
 .btn-save-only:hover {
   background: #e2e8f0;
 }
+
+/* Active Call Controls & End Call Button */
+.tutor-active-call-controls {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.btn-end-call-prominent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.72rem 1.65rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.42);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: pulse-end-btn 2.5s infinite ease-in-out;
+}
+
+.btn-end-call-prominent:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 22px rgba(220, 38, 38, 0.55);
+}
+
+.btn-end-call-prominent:active {
+  transform: translateY(1px);
+}
+
+.btn-end-call-prominent .end-call-icon {
+  font-size: 1.1rem;
+}
+
+@keyframes pulse-end-btn {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.42);
+  }
+  50% {
+    box-shadow: 0 4px 24px rgba(239, 68, 68, 0.65);
+  }
+}

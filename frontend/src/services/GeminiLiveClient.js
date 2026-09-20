@@ -58,8 +58,12 @@ export class GeminiLiveClient {
     this.videoFrameInterval = null;
     this.videoElement = null;
 
+    this.apiBaseUrl = options.apiBaseUrl || (typeof window !== 'undefined' && window.location.origin.includes('localhost') ? 'http://localhost:5001' : '');
+
     // Bufor aktualnej wypowiedzi lektora
     this.currentBotTurnText = '';
+    this.currentTurnAudioChunks = [];
+    this.botTurnStarted = false;
   }
 
   /**
@@ -426,6 +430,7 @@ export class GeminiLiveClient {
 
     // 3. Koniec tury lektora
     if (message.serverContent && message.serverContent.turnComplete) {
+      this.botTurnStarted = false;
       if (this.currentBotTurnText) {
         this.onTranscript({
           sender: 'bot',
@@ -433,6 +438,9 @@ export class GeminiLiveClient {
           isFinal: true
         });
         this.currentBotTurnText = '';
+        this.currentTurnAudioChunks = [];
+      } else {
+        this.transcribeBotTurn();
       }
     }
   }
@@ -475,6 +483,18 @@ export class GeminiLiveClient {
       const float32Array = this.base64ToFloat32Array(base64Data);
       if (!float32Array || float32Array.length === 0) return;
 
+      // Zbieramy próbki bieżącej tury do późniejszej automatycznej transkrypcji
+      this.currentTurnAudioChunks.push(float32Array);
+
+      if (!this.botTurnStarted) {
+        this.botTurnStarted = true;
+        this.onTranscript({
+          sender: 'bot',
+          text: '🎙️ Speaking...',
+          isFinal: false
+        });
+      }
+
       const audioBuffer = this.outputAudioContext.createBuffer(1, float32Array.length, sampleRate);
       if (audioBuffer.copyToChannel) {
         audioBuffer.copyToChannel(float32Array, 0);
@@ -511,6 +531,98 @@ export class GeminiLiveClient {
   }
 
   /**
+   * Koduje tablicę Float32 do pliku WAV PCM 16-bit
+   */
+  encodeWAV(samples, sampleRate = 24000) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    function writeString(offset, string) {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    }
+
+    writeString(0, "RIFF");
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, 1, true); // Mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); // Byte rate
+    view.setUint16(32, 2, true); // Block align
+    view.setUint16(34, 16, true); // Bits per sample
+    writeString(36, "data");
+    view.setUint32(40, samples.length * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+
+    return buffer;
+  }
+
+  /**
+   * Przesyła zarejestrowane audio tury lektora do Whisper API w celu uzyskania dokładnej transkrypcji
+   */
+  async transcribeBotTurn() {
+    if (!this.currentTurnAudioChunks || this.currentTurnAudioChunks.length === 0) return;
+
+    const chunks = this.currentTurnAudioChunks;
+    this.currentTurnAudioChunks = [];
+
+    let totalLength = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      totalLength += chunks[i].length;
+    }
+    if (totalLength < 4800) return; // Mniej niż 0.2s pomijamy
+
+    const combined = new Float32Array(totalLength);
+    let offset = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      combined.set(chunks[i], offset);
+      offset += chunks[i].length;
+    }
+
+    try {
+      const wavBuffer = this.encodeWAV(combined, 24000);
+      const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+      const formData = new FormData();
+      formData.append('audio', blob, 'bot_turn.wav');
+
+      const res = await fetch(`${this.apiBaseUrl}/api/live/transcribe`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = (data.text || '').trim();
+        if (text) {
+          this.onTranscript({
+            sender: 'bot',
+            text: text,
+            isFinal: true
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("[GeminiLive] Błąd transkrypcji wypowiedzi lektora:", e);
+    }
+
+    this.onTranscript({
+      sender: 'bot',
+      text: '🎙️ (Voice response)',
+      isFinal: true
+    });
+  }
+
+  /**
    * Natychmiastowe zatrzymanie odtwarzania głosu lektora (Barge-in)
    */
   stopBotAudio() {
@@ -521,6 +633,8 @@ export class GeminiLiveClient {
       } catch (e) {}
     });
     this.scheduledSources = [];
+    this.currentTurnAudioChunks = [];
+    this.botTurnStarted = false;
 
     if (this.outputAudioContext) {
       this.nextPlayTime = this.outputAudioContext.currentTime;
