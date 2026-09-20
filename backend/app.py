@@ -5081,11 +5081,11 @@ def generate_chat_summary():
         return jsonify({"error": f"Błąd generowania podsumowania czatu: {str(e)}"}), 500
 
 
-def create_gemini_ephemeral_token(api_key, model="gemini-2.0-flash-exp"):
+def create_gemini_ephemeral_token(api_key, model="gemini-2.5-flash-native-audio-latest"):
     """Creates an ephemeral token for Gemini Live API over WebSockets."""
     import datetime
     url = "https://generativelanguage.googleapis.com/v1beta/auth_tokens"
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.timezone.utc and datetime.datetime.now(datetime.timezone.utc)
     expire_time = (now + datetime.timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
     new_session_expire_time = (now + datetime.timedelta(minutes=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -5130,7 +5130,7 @@ def get_live_config():
     return jsonify({
         "gemini_api_key_configured": bool(active_key),
         "default_provider": "google_ai_studio",
-        "default_model": "gemini-2.0-flash-exp",
+        "default_model": "gemini-2.5-flash-native-audio-latest",
         "voices": [
             {"id": "Puck", "name": "Puck (Energetyczny męski)", "gender": "male"},
             {"id": "Charon", "name": "Charon (Głęboki męski)", "gender": "male"},
@@ -5139,8 +5139,10 @@ def get_live_config():
             {"id": "Kore", "name": "Kore (Naturalny żeński)", "gender": "female"}
         ],
         "models": [
-            {"id": "gemini-2.0-flash-exp", "name": "Gemini 2.0 Flash Live (Zalecany)"},
-            {"id": "gemini-2.5-flash-native-audio-preview-09-2025", "name": "Gemini 2.5 Flash Native Audio"}
+            {"id": "gemini-2.5-flash-native-audio-latest", "name": "Gemini 2.5 Flash Native Audio (Zalecany - najszybszy)"},
+            {"id": "gemini-3.8-live", "name": "Gemini 3.8 Live (Nowa generacja)"},
+            {"id": "gemini-3.1-flash-live-preview", "name": "Gemini 3.1 Flash Live"},
+            {"id": "gemini-2.5-flash-native-audio-preview-09-2025", "name": "Gemini 2.5 Flash Preview"}
         ]
     })
 
@@ -5193,7 +5195,7 @@ def get_live_token():
         return jsonify({"error": "Brak autoryzacji"}), 401
 
     req_data = request.get_json(silent=True) or {}
-    model = req_data.get("model", "gemini-2.0-flash-exp")
+    model = req_data.get("model", "gemini-2.5-flash-native-audio-latest")
     custom_api_key = req_data.get("api_key", "").strip()
 
     active_key = custom_api_key or get_gemini_api_key()
@@ -5233,7 +5235,7 @@ def get_vertex_live_token():
         region = os.getenv("GCP_REGION", "us-central1")
         ws_url = f"wss://{region}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent?access_token={creds.token}"
 
-        log_api_usage(user_email, "vertex_ai", "live_session_token", "gemini-2.0-flash-exp", 0, 0, 1)
+        log_api_usage(user_email, "vertex_ai", "live_session_token", "gemini-2.5-flash-native-audio-latest", 0, 0, 1)
         return jsonify({
             "access_token": creds.token,
             "project_id": project_id,

@@ -23,7 +23,12 @@ function Dashboard({ user }) {
     return localStorage.getItem("buddy_live_voice") || "Puck";
   });
   const [liveModel, setLiveModel] = useState(() => {
-    return localStorage.getItem("buddy_live_model") || "gemini-2.0-flash-exp";
+    const saved = localStorage.getItem("buddy_live_model");
+    if (!saved || saved === "gemini-2.0-flash-exp") {
+      localStorage.setItem("buddy_live_model", "gemini-2.5-flash-native-audio-latest");
+      return "gemini-2.5-flash-native-audio-latest";
+    }
+    return saved;
   });
   const [customApiKey, setCustomApiKey] = useState(() => {
     return localStorage.getItem("buddy_gemini_api_key") || "";
@@ -1233,8 +1238,10 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
                   onChange={(e) => setModel(e.target.value)}
                   className="settings-select"
                 >
-                  <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash Live (Eksperymentalny - najszybszy)</option>
-                  <option value="gemini-2.5-flash-native-audio-preview-09-2025">Gemini 2.5 Flash Native Audio</option>
+                  <option value="gemini-2.5-flash-native-audio-latest">Gemini 2.5 Flash Native Audio (Zalecany - najszybszy)</option>
+                  <option value="gemini-3.8-live">Gemini 3.8 Live (Nowa generacja)</option>
+                  <option value="gemini-3.1-flash-live-preview">Gemini 3.1 Flash Live</option>
+                  <option value="gemini-2.5-flash-native-audio-preview-09-2025">Gemini 2.5 Flash Preview</option>
                 </select>
               </div>
 

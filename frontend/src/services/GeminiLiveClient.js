@@ -19,7 +19,7 @@ export class GeminiLiveClient {
     this.apiKey = options.apiKey || '';
     this.token = options.token || '';
     this.wsUrl = options.wsUrl || '';
-    this.model = options.model || 'gemini-2.0-flash-exp';
+    this.model = options.model || 'gemini-2.5-flash-native-audio-latest';
     this.voiceName = options.voiceName || 'Puck'; // Puck, Charon, Kore, Fenrir, Aoede
     this.systemInstruction = options.systemInstruction || 
       "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise, conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone.";
@@ -106,14 +106,14 @@ export class GeminiLiveClient {
 
         if (event.code !== 1000 && event.code !== 1005) {
           let friendlyReason = "";
-          if (event.code === 1008) {
-            friendlyReason = "Google AI Studio odrzuciło połączenie (kod 1008: Błąd uprawnień / Policy Violation). Sprawdź czy podany klucz API jest prawidłowy i ma włączony dostęp do Gemini Live API w Google AI Studio.";
+          if (event.reason) {
+            friendlyReason = `Google AI Studio: ${event.reason} (kod ${event.code})`;
+          } else if (event.code === 1008) {
+            friendlyReason = "Google AI Studio odrzuciło połączenie (kod 1008: Błąd modelu lub uprawnień). Wybierz model Gemini 2.5 Flash Native Audio lub sprawdź klucz API.";
           } else if (event.code === 1007) {
             friendlyReason = "Google AI Studio zgłosiło błąd formatu danych lub nieobsługiwany model (kod 1007).";
           } else if (event.code === 1006) {
             friendlyReason = "Połączenie WebSocket z Gemini Live zostało przerwane (kod 1006). Sprawdź czy klucz API jest aktywny i czy sieć nie blokuje WebSockets.";
-          } else if (event.reason) {
-            friendlyReason = `Google zamknęło sesję Live: ${event.reason} (kod ${event.code})`;
           } else {
             friendlyReason = `Połączenie z Gemini Live zostało zakończone (kod ${event.code}).`;
           }
