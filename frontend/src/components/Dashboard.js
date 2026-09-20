@@ -28,6 +28,8 @@ function Dashboard({ user }) {
   const [customApiKey, setCustomApiKey] = useState(() => {
     return localStorage.getItem("buddy_gemini_api_key") || "";
   });
+  const [inlineKeyInput, setInlineKeyInput] = useState("");
+  const [isSavingInlineKey, setIsSavingInlineKey] = useState(false);
 
   // Konfiguracja serwera
   const [serverConfig, setServerConfig] = useState(null);
@@ -116,8 +118,10 @@ function Dashboard({ user }) {
     }
   }, [chatMessages, showTranscript]);
 
-  // Zapis ustawień do localStorage
-  const handleSaveSettings = (newSettings) => {
+  // Zapis ustawień do localStorage i opcjonalne natychmiastowe uruchomienie
+  const handleSaveSettings = async (newSettings, shouldStart = false) => {
+    setErrorMessage(null);
+    const trimmedKey = newSettings.apiKey !== undefined ? newSettings.apiKey.trim() : customApiKey.trim();
     if (newSettings.mode) {
       setChatMode(newSettings.mode);
       localStorage.setItem("buddy_live_chat_mode", newSettings.mode);
@@ -135,28 +139,82 @@ function Dashboard({ user }) {
       localStorage.setItem("buddy_live_model", newSettings.model);
     }
     if (newSettings.apiKey !== undefined) {
-      setCustomApiKey(newSettings.apiKey);
-      localStorage.setItem("buddy_gemini_api_key", newSettings.apiKey);
+      setCustomApiKey(trimmedKey);
+      localStorage.setItem("buddy_gemini_api_key", trimmedKey);
+
+      // Zapisz na serwerze jeśli klucz jest obecny i użytkownik ma token
+      if (trimmedKey && user?.token) {
+        fetch(`${API_BASE_URL}/api/live/save-key`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user.token,
+          },
+          body: JSON.stringify({ api_key: trimmedKey }),
+        }).catch((e) => console.warn("Nie udało się zapisać klucza na serwerze:", e));
+      }
     }
     setShowSettings(false);
+
+    if (shouldStart) {
+      if (newSettings.mode === "classic") {
+        await handleSwitchToClassicAndStart();
+      } else {
+        await startLiveSession({
+          apiKey: trimmedKey,
+          provider: newSettings.provider || liveProvider,
+          voice: newSettings.voice || liveVoice,
+          model: newSettings.model || liveModel,
+        });
+      }
+    }
+  };
+
+  const handleInlineKeySubmit = async (e) => {
+    if (e) e.preventDefault();
+    const trimmed = inlineKeyInput.trim();
+    if (!trimmed) return;
+    setIsSavingInlineKey(true);
+    setErrorMessage(null);
+    setCustomApiKey(trimmed);
+    localStorage.setItem("buddy_gemini_api_key", trimmed);
+
+    if (user?.token) {
+      fetch(`${API_BASE_URL}/api/live/save-key`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token,
+        },
+        body: JSON.stringify({ api_key: trimmed }),
+      }).catch((e) => console.warn("Nie udało się zapisać klucza na serwerze:", e));
+    }
+
+    setIsSavingInlineKey(false);
+    await startLiveSession({ apiKey: trimmed });
   };
 
   // ==========================================
   // GEMINI MULTIMODAL LIVE API LOGIC
   // ==========================================
 
-  const startLiveSession = async () => {
+  const startLiveSession = async (overrideOptions = {}) => {
     setErrorMessage(null);
     setLiveStatus("connecting");
     setIsChatActive(true);
     setChatMessages([]);
     setShowTranscript(false);
 
+    const activeProvider = overrideOptions.provider || liveProvider;
+    const activeModel = overrideOptions.model || liveModel;
+    const activeVoice = overrideOptions.voice || liveVoice;
+    const activeKey = (overrideOptions.apiKey !== undefined ? overrideOptions.apiKey : customApiKey).trim();
+
     try {
       let clientConfig = {
-        provider: liveProvider,
-        model: liveModel,
-        voiceName: liveVoice,
+        provider: activeProvider,
+        model: activeModel,
+        voiceName: activeVoice,
         systemInstruction:
           "You are Speakling, a friendly, charismatic and encouraging native English tutor. Help the student practice conversational English naturally. Keep responses lively, spoken and concise (1-3 sentences) so the conversation flows seamlessly back and forth.",
         onStatusChange: (status) => {
@@ -216,14 +274,14 @@ function Dashboard({ user }) {
       };
 
       // 1. Sprawdzamy czy użytkownik ma wpisany własny klucz API w ustawieniach
-      if (liveProvider === "google_ai_studio" && customApiKey.trim()) {
-        clientConfig.apiKey = customApiKey.trim();
-      } else if (liveProvider === "google_ai_studio") {
+      if (activeProvider === "google_ai_studio" && activeKey) {
+        clientConfig.apiKey = activeKey;
+      } else if (activeProvider === "google_ai_studio") {
         // Jeśli nie ma klucza w przeglądarce i serwer nie ma GEMINI_API_KEY
         if (!serverConfig?.gemini_api_key_configured) {
           setShowSettings(true);
           setErrorMessage(
-            "Do uruchomienia Gemini Live w czasie rzeczywistym wymagany jest bezpłatny klucz API z Google AI Studio. Wklej klucz poniżej lub przełącz jednym kliknięciem na tryb OpenAI / DeepSeek!"
+            "Wklej swój bezpłatny klucz API z Google AI Studio poniżej lub przełącz jednym kliknięciem na tryb OpenAI / DeepSeek!"
           );
           setIsChatActive(false);
           setLiveStatus("inactive");
@@ -238,8 +296,8 @@ function Dashboard({ user }) {
             "X-Session-Token": user?.token || "",
           },
           body: JSON.stringify({
-            model: liveModel,
-            api_key: customApiKey.trim() || undefined,
+            model: activeModel,
+            api_key: activeKey || undefined,
           }),
         });
 
@@ -259,7 +317,7 @@ function Dashboard({ user }) {
 
         clientConfig.token = tokenData.token;
         clientConfig.wsUrl = tokenData.ws_url;
-      } else if (liveProvider === "vertex_ai") {
+      } else if (activeProvider === "vertex_ai") {
         // Pobieramy token OAuth2 dla Vertex AI z backendu
         const vertexRes = await fetch(`${API_BASE_URL}/api/live/vertex-token`, {
           method: "POST",
@@ -858,7 +916,7 @@ function Dashboard({ user }) {
           <div className="tutor-status-label">
             {orbStatus === "inactive" && (
               chatMode === "live" && !customApiKey.trim() && !serverConfig?.gemini_api_key_configured ? (
-                <span>⚠️ Wymagany klucz Gemini API — kliknij poniżej, aby go podać lub włącz tryb OpenAI</span>
+                <span>Wklej bezpłatny klucz Gemini API poniżej, aby aktywować Orb</span>
               ) : (
                 "Naciśnij orb, aby rozpocząć rozmowę w czasie rzeczywistym"
               )
@@ -870,21 +928,62 @@ function Dashboard({ user }) {
             {orbStatus === "thinking" && "Lektor myśli..."}
           </div>
 
-          {/* Quick-start helper when Gemini key is not configured */}
-          {orbStatus === "inactive" && chatMode === "live" && !customApiKey.trim() && !serverConfig?.gemini_api_key_configured && (
-            <div className="tutor-quick-start-box animate-fade-in">
+          {/* Potwierdzenie aktywnego klucza */}
+          {orbStatus === "inactive" && chatMode === "live" && (customApiKey.trim() || serverConfig?.gemini_api_key_configured) && (
+            <div className="tutor-key-active-badge animate-fade-in">
+              <span className="dot"></span>
+              <span>Klucz Gemini API: <strong>aktywny</strong></span>
               <button
-                className="quick-btn-key"
+                type="button"
+                className="btn-change-key"
                 onClick={() => setShowSettings(true)}
+                title="Zmień klucz lub ustawienia głosu"
               >
-                🔑 Wpisz bezpłatny klucz Gemini
+                ⚙️ Zmień
               </button>
-              <button
-                className="quick-btn-classic"
-                onClick={handleSwitchToClassicAndStart}
-              >
-                🚀 Uruchom od razu z OpenAI (Działa bez klucza)
-              </button>
+            </div>
+          )}
+
+          {/* Bezpośredni formularz wpisania klucza pod Orbem (nie wymaga szukania w ustawieniach) */}
+          {orbStatus === "inactive" && chatMode === "live" && !customApiKey.trim() && !serverConfig?.gemini_api_key_configured && (
+            <div className="tutor-inline-key-card animate-fade-in">
+              <div className="key-card-header">
+                <span className="key-card-title">🔑 Wklej swój bezpłatny klucz Gemini API</span>
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="key-card-link"
+                >
+                  Pobierz z Google AI Studio ↗
+                </a>
+              </div>
+              <form onSubmit={handleInlineKeySubmit} className="key-inline-form">
+                <input
+                  type="text"
+                  className="key-inline-input"
+                  placeholder="Wklej klucz (AIzaSy...)"
+                  value={inlineKeyInput}
+                  onChange={(e) => setInlineKeyInput(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  className="btn-activate-orb"
+                  disabled={!inlineKeyInput.trim() || isSavingInlineKey}
+                >
+                  {isSavingInlineKey ? "Zapisywanie..." : "🟢 Zapisz i Włącz Orb"}
+                </button>
+              </form>
+              <div className="key-card-footer">
+                <span className="key-hint">Nie masz klucza Google Gemini?</span>
+                <button
+                  type="button"
+                  className="btn-inline-classic"
+                  onClick={handleSwitchToClassicAndStart}
+                >
+                  🚀 Rozmawiaj bez klucza z OpenAI
+                </button>
+              </div>
             </div>
           )}
 
@@ -1027,9 +1126,14 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
   const [apiKey, setApiKey] = useState(currentSettings.apiKey || "");
   const [showKey, setShowKey] = useState(false);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave({ mode, provider, voice, model, apiKey });
+  const handleSaveAndStart = (e) => {
+    if (e) e.preventDefault();
+    onSave({ mode, provider, voice, model, apiKey: apiKey.trim() }, true);
+  };
+
+  const handleSaveOnly = (e) => {
+    if (e) e.preventDefault();
+    onSave({ mode, provider, voice, model, apiKey: apiKey.trim() }, false);
   };
 
   const voicesList = serverConfig?.voices || [
@@ -1063,7 +1167,7 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="live-settings-form">
+        <form onSubmit={handleSaveAndStart} className="live-settings-form">
           {/* Wybór Trybu */}
           <div className="settings-field-group">
             <label className="settings-label">Tryb działania:</label>
@@ -1138,7 +1242,14 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
               {provider === "google_ai_studio" && (
                 <div className="settings-field-group">
                   <div className="label-with-badge">
-                    <label className="settings-label">Własny klucz API Google AI Studio (Opcjonalny):</label>
+                    <label className="settings-label">
+                      Klucz API Google AI Studio:
+                      {apiKey.trim() ? (
+                        <span className="status-badge-ok"> (Wprowadzony)</span>
+                      ) : serverConfig?.gemini_api_key_configured ? (
+                        <span className="status-badge-ok"> (Skonfigurowany na serwerze)</span>
+                      ) : null}
+                    </label>
                     <a
                       href="https://aistudio.google.com/app/apikey"
                       target="_blank"
@@ -1165,7 +1276,7 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
                     </button>
                   </div>
                   <span className="settings-hint">
-                    Klucz jest zapisywany lokalnie w Twojej przeglądarce i nie jest współdzielony z innymi użytkownikami.
+                    Klucz jest bezpiecznie zapamiętywany w Twojej przeglądarce i przekazywany bezpośrednio do Google.
                   </span>
                 </div>
               )}
@@ -1176,8 +1287,11 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
             <button type="button" className="btn-secondary" onClick={onClose}>
               Anuluj
             </button>
-            <button type="submit" className="btn-primary">
-              Zapisz ustawienia
+            <button type="button" className="btn-save-only" onClick={handleSaveOnly}>
+              Tylko zapisz
+            </button>
+            <button type="button" className="btn-primary btn-save-start" onClick={handleSaveAndStart}>
+              🟢 Zapisz i Włącz Orb
             </button>
           </div>
         </form>

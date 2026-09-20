@@ -5115,11 +5115,20 @@ def create_gemini_ephemeral_token(api_key, model="gemini-2.0-flash-exp"):
         raise Exception(f"Brak pola token w odpowiedzi: {data}")
     return token
 
+def get_gemini_api_key():
+    """Zwraca aktywny klucz GEMINI_API_KEY z pamięci lub dynamicznie doładowuje z .env."""
+    global GEMINI_API_KEY
+    if not GEMINI_API_KEY:
+        load_dotenv(override=True)
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    return GEMINI_API_KEY
+
 @app.route("/api/live/config", methods=['GET'])
 def get_live_config():
     """Zwraca publiczną konfigurację opcji Gemini Multimodal Live."""
+    active_key = get_gemini_api_key()
     return jsonify({
-        "gemini_api_key_configured": bool(GEMINI_API_KEY),
+        "gemini_api_key_configured": bool(active_key),
         "default_provider": "google_ai_studio",
         "default_model": "gemini-2.0-flash-exp",
         "voices": [
@@ -5135,6 +5144,47 @@ def get_live_config():
         ]
     })
 
+@app.route("/api/live/save-key", methods=['POST'])
+def save_live_key():
+    """Zapisuje podany przez użytkownika klucz GEMINI_API_KEY do pliku .env i do pamięci procesu."""
+    global GEMINI_API_KEY
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    req_data = request.get_json(silent=True) or {}
+    key = req_data.get("api_key", "").strip()
+    if not key:
+        return jsonify({"error": "Klucz API nie może być pusty"}), 400
+
+    GEMINI_API_KEY = key
+    os.environ["GEMINI_API_KEY"] = key
+
+    # Zapisz również do pliku .env w katalogu backendu
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    try:
+        lines = []
+        key_found = False
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            new_lines = []
+            for line in lines:
+                if line.startswith("GEMINI_API_KEY="):
+                    new_lines.append(f'GEMINI_API_KEY="{key}"\n')
+                    key_found = True
+                else:
+                    new_lines.append(line)
+            lines = new_lines
+        if not key_found:
+            lines.append(f'\nGEMINI_API_KEY="{key}"\n')
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    except Exception as e:
+        print(f"Błąd zapisu klucza do .env: {e}")
+
+    return jsonify({"success": True, "message": "Klucz Gemini API został pomyślnie zapisany."})
+
 @app.route("/api/live/token", methods=['POST', 'GET'])
 def get_live_token():
     """Generuje token efemeryczny dla połączenia WebSocket z Gemini Live API (Google AI Studio)."""
@@ -5146,7 +5196,7 @@ def get_live_token():
     model = req_data.get("model", "gemini-2.0-flash-exp")
     custom_api_key = req_data.get("api_key", "").strip()
 
-    active_key = custom_api_key or GEMINI_API_KEY
+    active_key = custom_api_key or get_gemini_api_key()
     if not active_key:
         return jsonify({
             "error": "NO_API_KEY",
@@ -5159,7 +5209,7 @@ def get_live_token():
         return jsonify({
             "token": token,
             "model": model,
-            "ws_url": f"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token={token}",
+            "ws_url": f"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token={token}",
             "provider": "google_ai_studio"
         })
     except Exception as e:

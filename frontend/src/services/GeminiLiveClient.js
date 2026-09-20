@@ -102,6 +102,24 @@ export class GeminiLiveClient {
       this.ws.onclose = (event) => {
         console.log(`[GeminiLive] WebSocket zamknięty (kod: ${event.code}, powód: ${event.reason})`);
         this.cleanup();
+        this.isConnected = false;
+
+        if (event.code !== 1000 && event.code !== 1005) {
+          let friendlyReason = "";
+          if (event.code === 1008) {
+            friendlyReason = "Google AI Studio odrzuciło połączenie (kod 1008: Błąd uprawnień / Policy Violation). Sprawdź czy podany klucz API jest prawidłowy i ma włączony dostęp do Gemini Live API w Google AI Studio.";
+          } else if (event.code === 1007) {
+            friendlyReason = "Google AI Studio zgłosiło błąd formatu danych lub nieobsługiwany model (kod 1007).";
+          } else if (event.code === 1006) {
+            friendlyReason = "Połączenie WebSocket z Gemini Live zostało przerwane (kod 1006). Sprawdź czy klucz API jest aktywny i czy sieć nie blokuje WebSockets.";
+          } else if (event.reason) {
+            friendlyReason = `Google zamknęło sesję Live: ${event.reason} (kod ${event.code})`;
+          } else {
+            friendlyReason = `Połączenie z Gemini Live zostało zakończone (kod ${event.code}).`;
+          }
+          this.onError(friendlyReason);
+        }
+
         this.onClose(event);
         this.onStatusChange('inactive');
       };
@@ -124,10 +142,10 @@ export class GeminiLiveClient {
 
     if (this.provider === 'google_ai_studio') {
       if (this.token) {
-        return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(this.token)}`;
+        return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(this.token)}`;
       }
       if (this.apiKey) {
-        return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(this.apiKey)}`;
+        return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(this.apiKey)}`;
       }
     }
 
