@@ -657,6 +657,7 @@ openai_client = None
 deepseek_client = None
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if OPENAI_API_KEY:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
@@ -5078,6 +5079,123 @@ def generate_chat_summary():
     except Exception as e:
         print(f"Error generating chat summary: {e}")
         return jsonify({"error": f"Błąd generowania podsumowania czatu: {str(e)}"}), 500
+
+
+def create_gemini_ephemeral_token(api_key, model="gemini-2.0-flash-exp"):
+    """Creates an ephemeral token for Gemini Live API over WebSockets."""
+    import datetime
+    url = "https://generativelanguage.googleapis.com/v1beta/auth_tokens"
+    now = datetime.datetime.now(datetime.timezone.utc)
+    expire_time = (now + datetime.timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    new_session_expire_time = (now + datetime.timedelta(minutes=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    model_full = model if model.startswith("models/") else f"models/{model}"
+    payload = {
+        "uses": 1,
+        "expireTime": expire_time,
+        "newSessionExpireTime": new_session_expire_time,
+        "liveConnectConstraints": {
+            "model": model_full,
+            "config": {
+                "responseModalities": ["AUDIO"]
+            }
+        }
+    }
+    headers = {
+        "x-goog-api-key": api_key,
+        "Content-Type": "application/json"
+    }
+    resp = requests.post(url, json=payload, headers=headers, timeout=10)
+    if not resp.ok:
+        raise Exception(f"Gemini API error {resp.status_code}: {resp.text}")
+
+    data = resp.json()
+    token = data.get("token") or data.get("name")
+    if not token:
+        raise Exception(f"Brak pola token w odpowiedzi: {data}")
+    return token
+
+@app.route("/api/live/config", methods=['GET'])
+def get_live_config():
+    """Zwraca publiczną konfigurację opcji Gemini Multimodal Live."""
+    return jsonify({
+        "gemini_api_key_configured": bool(GEMINI_API_KEY),
+        "default_provider": "google_ai_studio",
+        "default_model": "gemini-2.0-flash-exp",
+        "voices": [
+            {"id": "Puck", "name": "Puck (Energetyczny męski)", "gender": "male"},
+            {"id": "Charon", "name": "Charon (Głęboki męski)", "gender": "male"},
+            {"id": "Fenrir", "name": "Fenrir (Spokojny męski)", "gender": "male"},
+            {"id": "Aoede", "name": "Aoede (Ciepły żeński)", "gender": "female"},
+            {"id": "Kore", "name": "Kore (Naturalny żeński)", "gender": "female"}
+        ],
+        "models": [
+            {"id": "gemini-2.0-flash-exp", "name": "Gemini 2.0 Flash Live (Zalecany)"},
+            {"id": "gemini-2.5-flash-native-audio-preview-09-2025", "name": "Gemini 2.5 Flash Native Audio"}
+        ]
+    })
+
+@app.route("/api/live/token", methods=['POST', 'GET'])
+def get_live_token():
+    """Generuje token efemeryczny dla połączenia WebSocket z Gemini Live API (Google AI Studio)."""
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    req_data = request.get_json(silent=True) or {}
+    model = req_data.get("model", "gemini-2.0-flash-exp")
+    custom_api_key = req_data.get("api_key", "").strip()
+
+    active_key = custom_api_key or GEMINI_API_KEY
+    if not active_key:
+        return jsonify({
+            "error": "NO_API_KEY",
+            "message": "Brak skonfigurowanego klucza GEMINI_API_KEY na serwerze. Możesz podać własny klucz w oknie ustawień Live Chat."
+        }), 400
+
+    try:
+        token = create_gemini_ephemeral_token(active_key, model=model)
+        log_api_usage(user_email, "google_gemini", "live_session_token", model, 0, 0, 1)
+        return jsonify({
+            "token": token,
+            "model": model,
+            "ws_url": f"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token={token}",
+            "provider": "google_ai_studio"
+        })
+    except Exception as e:
+        print(f"Error creating ephemeral token: {e}")
+        return jsonify({"error": f"Błąd tworzenia tokena efemerycznego: {str(e)}"}), 500
+
+@app.route("/api/live/vertex-token", methods=['POST', 'GET'])
+def get_vertex_live_token():
+    """Generuje token OAuth2 dla połączenia z Vertex AI (Google Cloud Platform)."""
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    try:
+        import google.auth
+        from google.auth.transport.requests import Request
+
+        creds, project_id = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        creds.refresh(Request())
+
+        region = os.getenv("GCP_REGION", "us-central1")
+        ws_url = f"wss://{region}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent?access_token={creds.token}"
+
+        log_api_usage(user_email, "vertex_ai", "live_session_token", "gemini-2.0-flash-exp", 0, 0, 1)
+        return jsonify({
+            "access_token": creds.token,
+            "project_id": project_id,
+            "region": region,
+            "ws_url": ws_url,
+            "provider": "vertex_ai"
+        })
+    except Exception as e:
+        print(f"Error generating Vertex AI token: {e}")
+        return jsonify({"error": f"Błąd generowania tokena Vertex AI: {str(e)}"}), 500
+
+
 
 @app.route("/api/send-chat-summary-email", methods=['POST'])
 def send_chat_summary_email():

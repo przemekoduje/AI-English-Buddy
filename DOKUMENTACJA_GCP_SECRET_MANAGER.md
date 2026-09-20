@@ -19,6 +19,7 @@ Dla każdej wrażliwej zmiennej środowiskowej utwórz nowy sekret:
    - `OPENAI_API_KEY` – Klucz API OpenAI.
    - `DEEPSEEK_API_KEY` – Klucz API DeepSeek.
    - `HF_API_TOKEN` – Token API Hugging Face.
+   - `GEMINI_API_KEY` – Klucz API Gemini (Google AI Studio) dla Multimodal Live API.
    - `EMAIL_PASSWORD` – Hasło aplikacji Gmail do wysyłki e-maili.
    - `FIREBASE_CREDENTIALS_JSON` – Cała zawartość pliku JSON konta serwisowego Firebase (skopiowana bezpośrednio i wklejona jako tekst).
 3. Pozostaw domyślne ustawienia replikacji (Automatic) i kliknij **Create Secret**.
@@ -29,6 +30,7 @@ Aby Cloud Run mógł odczytywać sekrety przy starcie, jego tożsamość musi mi
 2. Znajdź konto serwisowe używane przez Cloud Run (domyślnie jest to `[numer-projektu]-compute@developer.gserviceaccount.com` lub dedykowane konto serwisowe, np. `speakling-runner@...`).
 3. Kliknij ikonę ołówka (**Edit member**).
 4. Kliknij **Add another role**, wyszukaj **Secret Manager Secret Accessor** (rola: `roles/secretmanager.secretAccessor`) i wybierz ją.
+   (Opcjonalnie dla trybu Vertex AI): Dodaj także rolę **Vertex AI User** (`roles/aiplatform.user`).
 5. Kliknij **Save**.
 
 ---

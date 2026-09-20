@@ -2,34 +2,68 @@ import React, { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from '../config';
 import "./Dashboard.css";
 import VoiceSessionSummaryModal from "./Notebook/VoiceSessionSummaryModal";
+import { GeminiLiveClient } from "../services/GeminiLiveClient";
 
-// Voice Activity Detection (VAD) thresholds
-const VOICE_THRESHOLD = 0.012;        // RMS level to trigger speaking state
-const INTERRUPTION_THRESHOLD = 0.022; // RMS level to trigger interruption when bot is speaking
-const SILENCE_DURATION = 1500;        // Silence duration (ms) to assume user finished speaking
+// Voice Activity Detection (VAD) thresholds for Classic Mode
+const VOICE_THRESHOLD = 0.012;
+const INTERRUPTION_THRESHOLD = 0.022;
+const SILENCE_DURATION = 1500;
 
 function Dashboard({ user }) {
+  // Tryb rozmowy: 'live' (Gemini Multimodal Live) lub 'classic' (Whisper + OpenAI/DeepSeek + TTS)
+  const [chatMode, setChatMode] = useState(() => {
+    return localStorage.getItem("buddy_live_chat_mode") || "live";
+  });
+
+  // Ustawienia Gemini Live
+  const [liveProvider, setLiveProvider] = useState(() => {
+    return localStorage.getItem("buddy_live_provider") || "google_ai_studio";
+  });
+  const [liveVoice, setLiveVoice] = useState(() => {
+    return localStorage.getItem("buddy_live_voice") || "Puck";
+  });
+  const [liveModel, setLiveModel] = useState(() => {
+    return localStorage.getItem("buddy_live_model") || "gemini-2.0-flash-exp";
+  });
+  const [customApiKey, setCustomApiKey] = useState(() => {
+    return localStorage.getItem("buddy_gemini_api_key") || "";
+  });
+
+  // Konfiguracja serwera
+  const [serverConfig, setServerConfig] = useState(null);
+
+  // Stany ogólne czatu
   const [isChatActive, setIsChatActive] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isBotSpeaking, setIsBotSpeaking] = useState(false);
   const [rmsVolume, setRmsVolume] = useState(0);
-  const [userIsSpeakingState, setUserIsSpeakingState] = useState(false);
-  const [showTranscript, setShowTranscript] = useState(false); // Transcript visibility state
+  const [showTranscript, setShowTranscript] = useState(false);
   const [voiceSummary, setVoiceSummary] = useState(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
-  // Audio/VAD Refs
+  // Stany specyficzne dla Gemini Live
+  const [liveStatus, setLiveStatus] = useState("inactive"); // 'inactive' | 'connecting' | 'listening' | 'user-speaking' | 'speaking'
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  // Stany dla Classic Mode
+  const [isClassicRecording, setIsClassicRecording] = useState(false);
+  const [isClassicProcessing, setIsClassicProcessing] = useState(false);
+  const [isClassicBotSpeaking, setIsClassicBotSpeaking] = useState(false);
+  const [classicUserSpeakingState, setClassicUserSpeakingState] = useState(false);
+
+  // Refs
+  const geminiLiveRef = useRef(null);
+  const videoElementRef = useRef(null);
+  const transcriptScrollRef = useRef(null);
+
+  // Classic Mode Refs
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const currentAudioRef = useRef(null);
   const streamRef = useRef(null);
-  const transcriptScrollRef = useRef(null); // Ref for scroll container
   const recognitionRef = useRef(null);
   const localTranscriptRef = useRef("");
-
-  // VAD state refs
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const microphoneRef = useRef(null);
@@ -37,49 +71,263 @@ function Dashboard({ user }) {
   const isUserSpeakingRef = useRef(false);
   const interruptionCounterRef = useRef(0);
   const checkVolumeAnimationRef = useRef(null);
-
-  // Sync state refs to prevent React closure stale states in requestAnimationFrame loop
   const isBotSpeakingRef = useRef(false);
   const isRecordingRef = useRef(false);
   const isProcessingRef = useRef(false);
 
   useEffect(() => {
-    isBotSpeakingRef.current = isBotSpeaking;
-  }, [isBotSpeaking]);
+    isBotSpeakingRef.current = isClassicBotSpeaking;
+  }, [isClassicBotSpeaking]);
 
   useEffect(() => {
-    isRecordingRef.current = isRecording;
-  }, [isRecording]);
+    isRecordingRef.current = isClassicRecording;
+  }, [isClassicRecording]);
 
   useEffect(() => {
-    isProcessingRef.current = isProcessing;
-  }, [isProcessing]);
+    isProcessingRef.current = isClassicProcessing;
+  }, [isClassicProcessing]);
 
-  // Clean up on component unmount
+  // Pobranie konfiguracji serwera dla Live API przy montowaniu
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/live/config`)
+      .then((res) => res.json())
+      .then((data) => {
+        setServerConfig(data);
+      })
+      .catch((err) => {
+        console.warn("Nie udało się pobrać konfiguracji /api/live/config:", err);
+      });
+  }, []);
+
+  // Czyszczenie przy odmontowaniu
   useEffect(() => {
     return () => {
-      stopAudio();
-      stopRecordingLocally();
-      cleanupVAD();
+      stopLiveSession();
+      cleanupClassicVAD();
+      stopClassicAudio();
+      stopClassicRecordingLocally();
     };
   }, []);
 
-  // Scroll to bottom of transcript history
+  // Automatyczne przewijanie transkrypcji
   useEffect(() => {
     if (transcriptScrollRef.current) {
       transcriptScrollRef.current.scrollTop = transcriptScrollRef.current.scrollHeight;
     }
   }, [chatMessages, showTranscript]);
 
-  const stopAudio = () => {
+  // Zapis ustawień do localStorage
+  const handleSaveSettings = (newSettings) => {
+    if (newSettings.mode) {
+      setChatMode(newSettings.mode);
+      localStorage.setItem("buddy_live_chat_mode", newSettings.mode);
+    }
+    if (newSettings.provider) {
+      setLiveProvider(newSettings.provider);
+      localStorage.setItem("buddy_live_provider", newSettings.provider);
+    }
+    if (newSettings.voice) {
+      setLiveVoice(newSettings.voice);
+      localStorage.setItem("buddy_live_voice", newSettings.voice);
+    }
+    if (newSettings.model) {
+      setLiveModel(newSettings.model);
+      localStorage.setItem("buddy_live_model", newSettings.model);
+    }
+    if (newSettings.apiKey !== undefined) {
+      setCustomApiKey(newSettings.apiKey);
+      localStorage.setItem("buddy_gemini_api_key", newSettings.apiKey);
+    }
+    setShowSettings(false);
+  };
+
+  // ==========================================
+  // GEMINI MULTIMODAL LIVE API LOGIC
+  // ==========================================
+
+  const startLiveSession = async () => {
+    setErrorMessage(null);
+    setLiveStatus("connecting");
+    setIsChatActive(true);
+    setChatMessages([]);
+    setShowTranscript(false);
+
+    try {
+      let clientConfig = {
+        provider: liveProvider,
+        model: liveModel,
+        voiceName: liveVoice,
+        systemInstruction:
+          "You are Speakling, a friendly, charismatic and encouraging native English tutor. Help the student practice conversational English naturally. Keep responses lively, spoken and concise (1-3 sentences) so the conversation flows seamlessly back and forth.",
+        onStatusChange: (status) => {
+          setLiveStatus(status);
+        },
+        onUserVolume: (volume) => {
+          setRmsVolume(volume);
+          if (volume > 0.02) {
+            setLiveStatus("user-speaking");
+          } else if (liveStatus === "user-speaking") {
+            setLiveStatus("listening");
+          }
+        },
+        onBotSpeaking: (isSpeaking) => {
+          if (isSpeaking) {
+            setLiveStatus("speaking");
+          } else {
+            setLiveStatus("listening");
+          }
+        },
+        onTranscript: ({ sender, text, isFinal }) => {
+          setChatMessages((prev) => {
+            const lastMsg = prev[prev.length - 1];
+            // Jeśli ostatnia wiadomość jest od tego samego nadawcy i nie była sfinalizowana, aktualizujemy ją
+            if (lastMsg && lastMsg.sender === sender && !lastMsg.isFinal) {
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                ...lastMsg,
+                text: text,
+                isFinal: isFinal,
+              };
+              return updated;
+            } else {
+              // W przeciwnym razie dodajemy nową wiadomość
+              return [
+                ...prev,
+                {
+                  id: `${sender}-${Date.now()}`,
+                  sender: sender,
+                  text: text,
+                  isFinal: isFinal,
+                },
+              ];
+            }
+          });
+        },
+        onError: (err) => {
+          console.error("Gemini Live Error:", err);
+          setErrorMessage(err);
+          setLiveStatus("inactive");
+          setIsChatActive(false);
+        },
+        onClose: () => {
+          setLiveStatus("inactive");
+          setIsChatActive(false);
+        },
+      };
+
+      // 1. Sprawdzamy czy użytkownik ma wpisany własny klucz API w ustawieniach
+      if (liveProvider === "google_ai_studio" && customApiKey.trim()) {
+        clientConfig.apiKey = customApiKey.trim();
+      } else if (liveProvider === "google_ai_studio") {
+        // Pobieramy token efemeryczny z backendu
+        const tokenRes = await fetch(`${API_BASE_URL}/api/live/token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || "",
+          },
+          body: JSON.stringify({
+            model: liveModel,
+            api_key: customApiKey.trim() || undefined,
+          }),
+        });
+
+        const tokenData = await tokenRes.json();
+        if (!tokenRes.ok || tokenData.error) {
+          if (tokenData.error === "NO_API_KEY") {
+            setShowSettings(true);
+            throw new Error(
+              "Wymagany klucz Gemini API. Wprowadź swój bezpłatny klucz z Google AI Studio w oknie ustawień."
+            );
+          }
+          throw new Error(tokenData.error || tokenData.message || "Błąd generowania tokena sesji.");
+        }
+
+        clientConfig.token = tokenData.token;
+        clientConfig.wsUrl = tokenData.ws_url;
+      } else if (liveProvider === "vertex_ai") {
+        // Pobieramy token OAuth2 dla Vertex AI z backendu
+        const vertexRes = await fetch(`${API_BASE_URL}/api/live/vertex-token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || "",
+          },
+        });
+
+        const vertexData = await vertexRes.json();
+        if (!vertexRes.ok || vertexData.error) {
+          throw new Error(vertexData.error || "Błąd uwierzytelniania w Google Cloud Vertex AI.");
+        }
+
+        clientConfig.token = vertexData.access_token;
+        clientConfig.wsUrl = vertexData.ws_url;
+      }
+
+      // Inicjalizacja klienta WebSocket
+      const client = new GeminiLiveClient(clientConfig);
+      geminiLiveRef.current = client;
+      await client.connect();
+
+      // Jeśli kamera była włączona, uruchamiamy strumień
+      if (isCameraActive && videoElementRef.current) {
+        await client.startCameraStream(videoElementRef.current);
+      }
+    } catch (err) {
+      console.error("Nie udało się rozpocząć sesji Gemini Live:", err);
+      setErrorMessage(err.message || "Wystąpił błąd podczas łączenia z Gemini Live.");
+      setIsChatActive(false);
+      setLiveStatus("inactive");
+    }
+  };
+
+  const stopLiveSession = () => {
+    if (geminiLiveRef.current) {
+      geminiLiveRef.current.cleanup();
+      geminiLiveRef.current = null;
+    }
+    setIsCameraActive(false);
+    setLiveStatus("inactive");
+  };
+
+  const handleToggleCamera = async () => {
+    if (!isChatActive || !geminiLiveRef.current) {
+      setIsCameraActive(!isCameraActive);
+      return;
+    }
+
+    try {
+      if (isCameraActive) {
+        geminiLiveRef.current.stopCameraStream();
+        setIsCameraActive(false);
+      } else {
+        setIsCameraActive(true);
+        // Poczekajmy na wyrenderowanie elementu video
+        setTimeout(async () => {
+          if (videoElementRef.current && geminiLiveRef.current) {
+            await geminiLiveRef.current.startCameraStream(videoElementRef.current);
+          }
+        }, 150);
+      }
+    } catch (err) {
+      alert("Nie udało się uzyskać dostępu do kamery: " + err.message);
+      setIsCameraActive(false);
+    }
+  };
+
+  // ==========================================
+  // CLASSIC MODE FALLBACK LOGIC
+  // ==========================================
+
+  const stopClassicAudio = () => {
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
     }
-    setIsBotSpeaking(false);
+    setIsClassicBotSpeaking(false);
   };
 
-  const stopRecordingLocally = () => {
+  const stopClassicRecordingLocally = () => {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -88,14 +336,12 @@ function Dashboard({ user }) {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       try {
         mediaRecorderRef.current.stop();
-      } catch (e) {
-        console.warn("Failed to stop mediarecorder:", e);
-      }
+      } catch (e) {}
     }
-    setIsRecording(false);
+    setIsClassicRecording(false);
   };
 
-  const cleanupVAD = () => {
+  const cleanupClassicVAD = () => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
@@ -120,7 +366,7 @@ function Dashboard({ user }) {
     }
     analyserRef.current = null;
     isUserSpeakingRef.current = false;
-    setUserIsSpeakingState(false);
+    setClassicUserSpeakingState(false);
     interruptionCounterRef.current = 0;
     setRmsVolume(0);
 
@@ -130,8 +376,7 @@ function Dashboard({ user }) {
     }
   };
 
-  // Setup Voice Activity Detection (VAD)
-  const setupVAD = (stream) => {
+  const setupClassicVAD = (stream) => {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
 
@@ -155,7 +400,6 @@ function Dashboard({ user }) {
         if (!analyserRef.current) return;
         analyserRef.current.getByteTimeDomainData(dataArray);
 
-        // Calculate Root Mean Square (RMS) volume
         let sum = 0;
         for (let i = 0; i < bufferLength; i++) {
           const deviation = (dataArray[i] - 128) / 128;
@@ -164,30 +408,25 @@ function Dashboard({ user }) {
         const rms = Math.sqrt(sum / bufferLength);
 
         setRmsVolume(rms);
-
-        // Process VAD rules
-        handleVoiceActivity(rms);
+        handleClassicVoiceActivity(rms);
 
         checkVolumeAnimationRef.current = requestAnimationFrame(checkVolume);
       };
 
       checkVolume();
     } catch (e) {
-      console.error("VAD initialization failed:", e);
+      console.error("Classic VAD initialization failed:", e);
     }
   };
 
-  // VAD checks
-  const handleVoiceActivity = (rms) => {
-    // 1. Interruption Check (User speaks over Tutor)
+  const handleClassicVoiceActivity = (rms) => {
     if (isBotSpeakingRef.current) {
       if (rms > INTERRUPTION_THRESHOLD) {
         interruptionCounterRef.current += 1;
         if (interruptionCounterRef.current > 10) {
-          console.log("Interruption detected: stopping tutor playback.");
           interruptionCounterRef.current = 0;
-          stopAudio();
-          startRecording();
+          stopClassicAudio();
+          startClassicRecording();
         }
       } else {
         interruptionCounterRef.current = Math.max(0, interruptionCounterRef.current - 1);
@@ -195,12 +434,11 @@ function Dashboard({ user }) {
       return;
     }
 
-    // 2. Turn-taking Silence Check (User speaks and finishes)
     if (isRecordingRef.current && !isProcessingRef.current) {
       if (rms > VOICE_THRESHOLD) {
         if (!isUserSpeakingRef.current) {
           isUserSpeakingRef.current = true;
-          setUserIsSpeakingState(true);
+          setClassicUserSpeakingState(true);
         }
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
@@ -209,10 +447,9 @@ function Dashboard({ user }) {
       } else {
         if (isUserSpeakingRef.current && !silenceTimerRef.current) {
           silenceTimerRef.current = setTimeout(() => {
-            console.log("Silence detected: ending turn.");
-            stopRecording();
+            stopClassicRecording();
             isUserSpeakingRef.current = false;
-            setUserIsSpeakingState(false);
+            setClassicUserSpeakingState(false);
             silenceTimerRef.current = null;
           }, SILENCE_DURATION);
         }
@@ -220,13 +457,13 @@ function Dashboard({ user }) {
     }
   };
 
-  const startRecording = () => {
+  const startClassicRecording = () => {
     if (!streamRef.current || isProcessingRef.current || isRecordingRef.current) return;
 
-    stopAudio();
+    stopClassicAudio();
     audioChunksRef.current = [];
     isUserSpeakingRef.current = false;
-    setUserIsSpeakingState(false);
+    setClassicUserSpeakingState(false);
     localTranscriptRef.current = "";
 
     if (silenceTimerRef.current) {
@@ -234,7 +471,6 @@ function Dashboard({ user }) {
       silenceTimerRef.current = null;
     }
 
-    // Start local browser speech recognition if supported
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       try {
@@ -251,36 +487,26 @@ function Dashboard({ user }) {
           }
           if (finalTranscript.trim()) {
             localTranscriptRef.current = (localTranscriptRef.current + " " + finalTranscript.trim()).trim();
-            console.log("Local SpeechRecognition transcript so far:", localTranscriptRef.current);
           }
-        };
-        rec.onerror = (err) => {
-          console.warn("Local SpeechRecognition error:", err.error);
         };
         recognitionRef.current = rec;
         rec.start();
-      } catch (e) {
-        console.warn("Failed to initialize SpeechRecognition:", e);
-      }
+      } catch (e) {}
     }
 
     try {
       const mediaRecorder = new MediaRecorder(streamRef.current, { mimeType: "audio/webm" });
       mediaRecorderRef.current = mediaRecorder;
-
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
-
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        await handleSendVoice(audioBlob);
+        await handleSendClassicVoice(audioBlob);
       };
-
       mediaRecorder.start();
-      setIsRecording(true);
+      setIsClassicRecording(true);
     } catch (err) {
-      console.warn("MediaRecorder start failed, retrying with default mimeType:", err);
       try {
         const mediaRecorder = new MediaRecorder(streamRef.current);
         mediaRecorderRef.current = mediaRecorder;
@@ -289,188 +515,30 @@ function Dashboard({ user }) {
         };
         mediaRecorder.onstop = async () => {
           const audioBlob = new Blob(audioChunksRef.current);
-          await handleSendVoice(audioBlob);
+          await handleSendClassicVoice(audioBlob);
         };
         mediaRecorder.start();
-        setIsRecording(true);
-      } catch (errFallback) {
-        console.error("Failed to initialize recorder:", errFallback);
-      }
+        setIsClassicRecording(true);
+      } catch (e) {}
     }
   };
 
-  const stopRecording = () => {
+  const stopClassicRecording = () => {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch (e) {
-        console.warn("Failed to stop SpeechRecognition:", e);
-      }
+      } catch (e) {}
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       try {
         mediaRecorderRef.current.stop();
-      } catch (e) {
-        console.warn("Failed to stop mediarecorder inside stopRecording:", e);
-      }
+      } catch (e) {}
     }
-    setIsRecording(false);
+    setIsClassicRecording(false);
   };
 
-  // Play audio response from Tutor
-  // Play audio response from Tutor
-  const playTutorAudio = async (text, cachedBase64) => {
-    stopAudio();
-    setIsBotSpeaking(true);
-
-    // If no base64 was generated/returned and SpeechSynthesis is supported, play it locally
-    if (!cachedBase64 && 'speechSynthesis' in window) {
-      try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "en-US";
-        
-        const voices = window.speechSynthesis.getVoices();
-        const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural') || v.name.includes('Microsoft')));
-        if (englishVoice) {
-          utterance.voice = englishVoice;
-        }
-
-        utterance.onend = () => {
-          setIsBotSpeaking(false);
-          startRecording();
-        };
-
-        utterance.onerror = (e) => {
-          console.warn("SpeechSynthesis error:", e);
-          setIsBotSpeaking(false);
-          startRecording();
-        };
-
-        window.speechSynthesis.speak(utterance);
-        return;
-      } catch (err) {
-        console.warn("Local SpeechSynthesis failed, trying fallback:", err);
-      }
-    }
-
-    try {
-      let base64_data = cachedBase64;
-      if (!base64_data) {
-        console.log("Web: TTS base64 not pre-generated, fetching from api...");
-        const response = await fetch(`${API_BASE_URL}/api/tts`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: text,
-            voice: "en-US-BrianNeural", // Default premium voice
-          }),
-        });
-
-        if (!response.ok) throw new Error("TTS generation failed");
-        const data = await response.json();
-        base64_data = data.audio_base64;
-      } else {
-        console.log("Web: Using pre-generated TTS audio base64.");
-      }
-
-      if (!base64_data) throw new Error("No audio base64 returned");
-
-      const audioUrl = `data:audio/mp3;base64,${base64_data}`;
-      const audio = new Audio(audioUrl);
-
-      audio.onended = () => {
-        setIsBotSpeaking(false);
-        currentAudioRef.current = null;
-        startRecording();
-      };
-
-      audio.onerror = () => {
-        setIsBotSpeaking(false);
-        currentAudioRef.current = null;
-        startRecording();
-      };
-
-      currentAudioRef.current = audio;
-      audio.play();
-    } catch (err) {
-      console.error("Error playing TTS:", err);
-      setIsBotSpeaking(false);
-      startRecording();
-    }
-  };
-
-  // Start the free conversation session
-  const handleStartSession = async () => {
-    cleanupVAD();
-    setIsChatActive(true);
-    setChatMessages([]);
-    stopAudio();
-    setShowTranscript(false); // Hide transcript on new session start
-
-    try {
-      // Access mic stream once and keep it open
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      setupVAD(stream);
-
-      // Student is always the first speaker! Immediately start recording.
-      startRecording();
-    } catch (err) {
-      console.error("Error starting session:", err);
-      alert("Nie udało się rozpocząć rozmowy. Zezwól na dostęp do mikrofonu: " + err.message);
-      setIsChatActive(false);
-      cleanupVAD();
-    }
-  };
-
-  // End discussion and reset states
-  const handleEndSession = async () => {
-    stopAudio();
-    stopRecordingLocally();
-    cleanupVAD();
-    setIsChatActive(false);
-    setShowTranscript(false);
-
-    if (chatMessages.length > 0) {
-      setIsGeneratingSummary(true);
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/chat-free/summary`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Session-Token": user.token,
-          },
-          body: JSON.stringify({
-            history: chatMessages.map((msg) => ({
-              sender: msg.sender,
-              text: msg.text,
-            })),
-          }),
-        });
-
-        if (response.ok) {
-          const summaryData = await response.json();
-          setVoiceSummary(summaryData);
-        }
-      } catch (err) {
-        console.error("Error generating session summary:", err);
-      } finally {
-        setIsGeneratingSummary(false);
-      }
-    } else {
-      setChatMessages([]);
-    }
-  };
-
-  const handleCloseSummary = () => {
-    setVoiceSummary(null);
-    setChatMessages([]);
-  };
-
-  // Send Voice Blob to API
-  const handleSendVoice = async (audioBlob) => {
-    setIsProcessing(true);
+  const handleSendClassicVoice = async (audioBlob) => {
+    setIsClassicProcessing(true);
     try {
       const historyForApi = chatMessages.map((msg) => ({
         sender: msg.sender,
@@ -491,19 +559,17 @@ function Dashboard({ user }) {
       const response = await fetch(`${API_BASE_URL}/api/chat-free`, {
         method: "POST",
         headers: {
-          "X-Session-Token": user.token,
+          "X-Session-Token": user?.token || "",
         },
         body: formData,
       });
 
-      if (!response.ok) throw new Error("API connection error");
+      if (!response.ok) throw new Error("Błąd połączenia z API");
       const result = await response.json();
-
       if (result.error) throw new Error(result.error);
 
-      const userMsgId = "user-" + Date.now();
       const userMsg = {
-        id: userMsgId,
+        id: "user-" + Date.now(),
         sender: "user",
         text: result.transcription || localTranscriptRef.current || "(Brak transkrypcji)",
         evaluation: result.user_evaluation,
@@ -516,54 +582,208 @@ function Dashboard({ user }) {
       };
 
       setChatMessages((prev) => [...prev, userMsg, botMsg]);
-
-      playTutorAudio(result.bot_response, result.audio_base64);
+      playClassicTutorAudio(result.bot_response, result.audio_base64);
     } catch (err) {
-      console.error("Error sending speech:", err);
+      console.error("Error in classic voice:", err);
       alert("Wystąpił problem z połączeniem: " + err.message);
-      startRecording(); // Restart loop
+      startClassicRecording();
     } finally {
-      setIsProcessing(false);
+      setIsClassicProcessing(false);
     }
   };
 
-  // Determine current active state for the Gemini Orb
+  const playClassicTutorAudio = (text, cachedBase64) => {
+    stopClassicAudio();
+    setIsClassicBotSpeaking(true);
+
+    if (!cachedBase64 && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "en-US";
+        utterance.onend = () => {
+          setIsClassicBotSpeaking(false);
+          startClassicRecording();
+        };
+        utterance.onerror = () => {
+          setIsClassicBotSpeaking(false);
+          startClassicRecording();
+        };
+        window.speechSynthesis.speak(utterance);
+        return;
+      } catch (err) {}
+    }
+
+    if (cachedBase64) {
+      const audioUrl = `data:audio/mp3;base64,${cachedBase64}`;
+      const audio = new Audio(audioUrl);
+      audio.onended = () => {
+        setIsClassicBotSpeaking(false);
+        currentAudioRef.current = null;
+        startClassicRecording();
+      };
+      audio.onerror = () => {
+        setIsClassicBotSpeaking(false);
+        currentAudioRef.current = null;
+        startClassicRecording();
+      };
+      currentAudioRef.current = audio;
+      audio.play();
+    } else {
+      setIsClassicBotSpeaking(false);
+      startClassicRecording();
+    }
+  };
+
+  // ==========================================
+  // UNIFIED SESSION START / END
+  // ==========================================
+
+  const handleStartSession = async () => {
+    if (chatMode === "live") {
+      await startLiveSession();
+    } else {
+      // Classic Mode
+      cleanupClassicVAD();
+      setIsChatActive(true);
+      setChatMessages([]);
+      stopClassicAudio();
+      setShowTranscript(false);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+        setupClassicVAD(stream);
+        startClassicRecording();
+      } catch (err) {
+        alert("Nie udało się uzyskać dostępu do mikrofonu: " + err.message);
+        setIsChatActive(false);
+      }
+    }
+  };
+
+  const handleEndSession = async () => {
+    if (chatMode === "live") {
+      stopLiveSession();
+    } else {
+      stopClassicAudio();
+      stopClassicRecordingLocally();
+      cleanupClassicVAD();
+    }
+
+    setIsChatActive(false);
+    setShowTranscript(false);
+
+    // Generowanie podsumowania, jeśli są jakiekolwiek wiadomości
+    if (chatMessages.length > 0) {
+      setIsGeneratingSummary(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/chat-free/summary`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || "",
+          },
+          body: JSON.stringify({
+            history: chatMessages.map((msg) => ({
+              sender: msg.sender,
+              text: msg.text,
+            })),
+          }),
+        });
+
+        if (response.ok) {
+          const summaryData = await response.json();
+          setVoiceSummary(summaryData);
+        }
+      } catch (err) {
+        console.error("Błąd podczas tworzenia podsumowania sesji:", err);
+      } finally {
+        setIsGeneratingSummary(false);
+      }
+    } else {
+      setChatMessages([]);
+    }
+  };
+
+  const handleCloseSummary = () => {
+    setVoiceSummary(null);
+    setChatMessages([]);
+  };
+
+  // Wyliczanie statusu Orba
   let orbStatus = "inactive";
   if (isChatActive) {
-    if (isProcessing) {
-      orbStatus = "thinking";
-    } else if (isBotSpeaking) {
-      orbStatus = "speaking";
-    } else if (isRecording) {
-      orbStatus = userIsSpeakingState ? "user-speaking" : "listening";
+    if (chatMode === "live") {
+      orbStatus = liveStatus;
+    } else {
+      if (isClassicProcessing) {
+        orbStatus = "thinking";
+      } else if (isClassicBotSpeaking) {
+        orbStatus = "speaking";
+      } else if (isClassicRecording) {
+        orbStatus = classicUserSpeakingState ? "user-speaking" : "listening";
+      }
     }
   }
 
-  // Scale value based on RMS volume for uczeń mówiący
   const scaleValue = orbStatus === "user-speaking" ? 1 + rmsVolume * 3.8 : 1;
-
   const isSplitLayout = isChatActive && showTranscript && chatMessages.length > 0;
 
   return (
     <div className="tutor-gemini-container">
-      
-      {/* Title / Brand */}
-      <h1 className="tutor-minimal-title">
-        Chat Live
-      </h1>
+      {/* Top Header & Mode Badge */}
+      <div className="tutor-header-area">
+        <div className="tutor-title-row">
+          <h1 className="tutor-minimal-title">
+            Chat <span className="blue-gradient-text">Live</span>
+          </h1>
+          <button
+            className="tutor-settings-icon-btn"
+            onClick={() => setShowSettings(true)}
+            title="Ustawienia połączenia i głosu"
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        </div>
 
-      {/* Main Action Stage (Can be centered or split row-wise on desktop) */}
+        {/* Status Pill Badge */}
+        <div className="tutor-badge-container">
+          {chatMode === "live" ? (
+            <span className="live-technology-badge">
+              <span className="badge-pulse-dot"></span>
+              ⚡ Gemini Multimodal Live API • {liveProvider === "vertex_ai" ? "Vertex AI (GCP)" : "Google AI Studio"} ({liveVoice})
+            </span>
+          ) : (
+            <span className="classic-technology-badge">
+              🎙️ Tryb Klasyczny (Whisper + OpenAI / DeepSeek)
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Floating Error Notification */}
+      {errorMessage && (
+        <div className="tutor-error-banner animate-fade-in">
+          <span>⚠️ {errorMessage}</span>
+          <button onClick={() => setErrorMessage(null)} className="error-close-btn">×</button>
+        </div>
+      )}
+
+      {/* Main Action Stage */}
       <div className={`tutor-main-stage ${isSplitLayout ? "split" : "centered"}`}>
         
         {/* Orb Section */}
         <div className="tutor-orb-section">
-          {/* Central Gemini-like Orb Control */}
+          {/* Central Gemini Orb Control */}
           <div className="tutor-orb-wrapper">
             <button
               className={`tutor-gemini-orb ${orbStatus}`}
               onClick={isChatActive ? handleEndSession : handleStartSession}
               style={{ transform: `scale(${scaleValue})` }}
-              title={isChatActive ? "Kliknij, aby zakończyć rozmowę" : "Kliknij, aby rozpocząć rozmowę"}
+              title={isChatActive ? "Kliknij, aby zakończyć rozmowę" : "Kliknij, aby rozpocząć rozmowę w czasie rzeczywistym"}
             >
               <div className="orb-pulse-ring-1"></div>
               <div className="orb-pulse-ring-2"></div>
@@ -591,7 +811,7 @@ function Dashboard({ user }) {
                     <span className="wave-bar bar-3"></span>
                   </div>
                 )}
-                {orbStatus === "thinking" && (
+                {(orbStatus === "thinking" || orbStatus === "connecting") && (
                   <div className="orb-spinner"></div>
                 )}
               </div>
@@ -600,28 +820,50 @@ function Dashboard({ user }) {
 
           {/* Status text label */}
           <div className="tutor-status-label">
-            {orbStatus === "inactive" && "Naciśnij orb, aby rozpocząć rozmowę"}
-            {orbStatus === "speaking" && "Lektor mówi (zacznij mówić, aby wtrącić)"}
-            {orbStatus === "listening" && "Słucham... powiedz coś"}
+            {orbStatus === "inactive" && "Naciśnij orb, aby rozpocząć rozmowę w czasie rzeczywistym"}
+            {orbStatus === "connecting" && "Łączenie z Gemini Live API..."}
+            {orbStatus === "speaking" && "Lektor mówi (zacznij mówić, aby wtrącić!)"}
+            {orbStatus === "listening" && "Słucham... powiedz coś po angielsku"}
             {orbStatus === "user-speaking" && "Mówisz..."}
             {orbStatus === "thinking" && "Lektor myśli..."}
           </div>
 
-          {/* Toggle Transcript button */}
-          {isChatActive && chatMessages.length > 0 && (
-            <button 
-              className={`tutor-transcript-toggle-btn ${showTranscript ? "active" : ""}`}
-              onClick={() => setShowTranscript(!showTranscript)}
-            >
-              {showTranscript ? "🙈 Ukryj tekst" : "👁 Pokaż tekst"}
-            </button>
-          )}
+          {/* Controls Bar: Camera Toggle & Transcript Button */}
+          <div className="tutor-action-buttons-row">
+            {/* Multimodal Camera Button */}
+            {chatMode === "live" && (
+              <button
+                className={`tutor-pill-btn ${isCameraActive ? "camera-active" : ""}`}
+                onClick={handleToggleCamera}
+                title={isCameraActive ? "Wyłącz podgląd wideo" : "Włącz kamerę (Multimodal Vision)"}
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+                {isCameraActive ? "Kamera włączona" : "Włącz kamerę"}
+              </button>
+            )}
+
+            {/* Toggle Transcript button */}
+            {isChatActive && chatMessages.length > 0 && (
+              <button 
+                className={`tutor-transcript-toggle-btn ${showTranscript ? "active" : ""}`}
+                onClick={() => setShowTranscript(!showTranscript)}
+              >
+                {showTranscript ? "🙈 Ukryj tekst" : "👁 Pokaż tekst"}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Side Transcript Section */}
         {isChatActive && chatMessages.length > 0 && (
           <div className={`tutor-side-transcript glass-panel ${showTranscript ? "open" : ""}`}>
-            <h3 className="side-transcript-header">Zapis rozmowy</h3>
+            <div className="side-transcript-header-row">
+              <h3 className="side-transcript-header">Zapis rozmowy na żywo</h3>
+              <span className="live-tag">LIVE</span>
+            </div>
             <div className="transcript-scroll-area" ref={transcriptScrollRef}>
               {chatMessages.map((msg) => {
                 const isBot = msg.sender === "bot";
@@ -643,10 +885,28 @@ function Dashboard({ user }) {
 
       </div>
 
+      {/* Multimodal Camera PIP Window */}
+      {isCameraActive && (
+        <div className="tutor-camera-pip glass-panel animate-zoom">
+          <div className="pip-header">
+            <span className="pip-badge">📷 Multimodal Vision</span>
+            <button className="pip-close-btn" onClick={handleToggleCamera}>✕</button>
+          </div>
+          <video
+            ref={videoElementRef}
+            className="pip-video-feed"
+            autoPlay
+            playsInline
+            muted
+          />
+          <div className="pip-footer">Lektor analizuje obraz z kamery w czasie rzeczywistym.</div>
+        </div>
+      )}
+
       {/* Tips */}
       {!isChatActive && !voiceSummary && (
         <div className="tutor-minimal-tips">
-          🎧 Używaj słuchawek, aby zapobiec zapętleniu dźwięku.
+          🎧 Używaj słuchawek, aby zapobiec zapętleniu dźwięku. W trybie Live możesz wtrącać się w mowę lektora w dowolnym momencie.
         </div>
       )}
 
@@ -672,11 +932,180 @@ function Dashboard({ user }) {
             <div className="spinner" style={{ width: "40px", height: "40px", border: "4px solid #e2e8f0", borderTop: "4px solid #1a73e8", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
             <h3 style={{ margin: 0, textAlign: "center", fontSize: "1.2rem", color: "var(--slate-800)" }}>Generowanie podsumowania lekcji...</h3>
             <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--slate-500)", textAlign: "center", lineHeight: "1.4" }}>
-              Analizuję Twoje błędy gramatyczne, wymowę oraz nowe słownictwo, aby przygotować raport.
+              Analizuję Twoje błędy gramatyczne, płynność oraz nowe słownictwo, aby przygotować raport z lekcji.
             </p>
           </div>
         </div>
       )}
+
+      {/* Live Settings Modal */}
+      {showSettings && (
+        <LiveSettingsModal
+          currentSettings={{
+            mode: chatMode,
+            provider: liveProvider,
+            voice: liveVoice,
+            model: liveModel,
+            apiKey: customApiKey,
+          }}
+          serverConfig={serverConfig}
+          onSave={handleSaveSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Modal Ustawień Live Chat
+function LiveSettingsModal({ currentSettings, serverConfig, onSave, onClose }) {
+  const [mode, setMode] = useState(currentSettings.mode);
+  const [provider, setProvider] = useState(currentSettings.provider);
+  const [voice, setVoice] = useState(currentSettings.voice);
+  const [model, setModel] = useState(currentSettings.model);
+  const [apiKey, setApiKey] = useState(currentSettings.apiKey || "");
+  const [showKey, setShowKey] = useState(false);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ mode, provider, voice, model, apiKey });
+  };
+
+  const voicesList = serverConfig?.voices || [
+    { id: "Puck", name: "Puck (Energetyczny męski)", gender: "male" },
+    { id: "Charon", name: "Charon (Głęboki męski)", gender: "male" },
+    { id: "Fenrir", name: "Fenrir (Spokojny męski)", gender: "male" },
+    { id: "Aoede", name: "Aoede (Ciepły żeński)", gender: "female" },
+    { id: "Kore", name: "Kore (Naturalny żeński)", gender: "female" },
+  ];
+
+  return (
+    <div className="live-settings-modal-overlay">
+      <div className="live-settings-modal-card glass-panel animate-zoom">
+        <div className="live-settings-modal-header">
+          <h3>⚙️ Ustawienia Chat Live</h3>
+          <button className="close-btn" onClick={onClose}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="live-settings-form">
+          {/* Wybór Trybu */}
+          <div className="settings-field-group">
+            <label className="settings-label">Tryb działania:</label>
+            <div className="settings-radio-toggle">
+              <button
+                type="button"
+                className={`toggle-option ${mode === "live" ? "active" : ""}`}
+                onClick={() => setMode("live")}
+              >
+                ⚡ Gemini Multimodal Live (Czas rzeczywisty)
+              </button>
+              <button
+                type="button"
+                className={`toggle-option ${mode === "classic" ? "active" : ""}`}
+                onClick={() => setMode("classic")}
+              >
+                🎙️ Klasyczny (Whisper + OpenAI / TTS)
+              </button>
+            </div>
+          </div>
+
+          {mode === "live" && (
+            <>
+              {/* Wybór Dostawcy */}
+              <div className="settings-field-group">
+                <label className="settings-label">Dostawca technologii Live:</label>
+                <select
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                  className="settings-select"
+                >
+                  <option value="google_ai_studio">Google AI Studio (Gemini Developer API)</option>
+                  <option value="vertex_ai">Vertex AI (Google Cloud Platform)</option>
+                </select>
+                <span className="settings-hint">
+                  {provider === "google_ai_studio"
+                    ? "Domyślna, ultra-szybka opcja z natywnym przesyłem JSON WebSockets."
+                    : "Wymaga uwierzytelnienia GCP dla konta chmurowego z usługą Vertex AI."}
+                </span>
+              </div>
+
+              {/* Wybór Głosu Gemini */}
+              <div className="settings-field-group">
+                <label className="settings-label">Głos lektora Gemini:</label>
+                <select
+                  value={voice}
+                  onChange={(e) => setVoice(e.target.value)}
+                  className="settings-select"
+                >
+                  {voicesList.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Wybór Modelu */}
+              <div className="settings-field-group">
+                <label className="settings-label">Model Gemini Live:</label>
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="settings-select"
+                >
+                  <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash Live (Eksperymentalny - najszybszy)</option>
+                  <option value="gemini-2.5-flash-native-audio-preview-09-2025">Gemini 2.5 Flash Native Audio</option>
+                </select>
+              </div>
+
+              {/* Opcjonalny Własny Klucz Google AI Studio */}
+              {provider === "google_ai_studio" && (
+                <div className="settings-field-group">
+                  <div className="label-with-badge">
+                    <label className="settings-label">Własny klucz API Google AI Studio (Opcjonalny):</label>
+                    <a
+                      href="https://aistudio.google.com/app/apikey"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="api-key-link"
+                    >
+                      Pobierz bezpłatny klucz ↗
+                    </a>
+                  </div>
+                  <div className="input-with-action">
+                    <input
+                      type={showKey ? "text" : "password"}
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder={serverConfig?.gemini_api_key_configured ? "Używam klucza skonfigurowanego na serwerze (opcjonalnie podaj własny)" : "Wklej swój klucz API z Google AI Studio (AIzaSy...)"}
+                      className="settings-input"
+                    />
+                    <button
+                      type="button"
+                      className="eye-toggle-btn"
+                      onClick={() => setShowKey(!showKey)}
+                    >
+                      {showKey ? "Ukryj" : "Pokaż"}
+                    </button>
+                  </div>
+                  <span className="settings-hint">
+                    Klucz jest zapisywany lokalnie w Twojej przeglądarce i nie jest współdzielony z innymi użytkownikami.
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="live-settings-actions">
+            <button type="button" className="btn-secondary" onClick={onClose}>
+              Anuluj
+            </button>
+            <button type="submit" className="btn-primary">
+              Zapisz ustawienia
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
