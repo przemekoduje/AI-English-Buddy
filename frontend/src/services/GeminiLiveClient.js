@@ -69,7 +69,10 @@ export class GeminiLiveClient {
     this.onStatusChange('connecting');
 
     try {
-      // 1. Ustalenie docelowego adresu WebSocket
+      // 1. Odblokowujemy Web Audio Output natychmiast w ramach bezpośredniego gestu użytkownika (kliknięcie Orb)
+      await this.initOutputAudio();
+
+      // 2. Ustalenie docelowego adresu WebSocket
       const url = this.buildWebSocketUrl();
       if (!url) {
         throw new Error("Brak prawidłowego adresu WebSocket lub klucza uwierzytelniającego.");
@@ -83,8 +86,7 @@ export class GeminiLiveClient {
         this.sendSetupFrame();
         this.isConnected = true;
 
-        // Inicjalizacja Audio Contexts
-        await this.initOutputAudio();
+        // Inicjalizacja mikrofonu
         await this.initInputAudio();
 
         this.onStatusChange('listening');
@@ -193,23 +195,37 @@ export class GeminiLiveClient {
    * Inicjalizuje odtwarzanie dźwięku z Gemini (PCM 24 kHz)
    */
   async initOutputAudio() {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    this.outputAudioContext = new AudioContextClass();
-    if (this.outputAudioContext.state === 'suspended') {
-      await this.outputAudioContext.resume();
-    }
-    this.nextPlayTime = this.outputAudioContext.currentTime;
-
-    // Monitorowanie czy lektor wciąż mówi
-    this.checkSpeakingInterval = setInterval(() => {
-      if (this.outputAudioContext) {
-        const isSpeaking = this.outputAudioContext.currentTime < this.nextPlayTime - 0.05;
-        if (isSpeaking !== this.isBotCurrentlySpeaking) {
-          this.isBotCurrentlySpeaking = isSpeaking;
-          this.onBotSpeaking(isSpeaking);
-        }
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!this.outputAudioContext || this.outputAudioContext.state === 'closed') {
+        this.outputAudioContext = new AudioContextClass();
       }
-    }, 100);
+      if (this.outputAudioContext.state === 'suspended') {
+        await this.outputAudioContext.resume();
+      }
+      this.nextPlayTime = this.outputAudioContext.currentTime;
+
+      if (!this.outputGainNode) {
+        this.outputGainNode = this.outputAudioContext.createGain();
+        this.outputGainNode.gain.value = 1.0;
+        this.outputGainNode.connect(this.outputAudioContext.destination);
+      }
+
+      if (!this.checkSpeakingInterval) {
+        // Monitorowanie czy lektor wciąż mówi
+        this.checkSpeakingInterval = setInterval(() => {
+          if (this.outputAudioContext) {
+            const isSpeaking = this.outputAudioContext.currentTime < this.nextPlayTime - 0.05;
+            if (isSpeaking !== this.isBotCurrentlySpeaking) {
+              this.isBotCurrentlySpeaking = isSpeaking;
+              this.onBotSpeaking(isSpeaking);
+            }
+          }
+        }, 80);
+      }
+    } catch (e) {
+      console.warn("[GeminiLive] Błąd inicjalizacji odtwarzania audio:", e);
+    }
   }
 
   /**
@@ -238,8 +254,13 @@ export class GeminiLiveClient {
       const bufferSize = 2048;
       this.scriptProcessorNode = this.inputAudioContext.createScriptProcessor(bufferSize, 1, 1);
 
+      // Wyciszamy bezpośrednie wyjście mikrofonu na głośniki za pomocą GainNode o wzmocnieniu 0
+      this.inputMuteGain = this.inputAudioContext.createGain();
+      this.inputMuteGain.gain.value = 0;
+
       this.audioSourceNode.connect(this.scriptProcessorNode);
-      this.scriptProcessorNode.connect(this.inputAudioContext.destination);
+      this.scriptProcessorNode.connect(this.inputMuteGain);
+      this.inputMuteGain.connect(this.inputAudioContext.destination);
 
       const targetSampleRate = 16000;
       const nativeSampleRate = this.inputAudioContext.sampleRate;
@@ -360,6 +381,14 @@ export class GeminiLiveClient {
 
     if (!message) return;
 
+    // 0. Potwierdzenie gotowości sesji przez Google AI Studio
+    if (message.setupComplete) {
+      console.log("[GeminiLive] Sesja skonfigurowana pomyślnie (setupComplete). Lektor rozpoczyna powitanie...");
+      this.onStatusChange('active');
+      this.sendInitialGreeting();
+      return;
+    }
+
     // 1. Sprawdzenie przerwania mowy lektora (Barge-in / User Interrupted)
     if (message.serverContent && message.serverContent.interrupted) {
       console.log("[GeminiLive] Wykryto przerwanie (interrupted = true). Wyciszam lektora natychmiast.");
@@ -372,13 +401,19 @@ export class GeminiLiveClient {
       const parts = message.serverContent.modelTurn.parts || [];
 
       for (const part of parts) {
-        // Audio PCM z Gemini (zazwyczaj audio/pcm;rate=24000)
-        if (part.mimeType && part.mimeType.startsWith('audio/pcm') && part.data) {
-          this.queueAudioChunk(part.data, 24000);
+        // Audio PCM z Gemini (Google AI Studio przesyła inlineData: { mimeType: "audio/pcm;rate=24000", data: "..." })
+        const audioData = part.inlineData || (part.mimeType && part.data ? part : null);
+        if (audioData && audioData.mimeType && audioData.mimeType.startsWith('audio/pcm') && audioData.data) {
+          let sampleRate = 24000;
+          const match = audioData.mimeType.match(/rate=(\d+)/);
+          if (match && match[1]) {
+            sampleRate = parseInt(match[1], 10);
+          }
+          this.queueAudioChunk(audioData.data, sampleRate);
         }
 
-        // Tekst wypowiedzi lektora
-        if (part.text) {
+        // Tekst wypowiedzi lektora (pomijamy myśli modelu: part.thought === true)
+        if (part.text && !part.thought) {
           this.currentBotTurnText += part.text;
           this.onTranscript({
             sender: 'bot',
@@ -403,24 +438,56 @@ export class GeminiLiveClient {
   }
 
   /**
+   * Wysyła krótką prośbę o powitanie ucznia natychmiast po połączeniu
+   */
+  sendInitialGreeting() {
+    const greetingTurn = {
+      clientContent: {
+        turns: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: "Hello! Please greet me warmly in English as my friendly tutor, introduce yourself briefly in 1-2 natural sentences, and ask how my day is going."
+              }
+            ]
+          }
+        ],
+        turnComplete: true
+      }
+    };
+    this.sendJson(greetingTurn);
+  }
+
+  /**
    * Kolejkuje i odtwarza fragment audio 24kHz PCM
    */
   queueAudioChunk(base64Data, sampleRate = 24000) {
     if (!this.outputAudioContext) return;
 
     try {
+      if (this.outputAudioContext.state === 'suspended') {
+        this.outputAudioContext.resume().catch((err) => {
+          console.warn("[GeminiLive] Wznowienie AudioContext:", err);
+        });
+      }
+
       const float32Array = this.base64ToFloat32Array(base64Data);
       if (!float32Array || float32Array.length === 0) return;
 
       const audioBuffer = this.outputAudioContext.createBuffer(1, float32Array.length, sampleRate);
-      audioBuffer.copyToChannel(float32Array, 0);
+      if (audioBuffer.copyToChannel) {
+        audioBuffer.copyToChannel(float32Array, 0);
+      } else {
+        audioBuffer.getChannelData(0).set(float32Array);
+      }
 
       const sourceNode = this.outputAudioContext.createBufferSource();
       sourceNode.buffer = audioBuffer;
-      sourceNode.connect(this.outputAudioContext.destination);
+      sourceNode.connect(this.outputGainNode || this.outputAudioContext.destination);
 
       const currentTime = this.outputAudioContext.currentTime;
-      const startTime = Math.max(currentTime, this.nextPlayTime);
+      const startTime = (this.nextPlayTime < currentTime) ? currentTime : this.nextPlayTime;
       sourceNode.start(startTime);
       this.nextPlayTime = startTime + audioBuffer.duration;
 
@@ -580,23 +647,29 @@ export class GeminiLiveClient {
    * Konwersja Base64 PCM 16-bit Little Endian do Float32Array
    */
   base64ToFloat32Array(base64) {
-    const binaryString = window.atob(base64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
+    try {
+      const sanitized = base64.replace(/\s/g, '');
+      const binaryString = window.atob(sanitized);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      const dataView = new DataView(bytes.buffer);
+      const numSamples = Math.floor(bytes.length / 2);
+      const samples = new Float32Array(numSamples);
+
+      for (let i = 0; i < numSamples; i++) {
+        const int16 = dataView.getInt16(i * 2, true);
+        samples[i] = int16 < 0 ? int16 / 32768 : int16 / 32767;
+      }
+
+      return samples;
+    } catch (e) {
+      console.warn("[GeminiLive] Błąd dekodowania Base64 PCM:", e);
+      return null;
     }
-
-    const dataView = new DataView(bytes.buffer);
-    const numSamples = Math.floor(bytes.length / 2);
-    const samples = new Float32Array(numSamples);
-
-    for (let i = 0; i < numSamples; i++) {
-      const int16 = dataView.getInt16(i * 2, true);
-      samples[i] = int16 < 0 ? int16 / 32768 : int16 / 32767;
-    }
-
-    return samples;
   }
 
   /**
@@ -640,11 +713,25 @@ export class GeminiLiveClient {
       this.scriptProcessorNode = null;
     }
 
+    if (this.inputMuteGain) {
+      try {
+        this.inputMuteGain.disconnect();
+      } catch (e) {}
+      this.inputMuteGain = null;
+    }
+
     if (this.audioSourceNode) {
       try {
         this.audioSourceNode.disconnect();
       } catch (e) {}
       this.audioSourceNode = null;
+    }
+
+    if (this.outputGainNode) {
+      try {
+        this.outputGainNode.disconnect();
+      } catch (e) {}
+      this.outputGainNode = null;
     }
 
     if (this.mediaStream) {

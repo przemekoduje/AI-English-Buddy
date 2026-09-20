@@ -227,17 +227,17 @@ function Dashboard({ user }) {
         },
         onUserVolume: (volume) => {
           setRmsVolume(volume);
-          if (volume > 0.02) {
-            setLiveStatus("user-speaking");
-          } else if (liveStatus === "user-speaking") {
-            setLiveStatus("listening");
+          if (volume > 0.025) {
+            setLiveStatus((prev) => (prev === "listening" ? "user-speaking" : prev));
+          } else {
+            setLiveStatus((prev) => (prev === "user-speaking" ? "listening" : prev));
           }
         },
         onBotSpeaking: (isSpeaking) => {
           if (isSpeaking) {
             setLiveStatus("speaking");
           } else {
-            setLiveStatus("listening");
+            setLiveStatus((prev) => (prev === "speaking" ? "listening" : prev));
           }
         },
         onTranscript: ({ sender, text, isFinal }) => {
