@@ -226,6 +226,8 @@ function Dashboard({ user }) {
         model: activeModel,
         voiceName: activeVoice,
         apiBaseUrl: API_BASE_URL,
+        sessionToken: user?.token || null,
+        userEmail: user?.email || null,
         systemInstruction:
           "You are Speakling, a friendly, charismatic and encouraging native English tutor. Help the student practice conversational English naturally. Keep responses lively, spoken and concise (1-3 sentences) so the conversation flows seamlessly back and forth.",
         onStatusChange: (status) => {

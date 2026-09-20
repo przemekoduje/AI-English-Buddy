@@ -116,12 +116,16 @@ const AdminDashboard = ({ user }) => {
       completionTokens: 0,
       ttsChars: 0,
       whisperSecs: 0,
+      geminiPromptTokens: 0,
+      geminiCompletionTokens: 0,
+      geminiSecs: 0,
       costUsd: 0.0,
       costPln: 0.0,
       openaiCost: 0.0,
       deepseekCost: 0.0,
       whisperCost: 0.0,
       ttsCost: 0.0,
+      geminiCost: 0.0,
     };
   });
 
@@ -139,12 +143,16 @@ const AdminDashboard = ({ user }) => {
         completionTokens: 0,
         ttsChars: 0,
         whisperSecs: 0,
+        geminiPromptTokens: 0,
+        geminiCompletionTokens: 0,
+        geminiSecs: 0,
         costUsd: 0.0,
         costPln: 0.0,
         openaiCost: 0.0,
         deepseekCost: 0.0,
         whisperCost: 0.0,
         ttsCost: 0.0,
+        geminiCost: 0.0,
       };
     }
 
@@ -156,7 +164,8 @@ const AdminDashboard = ({ user }) => {
     uStat.costUsd += cost_usd;
     uStat.costPln += cost_pln;
 
-    if (log.service === 'openai') {
+    const srv = (log.service || '').toLowerCase();
+    if (srv === 'openai') {
       if (log.model && log.model.includes('whisper')) {
         uStat.whisperSecs += log.quantity || 0;
         uStat.whisperCost += cost_usd;
@@ -168,10 +177,15 @@ const AdminDashboard = ({ user }) => {
         uStat.completionTokens += log.completion_tokens || 0;
         uStat.openaiCost += cost_usd;
       }
-    } else if (log.service === 'deepseek') {
+    } else if (srv === 'deepseek') {
       uStat.promptTokens += log.prompt_tokens || 0;
       uStat.completionTokens += log.completion_tokens || 0;
       uStat.deepseekCost += cost_usd;
+    } else if (srv.includes('gemini') || srv.includes('vertex')) {
+      uStat.geminiPromptTokens += log.prompt_tokens || 0;
+      uStat.geminiCompletionTokens += log.completion_tokens || 0;
+      uStat.geminiSecs += log.quantity || 0;
+      uStat.geminiCost += cost_usd;
     }
   });
 
@@ -184,10 +198,14 @@ const AdminDashboard = ({ user }) => {
   let totalDeepseekCost = 0;
   let totalWhisperCost = 0;
   let totalTtsCost = 0;
+  let totalGeminiCost = 0;
   let totalPromptTokens = 0;
   let totalCompletionTokens = 0;
   let totalTtsChars = 0;
   let totalWhisperSecs = 0;
+  let totalGeminiPromptTokens = 0;
+  let totalGeminiCompletionTokens = 0;
+  let totalGeminiSecs = 0;
   let totalCalls = selectedEmail
     ? (userStatsMap[selectedEmail]?.callsCount || 0)
     : filteredUsage.length;
@@ -203,10 +221,14 @@ const AdminDashboard = ({ user }) => {
     totalDeepseekCost += u.deepseekCost;
     totalWhisperCost += u.whisperCost;
     totalTtsCost += u.ttsCost;
+    totalGeminiCost += u.geminiCost;
     totalPromptTokens += u.promptTokens;
     totalCompletionTokens += u.completionTokens;
     totalTtsChars += u.ttsChars;
     totalWhisperSecs += u.whisperSecs;
+    totalGeminiPromptTokens += u.geminiPromptTokens;
+    totalGeminiCompletionTokens += u.geminiCompletionTokens;
+    totalGeminiSecs += u.geminiSecs;
   });
 
   // Filter & Sort
@@ -401,6 +423,25 @@ const AdminDashboard = ({ user }) => {
               </div>
             </div>
 
+            <div className="breakdown-item">
+              <div className="breakdown-info">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                  <span className="breakdown-name" style={{ marginBottom: 0 }}>Google Gemini Live (Audio & WebSockets)</span>
+                  <span className="gemini-live-badge">Flash Native Audio</span>
+                </div>
+                <span className="breakdown-tokens">
+                  {totalGeminiSecs > 0 ? `${(totalGeminiSecs / 60.0).toFixed(1)} min. rozmów (${totalGeminiSecs.toFixed(0)} sek.) • ` : ''}
+                  {(totalGeminiPromptTokens + totalGeminiCompletionTokens).toLocaleString()} tokenów audio (
+                    {totalGeminiPromptTokens.toLocaleString()} in / {totalGeminiCompletionTokens.toLocaleString()} out
+                  )
+                </span>
+              </div>
+              <div className="breakdown-cost">
+                <strong>{(totalGeminiCost * 4.0).toFixed(2)} PLN</strong>
+                <span>${totalGeminiCost.toFixed(4)} USD</span>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -468,6 +509,7 @@ const AdminDashboard = ({ user }) => {
                 <th>Słówka / Historie</th>
                 <th>Zapytania AI</th>
                 <th>GPT / DeepSeek</th>
+                <th>Gemini Live (Audio)</th>
                 <th>TTS (znaki)</th>
                 <th>Whisper (sek.)</th>
                 <th className="text-right">Suma (PLN)</th>
@@ -477,7 +519,7 @@ const AdminDashboard = ({ user }) => {
             <tbody>
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="no-data-cell">Brak wyników dopasowania</td>
+                  <td colSpan="9" className="no-data-cell">Brak wyników dopasowania</td>
                 </tr>
               ) : (
                 filteredUsers.map(u => (
@@ -505,6 +547,19 @@ const AdminDashboard = ({ user }) => {
                     <td>{u.callsCount}</td>
                     <td className="tokens-cell">
                       <span>{(u.promptTokens + u.completionTokens).toLocaleString()} tok.</span>
+                    </td>
+                    <td className="tokens-cell">
+                      {u.geminiCost > 0 || u.geminiSecs > 0 || (u.geminiPromptTokens + u.geminiCompletionTokens) > 0 ? (
+                        <span 
+                          title={`${(u.geminiCost * 4.0).toFixed(2)} PLN ($${u.geminiCost.toFixed(4)}) • ${u.geminiSecs.toFixed(0)} sek. • ${(u.geminiPromptTokens + u.geminiCompletionTokens).toLocaleString()} tok.`}
+                          style={{ cursor: 'help' }}
+                        >
+                          {u.geminiSecs > 0 ? `${(u.geminiSecs / 60.0).toFixed(1)}m` : ''}
+                          {(u.geminiPromptTokens + u.geminiCompletionTokens) > 0 ? ` (${(u.geminiPromptTokens + u.geminiCompletionTokens).toLocaleString()} t.)` : ''}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--gray-400, #9aa0a6)' }}>—</span>
+                      )}
                     </td>
                     <td>{u.ttsChars.toLocaleString()}</td>
                     <td>{u.whisperSecs.toFixed(0)}s</td>

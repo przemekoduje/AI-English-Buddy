@@ -59,6 +59,15 @@ export class GeminiLiveClient {
     this.videoElement = null;
 
     this.apiBaseUrl = options.apiBaseUrl || (typeof window !== 'undefined' && window.location.origin.includes('localhost') ? 'http://localhost:5001' : '');
+    this.sessionToken = options.sessionToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
+    this.userEmail = options.userEmail || null;
+
+    // Monitorowanie kosztów i zużycia tokenów Gemini Live
+    this.sessionStartTime = null;
+    this.sessionPromptTokens = 0;
+    this.sessionCompletionTokens = 0;
+    this.maxSeenTokens = 0;
+    this.usageReported = false;
 
     // Bufor aktualnej wypowiedzi lektora
     this.currentBotTurnText = '';
@@ -87,6 +96,8 @@ export class GeminiLiveClient {
 
       this.ws.onopen = async () => {
         console.log("[GeminiLive] Połączenie WebSocket otwarte. Wysyłam ramkę setup...");
+        this.sessionStartTime = Date.now();
+        this.usageReported = false;
         this.sendSetupFrame();
         this.isConnected = true;
 
@@ -385,6 +396,24 @@ export class GeminiLiveClient {
 
     if (!message) return;
 
+    // Monitorowanie zużycia tokenów Gemini Live (usageMetadata)
+    const usage = message.usageMetadata || (message.serverContent && message.serverContent.usageMetadata);
+    if (usage) {
+      const pTokens = usage.promptTokenCount || 0;
+      const cTokens = usage.candidatesTokenCount || 0;
+      const tTokens = usage.totalTokenCount || (pTokens + cTokens);
+      if (tTokens > 0) {
+        if (tTokens >= this.maxSeenTokens) {
+          this.sessionPromptTokens = pTokens;
+          this.sessionCompletionTokens = cTokens;
+          this.maxSeenTokens = tTokens;
+        } else {
+          this.sessionPromptTokens += pTokens;
+          this.sessionCompletionTokens += cTokens;
+        }
+      }
+    }
+
     // 0. Potwierdzenie gotowości sesji przez Google AI Studio
     if (message.setupComplete) {
       console.log("[GeminiLive] Sesja skonfigurowana pomyślnie (setupComplete). Lektor rozpoczyna powitanie...");
@@ -593,9 +622,18 @@ export class GeminiLiveClient {
       const blob = new Blob([wavBuffer], { type: 'audio/wav' });
       const formData = new FormData();
       formData.append('audio', blob, 'bot_turn.wav');
+      if (this.userEmail) {
+        formData.append('user_email', this.userEmail);
+      }
+
+      const headers = {};
+      if (this.sessionToken) {
+        headers['X-Session-Token'] = this.sessionToken;
+      }
 
       const res = await fetch(`${this.apiBaseUrl}/api/live/transcribe`, {
         method: 'POST',
+        headers,
         body: formData
       });
 
@@ -800,9 +838,49 @@ export class GeminiLiveClient {
   }
 
   /**
+   * Zgłasza do backendu statystyki sesji Gemini Live (czas trwania i zużycie tokenów) do monitora kosztów
+   */
+  async reportSessionUsage() {
+    if (this.usageReported) return;
+    this.usageReported = true;
+
+    const durationSeconds = this.sessionStartTime
+      ? Math.max(1, Math.round((Date.now() - this.sessionStartTime) / 1000))
+      : 0;
+
+    // Raportuj jeśli sesja trwała co najmniej 2 sekundy lub naliczono jakiekolwiek tokeny
+    if (durationSeconds < 2 && this.sessionPromptTokens === 0 && this.sessionCompletionTokens === 0) {
+      return;
+    }
+
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (this.sessionToken) {
+        headers['X-Session-Token'] = this.sessionToken;
+      }
+      await fetch(`${this.apiBaseUrl}/api/live/log-usage`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          provider: this.provider,
+          model: this.model,
+          prompt_tokens: this.sessionPromptTokens,
+          completion_tokens: this.sessionCompletionTokens,
+          duration_seconds: durationSeconds,
+          user_email: this.userEmail
+        })
+      });
+      console.log(`[GeminiLive] Zaraportowano zużycie sesji do monitora kosztów: ${durationSeconds}s, in: ${this.sessionPromptTokens}, out: ${this.sessionCompletionTokens}`);
+    } catch (e) {
+      console.warn("[GeminiLive] Błąd raportowania zużycia sesji do backendu:", e);
+    }
+  }
+
+  /**
    * Pełne sprzątanie zasobów
    */
   cleanup() {
+    this.reportSessionUsage();
     this.isConnected = false;
 
     this.stopBotAudio();

@@ -691,24 +691,51 @@ else:
 
 import secrets
 
-def log_api_usage(user_email, service, feature, model, prompt_tokens=0, completion_tokens=0, quantity=0):
+def log_api_usage(user_email, service, feature, model, prompt_tokens=0, completion_tokens=0, quantity=0, **kwargs):
     if not user_email:
-        return
+        user_email = "guest@speakling.ai"
     try:
         from datetime import datetime
         cost_usd = 0.0
-        if service == 'openai':
-            if 'gpt-4o-mini' in model:
+        service_normalized = str(service).lower()
+        model_str = str(model).lower()
+
+        if service_normalized == 'openai':
+            if 'gpt-4o-mini' in model_str:
                 cost_usd = (prompt_tokens * 0.00000015) + (completion_tokens * 0.0000006)
-            elif 'gpt-4o' in model:
+            elif 'gpt-4o' in model_str:
                 cost_usd = (prompt_tokens * 0.0000025) + (completion_tokens * 0.00001)
-            elif 'whisper' in model:
+            elif 'whisper' in model_str:
+                # $0.006 per minute = $0.0001 per second
                 cost_usd = quantity * 0.0001
-            elif 'tts' in model:
+            elif 'tts' in model_str:
+                # $15.00 per 1M characters
                 cost_usd = quantity * 0.000015
-        elif service == 'deepseek':
-            if 'deepseek-chat' in model:
+            else:
+                cost_usd = (prompt_tokens * 0.00000015) + (completion_tokens * 0.0000006)
+
+        elif service_normalized == 'deepseek':
+            if 'reasoner' in model_str or 'r1' in model_str:
+                cost_usd = (prompt_tokens * 0.00000055) + (completion_tokens * 0.00000219)
+            else:
                 cost_usd = (prompt_tokens * 0.00000014) + (completion_tokens * 0.00000028)
+
+        elif service_normalized in ['google_gemini', 'gemini', 'vertex_ai']:
+            # Cennik Google Gemini Multimodal Live API oraz modeli Flash:
+            # Wejście audio: $3.00 / 1M tokenów audio ($0.000003/tok)
+            # Wyjście audio: $12.00 / 1M tokenów audio ($0.000012/tok)
+            # Wejście tekst: $0.075 / 1M tokenów ($0.000000075/tok)
+            # Wyjście tekst: $0.30 / 1M tokenów ($0.0000003/tok)
+            if feature == 'live_session_token':
+                cost_usd = 0.0
+            elif 'audio' in model_str or 'native' in model_str or 'live' in model_str:
+                if prompt_tokens > 0 or completion_tokens > 0:
+                    cost_usd = (prompt_tokens * 0.000003) + (completion_tokens * 0.000012)
+                elif quantity > 0:
+                    # Estymacja na podstawie czasu trwania rozmowy w sekundach (~$0.027 / min)
+                    cost_usd = quantity * 0.00045
+            else:
+                cost_usd = (prompt_tokens * 0.000000075) + (completion_tokens * 0.0000003)
 
         cost_pln = cost_usd * 4.0
 
@@ -757,9 +784,9 @@ def track_chat_completion(user_email, feature, messages, response_format=None, c
     
     try:
         usage = getattr(ai_response, 'usage', None)
-        if usage and user_email:
+        if usage:
             log_api_usage(
-                user_email=user_email,
+                user_email=user_email or "guest@speakling.ai",
                 service=service,
                 feature=feature,
                 model=active_m,
@@ -1023,6 +1050,13 @@ def query_deepseek(prompt_text, max_tokens=350):
             if max_tokens:
                 kwargs["max_tokens"] = max_tokens
             res = client.chat.completions.create(**kwargs)
+            if res.usage:
+                try:
+                    user_email = get_user_from_request() or "guest@speakling.ai"
+                    s_name = 'deepseek' if ('deepseek' in str(type(client)).lower() or 'deepseek' in MODEL_NAME.lower()) else 'openai'
+                    log_api_usage(user_email, s_name, "query_deepseek", MODEL_NAME, res.usage.prompt_tokens, res.usage.completion_tokens)
+                except Exception as e_log:
+                    print(f"Błąd logowania API query_deepseek: {e_log}", flush=True)
             return {
                 "choices": [
                     {
@@ -1084,6 +1118,13 @@ def query_deepseek_with_system(system_prompt, user_prompt, max_tokens=500):
             if max_tokens:
                 kwargs["max_tokens"] = max_tokens
             res = client.chat.completions.create(**kwargs)
+            if res.usage:
+                try:
+                    user_email = get_user_from_request() or "guest@speakling.ai"
+                    s_name = 'deepseek' if ('deepseek' in str(type(client)).lower() or 'deepseek' in MODEL_NAME.lower()) else 'openai'
+                    log_api_usage(user_email, s_name, "query_deepseek_with_system", MODEL_NAME, res.usage.prompt_tokens, res.usage.completion_tokens)
+                except Exception as e_log:
+                    print(f"Błąd logowania API query_deepseek_with_system: {e_log}", flush=True)
             return {
                 "choices": [
                     {
@@ -5166,6 +5207,18 @@ def live_transcribe():
             language="en"
         )
         text = res.text.strip() if res and hasattr(res, 'text') else ""
+        try:
+            duration_secs = max(1.0, len(audio_bytes) / 48000.0)
+            u_email = get_user_from_request() or request.form.get("user_email") or "guest@speakling.ai"
+            log_api_usage(
+                user_email=u_email,
+                service="openai",
+                feature="live_transcribe_whisper",
+                model="whisper-1",
+                quantity=duration_secs
+            )
+        except Exception as e_log:
+            print(f"Error logging live_transcribe usage: {e_log}", flush=True)
     except Exception as e:
         print(f"OpenAI Whisper error in live_transcribe: {e}", flush=True)
         try:
@@ -5188,6 +5241,46 @@ def live_transcribe():
         text = ""
 
     return jsonify({"text": text}), 200
+
+
+@app.route("/api/live/log-usage", methods=['POST'])
+def log_live_usage():
+    """Zapisuje zużycie tokenów i czas trwania sesji Gemini Live (Google AI Studio / Vertex AI) do api_usage."""
+    user_email = get_user_from_request()
+    req_data = request.get_json(silent=True) or {}
+    if not user_email:
+        user_email = req_data.get("user_email") or "guest@speakling.ai"
+
+    provider = req_data.get("provider", "google_ai_studio")
+    service = "vertex_ai" if provider == "vertex_ai" else "google_gemini"
+    model = req_data.get("model", "gemini-2.5-flash-native-audio-latest")
+    prompt_tokens = int(req_data.get("prompt_tokens", 0) or 0)
+    completion_tokens = int(req_data.get("completion_tokens", 0) or 0)
+    duration_seconds = float(req_data.get("duration_seconds", 0) or 0)
+
+    # Jeśli Gemini nie zwróciło tokenów w ramce WebSocket, estymujemy z czasu sesji
+    if prompt_tokens == 0 and completion_tokens == 0 and duration_seconds > 0:
+        prompt_tokens = int(duration_seconds * 16)
+        completion_tokens = int(duration_seconds * 20)
+
+    log_api_usage(
+        user_email=user_email,
+        service=service,
+        feature="gemini_live_session",
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        quantity=duration_seconds
+    )
+    return jsonify({
+        "success": True,
+        "service": service,
+        "model": model,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "duration_seconds": duration_seconds
+    }), 200
+
 
 @app.route("/api/live/save-key", methods=['POST'])
 def save_live_key():

@@ -198,6 +198,20 @@
   margin-top: 2px;
 }
 
+.gemini-live-badge {
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(135deg, #e8f0fe 0%, #f3e8fd 100%);
+  color: #1a73e8;
+  border: 1px solid #c5d9fb;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
 /* ── Users Table Card ────────────────────────────────────────── */
 .admin-users-card {
   padding: 24px;
