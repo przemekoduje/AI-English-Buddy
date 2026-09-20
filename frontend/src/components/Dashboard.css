@@ -947,3 +947,90 @@
   gap: 0.75rem;
   margin-top: 0.5rem;
 }
+
+/* Quick Start Helper Box */
+.tutor-quick-start-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.quick-btn-key {
+  padding: 0.65rem 1.1rem;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-btn-key:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.quick-btn-classic {
+  padding: 0.65rem 1.25rem;
+  background: linear-gradient(135deg, #1a73e8, #34a853);
+  border: none;
+  border-radius: 999px;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 14px rgba(26, 115, 232, 0.3);
+}
+
+.quick-btn-classic:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(26, 115, 232, 0.4);
+}
+
+/* Modal Classic Shortcut Banner */
+.modal-classic-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 0.9rem 1.1rem;
+  gap: 1rem;
+}
+
+.modal-classic-shortcut .shortcut-text strong {
+  display: block;
+  font-size: 0.9rem;
+  color: #15803d;
+  margin-bottom: 0.2rem;
+}
+
+.modal-classic-shortcut .shortcut-text p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #166534;
+}
+
+.btn-shortcut-classic {
+  background: #16a34a;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.btn-shortcut-classic:hover {
+  background: #15803d;
+}

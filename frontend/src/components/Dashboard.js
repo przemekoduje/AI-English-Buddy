@@ -219,6 +219,17 @@ function Dashboard({ user }) {
       if (liveProvider === "google_ai_studio" && customApiKey.trim()) {
         clientConfig.apiKey = customApiKey.trim();
       } else if (liveProvider === "google_ai_studio") {
+        // Jeśli nie ma klucza w przeglądarce i serwer nie ma GEMINI_API_KEY
+        if (!serverConfig?.gemini_api_key_configured) {
+          setShowSettings(true);
+          setErrorMessage(
+            "Do uruchomienia Gemini Live w czasie rzeczywistym wymagany jest bezpłatny klucz API z Google AI Studio. Wklej klucz poniżej lub przełącz jednym kliknięciem na tryb OpenAI / DeepSeek!"
+          );
+          setIsChatActive(false);
+          setLiveStatus("inactive");
+          return;
+        }
+
         // Pobieramy token efemeryczny z backendu
         const tokenRes = await fetch(`${API_BASE_URL}/api/live/token`, {
           method: "POST",
@@ -236,9 +247,12 @@ function Dashboard({ user }) {
         if (!tokenRes.ok || tokenData.error) {
           if (tokenData.error === "NO_API_KEY") {
             setShowSettings(true);
-            throw new Error(
-              "Wymagany klucz Gemini API. Wprowadź swój bezpłatny klucz z Google AI Studio w oknie ustawień."
+            setErrorMessage(
+              "Wymagany bezpłatny klucz Gemini API. Wklej go poniżej lub uruchom tryb klasyczny (OpenAI), który nie wymaga konfiguracji."
             );
+            setIsChatActive(false);
+            setLiveStatus("inactive");
+            return;
           }
           throw new Error(tokenData.error || tokenData.message || "Błąd generowania tokena sesji.");
         }
@@ -661,6 +675,28 @@ function Dashboard({ user }) {
     }
   };
 
+  const handleSwitchToClassicAndStart = async () => {
+    setChatMode("classic");
+    localStorage.setItem("buddy_live_chat_mode", "classic");
+    setShowSettings(false);
+    setErrorMessage(null);
+    cleanupClassicVAD();
+    stopLiveSession();
+    setIsChatActive(true);
+    setChatMessages([]);
+    stopClassicAudio();
+    setShowTranscript(false);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      setupClassicVAD(stream);
+      startClassicRecording();
+    } catch (err) {
+      alert("Nie udało się uzyskać dostępu do mikrofonu: " + err.message);
+      setIsChatActive(false);
+    }
+  };
+
   const handleEndSession = async () => {
     if (chatMode === "live") {
       stopLiveSession();
@@ -820,13 +856,37 @@ function Dashboard({ user }) {
 
           {/* Status text label */}
           <div className="tutor-status-label">
-            {orbStatus === "inactive" && "Naciśnij orb, aby rozpocząć rozmowę w czasie rzeczywistym"}
+            {orbStatus === "inactive" && (
+              chatMode === "live" && !customApiKey.trim() && !serverConfig?.gemini_api_key_configured ? (
+                <span>⚠️ Wymagany klucz Gemini API — kliknij poniżej, aby go podać lub włącz tryb OpenAI</span>
+              ) : (
+                "Naciśnij orb, aby rozpocząć rozmowę w czasie rzeczywistym"
+              )
+            )}
             {orbStatus === "connecting" && "Łączenie z Gemini Live API..."}
             {orbStatus === "speaking" && "Lektor mówi (zacznij mówić, aby wtrącić!)"}
             {orbStatus === "listening" && "Słucham... powiedz coś po angielsku"}
             {orbStatus === "user-speaking" && "Mówisz..."}
             {orbStatus === "thinking" && "Lektor myśli..."}
           </div>
+
+          {/* Quick-start helper when Gemini key is not configured */}
+          {orbStatus === "inactive" && chatMode === "live" && !customApiKey.trim() && !serverConfig?.gemini_api_key_configured && (
+            <div className="tutor-quick-start-box animate-fade-in">
+              <button
+                className="quick-btn-key"
+                onClick={() => setShowSettings(true)}
+              >
+                🔑 Wpisz bezpłatny klucz Gemini
+              </button>
+              <button
+                className="quick-btn-classic"
+                onClick={handleSwitchToClassicAndStart}
+              >
+                🚀 Uruchom od razu z OpenAI (Działa bez klucza)
+              </button>
+            </div>
+          )}
 
           {/* Controls Bar: Camera Toggle & Transcript Button */}
           <div className="tutor-action-buttons-row">
@@ -950,6 +1010,7 @@ function Dashboard({ user }) {
           }}
           serverConfig={serverConfig}
           onSave={handleSaveSettings}
+          onSwitchToClassicAndStart={handleSwitchToClassicAndStart}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -958,7 +1019,7 @@ function Dashboard({ user }) {
 }
 
 // Modal Ustawień Live Chat
-function LiveSettingsModal({ currentSettings, serverConfig, onSave, onClose }) {
+function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToClassicAndStart, onClose }) {
   const [mode, setMode] = useState(currentSettings.mode);
   const [provider, setProvider] = useState(currentSettings.provider);
   const [voice, setVoice] = useState(currentSettings.voice);
@@ -985,6 +1046,21 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onClose }) {
         <div className="live-settings-modal-header">
           <h3>⚙️ Ustawienia Chat Live</h3>
           <button className="close-btn" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Shortcut to switch to Classic Mode */}
+        <div className="modal-classic-shortcut">
+          <div className="shortcut-text">
+            <strong>💡 Nie masz klucza Gemini API?</strong>
+            <p>Możesz od razu rozmawiać w trybie OpenAI / DeepSeek (nie wymaga klucza Gemini).</p>
+          </div>
+          <button
+            type="button"
+            className="btn-shortcut-classic"
+            onClick={onSwitchToClassicAndStart}
+          >
+            🚀 Włącz tryb OpenAI
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="live-settings-form">
