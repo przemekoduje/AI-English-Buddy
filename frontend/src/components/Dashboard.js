@@ -845,37 +845,15 @@ function Dashboard({ user }) {
 
   return (
     <div className="tutor-gemini-container">
-      {/* Top Header & Mode Badge */}
-      <div className="tutor-header-area">
-        <div className="tutor-title-row">
-          <h1 className="tutor-minimal-title">
-            Chat <span className="blue-gradient-text">Live</span>
-          </h1>
-          <button
-            className="tutor-settings-icon-btn"
-            onClick={() => setShowSettings(true)}
-            title="Ustawienia połączenia i głosu"
-          >
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Status Pill Badge */}
-        <div className="tutor-badge-container">
-          {chatMode === "live" ? (
-            <span className="live-technology-badge">
-              <span className="badge-pulse-dot"></span>
-              ⚡ Gemini Multimodal Live API • {liveProvider === "vertex_ai" ? "Vertex AI (GCP)" : "Google AI Studio"} ({liveVoice})
-            </span>
-          ) : (
-            <span className="classic-technology-badge">
-              🎙️ Tryb Klasyczny (Whisper + OpenAI / DeepSeek)
-            </span>
-          )}
-        </div>
+      {/* Top Header */}
+      <div className="tutor-header-area" style={{ display: 'flex', justifyContent: 'flex-end', padding: '1rem 2rem' }}>
+        <button
+          className="btn-secondary"
+          onClick={() => setShowSettings(true)}
+          style={{ padding: '8px 16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '20px' }}
+        >
+          ⚙️ Settings
+        </button>
       </div>
 
       {/* Floating Error Notification */}
@@ -933,14 +911,8 @@ function Dashboard({ user }) {
           </div>
 
           {/* Status text label */}
-          <div className="tutor-status-label">
-            {orbStatus === "inactive" && (
-              chatMode === "live" && !customApiKey.trim() && !serverConfig?.gemini_api_key_configured ? (
-                <span>Wklej bezpłatny klucz Gemini API poniżej, aby aktywować Orb</span>
-              ) : (
-                "Naciśnij orb, aby rozpocząć rozmowę w czasie rzeczywistym"
-              )
-            )}
+          <div className="tutor-status-label" style={{ marginTop: '2rem' }}>
+            {orbStatus === "inactive" && "Naciśnij orb, aby rozpocząć rozmowę w czasie rzeczywistym"}
             {orbStatus === "connecting" && "Łączenie z Gemini Live API..."}
             {orbStatus === "speaking" && "Lektor mówi (zacznij mówić, aby wtrącić!)"}
             {orbStatus === "listening" && "Słucham... powiedz coś po angielsku"}
@@ -948,64 +920,7 @@ function Dashboard({ user }) {
             {orbStatus === "thinking" && "Lektor myśli..."}
           </div>
 
-          {/* Potwierdzenie aktywnego klucza */}
-          {orbStatus === "inactive" && chatMode === "live" && (customApiKey.trim() || serverConfig?.gemini_api_key_configured) && (
-            <div className="tutor-key-active-badge animate-fade-in">
-              <span className="dot"></span>
-              <span>Klucz Gemini API: <strong>aktywny</strong></span>
-              <button
-                type="button"
-                className="btn-change-key"
-                onClick={() => setShowSettings(true)}
-                title="Zmień klucz lub ustawienia głosu"
-              >
-                ⚙️ Zmień
-              </button>
-            </div>
-          )}
 
-          {/* Bezpośredni formularz wpisania klucza pod Orbem (nie wymaga szukania w ustawieniach) */}
-          {orbStatus === "inactive" && chatMode === "live" && !customApiKey.trim() && !serverConfig?.gemini_api_key_configured && (
-            <div className="tutor-inline-key-card animate-fade-in">
-              <div className="key-card-header">
-                <span className="key-card-title">🔑 Wklej swój bezpłatny klucz Gemini API</span>
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="key-card-link"
-                >
-                  Pobierz z Google AI Studio ↗
-                </a>
-              </div>
-              <form onSubmit={handleInlineKeySubmit} className="key-inline-form">
-                <input
-                  type="text"
-                  className="key-inline-input"
-                  placeholder="Wklej klucz (AIzaSy...)"
-                  value={inlineKeyInput}
-                  onChange={(e) => setInlineKeyInput(e.target.value)}
-                />
-                <button
-                  type="submit"
-                  className="btn-activate-orb"
-                  disabled={!inlineKeyInput.trim() || isSavingInlineKey}
-                >
-                  {isSavingInlineKey ? "Zapisywanie..." : "🟢 Zapisz i Włącz Orb"}
-                </button>
-              </form>
-              <div className="key-card-footer">
-                <span className="key-hint">Nie masz klucza Google Gemini?</span>
-                <button
-                  type="button"
-                  className="btn-inline-classic"
-                  onClick={handleSwitchToClassicAndStart}
-                >
-                  🚀 Rozmawiaj bez klucza z OpenAI
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Przycisk zakończenia rozmowy i przejścia do podsumowania */}
           {isChatActive && (
@@ -1021,22 +936,8 @@ function Dashboard({ user }) {
             </div>
           )}
 
-          {/* Controls Bar: Camera Toggle & Transcript Button */}
+          {/* Controls Bar: Transcript Button (Only visible after initiating chat) */}
           <div className="tutor-action-buttons-row">
-            {/* Multimodal Camera Button */}
-            {chatMode === "live" && (
-              <button
-                className={`tutor-pill-btn ${isCameraActive ? "camera-active" : ""}`}
-                onClick={handleToggleCamera}
-                title={isCameraActive ? "Wyłącz podgląd wideo" : "Włącz kamerę (Multimodal Vision)"}
-              >
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                  <circle cx="12" cy="13" r="4" />
-                </svg>
-                {isCameraActive ? "Kamera włączona" : "Włącz kamerę"}
-              </button>
-            )}
 
             {/* Toggle Transcript button */}
             {chatMessages.length > 0 && (
@@ -1096,12 +997,6 @@ function Dashboard({ user }) {
         </div>
       )}
 
-      {/* Tips */}
-      {!isChatActive && !voiceSummary && (
-        <div className="tutor-minimal-tips">
-          🎧 Używaj słuchawek, aby zapobiec zapętleniu dźwięku. W trybie Live możesz wtrącać się w mowę lektora w dowolnym momencie.
-        </div>
-      )}
 
       {/* Voice Session Summary Modal */}
       {voiceSummary && (
@@ -1182,8 +1077,22 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
     <div className="live-settings-modal-overlay">
       <div className="live-settings-modal-card glass-panel animate-zoom">
         <div className="live-settings-modal-header">
-          <h3>⚙️ Ustawienia Chat Live</h3>
+          <h3>⚙️ Settings</h3>
           <button className="close-btn" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Status Pill Badge Moved to Settings */}
+        <div className="tutor-badge-container" style={{ margin: '1rem 0', display: 'flex', justifyContent: 'center' }}>
+          {currentSettings.mode === "live" ? (
+            <span className="live-technology-badge">
+              <span className="badge-pulse-dot"></span>
+              ⚡ Gemini Multimodal Live API • {currentSettings.provider === "vertex_ai" ? "Vertex AI (GCP)" : "Google AI Studio"} ({currentSettings.voice})
+            </span>
+          ) : (
+            <span className="classic-technology-badge">
+              🎙️ Tryb Klasyczny (Whisper + OpenAI / DeepSeek)
+            </span>
+          )}
         </div>
 
         {/* Shortcut to switch to Classic Mode */}
