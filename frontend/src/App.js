@@ -86,6 +86,24 @@ function App() {
     };
   }, []);
 
+  // Dynamiczne wykrywanie zmniejszenia ekranu i przekierowanie na wersję mobilną
+  useEffect(() => {
+    const checkMobileRedirect = () => {
+      if (window.innerWidth < 768) {
+        const path = window.location.pathname;
+        if (!path.startsWith('/speakling/mobile') && !path.startsWith('/speakling/mobile/')) {
+          const separator = window.location.search ? '&' : '?';
+          const target = window.location.origin + '/speakling/mobile/' + window.location.search + separator + 'cb=' + Date.now() + window.location.hash;
+          window.location.replace(target);
+        }
+      }
+    };
+
+    window.addEventListener('resize', checkMobileRedirect);
+    
+    return () => window.removeEventListener('resize', checkMobileRedirect);
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const playFlashcards = params.get('play_flashcards') === 'true';
