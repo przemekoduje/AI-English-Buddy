@@ -2,21 +2,6 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <script>
-      (function() {
-        var isMobileDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || 
-                             window.innerWidth < 768 || 
-                             (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
-        if (isMobileDevice) {
-          var path = window.location.pathname;
-          if (!path.startsWith('/speakling/mobile') && !path.startsWith('/speakling/mobile/')) {
-            var separator = window.location.search ? '&' : '?';
-            var target = window.location.origin + '/speakling/mobile/' + window.location.search + separator + 'cb=' + Date.now() + window.location.hash;
-            window.location.replace(target);
-          }
-        }
-      })();
-    </script>
     <link rel="icon" type="image/png" href="%PUBLIC_URL%/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
