@@ -166,7 +166,6 @@ function Workspace({
   const [continuationDetails, setContinuationDetails] = useState("");
   const [selectedContinuationTopics, setSelectedContinuationTopics] = useState([]);
   const [loadedRootId, setLoadedRootId] = useState(null);
-  const rootStoryId = loadedRootId || currentStoryId;
   
   const [genProgress, setGenProgress] = useState(0);
   const [genPhaseLabel, setGenPhaseLabel] = useState("");
@@ -265,12 +264,12 @@ function Workspace({
 
   const loadVocabulary = useCallback(async () => {
     if (!user) return;
-    if (!rootStoryId) {
+    if (!currentStoryId) {
       setNotebookWords([]);
       return;
     }
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary?story_id=${rootStoryId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary?story_id=${currentStoryId}`, {
         headers: { "X-Session-Token": user.token }
       });
       if (response.ok) {
@@ -280,7 +279,7 @@ function Workspace({
     } catch (err) {
       console.error("Błąd podczas ładowania słownika:", err);
     }
-  }, [user, rootStoryId]);
+  }, [user, currentStoryId]);
 
   useEffect(() => {
     loadVocabulary();
@@ -371,7 +370,7 @@ function Workspace({
     handleStop();
     setIsLoading(true);
     
-    
+    const rootStoryId = loadedRootId || currentStoryId;
     
     try {
       let settings = {
@@ -1146,7 +1145,7 @@ function Workspace({
         await fetch(`${API_BASE_URL}/api/vocabulary`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
-          body: JSON.stringify({ ...newEntry, story_id: rootStoryId })
+          body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
         });
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } catch (err) {
@@ -1282,7 +1281,7 @@ function Workspace({
             "Content-Type": "application/json",
             "X-Session-Token": user.token
           },
-          body: JSON.stringify({ ...newEntry, story_id: rootStoryId })
+          body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
         });
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } catch (err) {
@@ -1326,7 +1325,7 @@ function Workspace({
             "Content-Type": "application/json",
             "X-Session-Token": user.token
           },
-          body: JSON.stringify({ original: textToTranslate, translated: preTranslated, story_id: rootStoryId })
+          body: JSON.stringify({ original: textToTranslate, translated: preTranslated, story_id: currentStoryId })
         });
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } catch (err) {
@@ -1387,7 +1386,7 @@ function Workspace({
             "Content-Type": "application/json",
             "X-Session-Token": user.token
           },
-          body: JSON.stringify({ original: textToTranslate, translated: data.translation, story_id: rootStoryId })
+          body: JSON.stringify({ original: textToTranslate, translated: data.translation, story_id: currentStoryId })
         });
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } else {
@@ -1475,7 +1474,7 @@ function Workspace({
     setNotebookWords(prev => prev.filter(w => w.original !== wordToDelete));
     try {
       const url = `${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordToDelete)}` + 
-        (rootStoryId ? `?story_id=${rootStoryId}` : "");
+        (currentStoryId ? `?story_id=${currentStoryId}` : "");
       await fetch(url, {
         method: "DELETE",
         headers: { "X-Session-Token": user.token }
@@ -1603,7 +1602,7 @@ function Workspace({
           "Content-Type": "application/json",
           "X-Session-Token": user.token
         },
-        body: JSON.stringify({ ...newEntry, story_id: rootStoryId })
+        body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
       });
       window.dispatchEvent(new CustomEvent("vocabulary-updated"));
     } catch (err) {
