@@ -264,12 +264,11 @@ function Workspace({
 
   const loadVocabulary = useCallback(async () => {
     if (!user) return;
-    if (!currentStoryId) {
-      setNotebookWords([]);
-      return;
-    }
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary?story_id=${currentStoryId}`, {
+      const url = currentStoryId 
+        ? `${API_BASE_URL}/api/vocabulary?story_id=${currentStoryId}` 
+        : `${API_BASE_URL}/api/vocabulary`;
+      const response = await fetch(url, {
         headers: { "X-Session-Token": user.token }
       });
       if (response.ok) {
