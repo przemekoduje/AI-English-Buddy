@@ -1027,7 +1027,7 @@ TRANSLATION_CACHE = {}
 EXPLAIN_WORD_CACHE = {}
 BASE_FORM_CACHE = {}
 
-def query_deepseek(prompt_text, max_tokens=350):
+def query_deepseek(prompt_text, max_tokens=2500):
     if not API_TOKEN and not (client and not isinstance(client, MockOpenAIClient)):
         mock_content = generate_mock_ai_content(prompt_text)
         return {
@@ -1092,7 +1092,7 @@ def query_deepseek(prompt_text, max_tokens=350):
     return response.json()
 
 
-def query_deepseek_with_system(system_prompt, user_prompt, max_tokens=500):
+def query_deepseek_with_system(system_prompt, user_prompt, max_tokens=2500):
     if not API_TOKEN and not (client and not isinstance(client, MockOpenAIClient)):
         mock_content = generate_mock_ai_content(user_prompt, system_prompt)
         return {
