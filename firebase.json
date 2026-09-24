@@ -6,6 +6,18 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "redirects": [
+      {
+        "source": "/mobile",
+        "destination": "/speakling/mobile/",
+        "type": 302
+      },
+      {
+        "source": "/mobile/:path*",
+        "destination": "/speakling/mobile/:path*",
+        "type": 302
+      }
+    ],
     "rewrites": [
       {
         "source": "/api/**",

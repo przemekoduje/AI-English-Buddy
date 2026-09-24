@@ -13,12 +13,18 @@ Write-Host "=== 2. Budowanie aplikacji przeglądarkowej (React Web) ==="
 $env:REACT_APP_API_URL=""
 npm run build --prefix frontend
 
-Write-Host "=== 3. Łączenie buildów (kopiowanie wersji mobilnej do podfolderu /speakling/mobile) ==="
+Write-Host "=== 3. Łączenie buildów (kopiowanie wersji mobilnej do /speakling/mobile oraz /mobile) ==="
 if (Test-Path frontend/build/speakling/mobile) {
     Remove-Item -Recurse -Force frontend/build/speakling/mobile
 }
 New-Item -ItemType Directory -Force -Path frontend/build/speakling/mobile
 Copy-Item -Recurse -Force mobile/dist/* frontend/build/speakling/mobile/
+
+if (Test-Path frontend/build/mobile) {
+    Remove-Item -Recurse -Force frontend/build/mobile
+}
+New-Item -ItemType Directory -Force -Path frontend/build/mobile
+Copy-Item -Recurse -Force mobile/dist/* frontend/build/mobile/
 
 Write-Host "=== 3b. Konfiguracja Portalu Głównego przemokoduje.com ==="
 Copy-Item -Force frontend/build/index.html frontend/build/speakling.html

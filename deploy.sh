@@ -13,10 +13,14 @@ cd ..
 echo "=== 2. Budowanie aplikacji przeglądarkowej (React Web) ==="
 REACT_APP_API_URL="" npm run build --prefix frontend
 
-echo "=== 3. Łączenie buildów (kopiowanie wersji mobilnej do podfolderu /speakling/mobile) ==="
+echo "=== 3. Łączenie buildów (kopiowanie wersji mobilnej do /speakling/mobile oraz /mobile) ==="
 rm -rf frontend/build/speakling/mobile
 mkdir -p frontend/build/speakling/mobile
 cp -r mobile/dist/* frontend/build/speakling/mobile/
+
+rm -rf frontend/build/mobile
+mkdir -p frontend/build/mobile
+cp -r mobile/dist/* frontend/build/mobile/
 
 echo "=== 3b. Konfiguracja Portalu Głównego przemokoduje.com ==="
 cp frontend/build/index.html frontend/build/speakling.html

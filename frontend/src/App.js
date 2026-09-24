@@ -86,6 +86,29 @@ function App() {
     };
   }, []);
 
+  // Dynamiczne wykrywanie urządzeń mobilnych oraz zmniejszenia ekranu i przekierowanie na wersję mobilną
+  useEffect(() => {
+    const checkMobileRedirect = () => {
+      const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || 
+                       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+                       window.innerWidth < 768 ||
+                       (window.screen && Math.min(window.screen.width, window.screen.height) < 768);
+      if (isMobile) {
+        const path = window.location.pathname;
+        if (!path.startsWith('/speakling/mobile') && !path.startsWith('/speakling/mobile/')) {
+          const separator = window.location.search ? '&' : '?';
+          const target = window.location.origin + '/speakling/mobile/' + window.location.search + separator + 'cb=' + Date.now() + window.location.hash;
+          window.location.replace(target);
+        }
+      }
+    };
+
+    checkMobileRedirect();
+    window.addEventListener('resize', checkMobileRedirect);
+    
+    return () => window.removeEventListener('resize', checkMobileRedirect);
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const playFlashcards = params.get('play_flashcards') === 'true';
