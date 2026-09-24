@@ -407,6 +407,11 @@ function Workspace({
         }),
       });
       const data = await response.json();
+      if (!response.ok || (data && data.error)) {
+        const errorMsg = data?.error || data?.details || "Wystąpił błąd podczas generowania kontynuacji opowiadania.";
+        alert(errorMsg);
+        return;
+      }
       if (data && data[0] && data[0].generated_text) {
         const newPart = {
           id: data[0].story_id,
@@ -429,6 +434,7 @@ function Workspace({
       }
     } catch (error) {
       console.error("Błąd generowania kontynuacji:", error);
+      alert("Nie udało się wygenerować kontynuacji. Sprawdź połączenie z internetem lub spróbuj ponownie za chwilę.");
     } finally {
       setIsLoading(false);
     }
@@ -776,6 +782,11 @@ function Workspace({
         body: JSON.stringify({ topics, customDetails, settings }),
       });
       const data = await response.json();
+      if (!response.ok || (data && data.error)) {
+        const errorMsg = data?.error || data?.details || "Wystąpił błąd podczas generowania opowiadania.";
+        alert(errorMsg);
+        return;
+      }
       if (data && data[0] && data[0].generated_text) {
         setGeneratedText(data[0].generated_text);
         const title = data[0].title || "My AI Story";
@@ -797,6 +808,7 @@ function Workspace({
       }
     } catch (error) {
       console.error("Błąd generowania:", error);
+      alert("Nie udało się wygenerować opowiadania. Sprawdź połączenie z internetem lub spróbuj ponownie za chwilę.");
     } finally {
       setIsLoading(false);
     }
@@ -824,6 +836,11 @@ function Workspace({
         },
       });
       const data = await response.json();
+      if (!response.ok || (data && data.error)) {
+        const errorMsg = data?.error || data?.details || "Wystąpił błąd podczas generowania domyślnej lekcji.";
+        alert(errorMsg);
+        return;
+      }
       if (data && data[0] && data[0].generated_text) {
         setGeneratedText(data[0].generated_text);
         const title = data[0].title || "Default Lesson";
@@ -845,6 +862,7 @@ function Workspace({
       }
     } catch (error) {
       console.error("Błąd generowania lekcji domyślnej:", error);
+      alert("Nie udało się wygenerować domyślnej lekcji. Spróbuj ponownie za chwilę.");
     } finally {
       setIsLoading(false);
     }

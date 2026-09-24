@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import time
 import base64
 from dotenv import load_dotenv # Upewnij się, że to jest na górze!
 from flask import Flask, request, jsonify, Response, send_file
@@ -651,39 +652,77 @@ class MockOpenAIClient:
     def __init__(self):
         self.chat = MockChat()
 
-# Klient OpenAI / DeepSeek
+# Klient OpenAI / DeepSeek / Gemini
 client = None
 openai_client = None
 deepseek_client = None
+gemini_client = None
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if OPENAI_API_KEY:
-    openai_client = OpenAI(api_key=OPENAI_API_KEY)
-    print("Klient OpenAI (wewnętrzny) zainicjalizowany.")
+    try:
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        print("Klient OpenAI (wewnętrzny) zainicjalizowany.")
+    except Exception as e_oa:
+        print(f"Błąd inicjalizacji klienta OpenAI: {e_oa}")
 
 if DEEPSEEK_API_KEY:
-    deepseek_client = OpenAI(
-        api_key=DEEPSEEK_API_KEY,
-        base_url="https://api.deepseek.com"
-    )
-    print("Klient DeepSeek (wewnętrzny) zainicjalizowany.")
+    try:
+        deepseek_client = OpenAI(
+            api_key=DEEPSEEK_API_KEY,
+            base_url="https://api.deepseek.com"
+        )
+        print("Klient DeepSeek (wewnętrzny) zainicjalizowany.")
+    except Exception as e_ds:
+        print(f"Błąd inicjalizacji klienta DeepSeek: {e_ds}")
 
-if OPENAI_API_KEY:
-    client = openai_client
-    print("Klient OpenAI zainicjalizowany.")
-    MODEL_NAME = "gpt-4o-mini"
-    API_URL = "https://api.openai.com/v1/chat/completions"
-    API_TOKEN = OPENAI_API_KEY
-elif DEEPSEEK_API_KEY:
+if GEMINI_API_KEY:
+    try:
+        gemini_client = OpenAI(
+            api_key=GEMINI_API_KEY,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
+        print("Klient Gemini (wewnętrzny) zainicjalizowany.")
+    except Exception as e_gem:
+        print(f"Błąd inicjalizacji klienta Gemini: {e_gem}")
+
+# Domyślny dostawca: jeśli GEMINI_API_KEY jest dostępny, preferuj Gemini (gwarantowane kredyty i wysoka wydajność)
+preferred_provider = os.getenv("AI_PROVIDER", "gemini" if GEMINI_API_KEY else "openai").lower()
+
+if preferred_provider == "gemini" and gemini_client:
+    client = gemini_client
+    MODEL_NAME = "gemini-3.5-flash"
+    API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    API_TOKEN = GEMINI_API_KEY
+    print("Główny klient AI: Gemini (gemini-3.5-flash).")
+elif preferred_provider == "deepseek" and deepseek_client:
     client = deepseek_client
-    print("Klient DeepSeek zainicjalizowany.")
     MODEL_NAME = "deepseek-chat"
     API_URL = "https://api.deepseek.com/chat/completions"
     API_TOKEN = DEEPSEEK_API_KEY
+    print("Główny klient AI: DeepSeek (deepseek-chat).")
+elif OPENAI_API_KEY and openai_client:
+    client = openai_client
+    MODEL_NAME = "gpt-4o-mini"
+    API_URL = "https://api.openai.com/v1/chat/completions"
+    API_TOKEN = OPENAI_API_KEY
+    print("Główny klient AI: OpenAI (gpt-4o-mini).")
+elif DEEPSEEK_API_KEY and deepseek_client:
+    client = deepseek_client
+    MODEL_NAME = "deepseek-chat"
+    API_URL = "https://api.deepseek.com/chat/completions"
+    API_TOKEN = DEEPSEEK_API_KEY
+    print("Główny klient AI: DeepSeek (deepseek-chat).")
+elif gemini_client:
+    client = gemini_client
+    MODEL_NAME = "gemini-3.5-flash"
+    API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    API_TOKEN = GEMINI_API_KEY
+    print("Główny klient AI: Gemini (gemini-3.5-flash).")
 else:
-    print("OSTRZEŻENIE: Brak klucza OPENAI_API_KEY lub DEEPSEEK_API_KEY w .env. Używam lokalnego mocka AI.")
+    print("OSTRZEŻENIE: Brak działających kluczy API. Używam lokalnego mocka AI.")
     MODEL_NAME = "gpt-4o-mini"
     API_URL = "https://api.openai.com/v1/chat/completions"
     API_TOKEN = ""
@@ -767,36 +806,101 @@ def log_api_usage(user_email, service, feature, model, prompt_tokens=0, completi
         print(f"Error logging API usage: {e}", flush=True)
 
 
+EXHAUSTED_PROVIDERS = {}
+
+def get_candidate_providers(custom_client=None, custom_model=None):
+    if custom_client:
+        return [("custom", custom_client, custom_model or MODEL_NAME)]
+
+    preferred = os.getenv("AI_PROVIDER", "gemini" if GEMINI_API_KEY else "openai").lower()
+
+    all_available = []
+    if preferred == "gemini":
+        if gemini_client:
+            all_available.append(("gemini", gemini_client, "gemini-3.5-flash"))
+        if openai_client:
+            all_available.append(("openai", openai_client, "gpt-4o-mini"))
+        if deepseek_client:
+            all_available.append(("deepseek", deepseek_client, "deepseek-chat"))
+    elif preferred == "deepseek":
+        if deepseek_client:
+            all_available.append(("deepseek", deepseek_client, "deepseek-chat"))
+        if gemini_client:
+            all_available.append(("gemini", gemini_client, "gemini-3.5-flash"))
+        if openai_client:
+            all_available.append(("openai", openai_client, "gpt-4o-mini"))
+    else:  # openai or other
+        if openai_client:
+            all_available.append(("openai", openai_client, "gpt-4o-mini"))
+        if gemini_client:
+            all_available.append(("gemini", gemini_client, "gemini-3.5-flash"))
+        if deepseek_client:
+            all_available.append(("deepseek", deepseek_client, "deepseek-chat"))
+
+    # Fallback to general client if not already added
+    if client and not isinstance(client, MockOpenAIClient):
+        s_name = 'gemini' if ('generativelanguage' in str(getattr(client, 'base_url', '')).lower()) else ('deepseek' if ('deepseek' in str(type(client)).lower() or 'deepseek' in MODEL_NAME.lower()) else 'openai')
+        if not any(c[0] == s_name for c in all_available):
+            all_available.append((s_name, client, MODEL_NAME))
+
+    now = time.time()
+    active = [c for c in all_available if EXHAUSTED_PROVIDERS.get(c[0], 0) < now]
+    if not active:
+        active = all_available
+
+    return active
+
+
 def track_chat_completion(user_email, feature, messages, response_format=None, custom_client=None, custom_model=None, **kwargs):
-    active_c = custom_client or client
-    active_m = custom_model or MODEL_NAME
-    
-    service = 'openai'
-    if 'deepseek' in str(type(active_c)) or active_m == 'deepseek-chat':
-        service = 'deepseek'
-        
-    ai_response = active_c.chat.completions.create(
-        model=active_m,
-        messages=messages,
-        response_format=response_format,
-        **kwargs
-    )
-    
-    try:
-        usage = getattr(ai_response, 'usage', None)
-        if usage:
-            log_api_usage(
-                user_email=user_email or "guest@speakling.ai",
-                service=service,
-                feature=feature,
-                model=active_m,
-                prompt_tokens=usage.prompt_tokens,
-                completion_tokens=usage.completion_tokens
-            )
-    except Exception as e:
-        print(f"Error logging chat completion: {e}", flush=True)
-        
-    return ai_response
+    candidates = get_candidate_providers(custom_client, custom_model)
+    if not candidates:
+        if client and not isinstance(client, MockOpenAIClient):
+            candidates = [('default', client, MODEL_NAME)]
+
+    if not candidates:
+        raise Exception("Brak skonfigurowanych dostawców AI.")
+
+    last_error = None
+    for service, cli, model in candidates:
+        try:
+            req_kwargs = {
+                "model": model,
+                "messages": messages,
+                **kwargs
+            }
+            if response_format:
+                req_kwargs["response_format"] = response_format
+
+            ai_response = cli.chat.completions.create(**req_kwargs)
+
+            try:
+                usage = getattr(ai_response, 'usage', None)
+                if usage:
+                    log_api_usage(
+                        user_email=user_email or "guest@speakling.ai",
+                        service=service,
+                        feature=feature,
+                        model=model,
+                        prompt_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
+                        completion_tokens=getattr(usage, 'completion_tokens', 0) or 0
+                    )
+            except Exception as e_log:
+                print(f"Error logging chat completion: {e_log}", flush=True)
+
+            return ai_response
+        except Exception as e_prov:
+            err_str = str(e_prov).lower()
+            if any(k in err_str for k in ["credit", "quota", "balance", "429", "402", "insufficient"]):
+                EXHAUSTED_PROVIDERS[service] = time.time() + 600
+                print(f"Dostawca {service} zgłosił brak środków/quota ({e_prov}). Oznaczony na 10 min. Przełączam na zapasowego dostawcę...", flush=True)
+            else:
+                print(f"Błąd dostawcy AI {service} ({model}): {e_prov}. Próbuję kolejnego...", flush=True)
+            last_error = e_prov
+            continue
+
+    if last_error:
+        raise last_error
+    raise Exception("Wszyscy dostawcy AI zwrócili błąd.")
 
 
 def hash_password(password):
@@ -1028,137 +1132,111 @@ EXPLAIN_WORD_CACHE = {}
 BASE_FORM_CACHE = {}
 
 def query_deepseek(prompt_text, max_tokens=2500):
-    if not API_TOKEN and not (client and not isinstance(client, MockOpenAIClient)):
+    user_email = None
+    try:
+        user_email = get_user_from_request()
+    except Exception:
+        pass
+    if not user_email:
+        user_email = "guest@speakling.ai"
+
+    # Jeśli żaden klucz nie jest skonfigurowany
+    if not OPENAI_API_KEY and not DEEPSEEK_API_KEY and not GEMINI_API_KEY:
         mock_content = generate_mock_ai_content(prompt_text)
+        return {
+            "choices": [{"message": {"content": mock_content}}],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        }
+
+    try:
+        kwargs = {}
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        res = track_chat_completion(
+            user_email=user_email,
+            feature="query_deepseek",
+            messages=[{"role": "user", "content": prompt_text}],
+            **kwargs
+        )
+        usage = getattr(res, 'usage', None)
         return {
             "choices": [
                 {
                     "message": {
-                        "content": mock_content
+                        "content": res.choices[0].message.content or ""
                     }
                 }
-            ]
+            ],
+            "usage": {
+                "prompt_tokens": getattr(usage, 'prompt_tokens', 0) if usage else 0,
+                "completion_tokens": getattr(usage, 'completion_tokens', 0) if usage else 0,
+                "total_tokens": getattr(usage, 'total_tokens', 0) if usage else 0
+            }
         }
-    
-    # Użycie aktywnego klienta OpenAI / DeepSeek przez SDK
-    if client and not isinstance(client, MockOpenAIClient):
-        try:
-            kwargs = {
-                "model": MODEL_NAME,
-                "messages": [{"role": "user", "content": prompt_text}]
-            }
-            if max_tokens:
-                kwargs["max_tokens"] = max_tokens
-            res = client.chat.completions.create(**kwargs)
-            if res.usage:
-                try:
-                    user_email = get_user_from_request() or "guest@speakling.ai"
-                    s_name = 'deepseek' if ('deepseek' in str(type(client)).lower() or 'deepseek' in MODEL_NAME.lower()) else 'openai'
-                    log_api_usage(user_email, s_name, "query_deepseek", MODEL_NAME, res.usage.prompt_tokens, res.usage.completion_tokens)
-                except Exception as e_log:
-                    print(f"Błąd logowania API query_deepseek: {e_log}", flush=True)
+    except Exception as e:
+        print(f"Błąd AI w query_deepseek: {e}", flush=True)
+        if not OPENAI_API_KEY and not DEEPSEEK_API_KEY and not GEMINI_API_KEY:
+            mock_content = generate_mock_ai_content(prompt_text)
             return {
-                "choices": [
-                    {
-                        "message": {
-                            "content": res.choices[0].message.content or ""
-                        }
-                    }
-                ],
-                "usage": {
-                    "prompt_tokens": res.usage.prompt_tokens if res.usage else 0,
-                    "completion_tokens": res.usage.completion_tokens if res.usage else 0,
-                    "total_tokens": res.usage.total_tokens if res.usage else 0
-                }
+                "choices": [{"message": {"content": mock_content}}],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
             }
-        except Exception as e:
-            print(f"Błąd OpenAI completions w query_deepseek: {e}")
-            raise
-
-    payload = {
-        "model": MODEL_NAME,
-        "messages": [
-            {"role": "user", "content": prompt_text}
-        ]
-    }
-    if max_tokens:
-        payload["max_tokens"] = max_tokens
-    req_headers = {
-        "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    response = requests.post(API_URL, headers=req_headers, json=payload, timeout=20)
-    response.raise_for_status()
-    return response.json()
+        raise
 
 
 def query_deepseek_with_system(system_prompt, user_prompt, max_tokens=2500):
-    if not API_TOKEN and not (client and not isinstance(client, MockOpenAIClient)):
+    user_email = None
+    try:
+        user_email = get_user_from_request()
+    except Exception:
+        pass
+    if not user_email:
+        user_email = "guest@speakling.ai"
+
+    if not OPENAI_API_KEY and not DEEPSEEK_API_KEY and not GEMINI_API_KEY:
         mock_content = generate_mock_ai_content(user_prompt, system_prompt)
+        return {
+            "choices": [{"message": {"content": mock_content}}],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        }
+
+    try:
+        kwargs = {}
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        res = track_chat_completion(
+            user_email=user_email,
+            feature="query_deepseek_with_system",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            **kwargs
+        )
+        usage = getattr(res, 'usage', None)
         return {
             "choices": [
                 {
                     "message": {
-                        "content": mock_content
+                        "content": res.choices[0].message.content or ""
                     }
                 }
-            ]
+            ],
+            "usage": {
+                "prompt_tokens": getattr(usage, 'prompt_tokens', 0) if usage else 0,
+                "completion_tokens": getattr(usage, 'completion_tokens', 0) if usage else 0,
+                "total_tokens": getattr(usage, 'total_tokens', 0) if usage else 0
+            }
         }
-
-    # Użycie aktywnego klienta OpenAI / DeepSeek przez SDK
-    if client and not isinstance(client, MockOpenAIClient):
-        try:
-            kwargs = {
-                "model": MODEL_NAME,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ]
-            }
-            if max_tokens:
-                kwargs["max_tokens"] = max_tokens
-            res = client.chat.completions.create(**kwargs)
-            if res.usage:
-                try:
-                    user_email = get_user_from_request() or "guest@speakling.ai"
-                    s_name = 'deepseek' if ('deepseek' in str(type(client)).lower() or 'deepseek' in MODEL_NAME.lower()) else 'openai'
-                    log_api_usage(user_email, s_name, "query_deepseek_with_system", MODEL_NAME, res.usage.prompt_tokens, res.usage.completion_tokens)
-                except Exception as e_log:
-                    print(f"Błąd logowania API query_deepseek_with_system: {e_log}", flush=True)
+    except Exception as e:
+        print(f"Błąd AI w query_deepseek_with_system: {e}", flush=True)
+        if not OPENAI_API_KEY and not DEEPSEEK_API_KEY and not GEMINI_API_KEY:
+            mock_content = generate_mock_ai_content(user_prompt, system_prompt)
             return {
-                "choices": [
-                    {
-                        "message": {
-                            "content": res.choices[0].message.content or ""
-                        }
-                    }
-                ],
-                "usage": {
-                    "prompt_tokens": res.usage.prompt_tokens if res.usage else 0,
-                    "completion_tokens": res.usage.completion_tokens if res.usage else 0,
-                    "total_tokens": res.usage.total_tokens if res.usage else 0
-                }
+                "choices": [{"message": {"content": mock_content}}],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
             }
-        except Exception as e:
-            print(f"Błąd OpenAI completions w query_deepseek_with_system: {e}")
-            raise
-
-    payload = {
-        "model": MODEL_NAME,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-    }
-    if max_tokens:
-        payload["max_tokens"] = max_tokens
-    req_headers = {
-        "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    response = requests.post(API_URL, headers=req_headers, json=payload, timeout=25)
-    response.raise_for_status()
-    return response.json()
+        raise
 
 @app.route("/api/get-topics", methods=['GET'])
 def get_topics():
@@ -2549,9 +2627,12 @@ def generate_text():
 
         return jsonify([{"generated_text": story_text, "title": title, "story_id": story_id}])
     except (KeyError, IndexError) as e:
-        return jsonify({"error": "Nie udało się sparsować odpowiedzi z DeepSeek", "details": str(e)}), 500
+        return jsonify({"error": "Nie udało się sparsować odpowiedzi z AI", "details": str(e)}), 500
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"Błąd połączenia z DeepSeek API: {str(e)}"}), 500
+        return jsonify({"error": f"Błąd połączenia z API: {str(e)}"}), 500
+    except Exception as e:
+        print(f"Błąd generowania tekstu: {e}", flush=True)
+        return jsonify({"error": f"Wystąpił błąd podczas generowania opowiadania: {str(e)}"}), 500
 
 
 @app.route("/api/generate-default", methods=['POST'])
@@ -2621,9 +2702,12 @@ def generate_default_text():
 
         return jsonify([{"generated_text": story_text, "title": title, "story_id": story_id}])
     except (KeyError, IndexError) as e:
-        return jsonify({"error": "Nie udało się sparsować odpowiedzi z DeepSeek", "details": str(e)}), 500
+        return jsonify({"error": "Nie udało się sparsować odpowiedzi z AI", "details": str(e)}), 500
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"Błąd połączenia z DeepSeek API: {str(e)}"}), 500
+        return jsonify({"error": f"Błąd połączenia z API: {str(e)}"}), 500
+    except Exception as e:
+        print(f"Błąd generowania domyślnego tekstu: {e}", flush=True)
+        return jsonify({"error": f"Wystąpił błąd podczas generowania tekstu: {str(e)}"}), 500
 
 
 @app.route("/api/user-settings", methods=['GET'])
