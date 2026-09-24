@@ -12,6 +12,7 @@
  * - Wsparcie dla wielomodalności (Multimodal Vision: wysyłanie klatek wideo z kamery/ekranu)
  * - Śledzenie transkrypcji na żywo
  */
+import { API_BASE_URL } from '../config';
 
 export class GeminiLiveClient {
   constructor(options = {}) {
@@ -58,7 +59,7 @@ export class GeminiLiveClient {
     this.videoFrameInterval = null;
     this.videoElement = null;
 
-    this.apiBaseUrl = options.apiBaseUrl || (typeof window !== 'undefined' && window.location.origin.includes('localhost') ? 'http://localhost:5001' : '');
+    this.apiBaseUrl = options.apiBaseUrl || (typeof window !== 'undefined' && window.location.origin.includes('localhost') ? 'http://localhost:5001' : (API_BASE_URL || ''));
     this.sessionToken = options.sessionToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
     this.userEmail = options.userEmail || null;
 

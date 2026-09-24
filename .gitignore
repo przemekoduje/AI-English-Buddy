@@ -40,3 +40,4 @@ codebase_dump.txt
 
 # Firebase cache
 .firebase/
+firebase.temp.json

@@ -20,6 +20,12 @@ if (Test-Path frontend/build/speakling/mobile) {
 New-Item -ItemType Directory -Force -Path frontend/build/speakling/mobile
 Copy-Item -Recurse -Force mobile/dist/* frontend/build/speakling/mobile/
 
+Write-Host "=== 3b. Konfiguracja Portalu Głównego przemokoduje.com ==="
+Copy-Item -Force frontend/build/index.html frontend/build/speakling.html
+if (Test-Path portal/index.html) {
+    Copy-Item -Force portal/index.html frontend/build/index.html
+}
+
 Write-Host "=== 4. Publikacja połączonej aplikacji na Firebase Hosting ==="
 npx firebase-tools deploy --only hosting
 
