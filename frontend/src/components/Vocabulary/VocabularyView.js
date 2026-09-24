@@ -24,6 +24,14 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   const [recipientEmail, setRecipientEmail] = useState(user?.email || "");
   const [emailStatus, setEmailStatus] = useState(""); // success, error, sending
   
+  // Add Word Modal State
+  const [showAddWordModal, setShowAddWordModal] = useState(false);
+  const [newOriginalWord, setNewOriginalWord] = useState("");
+  const [newTranslatedWord, setNewTranslatedWord] = useState("");
+  const [isTranslatingNew, setIsTranslatingNew] = useState(false);
+  const [isSavingNewWord, setIsSavingNewWord] = useState(false);
+  const [addWordError, setAddWordError] = useState("");
+  
   // TTS State
   const [playingWord, setPlayingWord] = useState(null);
 
@@ -123,6 +131,66 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
     } catch (err) {
       console.error(err);
       alert("Błąd połączenia z serwerem podczas usuwania.");
+    }
+  };
+
+  const handleAutoTranslateNewWord = async () => {
+    if (!newOriginalWord.trim()) return;
+    setIsTranslatingNew(true);
+    setAddWordError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/translate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || "",
+        },
+        body: JSON.stringify({ text: newOriginalWord.trim() }),
+      });
+      const data = await response.json();
+      if (data.translation) {
+        setNewTranslatedWord(data.translation);
+      }
+    } catch (err) {
+      console.error(err);
+      setAddWordError("Nie udało się pobrać tłumaczenia.");
+    } finally {
+      setIsTranslatingNew(false);
+    }
+  };
+
+  const handleAddNewWord = async (e) => {
+    e.preventDefault();
+    if (!newOriginalWord.trim() || !newTranslatedWord.trim() || isSavingNewWord) return;
+    setIsSavingNewWord(true);
+    setAddWordError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || "",
+        },
+        body: JSON.stringify({
+          original: newOriginalWord.trim(),
+          translated: newTranslatedWord.trim(),
+        }),
+      });
+      if (response.ok) {
+        setNewOriginalWord("");
+        setNewTranslatedWord("");
+        setShowAddWordModal(false);
+        fetchVocabulary();
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+      } else {
+        const data = await response.json();
+        setAddWordError(data.error || "Błąd podczas zapisywania słówka.");
+      }
+    } catch (err) {
+      console.error(err);
+      setAddWordError("Błąd połączenia z serwerem.");
+    } finally {
+      setIsSavingNewWord(false);
     }
   };
 
@@ -318,6 +386,22 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         </div>
 
         <div className="vocab-header-actions">
+          <button 
+            className="action-premium-btn add-word-btn"
+            onClick={() => setShowAddWordModal(true)}
+            style={{
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(99, 102, 241, 0.3))',
+              borderColor: 'rgba(139, 92, 246, 0.6)'
+            }}
+          >
+            <span className="btn-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </span>
+            <span>Dodaj słówko</span>
+          </button>
 
           <button 
             className="action-premium-btn flashcards-btn"
@@ -980,6 +1064,79 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
               </button>
             </div>
           </form>
+        </div>
+      )}
+      {showAddWordModal && (
+        <div className="modal-overlay" style={{ zIndex: 10000 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '440px' }}>
+            <h3>Dodaj nowe słówko</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '16px' }}>
+              Wpisz angielskie słowo lub frazę. Możesz użyć AI do automatycznego przetłumaczenia.
+            </p>
+            {addWordError && (
+              <div style={{ color: '#ef4444', marginBottom: '12px', fontSize: '0.85rem' }}>
+                {addWordError}
+              </div>
+            )}
+            <form onSubmit={handleAddNewWord}>
+              <div style={{ marginBottom: '12px', textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                  Słowo / fraza po angielsku:
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    required
+                    placeholder="np. resilient"
+                    value={newOriginalWord}
+                    onChange={(e) => setNewOriginalWord(e.target.value)}
+                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.25)', color: 'white' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAutoTranslateNewWord}
+                    disabled={isTranslatingNew || !newOriginalWord.trim()}
+                    style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'rgba(139, 92, 246, 0.25)', color: '#c4b5fd', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600' }}
+                    title="Przetłumacz za pomocą AI"
+                  >
+                    {isTranslatingNew ? "..." : "AI Tłumacz"}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px', textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                  Tłumaczenie po polsku:
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="np. odporny, elastyczny"
+                  value={newTranslatedWord}
+                  onChange={(e) => setNewTranslatedWord(e.target.value)}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.25)', color: 'white' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddWordModal(false)}
+                  style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: 'white', cursor: 'pointer' }}
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingNewWord || !newOriginalWord.trim() || !newTranslatedWord.trim()}
+                  className="action-premium-btn"
+                  style={{ cursor: 'pointer' }}
+                >
+                  {isSavingNewWord ? "Zapisywanie..." : "Zapisz w słowniku"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

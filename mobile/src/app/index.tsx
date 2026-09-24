@@ -126,10 +126,6 @@ const getInitialBackendUrl = () => {
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
     if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
-      if (hostname.includes('przemokoduje.com')) {
-        // Produkcja domyślna: Firebase Hosting automatycznie przekierowuje /api/** → Cloud Run
-        return '';
-      }
       return 'https://ai-english-buddy-backend-665075210565.europe-west1.run.app';
     }
   }

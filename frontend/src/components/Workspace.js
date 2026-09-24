@@ -1775,6 +1775,19 @@ function Workspace({
               
               <div className="header-actions-group">
                 <button 
+                  onClick={handleBackButtonClick} 
+                  className="header-action-text-btn new-story-btn" 
+                  title="Utwórz nową historię AI lub wklej własny tekst"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  <span>Nowa opowieść</span>
+                </button>
+
+                <button 
                   onClick={() => {
                     handleStop();
                     setShowPracticeMode(true);

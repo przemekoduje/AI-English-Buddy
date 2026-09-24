@@ -8,6 +8,8 @@ const TranslatorDrawer = ({ user }) => {
   const [translatedText, setTranslatedText] = useState("");
   const [isTranslating, setIsTranslating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isSavingVocab, setIsSavingVocab] = useState(false);
+  const [vocabSaved, setVocabSaved] = useState(false);
   const debounceTimerRef = useRef(null);
 
   const handleOpenDrawer = () => setIsOpen(true);
@@ -101,8 +103,36 @@ const TranslatorDrawer = ({ user }) => {
   const handleClear = () => {
     setSourceText("");
     setTranslatedText("");
+    setVocabSaved(false);
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
+    }
+  };
+
+  const handleSaveToVocabulary = async () => {
+    if (!sourceText.trim() || !translatedText.trim() || isSavingVocab || !user?.token) return;
+    setIsSavingVocab(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user.token,
+        },
+        body: JSON.stringify({
+          original: sourceText.trim(),
+          translated: translatedText.trim(),
+        }),
+      });
+      if (response.ok) {
+        setVocabSaved(true);
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+        setTimeout(() => setVocabSaved(false), 3000);
+      }
+    } catch (e) {
+      console.error("Błąd zapisu do słownika:", e);
+    } finally {
+      setIsSavingVocab(false);
     }
   };
 
@@ -191,7 +221,43 @@ const TranslatorDrawer = ({ user }) => {
             </div>
             <div className="translator-output">
               {translatedText ? (
-                <p>{translatedText}</p>
+                <>
+                  <p>{translatedText}</p>
+                  {user && !isTranslating && translatedText !== "Błąd połączenia z serwerem." && translatedText !== "Błąd tłumaczenia." && (
+                    <button 
+                      className={`translator-add-vocab-btn ${vocabSaved ? "saved" : ""}`}
+                      onClick={handleSaveToVocabulary}
+                      disabled={isSavingVocab}
+                      style={{
+                        marginTop: "12px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "8px 14px",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border)",
+                        background: vocabSaved ? "rgba(16, 185, 129, 0.2)" : "rgba(139, 92, 246, 0.15)",
+                        color: vocabSaved ? "#10b981" : "#c4b5fd",
+                        fontWeight: "600",
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        {vocabSaved ? (
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        ) : (
+                          <>
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                          </>
+                        )}
+                      </svg>
+                      <span>{vocabSaved ? "Zapisano w słowniku!" : isSavingVocab ? "Zapisywanie..." : "Dodaj do słownika"}</span>
+                    </button>
+                  )}
+                </>
               ) : (
                 <p className="translator-placeholder-text">Tłumaczenie pojawi się tutaj.</p>
               )}
