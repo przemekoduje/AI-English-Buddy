@@ -697,10 +697,10 @@ preferred_provider = os.getenv("AI_PROVIDER", "gemini" if GEMINI_API_KEY else "o
 
 if preferred_provider == "gemini" and gemini_client:
     client = gemini_client
-    MODEL_NAME = "gemini-3.5-flash"
+    MODEL_NAME = "gemini-1.5-flash"
     API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     API_TOKEN = GEMINI_API_KEY
-    print("Główny klient AI: Gemini (gemini-3.5-flash).")
+    print("Główny klient AI: Gemini (gemini-1.5-flash).")
 elif preferred_provider == "deepseek" and deepseek_client:
     client = deepseek_client
     MODEL_NAME = "deepseek-chat"
@@ -721,10 +721,10 @@ elif DEEPSEEK_API_KEY and deepseek_client:
     print("Główny klient AI: DeepSeek (deepseek-chat).")
 elif gemini_client:
     client = gemini_client
-    MODEL_NAME = "gemini-3.5-flash"
+    MODEL_NAME = "gemini-1.5-flash"
     API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     API_TOKEN = GEMINI_API_KEY
-    print("Główny klient AI: Gemini (gemini-3.5-flash).")
+    print("Główny klient AI: Gemini (gemini-1.5-flash).")
 else:
     print("OSTRZEŻENIE: Brak działających kluczy API. Używam lokalnego mocka AI.")
     MODEL_NAME = "gpt-4o-mini"
@@ -821,7 +821,7 @@ def get_candidate_providers(custom_client=None, custom_model=None):
     all_available = []
     if preferred == "gemini":
         if gemini_client:
-            all_available.append(("gemini", gemini_client, "gemini-3.5-flash"))
+            all_available.append(("gemini", gemini_client, "gemini-1.5-flash"))
         if openai_client:
             all_available.append(("openai", openai_client, "gpt-4o-mini"))
         if deepseek_client:
@@ -830,14 +830,14 @@ def get_candidate_providers(custom_client=None, custom_model=None):
         if deepseek_client:
             all_available.append(("deepseek", deepseek_client, "deepseek-chat"))
         if gemini_client:
-            all_available.append(("gemini", gemini_client, "gemini-3.5-flash"))
+            all_available.append(("gemini", gemini_client, "gemini-1.5-flash"))
         if openai_client:
             all_available.append(("openai", openai_client, "gpt-4o-mini"))
     else:  # openai or other
         if openai_client:
             all_available.append(("openai", openai_client, "gpt-4o-mini"))
         if gemini_client:
-            all_available.append(("gemini", gemini_client, "gemini-3.5-flash"))
+            all_available.append(("gemini", gemini_client, "gemini-1.5-flash"))
         if deepseek_client:
             all_available.append(("deepseek", deepseek_client, "deepseek-chat"))
 
