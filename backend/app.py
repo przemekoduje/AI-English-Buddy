@@ -1022,7 +1022,15 @@ def admin_stats():
             'users': users_list,
             'usage': usage_list,
             'vocab_counts': vocab_counts,
-            'story_counts': story_counts
+            'story_counts': story_counts,
+            'current_models': {
+                'openai': "gpt-4o-mini",
+                'deepseek': "deepseek-chat",
+                'gemini': "gemini-3.5-flash",
+                'gemini_advanced': "gemini-pro-latest",
+                'tts': "tts-1",
+                'whisper': "whisper-1"
+            }
         }), 200
     except Exception as e:
         print(f"Error fetching admin stats: {e}")

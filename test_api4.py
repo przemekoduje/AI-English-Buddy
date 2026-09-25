@@ -1,0 +1,1 @@
+import urllib.request, json; data = json.dumps({'text': 'apple', 'context': 'I ate an apple'}).encode('utf-8'); req = urllib.request.Request('http://127.0.0.1:5001/api/translate', data=data, headers={'Content-Type': 'application/json'}); print(urllib.request.urlopen(req).read().decode('utf-8', 'ignore'))

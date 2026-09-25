@@ -1,0 +1,11 @@
+{
+  "vocabulary": {
+    "96ab9c04-c432-472d-a3d6-cb5a7cb0b695": {
+      "user_email": "test@test.com",
+      "original": "hello",
+      "translated": "czesc",
+      "story_id": "s1",
+      "timestamp": "2026-09-23T05:14:01.275506Z"
+    }
+  }
+}
