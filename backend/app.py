@@ -247,6 +247,10 @@ def generate_mock_ai_content(user_prompt, system_prompt=""):
     
     user_prompt_lower = user_prompt.lower()
     
+    # Translation Mock
+    if "translate" in system_prompt.lower() or "translator" in system_prompt.lower() or "translate" in user_prompt_lower:
+        return "mock_base_word, mock_synonym\nTo jest mockowane testowe tłumaczenie całego zdania."
+
     # Joke Explanation Mock
     if "stand-up" in user_prompt_lower or "explain-joke" in user_prompt_lower or "wyjaśnij poniższy fragment ze stand-upu" in user_prompt_lower:
         if "target" in user_prompt_lower or "hoarder" in user_prompt_lower or "boyfriend" in user_prompt_lower:
