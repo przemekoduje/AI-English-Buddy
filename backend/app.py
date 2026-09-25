@@ -812,40 +812,44 @@ def log_api_usage(user_email, service, feature, model, prompt_tokens=0, completi
 
 EXHAUSTED_PROVIDERS = {}
 
-def get_candidate_providers(custom_client=None, custom_model=None):
+def get_candidate_providers(custom_client=None, custom_model=None, model_tier="cheap"):
     if custom_client:
-        return [("custom", custom_client, custom_model or MODEL_NAME)]
+        return [("custom", custom_client, custom_model or ("gemini-1.5-pro" if model_tier == "advanced" else "gemini-1.5-flash"))]
 
     preferred = os.getenv("AI_PROVIDER", "gemini" if GEMINI_API_KEY else "openai").lower()
+    
+    gemini_model = "gemini-1.5-pro" if model_tier == "advanced" else "gemini-1.5-flash"
+    openai_model = "gpt-4o" if model_tier == "advanced" else "gpt-4o-mini"
+    deepseek_model = "deepseek-chat"
 
     all_available = []
     if preferred == "gemini":
         if gemini_client:
-            all_available.append(("gemini", gemini_client, "gemini-1.5-flash"))
+            all_available.append(("gemini", gemini_client, gemini_model))
         if openai_client:
-            all_available.append(("openai", openai_client, "gpt-4o-mini"))
+            all_available.append(("openai", openai_client, openai_model))
         if deepseek_client:
-            all_available.append(("deepseek", deepseek_client, "deepseek-chat"))
+            all_available.append(("deepseek", deepseek_client, deepseek_model))
     elif preferred == "deepseek":
         if deepseek_client:
-            all_available.append(("deepseek", deepseek_client, "deepseek-chat"))
+            all_available.append(("deepseek", deepseek_client, deepseek_model))
         if gemini_client:
-            all_available.append(("gemini", gemini_client, "gemini-1.5-flash"))
+            all_available.append(("gemini", gemini_client, gemini_model))
         if openai_client:
-            all_available.append(("openai", openai_client, "gpt-4o-mini"))
+            all_available.append(("openai", openai_client, openai_model))
     else:  # openai or other
         if openai_client:
-            all_available.append(("openai", openai_client, "gpt-4o-mini"))
+            all_available.append(("openai", openai_client, openai_model))
         if gemini_client:
-            all_available.append(("gemini", gemini_client, "gemini-1.5-flash"))
+            all_available.append(("gemini", gemini_client, gemini_model))
         if deepseek_client:
-            all_available.append(("deepseek", deepseek_client, "deepseek-chat"))
+            all_available.append(("deepseek", deepseek_client, deepseek_model))
 
     # Fallback to general client if not already added
     if client and not isinstance(client, MockOpenAIClient):
         s_name = 'gemini' if ('generativelanguage' in str(getattr(client, 'base_url', '')).lower()) else ('deepseek' if ('deepseek' in str(type(client)).lower() or 'deepseek' in MODEL_NAME.lower()) else 'openai')
         if not any(c[0] == s_name for c in all_available):
-            all_available.append((s_name, client, MODEL_NAME))
+            all_available.append((s_name, client, gemini_model if s_name == 'gemini' else (openai_model if s_name == 'openai' else deepseek_model)))
 
     now = time.time()
     active = [c for c in all_available if EXHAUSTED_PROVIDERS.get(c[0], 0) < now]
@@ -855,11 +859,11 @@ def get_candidate_providers(custom_client=None, custom_model=None):
     return active
 
 
-def track_chat_completion(user_email, feature, messages, response_format=None, custom_client=None, custom_model=None, **kwargs):
-    candidates = get_candidate_providers(custom_client, custom_model)
+def track_chat_completion(user_email, feature, messages, response_format=None, custom_client=None, custom_model=None, model_tier="cheap", **kwargs):
+    candidates = get_candidate_providers(custom_client, custom_model, model_tier)
     if not candidates:
         if client and not isinstance(client, MockOpenAIClient):
-            candidates = [('default', client, MODEL_NAME)]
+            candidates = [('default', client, custom_model or ("gemini-1.5-pro" if model_tier == "advanced" else "gemini-1.5-flash"))]
 
     if not candidates:
         raise Exception("Brak skonfigurowanych dostawców AI.")
@@ -1135,7 +1139,7 @@ TRANSLATION_CACHE = {}
 EXPLAIN_WORD_CACHE = {}
 BASE_FORM_CACHE = {}
 
-def query_deepseek(prompt_text, max_tokens=2500):
+def query_deepseek(prompt_text, max_tokens=2500, model_tier="cheap"):
     user_email = None
     try:
         user_email = get_user_from_request()
@@ -1160,6 +1164,7 @@ def query_deepseek(prompt_text, max_tokens=2500):
             user_email=user_email,
             feature="query_deepseek",
             messages=[{"role": "user", "content": prompt_text}],
+            model_tier=model_tier,
             **kwargs
         )
         usage = getattr(res, 'usage', None)
@@ -1188,7 +1193,7 @@ def query_deepseek(prompt_text, max_tokens=2500):
         raise
 
 
-def query_deepseek_with_system(system_prompt, user_prompt, max_tokens=2500):
+def query_deepseek_with_system(system_prompt, user_prompt, max_tokens=2500, model_tier="cheap"):
     user_email = None
     try:
         user_email = get_user_from_request()
@@ -1215,6 +1220,7 @@ def query_deepseek_with_system(system_prompt, user_prompt, max_tokens=2500):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
+            model_tier=model_tier,
             **kwargs
         )
         usage = getattr(res, 'usage', None)
@@ -4567,7 +4573,7 @@ def evaluate_story_answer():
     try:
         ai_response = track_chat_completion(
             user_email=user_email,
-            feature="story_evaluate_answer",
+            feature="story_evaluate_answer", model_tier="advanced",
             messages=[{"role": "user", "content": prompt}]
         )
         raw_json = ai_response.choices[0].message.content.strip()
@@ -4766,7 +4772,7 @@ def chat_next():
     try:
         ai_response = track_chat_completion(
             user_email=user_email,
-            feature="story_chat_next",
+            feature="story_chat_next", model_tier="advanced",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -5029,7 +5035,7 @@ def chat_free():
     try:
         ai_response = track_chat_completion(
             user_email=user_email,
-            feature="chat_free",
+            feature="chat_free", model_tier="advanced",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
