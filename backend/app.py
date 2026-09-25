@@ -697,10 +697,10 @@ preferred_provider = os.getenv("AI_PROVIDER", "gemini" if GEMINI_API_KEY else "o
 
 if preferred_provider == "gemini" and gemini_client:
     client = gemini_client
-    MODEL_NAME = "gemini-3.5-flash"
+    MODEL_NAME = "gemini-flash-lite-latest"
     API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     API_TOKEN = GEMINI_API_KEY
-    print("Główny klient AI: Gemini (gemini-3.5-flash).")
+    print("Główny klient AI: Gemini (gemini-flash-lite-latest).")
 elif preferred_provider == "deepseek" and deepseek_client:
     client = deepseek_client
     MODEL_NAME = "deepseek-chat"
@@ -721,10 +721,10 @@ elif DEEPSEEK_API_KEY and deepseek_client:
     print("Główny klient AI: DeepSeek (deepseek-chat).")
 elif gemini_client:
     client = gemini_client
-    MODEL_NAME = "gemini-3.5-flash"
+    MODEL_NAME = "gemini-flash-lite-latest"
     API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     API_TOKEN = GEMINI_API_KEY
-    print("Główny klient AI: Gemini (gemini-3.5-flash).")
+    print("Główny klient AI: Gemini (gemini-flash-lite-latest).")
 else:
     print("OSTRZEŻENIE: Brak działających kluczy API. Używam lokalnego mocka AI.")
     MODEL_NAME = "gpt-4o-mini"
@@ -814,11 +814,11 @@ EXHAUSTED_PROVIDERS = {}
 
 def get_candidate_providers(custom_client=None, custom_model=None, model_tier="cheap"):
     if custom_client:
-        return [("custom", custom_client, custom_model or ("gemini-pro-latest" if model_tier == "advanced" else "gemini-3.5-flash"))]
+        return [("custom", custom_client, custom_model or ("gemini-pro-latest" if model_tier == "advanced" else "gemini-flash-lite-latest"))]
 
     preferred = os.getenv("AI_PROVIDER", "gemini" if GEMINI_API_KEY else "openai").lower()
     
-    gemini_model = "gemini-pro-latest" if model_tier == "advanced" else "gemini-3.5-flash"
+    gemini_model = "gemini-pro-latest" if model_tier == "advanced" else "gemini-flash-lite-latest"
     openai_model = "gpt-4o" if model_tier == "advanced" else "gpt-4o-mini"
     deepseek_model = "deepseek-chat"
 
@@ -863,7 +863,7 @@ def track_chat_completion(user_email, feature, messages, response_format=None, c
     candidates = get_candidate_providers(custom_client, custom_model, model_tier)
     if not candidates:
         if client and not isinstance(client, MockOpenAIClient):
-            candidates = [('default', client, custom_model or ("gemini-pro-latest" if model_tier == "advanced" else "gemini-3.5-flash"))]
+            candidates = [('default', client, custom_model or ("gemini-pro-latest" if model_tier == "advanced" else "gemini-flash-lite-latest"))]
 
     if not candidates:
         raise Exception("Brak skonfigurowanych dostawców AI.")
@@ -1026,7 +1026,7 @@ def admin_stats():
             'current_models': {
                 'openai': "gpt-4o-mini",
                 'deepseek': "deepseek-chat",
-                'gemini': "gemini-3.5-flash",
+                'gemini': "gemini-flash-lite-latest",
                 'gemini_advanced': "gemini-pro-latest",
                 'tts': "tts-1",
                 'whisper': "whisper-1"
