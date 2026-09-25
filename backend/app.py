@@ -1266,20 +1266,20 @@ def translate_text():
         if is_phrase:
             translation_prompt = (
                 f"You are an English-to-Polish translator.\n"
-                f"Translate the phrase '{text_to_translate}' and its context sentence to Polish.\n"
+                f"Translate the phrase '{text_to_translate}' based on its context sentence.\n"
                 f"Sentence: \"{context_sentence}\"\n\n"
                 f"Rules:\n"
-                f"1. Line 1: Exact Polish translation of the phrase '{text_to_translate}'.\n"
+                f"1. Line 1: Provide the BASE dictionary form (infinitive, nominative, etc.) of the Polish translation of the phrase '{text_to_translate}', and optionally 1-2 synonyms separated by commas.\n"
                 f"2. Line 2: Natural Polish translation of the entire sentence.\n"
                 f"Respond ONLY with these 2 lines, without prefixes or labels."
             )
         else:
             translation_prompt = (
                 f"You are an English-to-Polish translator.\n"
-                f"Translate the word '{text_to_translate}' and its context sentence to Polish.\n"
+                f"Translate the word '{text_to_translate}' based on its context sentence.\n"
                 f"Sentence: \"{context_sentence}\"\n\n"
                 f"Rules:\n"
-                f"1. Line 1: Exact contextual Polish translation of the word '{text_to_translate}' (and optionally 1-2 common synonyms separated by commas).\n"
+                f"1. Line 1: Provide the BASE dictionary form (infinitive, nominative, etc.) of the Polish translation of the word '{text_to_translate}' in this context, followed by 2-3 other common Polish synonyms separated by commas.\n"
                 f"2. Line 2: Natural Polish translation of the entire sentence.\n"
                 f"Respond ONLY with these 2 lines, without prefixes or labels."
             )
@@ -1296,9 +1296,9 @@ def translate_text():
         else:
             translation_prompt = (
                 f"Translate the English word '{text_to_translate}' to Polish.\n"
-                f"1. Line 1: Most common Polish translation. No prefix.\n"
-                f"2. Line 2: (Optional) 2-4 other common distinct Polish meanings separated by commas. No prefix.\n"
-                f"Respond ONLY with the translation lines, without markdown formatting or extra text."
+                f"Rules:\n"
+                f"1. Provide the most common BASE dictionary form of the Polish translation, followed by 2-3 other distinct Polish meanings separated by commas. No prefix.\n"
+                f"Respond ONLY with the translation line, without markdown formatting or extra text."
             )
     
     try:
@@ -1308,10 +1308,13 @@ def translate_text():
         translated_text = translated_text.strip()
         lines = [line.strip() for line in translated_text.split('\n') if line.strip()]
         cleaned_lines = []
+        import re
         for line in lines:
-            for prefix in ['line 1:', 'line 2:', 'translation:', 'polish:']:
+            for prefix in ['line 1:', 'line 2:', 'translation:', 'polish:', '1.', '2.', '1:', '2:', '-']:
                 if line.lower().startswith(prefix):
                     line = line[len(prefix):].strip()
+            # Usuń dodatkowe numerowanie np. "1. " przez regex
+            line = re.sub(r'^\d+[\.\)\-:]\s*', '', line)
             line = line.strip('\'" \t\n\r.?!')
             if line:
                 cleaned_lines.append(line)
