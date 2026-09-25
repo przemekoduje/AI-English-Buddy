@@ -876,6 +876,9 @@ def track_chat_completion(user_email, feature, messages, response_format=None, c
                 "messages": messages,
                 **kwargs
             }
+            if "gemini" in model.lower() and "max_tokens" in req_kwargs:
+                del req_kwargs["max_tokens"]
+                
             if response_format:
                 req_kwargs["response_format"] = response_format
 
@@ -1312,8 +1315,9 @@ def translate_text():
             )
     
     try:
-        output_data = query_deepseek(translation_prompt, max_tokens=120)
+        output_data = query_deepseek(translation_prompt, max_tokens=None)
         translated_text = output_data['choices'][0]['message']['content']
+        print(f'"RAW TRANSLATED TEXT: {repr(translated_text)}"', flush=True)
         
         translated_text = translated_text.strip()
         lines = [line.strip() for line in translated_text.split('\n') if line.strip()]
@@ -1405,7 +1409,7 @@ def explain_word():
     )
 
     try:
-        output_data = query_deepseek(explain_prompt, max_tokens=450)
+        output_data = query_deepseek(explain_prompt, max_tokens=None)
         content = output_data['choices'][0]['message']['content'].strip()
 
         # Clean markdown code blocks if present
