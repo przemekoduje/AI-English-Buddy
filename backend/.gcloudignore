@@ -13,3 +13,6 @@ ENV/
 # Ignore local configs / secrets (they are in Secret Manager)
 .env
 temp_audio/
+app_old.py
+*.mp3
+mock_db.json
