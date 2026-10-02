@@ -1387,8 +1387,8 @@ function MediaBuddy({ user }) {
               </button>
             </div>
             <div className="transcript-list">
-              {currentVideo.transcript.length > 0 ? (
-                currentVideo.transcript.map((seg, idx) => (
+              {(currentVideo.transcript || []).length > 0 ? (
+                (currentVideo.transcript || []).map((seg, idx) => (
                   <div
                     key={idx}
                     data-index={idx}
