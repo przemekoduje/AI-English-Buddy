@@ -8,6 +8,7 @@ const VocabularyExerciseModal = ({ notebookWords, user, onClose }) => {
   const [exerciseResult, setExerciseResult] = useState(null);
   const [exerciseChecking, setExerciseChecking] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const [showHint, setShowHint] = useState(false);
 
   const handleStartExercise = async () => {
     if (notebookWords.length === 0) return;
@@ -16,11 +17,16 @@ const VocabularyExerciseModal = ({ notebookWords, user, onClose }) => {
     setExerciseData(null);
     setExerciseResult(null);
     setExerciseTranslation("");
+    setShowHint(false);
     try {
+      // Shuffle words to ensure variety
+      const shuffledWords = [...notebookWords].sort(() => 0.5 - Math.random());
+      const selectedWords = shuffledWords.slice(0, 10);
+      
       const res = await fetch(`${API_BASE_URL}/api/vocabulary/generate-exercise`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
-        body: JSON.stringify({ words: notebookWords.slice(0, 10) }) // AI picks 1-3
+        body: JSON.stringify({ words: selectedWords }) // AI picks 1-3
       });
       if (res.ok) {
         const data = await res.json();
@@ -95,9 +101,21 @@ const VocabularyExerciseModal = ({ notebookWords, user, onClose }) => {
               {exerciseData.sentence_pl}
             </p>
             
-            <p style={{ fontSize: "0.85rem", color: "var(--slate-600)", marginBottom: "1rem" }}>
-              Użyj słów ze słownika: <strong>{exerciseData.target_words.join(", ")}</strong>
-            </p>
+            <div style={{ marginBottom: "1rem" }}>
+              {showHint ? (
+                <p style={{ fontSize: "0.85rem", color: "var(--slate-600)" }}>
+                  Użyj słów ze słownika: <strong>{exerciseData.target_words.join(", ")}</strong>
+                </p>
+              ) : (
+                <button 
+                  onClick={() => setShowHint(true)}
+                  className="btn-secondary"
+                  style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
+                >
+                  💡 Pokaż słówka, których należy użyć
+                </button>
+              )}
+            </div>
 
             <textarea
               value={exerciseTranslation}

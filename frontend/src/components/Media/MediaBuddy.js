@@ -202,6 +202,7 @@ function MediaBuddy({ user }) {
   const [exerciseTranslation, setExerciseTranslation] = useState("");
   const [exerciseResult, setExerciseResult] = useState(null);
   const [exerciseChecking, setExerciseChecking] = useState(false);
+  const [showExerciseHint, setShowExerciseHint] = useState(false);
 
   useEffect(() => {
     if (!currentVideo || !user?.token) {
@@ -227,11 +228,15 @@ function MediaBuddy({ user }) {
     setExerciseData(null);
     setExerciseResult(null);
     setExerciseTranslation("");
+    setShowExerciseHint(false);
     try {
+      const shuffledWords = [...notebookWords].sort(() => 0.5 - Math.random());
+      const selectedWords = shuffledWords.slice(0, 10);
+      
       const res = await fetch(`${API_BASE_URL}/api/vocabulary/generate-exercise`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
-        body: JSON.stringify({ words: notebookWords.slice(0, 10) }) // AI will pick 1-3
+        body: JSON.stringify({ words: selectedWords }) // AI will pick 1-3
       });
       if (res.ok) {
         const data = await res.json();
@@ -1473,9 +1478,21 @@ function MediaBuddy({ user }) {
                       <h5 style={{ color: "var(--primary-700)", marginBottom: "0.5rem" }}>Przetłumacz na angielski:</h5>
                       <p style={{ fontSize: "1.05rem", marginBottom: "1rem", fontWeight: "500" }}>{exerciseData.sentence_pl}</p>
                       
-                      <p style={{ fontSize: "0.85rem", color: "var(--slate-600)", marginBottom: "0.75rem" }}>
-                        Użyj słów: <strong>{exerciseData.target_words.join(", ")}</strong>
-                      </p>
+                      <div style={{ marginBottom: "1rem" }}>
+                        {showExerciseHint ? (
+                          <p style={{ fontSize: "0.85rem", color: "var(--slate-600)" }}>
+                            Użyj słów: <strong>{exerciseData.target_words.join(", ")}</strong>
+                          </p>
+                        ) : (
+                          <button 
+                            onClick={() => setShowExerciseHint(true)}
+                            className="btn-secondary"
+                            style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
+                          >
+                            💡 Pokaż podpowiedź ze słówkami
+                          </button>
+                        )}
+                      </div>
 
                       <textarea
                         value={exerciseTranslation}
