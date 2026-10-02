@@ -3243,7 +3243,10 @@ def generate_vocabulary_exercise():
             user_email=user_email,
             feature="vocabulary_exercise",
             custom_model="gpt-4o",
-            messages=[{"role": "system", "content": system_prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Wygeneruj ćwiczenie zgodnie z instrukcją."}
+            ],
             max_tokens=300,
             temperature=0.7
         )
