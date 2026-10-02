@@ -3213,6 +3213,55 @@ def generate_quiz(word_id):
         return jsonify({"error": f"Błąd generowania quizu i ćwiczeń: {str(e)}"}), 500
 
 
+@app.route("/api/vocabulary/generate-exercise", methods=['POST'])
+def generate_vocabulary_exercise():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    data = request.get_json(silent=True) or {}
+    words = data.get('words', [])
+
+    if not words or not isinstance(words, list):
+        return jsonify({"error": "Brak listy słów"}), 400
+
+    try:
+        # Prepare context
+        words_str = ", ".join([f"{w.get('original', '')} ({w.get('translated', '')})" for w in words])
+        system_prompt = (
+            "Jesteś kreatywnym nauczycielem języka angielskiego. "
+            "Twoim zadaniem jest stworzenie JEDNEGO ćwiczenia polegającego na przetłumaczeniu zdania z języka polskiego na angielski. "
+            f"Masz do dyspozycji następujące słówka, które uczeń niedawno dodał do słownika:\n{words_str}\n\n"
+            "Wybierz od 1 do 3 z tych słów. Następnie stwórz ciekawe, naturalnie brzmiące zdanie po polsku, którego optymalne angielskie tłumaczenie musi zawierać dokładnie te wybrane słowa (w odpowiedniej formie). "
+            "Zwróć wynik jako obiekt JSON z następującymi polami:\n"
+            "- 'target_words': lista słów kluczowych po angielsku, które zostały użyte w tłumaczeniu (w ich oryginalnej, bazowej formie z listy powyżej)\n"
+            "- 'sentence_pl': utworzone zdanie po polsku do przetłumaczenia\n"
+            "- 'correct_en': przykładowe poprawne tłumaczenie tego zdania na angielski używające target_words\n"
+        )
+
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            model="gpt-4o",
+            messages=[{"role": "system", "content": system_prompt}],
+            max_tokens=300,
+            temperature=0.7
+        )
+
+        content = ai_response.choices[0].message.content.strip()
+        if content.startswith("```json"):
+            content = content[7:]
+            if content.endswith("```"):
+                content = content[:-3]
+        content = content.strip()
+        
+        exercise_json = json.loads(content)
+        return jsonify(exercise_json), 200
+
+    except Exception as e:
+        print(f"Error generating exercise: {e}")
+        return jsonify({"error": f"Błąd podczas generowania ćwiczenia: {str(e)}"}), 500
+
+
 @app.route("/api/vocabulary/check-translation", methods=['POST'])
 def check_translation():
     user_email = get_user_from_request()

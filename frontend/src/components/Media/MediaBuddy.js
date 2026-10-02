@@ -194,6 +194,86 @@ function MediaBuddy({ user }) {
   }, [autoScrollEnabled]);
 
   const [pastedSrt, setPastedSrt] = useState("");
+  const [notebookWords, setNotebookWords] = useState([]);
+  
+  // Exercise State
+  const [exerciseData, setExerciseData] = useState(null);
+  const [exerciseLoading, setExerciseLoading] = useState(false);
+  const [exerciseTranslation, setExerciseTranslation] = useState("");
+  const [exerciseResult, setExerciseResult] = useState(null);
+  const [exerciseChecking, setExerciseChecking] = useState(false);
+
+  useEffect(() => {
+    if (!currentVideo || !user?.token) {
+      setNotebookWords([]);
+      return;
+    }
+    const storyId = currentVideo.youtubeId || currentVideo.id;
+    fetch(`${API_BASE_URL}/api/vocabulary?story_id=${storyId}`, {
+      headers: { "X-Session-Token": user.token }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setNotebookWords(data);
+        }
+      })
+      .catch(err => console.error("Error fetching notebook words:", err));
+  }, [currentVideo, user?.token]);
+
+  const handleStartExercise = async () => {
+    if (notebookWords.length === 0) return;
+    setExerciseLoading(true);
+    setExerciseData(null);
+    setExerciseResult(null);
+    setExerciseTranslation("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/vocabulary/generate-exercise`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+        body: JSON.stringify({ words: notebookWords.slice(0, 10) }) // AI will pick 1-3
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setExerciseData(data);
+      } else {
+        alert("Błąd podczas generowania ćwiczenia.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Błąd sieci podczas generowania ćwiczenia.");
+    } finally {
+      setExerciseLoading(false);
+    }
+  };
+
+  const handleCheckExercise = async () => {
+    if (!exerciseTranslation.trim() || !exerciseData) return;
+    setExerciseChecking(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/vocabulary/check-translation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+        body: JSON.stringify({
+          target_word: exerciseData.target_words.join(", "),
+          sentence_pl: exerciseData.sentence_pl,
+          correct_en: exerciseData.correct_en,
+          user_translation: exerciseTranslation
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setExerciseResult(data);
+      } else {
+        alert("Błąd sprawdzania.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Błąd sieci podczas sprawdzania.");
+    } finally {
+      setExerciseChecking(false);
+    }
+  };
 
 
 
@@ -658,7 +738,11 @@ function MediaBuddy({ user }) {
         })
       });
       if (response.ok) {
+        const added_doc = await response.json();
         setIsSegmentSaved(true);
+        if (!notebookWords.some(w => w.original === added_doc.original)) {
+          setNotebookWords(prev => [added_doc, ...prev]);
+        }
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       }
     } catch (err) {
@@ -725,7 +809,11 @@ function MediaBuddy({ user }) {
         })
       });
       if (response.ok) {
+        const added_doc = await response.json();
         setIsSaved(true);
+        if (!notebookWords.some(w => w.original === added_doc.original)) {
+          setNotebookWords(prev => [added_doc, ...prev]);
+        }
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       }
     } catch (err) {
@@ -1345,6 +1433,94 @@ function MediaBuddy({ user }) {
                 Kliknij słowo w transkrypcji po prawej, aby je przetłumaczyć, lub zatrzymaj wideo, aby zobaczyć tłumaczenie całej wypowiedzi.
               </p>
             )}
+
+            {/* Notebook Words & Exercise */}
+            <div className="media-notebook-section" style={{ marginTop: "2rem", borderTop: "1px solid var(--border)", paddingTop: "1.5rem" }}>
+              <h4 style={{ fontSize: "1rem", marginBottom: "1rem", color: "var(--slate-800)" }}>
+                Słówka z tego tekstu ({notebookWords.length})
+              </h4>
+              
+              {notebookWords.length > 0 ? (
+                <>
+                  <div className="media-notebook-list" style={{ maxHeight: "150px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.5rem" }}>
+                    {notebookWords.map((word, idx) => (
+                      <div key={idx} style={{ padding: "0.5rem", background: "var(--slate-50)", borderRadius: "8px", fontSize: "0.9rem" }}>
+                        <strong>{word.original}</strong> — {word.translated}
+                      </div>
+                    ))}
+                  </div>
+
+                  {!exerciseData && !exerciseLoading && (
+                    <button 
+                      onClick={handleStartExercise}
+                      className="btn-primary" 
+                      style={{ width: "100%", justifyContent: "center", padding: "0.75rem" }}
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: "8px" }}>
+                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/>
+                      </svg>
+                      Przećwicz te słówka (Tłumaczenie zdania)
+                    </button>
+                  )}
+
+                  {exerciseLoading && (
+                    <div className="mini-loader" style={{ marginTop: "1rem" }}>Generowanie ćwiczenia...</div>
+                  )}
+
+                  {exerciseData && (
+                    <div className="exercise-container glass-panel" style={{ marginTop: "1rem", padding: "1rem", background: "var(--primary-50)", border: "1px solid var(--primary-200)" }}>
+                      <h5 style={{ color: "var(--primary-700)", marginBottom: "0.5rem" }}>Przetłumacz na angielski:</h5>
+                      <p style={{ fontSize: "1.05rem", marginBottom: "1rem", fontWeight: "500" }}>{exerciseData.sentence_pl}</p>
+                      
+                      <p style={{ fontSize: "0.85rem", color: "var(--slate-600)", marginBottom: "0.75rem" }}>
+                        Użyj słów: <strong>{exerciseData.target_words.join(", ")}</strong>
+                      </p>
+
+                      <textarea
+                        value={exerciseTranslation}
+                        onChange={e => setExerciseTranslation(e.target.value)}
+                        placeholder="Wpisz swoje tłumaczenie tutaj..."
+                        className="premium-input"
+                        style={{ minHeight: "80px", marginBottom: "1rem", resize: "vertical" }}
+                        disabled={exerciseChecking || exerciseResult}
+                      />
+
+                      {!exerciseResult ? (
+                        <button 
+                          onClick={handleCheckExercise} 
+                          className="btn-primary" 
+                          disabled={!exerciseTranslation.trim() || exerciseChecking}
+                          style={{ width: "100%", justifyContent: "center" }}
+                        >
+                          {exerciseChecking ? "Sprawdzanie..." : "Sprawdź tłumaczenie"}
+                        </button>
+                      ) : (
+                        <div className={`exercise-result ${exerciseResult.status}`} style={{ marginTop: "1rem", padding: "1rem", borderRadius: "8px", background: exerciseResult.status === 'correct' ? '#ecfdf5' : exerciseResult.status === 'acceptable' ? '#fffbeb' : '#fef2f2', border: `1px solid ${exerciseResult.status === 'correct' ? '#10b981' : exerciseResult.status === 'acceptable' ? '#f59e0b' : '#ef4444'}` }}>
+                          <h5 style={{ color: exerciseResult.status === 'correct' ? '#047857' : exerciseResult.status === 'acceptable' ? '#b45309' : '#b91c1c', marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            {exerciseResult.status === 'correct' && "✅ Rewelacja!"}
+                            {exerciseResult.status === 'acceptable' && "⚠️ Dobrze, ale można lepiej!"}
+                            {exerciseResult.status === 'incorrect' && "❌ Spróbuj jeszcze raz!"}
+                          </h5>
+                          <p style={{ fontSize: "0.95rem", whiteSpace: "pre-wrap", color: "var(--slate-800)" }}>{exerciseResult.feedback}</p>
+                          <button 
+                            onClick={handleStartExercise}
+                            className="btn-secondary" 
+                            style={{ width: "100%", justifyContent: "center", marginTop: "1rem" }}
+                          >
+                            Następne ćwiczenie
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p style={{ fontSize: "0.9rem", color: "var(--slate-500)", fontStyle: "italic" }}>
+                  Zapisuj nowe słówka podczas oglądania, aby generować z nich ćwiczenia tłumaczeniowe.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

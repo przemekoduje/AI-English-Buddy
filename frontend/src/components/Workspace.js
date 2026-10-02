@@ -4,6 +4,7 @@ import "../App.css";
 import "./Workspace.css";
 import globalAudioManager from '../globalAudioManager';
 import Flashcards from "./Flashcards";
+import VocabularyExerciseModal from "./Vocabulary/VocabularyExerciseModal";
 import StoryGenerator from "./Story/StoryGenerator";
 import Reader from "./Reader/Reader";
 import NotebookSidebar from "./Notebook/NotebookSidebar";
@@ -152,6 +153,7 @@ function Workspace({
   const [playSingle, setPlaySingle] = useState(false);
   const [showVoiceControls, setShowVoiceControls] = useState(false);
   const [showFlashcards, setShowFlashcards] = useState(false);
+  const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState("");
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -2028,6 +2030,7 @@ function Workspace({
         onDeleteWord={handleDeleteWord}
         onOpenEmailModal={() => setShowSendEmailModal(true)}
         onOpenFlashcards={() => setShowFlashcards(true)}
+        onOpenExercise={() => setShowExerciseModal(true)}
         onExplainWord={(word) => {
           pauseAudioForTooltip();
           setExplanationWord(word);
@@ -2054,6 +2057,14 @@ function Workspace({
             onFinishExercises={() => setShowFlashcards(false)} 
           />
         </div>
+      )}
+
+      {showExerciseModal && (
+        <VocabularyExerciseModal 
+          notebookWords={notebookWords}
+          user={user}
+          onClose={() => setShowExerciseModal(false)}
+        />
       )}
 
       {explanationWord && (
