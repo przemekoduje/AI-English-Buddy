@@ -193,38 +193,7 @@ function MediaBuddy({ user }) {
     }
   }, [autoScrollEnabled]);
 
-  const [useWhisper, setUseWhisper] = useState(() => {
-    try {
-      const saved = localStorage.getItem("media_buddy_use_whisper");
-      return saved === "false" ? false : true;
-    } catch (e) {
-      return true;
-    }
-  });
-
-  // Sync useWhisper to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem("media_buddy_use_whisper", useWhisper.toString());
-      console.log("useWhisper persisted to localStorage:", useWhisper);
-    } catch (e) {
-      console.error("Failed to save useWhisper to localStorage", e);
-    }
-  }, [useWhisper]);
-
-  const [useRapidAPI, setUseRapidAPI] = useState(() => {
-    try {
-      return localStorage.getItem("media_buddy_use_rapidapi") === "true";
-    } catch (e) {
-      return false;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("media_buddy_use_rapidapi", useRapidAPI.toString());
-    } catch (e) {}
-  }, [useRapidAPI]);
+  const [pastedSrt, setPastedSrt] = useState("");
 
 
 
@@ -869,10 +838,10 @@ function MediaBuddy({ user }) {
     }
 
     setIsLoadingCustom(true);
+    let newTranscript = [];
+    let newTitle = `Własne wideo (${videoId})`;
     try {
-      const endpoint = useRapidAPI
-        ? `${API_BASE_URL}/api/media/transcript/rapidapi?video_id=${videoId}`
-        : `${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=${useWhisper}`;
+      const endpoint = `${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=false`;
 
       const response = await fetch(endpoint, {
         headers: {
@@ -881,32 +850,33 @@ function MediaBuddy({ user }) {
       });
       if (response.ok) {
         const data = await response.json();
-        if (!data.transcript || data.transcript.length === 0) {
-          setCustomError("Ten film nie posiada angielskich napisów.");
-          return;
+        if (data.transcript && data.transcript.length > 0) {
+          newTranscript = data.transcript;
+        } else {
+          setCustomError("Ten film nie posiada angielskich napisów. Możesz dodać własne napisy .srt po załadowaniu.");
         }
-
-        const newCustomVid = {
-          id: `custom_${videoId}`,
-          title: data.title || `Własne wideo (${videoId})`,
-          youtubeId: videoId,
-          transcript: ensureCompleteSentences(data.transcript)
-        };
-
-        setCustomVideos(prev => {
-          const filtered = prev.filter(v => v.youtubeId !== videoId);
-          return [newCustomVid, ...filtered];
-        });
-        setCurrentVideo(newCustomVid);
-        setCustomUrl("");
+        if (data.title) newTitle = data.title;
       } else {
         const errData = await response.json();
-        setCustomError(errData.error || "Błąd podczas pobierania transkrypcji.");
+        setCustomError(errData.error || "Błąd podczas pobierania transkrypcji. Możesz dodać własne napisy.");
       }
     } catch (err) {
       console.error(err);
-      setCustomError("Błąd pobierania transkrypcji z serwisu YouTube.");
+      setCustomError("Błąd pobierania transkrypcji z serwisu YouTube. Możesz dodać własne napisy.");
     } finally {
+      const newCustomVid = {
+        id: `custom_${videoId}`,
+        title: newTitle,
+        youtubeId: videoId,
+        transcript: newTranscript.length > 0 ? ensureCompleteSentences(newTranscript) : []
+      };
+
+      setCustomVideos(prev => {
+        const filtered = prev.filter(v => v.youtubeId !== videoId);
+        return [newCustomVid, ...filtered];
+      });
+      setCurrentVideo(newCustomVid);
+      setCustomUrl("");
       setIsLoadingCustom(false);
     }
   };
@@ -921,9 +891,93 @@ function MediaBuddy({ user }) {
     await fetchAndLoadVideo(videoId);
   };
 
+  const timeToSeconds = (timeStr) => {
+    if (!timeStr) return 0;
+    const parts = timeStr.split(',');
+    const hms = parts[0];
+    const ms = parts[1] || '000';
+    const timeParts = hms.split(':');
+    let h = 0, m = 0, s = 0;
+    if (timeParts.length === 3) {
+      h = parseInt(timeParts[0], 10);
+      m = parseInt(timeParts[1], 10);
+      s = parseInt(timeParts[2], 10);
+    } else if (timeParts.length === 2) {
+      m = parseInt(timeParts[0], 10);
+      s = parseInt(timeParts[1], 10);
+    }
+    return (h * 3600) + (m * 60) + s + (parseInt(ms, 10) / 1000);
+  };
 
+  const parseSrt = (srtText) => {
+    const segments = [];
+    const blocks = srtText.trim().replace(/\r\n/g, '\n').split(/\n\s*\n/);
+    blocks.forEach(block => {
+      const lines = block.split('\n');
+      let timeLineIdx = -1;
+      for(let i=0; i<lines.length; i++) {
+        if(lines[i].includes('-->')) {
+          timeLineIdx = i;
+          break;
+        }
+      }
+      if (timeLineIdx !== -1 && lines.length > timeLineIdx + 1) {
+        const timeLine = lines[timeLineIdx];
+        const times = timeLine.split('-->').map(t => t.trim());
+        if (times.length === 2) {
+          const start = timeToSeconds(times[0]);
+          const end = timeToSeconds(times[1]);
+          const text = lines.slice(timeLineIdx + 1).join(' ').replace(/<[^>]+>/g, '').trim();
+          if (text) {
+             segments.push({ start, end, text });
+          }
+        }
+      }
+    });
+    return segments;
+  };
 
+  const handleSrtUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const srtText = evt.target.result;
+      const parsed = parseSrt(srtText);
+      if (parsed.length > 0) {
+        const formatted = ensureCompleteSentences(parsed);
+        setCurrentVideo(prev => ({ ...prev, transcript: formatted }));
+        setCustomVideos(prev => 
+          prev.map(v => v.id === currentVideo.id ? { ...v, transcript: formatted } : v)
+        );
+        setCustomError("");
+      } else {
+        setCustomError("Plik SRT jest pusty lub ma nieprawidłowy format.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = null; // reset input
+  };
 
+  const handlePastedSrt = () => {
+    if (!pastedSrt.trim()) return;
+    if (pastedSrt.includes('-->')) {
+      const parsed = parseSrt(pastedSrt);
+      if (parsed.length > 0) {
+        const formatted = ensureCompleteSentences(parsed);
+        setCurrentVideo(prev => ({ ...prev, transcript: formatted }));
+        setCustomVideos(prev => 
+          prev.map(v => v.id === currentVideo.id ? { ...v, transcript: formatted } : v)
+        );
+        setPastedSrt("");
+        setCustomError("");
+      } else {
+         setCustomError("Nie rozpoznano prawidłowego formatu SRT.");
+      }
+    } else {
+      setCustomError("Tekst musi być w formacie SRT (zawierać czasy np. '00:00:01,000 --> 00:00:04,000').");
+    }
+  };
 
   return (
     <div className="mediabuddy-container">
@@ -950,58 +1004,7 @@ function MediaBuddy({ user }) {
             {isLoadingCustom ? "Pobieranie transkrypcji..." : "Załaduj wideo"}
           </button>
         </form>
-        
-        <div className="transcript-mode-toggle-container">
-          <span className="toggle-label-text">Tryb pobierania transkrypcji:</span>
-          <div className="toggle-switch-wrapper">
-            <button
-              type="button"
-              className={`toggle-option-btn ${!useWhisper && !useRapidAPI ? "active" : ""}`}
-              onClick={() => { setUseWhisper(false); setUseRapidAPI(false); }}
-              title="Darmowe automatyczne napisy z YouTube (brak interpunkcji)"
-            >
-              <span>Darmowy (Nap. automatyczne)</span>
-            </button>
-            <button
-              type="button"
-              className={`toggle-option-btn ${useWhisper && !useRapidAPI ? "active" : ""}`}
-              onClick={() => { setUseWhisper(true); setUseRapidAPI(false); }}
-              title="Płatna transkrypcja AI przez Whisper (świetna interpunkcja i wielkie litery)"
-            >
-              <span>Premium AI (Whisper)</span>
-            </button>
-            <button
-              type="button"
-              className={`toggle-option-btn ${useRapidAPI ? "active rapidapi-active" : ""}`}
-              onClick={() => { setUseRapidAPI(!useRapidAPI); }}
-              title="Zewnętrzne Cloud API – omija blokady YouTube na serwerze (PŁATNE)"
-            >
-              <span>☁️ Cloud API (RapidAPI)</span>
-            </button>
-          </div>
-        </div>
 
-        {/* RapidAPI Warning Banner */}
-        {useRapidAPI && (
-          <div className="rapidapi-warning-banner">
-            <div className="rapidapi-warning-icon">⚠️</div>
-            <div className="rapidapi-warning-content">
-              <strong>Tryb płatny – Cloud API (RapidAPI) jest aktywny</strong>
-              <p>
-                Ten tryb pobiera transkrypcje przez zewnętrzne API (<strong>~10 USD/mc</strong>).
-                Omija blokady YouTube na serwerach chmurowych, ale generuje koszty przy każdym zapytaniu.
-                Wyłącz go jeśli nie potrzebujesz pobierać nowych filmów.
-              </p>
-            </div>
-            <button
-              className="rapidapi-warning-close"
-              onClick={() => setUseRapidAPI(false)}
-              title="Wyłącz Cloud API"
-            >
-              Wyłącz
-            </button>
-          </div>
-        )}
 
         {customError && <p className="loader-error">{customError}</p>}
 
@@ -1384,35 +1387,65 @@ function MediaBuddy({ user }) {
               </button>
             </div>
             <div className="transcript-list">
-              {currentVideo.transcript.map((seg, idx) => (
-                <div
-                  key={idx}
-                  data-index={idx}
-                  className={`transcript-segment-card ${activeSegmentIndex === idx ? "active" : ""}`}
-                  onClick={() => handleCardClick(seg, idx)}
-                >
-                  <div className="segment-left-col">
-                    <span className="segment-time-badge">
-                      {Math.floor(seg.start / 60)}:{(Math.floor(seg.start) % 60).toString().padStart(2, "0")}
-                    </span>
-                  </div>
-                  <div className="segment-content">
-                    <p className="segment-text-line">{renderInteractiveText(seg.text, idx)}</p>
-                    <div className="segment-actions">
-                      <button
-                        className="segment-action-btn practice"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePracticePronunciation(seg.text);
-                        }}
-                        title="Przećwicz wymowę i intonację z mikrofonem"
-                      >
-                        Ćwicz wymowę 🎤
-                      </button>
+              {currentVideo.transcript.length > 0 ? (
+                currentVideo.transcript.map((seg, idx) => (
+                  <div
+                    key={idx}
+                    data-index={idx}
+                    className={`transcript-segment-card ${activeSegmentIndex === idx ? "active" : ""}`}
+                    onClick={() => handleCardClick(seg, idx)}
+                  >
+                    <div className="segment-left-col">
+                      <span className="segment-time-badge">
+                        {Math.floor(seg.start / 60)}:{(Math.floor(seg.start) % 60).toString().padStart(2, "0")}
+                      </span>
+                    </div>
+                    <div className="segment-content">
+                      <p className="segment-text-line">{renderInteractiveText(seg.text, idx)}</p>
+                      <div className="segment-actions">
+                        <button
+                          className="segment-action-btn practice"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePracticePronunciation(seg.text);
+                          }}
+                          title="Przećwicz wymowę i intonację z mikrofonem"
+                        >
+                          Ćwicz wymowę 🎤
+                        </button>
+                      </div>
                     </div>
                   </div>
+                ))
+              ) : (
+                <div className="empty-transcript-container" style={{ padding: '2rem', textAlign: 'center' }}>
+                  <h4 style={{ marginBottom: '1rem', color: 'var(--slate-800)' }}>Brak transkrypcji</h4>
+                  <p style={{ marginBottom: '1.5rem', color: 'var(--slate-600)' }}>Ten film nie posiada angielskich napisów. Możesz wgrać własny plik .srt lub wkleić jego zawartość.</p>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
+                    <label className="btn-save-vocabulary" style={{ cursor: 'pointer', background: 'var(--primary-600)', color: 'white', padding: '0.5rem 1rem', borderRadius: '4px' }}>
+                      Załaduj plik .srt
+                      <input type="file" accept=".srt" onChange={handleSrtUpload} style={{ display: 'none' }} />
+                    </label>
+                    
+                    <span style={{ color: 'var(--slate-400)' }}>lub wklej tekst SRT</span>
+                    
+                    <textarea 
+                      value={pastedSrt} 
+                      onChange={(e) => setPastedSrt(e.target.value)}
+                      placeholder="1&#10;00:00:01,000 --> 00:00:04,000&#10;Przykładowy tekst..."
+                      style={{ width: '100%', minHeight: '120px', padding: '0.75rem', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'monospace' }}
+                    />
+                    <button 
+                      className="btn-save-vocabulary" 
+                      onClick={handlePastedSrt}
+                      style={{ width: '100%', background: 'linear-gradient(135deg, var(--secondary-500), var(--secondary-600))', color: 'white' }}
+                    >
+                      Wgraj wklejone napisy
+                    </button>
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
