@@ -21,12 +21,12 @@ const VocabularyExerciseModal = ({ notebookWords, user, onClose }) => {
     try {
       // Shuffle words to ensure variety
       const shuffledWords = [...notebookWords].sort(() => 0.5 - Math.random());
-      const selectedWords = shuffledWords.slice(0, 10);
+      const selectedWords = shuffledWords.slice(0, 30);
       
       const res = await fetch(`${API_BASE_URL}/api/vocabulary/generate-exercise`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
-        body: JSON.stringify({ words: selectedWords }) // AI picks 1-3
+        body: JSON.stringify({ words: selectedWords }) // Send up to 30 shuffled words, AI picks a subset
       });
       if (res.ok) {
         const data = await res.json();
