@@ -3241,7 +3241,8 @@ def generate_vocabulary_exercise():
 
         ai_response = track_chat_completion(
             user_email=user_email,
-            model="gpt-4o",
+            feature="vocabulary_exercise",
+            custom_model="gpt-4o",
             messages=[{"role": "system", "content": system_prompt}],
             max_tokens=300,
             temperature=0.7
@@ -3258,7 +3259,9 @@ def generate_vocabulary_exercise():
         return jsonify(exercise_json), 200
 
     except Exception as e:
-        print(f"Error generating exercise: {e}")
+        import traceback
+        traceback.print_exc()
+        print(f"Error generating exercise: {e}", flush=True)
         return jsonify({"error": f"Błąd podczas generowania ćwiczenia: {str(e)}"}), 500
 
 
