@@ -5100,7 +5100,7 @@ def create_gemini_ephemeral_token(api_key, model="gemini-2.5-flash-native-audio-
     """Creates an ephemeral token for Gemini Live API over WebSockets."""
     import datetime
     url = "https://generativelanguage.googleapis.com/v1beta/auth_tokens"
-    now = datetime.timezone.utc and datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.timezone.utc)
     expire_time = (now + datetime.timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
     new_session_expire_time = (now + datetime.timedelta(minutes=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -5109,11 +5109,8 @@ def create_gemini_ephemeral_token(api_key, model="gemini-2.5-flash-native-audio-
         "uses": 1,
         "expireTime": expire_time,
         "newSessionExpireTime": new_session_expire_time,
-        "liveConnectConstraints": {
-            "model": model_full,
-            "config": {
-                "responseModalities": ["AUDIO"]
-            }
+        "bidiGenerateContentSetup": {
+            "model": model_full
         }
     }
     headers = {
@@ -5125,7 +5122,9 @@ def create_gemini_ephemeral_token(api_key, model="gemini-2.5-flash-native-audio-
         raise Exception(f"Gemini API error {resp.status_code}: {resp.text}")
 
     data = resp.json()
-    token = data.get("token") or data.get("name")
+    token = data.get("token") or data.get("name", "")
+    if token.startswith("auth_tokens/"):
+        token = token[len("auth_tokens/"):]
     if not token:
         raise Exception(f"Brak pola token w odpowiedzi: {data}")
     return token
@@ -5303,10 +5302,10 @@ def save_live_key():
 def get_live_token():
     """Generuje token efemeryczny dla połączenia WebSocket z Gemini Live API (Google AI Studio)."""
     user_email = get_user_from_request()
-    if not user_email:
-        return jsonify({"error": "Brak autoryzacji"}), 401
-
     req_data = request.get_json(silent=True) or {}
+    if not user_email:
+        user_email = req_data.get("user_email") or "guest@speakling.ai"
+
     model = req_data.get("model", "gemini-2.5-flash-native-audio-latest")
     custom_api_key = req_data.get("api_key", "").strip()
 
@@ -5334,8 +5333,9 @@ def get_live_token():
 def get_vertex_live_token():
     """Generuje token OAuth2 dla połączenia z Vertex AI (Google Cloud Platform)."""
     user_email = get_user_from_request()
+    req_data = request.get_json(silent=True) or {}
     if not user_email:
-        return jsonify({"error": "Brak autoryzacji"}), 401
+        user_email = req_data.get("user_email") or "guest@speakling.ai"
 
     try:
         import google.auth

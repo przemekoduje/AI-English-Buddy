@@ -20,10 +20,11 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Rect } from 'react-native-svg';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import transcriptsData from '../constants/transcripts.json';
 import Constants from 'expo-constants';
+import { GeminiLiveClient } from '../services/GeminiLiveClient';
 
 const { width } = Dimensions.get('window');
 
@@ -382,6 +383,8 @@ export default function HomeScreen() {
   const [voiceSessionDuration, setVoiceSessionDuration] = useState<number>(0);
   const voiceSessionTimerRef = useRef<any>(null);
   const [isVoiceTutorPreSending, setIsVoiceTutorPreSending] = useState<boolean>(false);
+  const [liveOrbStatus, setLiveOrbStatus] = useState<string>('inactive');
+  const geminiLiveClientRef = useRef<GeminiLiveClient | null>(null);
 
   useEffect(() => {
     if (user && user.email) {
@@ -457,6 +460,7 @@ export default function HomeScreen() {
   // Clean up Voice Tutor on unmount
   useEffect(() => {
     return () => {
+      geminiLiveClientRef.current?.cleanup();
       stopVoiceTutorAudio();
       stopVoiceTutorRecordingLocally();
       cleanupVoiceTutorVAD();
@@ -1189,7 +1193,7 @@ export default function HomeScreen() {
     if (Platform.OS === 'web') {
       try {
         const dummyAudio = new Audio();
-        dummyAudio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA"; // krótki cichy szum
+        dummyAudio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA";
         dummyAudio.play().catch(() => {});
 
         if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -1211,13 +1215,118 @@ export default function HomeScreen() {
     setVoiceTutorSavedWords([]);
     await stopVoiceTutorAudio();
     setVoiceTutorShowTranscript(false);
+    setLiveOrbStatus("connecting");
 
+    // Inicjalizacja Gemini Live WebSocket (identyczna technologia jak wersja Desktop)
+    if (Platform.OS === 'web') {
+      try {
+        const tokenRes = await fetch(`${backendUrl}/api/live/token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || "",
+          },
+          body: JSON.stringify({
+            model: "gemini-2.5-flash-native-audio-latest",
+            user_email: user?.email || undefined,
+          }),
+        });
+
+        const tokenData = await tokenRes.json();
+        if (!tokenRes.ok || tokenData.error) {
+          throw new Error(tokenData.error || tokenData.message || "Błąd pobierania tokena sesji Gemini Live.");
+        }
+
+        const client = new GeminiLiveClient({
+          provider: "google_ai_studio",
+          model: "gemini-2.5-flash-native-audio-latest",
+          voiceName: "Puck",
+          token: tokenData.token,
+          wsUrl: tokenData.ws_url,
+          apiBaseUrl: backendUrl,
+          sessionToken: user?.token || null,
+          userEmail: user?.email || null,
+          systemInstruction:
+            "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise, conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone.",
+          onStatusChange: (status) => {
+            setLiveOrbStatus(status);
+            if (status === 'active' || status === 'listening') {
+              setIsVoiceTutorBotSpeaking(false);
+            }
+          },
+          onUserVolume: (volume) => {
+            setVoiceTutorRmsVolume(volume);
+            if (volume > 0.025) {
+              setLiveOrbStatus("user-speaking");
+            } else {
+              setLiveOrbStatus((prev) => (prev === "user-speaking" ? "listening" : prev));
+            }
+          },
+          onBotSpeaking: (isSpeaking) => {
+            setIsVoiceTutorBotSpeaking(isSpeaking);
+            if (isSpeaking) {
+              setLiveOrbStatus("speaking");
+            } else {
+              setLiveOrbStatus("listening");
+            }
+          },
+          onTranscript: ({ sender, text, isFinal }) => {
+            setVoiceTutorMessages((prev) => {
+              const lastMsg = prev[prev.length - 1];
+              if (lastMsg && lastMsg.sender === sender && !lastMsg.isFinal) {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...lastMsg,
+                  text: text,
+                  isFinal: isFinal,
+                };
+                return updated;
+              } else {
+                return [
+                  ...prev,
+                  {
+                    id: `${sender}-${Date.now()}`,
+                    sender: sender,
+                    text: text,
+                    isFinal: isFinal,
+                  },
+                ];
+              }
+            });
+          },
+          onError: (err) => {
+            console.error("[GeminiLive Mobile] Error:", err);
+            Alert.alert("Gemini Live", err);
+            handleEndVoiceTutorSession();
+          },
+          onClose: () => {
+            handleEndVoiceTutorSession();
+          },
+        });
+
+        geminiLiveClientRef.current = client;
+        await client.connect();
+        return;
+      } catch (err: any) {
+        console.warn("[GeminiLive Mobile] Fallback do trybu klasycznego:", err);
+        // W razie problemów fallback do nagrywania klasycznego
+      }
+    }
+
+    // Tryb klasyczny (nagrywanie całościowe)
     await startVoiceTutorRecording();
   };
 
   const handleEndVoiceTutorSession = async () => {
     setIsVoiceTutorActive(false);
     voiceTutorIsActiveRef.current = false;
+    setLiveOrbStatus("inactive");
+
+    if (geminiLiveClientRef.current) {
+      geminiLiveClientRef.current.cleanup();
+      geminiLiveClientRef.current = null;
+    }
+
     await stopVoiceTutorAudio();
     await stopVoiceTutorRecordingLocally();
     cleanupVoiceTutorVAD();
@@ -1238,6 +1347,7 @@ export default function HomeScreen() {
               sender: msg.sender,
               text: msg.text,
             })),
+            user_email: user?.email,
           }),
         });
 
@@ -3035,7 +3145,9 @@ export default function HomeScreen() {
           // Determine current active state for the voice orb
           let orbStatus = "inactive";
           if (isVoiceTutorActive) {
-            if (isVoiceTutorProcessing) {
+            if (geminiLiveClientRef.current) {
+              orbStatus = liveOrbStatus;
+            } else if (isVoiceTutorProcessing) {
               orbStatus = "thinking";
             } else if (isVoiceTutorPreSending) {
               orbStatus = "presending";
@@ -3056,31 +3168,72 @@ export default function HomeScreen() {
               {/* Main Stage */}
               <View style={styles.voiceTutorStage}>
                 
-                {/* Outlined Microphone Button — DISABLED (coming soon) */}
+                {/* Outlined Microphone / Active Voice Orb Button */}
                 <View style={{ alignItems: 'center' }}>
-                  <View
-                    style={[styles.voiceOrbButton, { opacity: 0.4 }]}
+                  <TouchableOpacity
+                    style={[
+                      styles.voiceOrbButton,
+                      {
+                        borderRadius: 70,
+                        backgroundColor: isVoiceTutorActive
+                          ? (orbStatus === 'speaking'
+                              ? '#4285F4'
+                              : orbStatus === 'user-speaking'
+                              ? '#34A853'
+                              : '#1A73E8')
+                          : '#F3F4F6',
+                        shadowColor: isVoiceTutorActive ? '#1A73E8' : '#000',
+                        shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: isVoiceTutorActive ? 0.35 : 0.08,
+                        shadowRadius: isVoiceTutorActive ? 16 : 8,
+                        elevation: isVoiceTutorActive ? 10 : 3,
+                      }
+                    ]}
+                    onPress={isVoiceTutorActive ? handleEndVoiceTutorSession : handleStartVoiceTutorSession}
+                    activeOpacity={0.8}
                   >
-                    <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
-                      <Path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" stroke="#9CA3AF" strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
-                      <Path d="M19 10v1a7 7 0 0 1-14 0v-1" stroke="#9CA3AF" strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
-                      <Path d="M12 18v3" stroke="#9CA3AF" strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
-                      <Path d="M9 21h6" stroke="#9CA3AF" strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
-                  </View>
-                  <View style={{ backgroundColor: '#F3F4F6', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 4, marginTop: 10 }}>
-                    <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500', letterSpacing: 0.5 }}>wkrótce</Text>
-                  </View>
+                    {isVoiceTutorActive ? (
+                      <Svg width={44} height={44} viewBox="0 0 24 24" fill="none">
+                        <Rect x="6" y="6" width="12" height="12" rx="2" fill="#FFFFFF" />
+                      </Svg>
+                    ) : (
+                      <Svg width={54} height={54} viewBox="0 0 24 24" fill="none">
+                        <Path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" stroke="#1A73E8" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                        <Path d="M19 10v1a7 7 0 0 1-14 0v-1" stroke="#1A73E8" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                        <Path d="M12 18v3" stroke="#1A73E8" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                        <Path d="M9 21h6" stroke="#1A73E8" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    )}
+                  </TouchableOpacity>
+
+                  {!isVoiceTutorActive ? (
+                    <View style={{ backgroundColor: '#E8F0FE', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 6, marginTop: 16 }}>
+                      <Text style={{ fontSize: 13, color: '#1A73E8', fontWeight: '600', letterSpacing: 0.3 }}>
+                        Dotknij, aby rozmawiać na żywo (Gemini Live)
+                      </Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={handleEndVoiceTutorSession}
+                      style={{ backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 6, marginTop: 16 }}
+                    >
+                      <Text style={{ fontSize: 13, color: '#DC2626', fontWeight: '600' }}>
+                        Zakończ rozmowę
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
-                {/* Status label (large, light sans-serif) */}
-                <Text style={{ fontSize: 28, fontWeight: '300', color: '#1F2937', marginTop: 32, textAlign: 'center' }}>
-                  {isVoiceTutorActive && orbStatus === "inactive" && "Connecting..."}
-                  {isVoiceTutorActive && orbStatus === "speaking" && "Speaking"}
-                  {isVoiceTutorActive && orbStatus === "listening" && "Listening"}
-                  {isVoiceTutorActive && orbStatus === "user-speaking" && "Listening"}
+                {/* Status label */}
+                <Text style={{ fontSize: 24, fontWeight: '400', color: '#1F2937', marginTop: 24, textAlign: 'center' }}>
+                  {!isVoiceTutorActive && "Gotowy do rozmowy"}
+                  {isVoiceTutorActive && orbStatus === "inactive" && "Łączenie..."}
+                  {isVoiceTutorActive && orbStatus === "connecting" && "Łączenie z Gemini Live..."}
+                  {isVoiceTutorActive && orbStatus === "speaking" && "Lektor mówi..."}
+                  {isVoiceTutorActive && orbStatus === "listening" && "Słucham Cię..."}
+                  {isVoiceTutorActive && orbStatus === "user-speaking" && "Mówisz..."}
                   {isVoiceTutorActive && orbStatus === "presending" && "Czy to wszystko?..."}
-                  {isVoiceTutorActive && orbStatus === "thinking" && "Thinking..."}
+                  {isVoiceTutorActive && orbStatus === "thinking" && "Przetwarzanie..."}
                 </Text>
 
                 {/* Waveform component with session timer in the middle */}
@@ -3092,8 +3245,8 @@ export default function HomeScreen() {
                   />
                 )}
 
-                {/* Send Now Button */}
-                {isVoiceTutorActive && !isVoiceTutorProcessing && !isVoiceTutorBotSpeaking && (
+                {/* Send Now Button (only in classic fallback mode) */}
+                {isVoiceTutorActive && !geminiLiveClientRef.current && !isVoiceTutorProcessing && !isVoiceTutorBotSpeaking && (
                   <TouchableOpacity
                     style={styles.sendNowBtn}
                     onPress={async () => {
