@@ -3320,14 +3320,7 @@ export default function HomeScreen() {
             <View style={styles.voiceTutorContainer}>
               
               {/* Main Stage */}
-              <View 
-                style={styles.voiceTutorStage}
-                onTouchStart={() => {
-                  if (isVoiceTutorActive && geminiLiveClientRef.current) {
-                    geminiLiveClientRef.current.resumeAudioContextIfSuspended();
-                  }
-                }}
-              >
+              <View style={styles.voiceTutorStage}>
                 
                 {/* Outlined Microphone / Active Voice Orb Button */}
                 <View style={{ alignItems: 'center' }}>

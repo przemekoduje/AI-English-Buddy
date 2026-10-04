@@ -31,11 +31,12 @@
     ],
     "rewrites": [
       {
-        "source": "/api/**",
-        "run": {
-          "serviceId": "ai-english-buddy-backend",
-          "region": "europe-west1"
-        }
+        "source": "/speakling/mobile",
+        "destination": "/speakling/mobile/index.html"
+      },
+      {
+        "source": "/speakling/mobile/",
+        "destination": "/speakling/mobile/index.html"
       },
       {
         "source": "/speakling/mobile/**",
@@ -48,14 +49,6 @@
       {
         "source": "/speakling/**",
         "destination": "/speakling.html"
-      },
-      {
-        "source": "/keepgoals",
-        "destination": "/keepgoals/index.html"
-      },
-      {
-        "source": "/keepgoals/**",
-        "destination": "/keepgoals/index.html"
       },
       {
         "source": "**",
