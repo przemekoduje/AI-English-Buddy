@@ -5172,30 +5172,87 @@ def live_transcribe():
         return jsonify({"text": ""}), 200
 
     text = ""
-    try:
-        from io import BytesIO
-        audio_stream = BytesIO(audio_bytes)
-        audio_stream.name = "turn.wav"
-        res = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_stream,
-            language="en"
-        )
-        text = res.text.strip() if res and hasattr(res, 'text') else ""
+    gemini_key = get_gemini_api_key()
+
+    # 1. Próba transkrypcji przez Google Gemini (najszybsza, natywna dla ekosystemu Gemini Live)
+    if gemini_key:
         try:
-            duration_secs = max(1.0, len(audio_bytes) / 48000.0)
-            u_email = get_user_from_request() or request.form.get("user_email") or "guest@speakling.ai"
-            log_api_usage(
-                user_email=u_email,
-                service="openai",
-                feature="live_transcribe_whisper",
+            import base64
+            for g_model in ["gemini-3.8-flash", "gemini-2.5-flash-native-audio-latest"]:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={gemini_key}"
+                payload = {
+                    "contents": [{
+                        "parts": [
+                            {
+                                "inline_data": {
+                                    "mime_type": "audio/wav",
+                                    "data": base64.b64encode(audio_bytes).decode("utf-8")
+                                }
+                            },
+                            {
+                                "text": "Transcribe the spoken audio verbatim in its original language. Output ONLY the plain transcription text, nothing else. No markdown, no commentary, no quotation marks."
+                            }
+                        ]
+                    }],
+                    "generationConfig": {
+                        "temperature": 0.0
+                    }
+                }
+                res = requests.post(url, json=payload, timeout=8)
+                if res.ok:
+                    data = res.json()
+                    cands = data.get("candidates", [])
+                    if cands and "content" in cands[0] and "parts" in cands[0]["content"]:
+                        part_text = cands[0]["content"]["parts"][0].get("text", "").strip()
+                        if part_text:
+                            text = part_text
+                            break
+            if text:
+                try:
+                    duration_secs = max(1.0, len(audio_bytes) / 48000.0)
+                    u_email = get_user_from_request() or request.form.get("user_email") or "guest@speakling.ai"
+                    log_api_usage(
+                        user_email=u_email,
+                        service="google_gemini",
+                        feature="live_transcribe_gemini",
+                        model="gemini-3.8-flash",
+                        quantity=duration_secs
+                    )
+                except Exception as e_log:
+                    print(f"Error logging gemini live_transcribe usage: {e_log}", flush=True)
+        except Exception as e_gem:
+            print(f"Gemini audio transcription error in live_transcribe: {e_gem}", flush=True)
+
+    # 2. Próba transkrypcji przez OpenAI Whisper (jeśli openai_client jest dostępny z poprawnym kluczem OpenAI)
+    if not text and openai_client and OPENAI_API_KEY:
+        try:
+            from io import BytesIO
+            audio_stream = BytesIO(audio_bytes)
+            audio_stream.name = "turn.wav"
+            res = openai_client.audio.transcriptions.create(
                 model="whisper-1",
-                quantity=duration_secs
+                file=audio_stream,
+                language="en"
             )
-        except Exception as e_log:
-            print(f"Error logging live_transcribe usage: {e_log}", flush=True)
-    except Exception as e:
-        print(f"OpenAI Whisper error in live_transcribe: {e}", flush=True)
+            text = res.text.strip() if res and hasattr(res, 'text') else ""
+            if text:
+                try:
+                    duration_secs = max(1.0, len(audio_bytes) / 48000.0)
+                    u_email = get_user_from_request() or request.form.get("user_email") or "guest@speakling.ai"
+                    log_api_usage(
+                        user_email=u_email,
+                        service="openai",
+                        feature="live_transcribe_whisper",
+                        model="whisper-1",
+                        quantity=duration_secs
+                    )
+                except Exception as e_log:
+                    print(f"Error logging live_transcribe usage: {e_log}", flush=True)
+        except Exception as e:
+            print(f"OpenAI Whisper error in live_transcribe: {e}", flush=True)
+
+    # 3. Próba fallbacku przez Hugging Face Inference API
+    if not text:
         try:
             HF_TOKEN = os.getenv("HF_TOKEN")
             if HF_TOKEN:

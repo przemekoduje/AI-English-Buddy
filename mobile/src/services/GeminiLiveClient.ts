@@ -231,6 +231,7 @@ export class GeminiLiveClient {
             }
           }
         },
+        outputAudioTranscription: {},
         systemInstruction: {
           parts: [
             {
@@ -468,6 +469,18 @@ export class GeminiLiveClient {
       }
     }
 
+    if (message.serverContent) {
+      const outTr = message.serverContent.outputTranscription || message.serverContent.output_transcription;
+      if (outTr && outTr.text) {
+        this.currentBotTurnText += outTr.text;
+        this.onTranscript({
+          sender: 'bot',
+          text: this.currentBotTurnText,
+          isFinal: false
+        });
+      }
+    }
+
     if (message.serverContent && message.serverContent.turnComplete) {
       this.botTurnStarted = false;
       if (this.currentBotTurnText) {
@@ -598,11 +611,12 @@ export class GeminiLiveClient {
     return buffer;
   }
 
-  async transcribeBotTurn(): Promise<void> {
-    if (!this.currentTurnAudioChunks || this.currentTurnAudioChunks.length === 0) return;
-
-    const chunks = this.currentTurnAudioChunks;
-    this.currentTurnAudioChunks = [];
+  async transcribeBotTurn(explicitChunks?: Float32Array[] | null): Promise<void> {
+    const chunks = explicitChunks || this.currentTurnAudioChunks;
+    if (!chunks || chunks.length === 0) return;
+    if (!explicitChunks) {
+      this.currentTurnAudioChunks = [];
+    }
 
     let totalLength = 0;
     for (let i = 0; i < chunks.length; i++) {
@@ -652,12 +666,6 @@ export class GeminiLiveClient {
     } catch (e) {
       console.warn("[GeminiLive Mobile] Błąd transkrypcji:", e);
     }
-
-    this.onTranscript({
-      sender: 'bot',
-      text: '🎙️ (Voice response)',
-      isFinal: true
-    });
   }
 
   stopBotAudio(): void {
@@ -668,7 +676,9 @@ export class GeminiLiveClient {
       } catch (e) {}
     });
     this.scheduledSources = [];
+    const chunksToTranscribe = this.currentTurnAudioChunks;
     this.currentTurnAudioChunks = [];
+    const wasTurnStarted = this.botTurnStarted;
     this.botTurnStarted = false;
 
     if (this.audioContext) {
@@ -677,6 +687,10 @@ export class GeminiLiveClient {
 
     this.isBotCurrentlySpeaking = false;
     this.onBotSpeaking(false);
+
+    if (wasTurnStarted && !this.currentBotTurnText && chunksToTranscribe && chunksToTranscribe.length > 0) {
+      this.transcribeBotTurn(chunksToTranscribe);
+    }
   }
 
   sendJson(obj: any): void {

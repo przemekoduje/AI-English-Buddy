@@ -198,6 +198,7 @@ export class GeminiLiveClient {
             }
           }
         },
+        outputAudioTranscription: {},
         systemInstruction: {
           parts: [
             {
@@ -531,6 +532,19 @@ export class GeminiLiveClient {
       }
     }
 
+    // Bezpośrednia transkrypcja mowy lektora ze strumienia outputTranscription (jeśli przesłana przez Gemini)
+    if (message.serverContent) {
+      const outTr = message.serverContent.outputTranscription || message.serverContent.output_transcription;
+      if (outTr && outTr.text) {
+        this.currentBotTurnText += outTr.text;
+        this.onTranscript({
+          sender: 'bot',
+          text: this.currentBotTurnText,
+          isFinal: false
+        });
+      }
+    }
+
     // 3. Koniec tury lektora
     if (message.serverContent && message.serverContent.turnComplete) {
       this.botTurnStarted = false;
@@ -674,13 +688,14 @@ export class GeminiLiveClient {
   }
 
   /**
-   * Przesyła zarejestrowane audio tury lektora do Whisper API w celu uzyskania dokładnej transkrypcji
+   * Przesyła zarejestrowane audio tury lektora do backendu w celu uzyskania dokładnej transkrypcji (Gemini 3.8 / Whisper)
    */
-  async transcribeBotTurn() {
-    if (!this.currentTurnAudioChunks || this.currentTurnAudioChunks.length === 0) return;
-
-    const chunks = this.currentTurnAudioChunks;
-    this.currentTurnAudioChunks = [];
+  async transcribeBotTurn(explicitChunks = null) {
+    const chunks = explicitChunks || this.currentTurnAudioChunks;
+    if (!chunks || chunks.length === 0) return;
+    if (!explicitChunks) {
+      this.currentTurnAudioChunks = [];
+    }
 
     let totalLength = 0;
     for (let i = 0; i < chunks.length; i++) {
@@ -719,6 +734,10 @@ export class GeminiLiveClient {
         const data = await res.json();
         const text = (data.text || '').trim();
         if (text) {
+          this.recentBotPhrases.push(text);
+          if (this.recentBotPhrases.length > 8) {
+            this.recentBotPhrases.shift();
+          }
           this.onTranscript({
             sender: 'bot',
             text: text,
@@ -730,12 +749,6 @@ export class GeminiLiveClient {
     } catch (e) {
       console.warn("[GeminiLive] Błąd transkrypcji wypowiedzi lektora:", e);
     }
-
-    this.onTranscript({
-      sender: 'bot',
-      text: '🎙️ (Voice response)',
-      isFinal: true
-    });
   }
 
   /**
@@ -749,7 +762,10 @@ export class GeminiLiveClient {
       } catch (e) {}
     });
     this.scheduledSources = [];
+
+    const chunksToTranscribe = this.currentTurnAudioChunks;
     this.currentTurnAudioChunks = [];
+    const wasTurnStarted = this.botTurnStarted;
     this.botTurnStarted = false;
 
     if (this.outputAudioContext) {
@@ -761,6 +777,12 @@ export class GeminiLiveClient {
     }
     this.isBotCurrentlySpeaking = false;
     this.onBotSpeaking(false);
+
+    // Jeśli lektor został przerwany przez użytkownika (Barge-in), ale zdążył już coś wypowiedzieć,
+    // transkrybujemy to co wypowiedział do momentu przerwania.
+    if (wasTurnStarted && !this.currentBotTurnText && chunksToTranscribe && chunksToTranscribe.length > 0) {
+      this.transcribeBotTurn(chunksToTranscribe);
+    }
   }
 
   /**
