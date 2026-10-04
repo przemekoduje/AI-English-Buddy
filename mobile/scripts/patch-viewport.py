@@ -10,6 +10,8 @@ Run after: npx expo export --platform web
 """
 import os
 import glob
+import re
+import time
 
 DIST_DIR = os.path.join(os.path.dirname(__file__), '..', 'dist')
 
@@ -48,6 +50,14 @@ for path in html_files:
     if PINCH_ZOOM_BLOCKER.strip() not in content and '</head>' in content:
         content = content.replace('</head>', PINCH_ZOOM_BLOCKER + '</head>', 1)
         changed = True
+
+    # 3. Cache-bust JS entry bundles
+    timestamp = int(time.time())
+    if '_expo/static/js/web' in content:
+        new_content = re.sub(r'(_expo/static/js/web/[^"]+\.js)(?:\?v=\d+)?', r'\1?v=' + str(timestamp), content)
+        if new_content != content:
+            content = new_content
+            changed = True
 
     if changed:
         with open(path, 'w', encoding='utf-8') as f:

@@ -284,14 +284,16 @@ export class GeminiLiveClient {
         if (typeof navigator === 'undefined' || !navigator.mediaDevices) {
           throw new Error("Brak wsparcia dla nagrywania audio w tym środowisku.");
         }
-        this.mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          }
-        });
+        try {
+          this.mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true
+            }
+          });
+        } catch (e) {
+          console.warn("[GeminiLive Mobile] Fallback do podstawowego audio: true:", e);
+          this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
       }
 
       if (!this.audioContext) {

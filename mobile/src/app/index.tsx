@@ -384,7 +384,17 @@ export default function HomeScreen() {
   const voiceSessionTimerRef = useRef<any>(null);
   const [isVoiceTutorPreSending, setIsVoiceTutorPreSending] = useState<boolean>(false);
   const [liveOrbStatus, setLiveOrbStatus] = useState<string>('inactive');
+  const [liveStatusDetail, setLiveStatusDetail] = useState<string>('');
+  const [liveErrorMessage, setLiveErrorMessage] = useState<string | null>(null);
   const geminiLiveClientRef = useRef<GeminiLiveClient | null>(null);
+
+  const showWebAlert = (title: string, msg: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
+      window.alert(`${title ? title + ': ' : ''}${msg}`);
+    } else {
+      Alert.alert(title, msg);
+    }
+  };
 
   useEffect(() => {
     if (user && user.email) {
@@ -1189,10 +1199,12 @@ export default function HomeScreen() {
   };
 
   const handleStartVoiceTutorSession = async () => {
+    setLiveErrorMessage(null);
+    setLiveStatusDetail("Inicjalizacja mikrofonu...");
     let preAudioContext: any = null;
     let preMediaStream: any = null;
 
-    // Odblokowanie odtwarzania audio, AudioContext i mikrofonu na iOS/Safari (musi nastąpić bezpośrednio w akcji kliknięcia użytkownika)
+    // Odblokowanie odtwarzania audio, AudioContext i mikrofonu na urządzeniach mobilnych (w geście dotyku użytkownika)
     if (Platform.OS === 'web') {
       try {
         const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
@@ -1203,16 +1215,20 @@ export default function HomeScreen() {
           }
         }
 
-        // Natychmiastowe pozyskanie strumienia mikrofonu bezpośrednio w geście dotyku (kluczowe dla iOS Safari!)
+        // Pozyskanie strumienia mikrofonu bezpośrednio w geście dotyku z fallbackiem do podstawowego formatu
         if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-          preMediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              channelCount: 1,
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            }
-          });
+          try {
+            preMediaStream = await navigator.mediaDevices.getUserMedia({
+              audio: { echoCancellation: true }
+            });
+          } catch (strictErr) {
+            console.warn("[GeminiLive Mobile] Fallback do audio: true", strictErr);
+            preMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          }
+        }
+
+        if (!preMediaStream) {
+          throw new Error("Brak dostępu do mikrofonu.");
         }
 
         const dummyAudio = new Audio();
@@ -1224,13 +1240,16 @@ export default function HomeScreen() {
           dummyUtterance.volume = 0;
           window.speechSynthesis.speak(dummyUtterance);
         }
-        console.log("[GeminiLive Mobile] Odblokowano AudioContext, mikrofon i SpeechSynthesis w geście dotyku.");
+        console.log("[GeminiLive Mobile] Odblokowano AudioContext, mikrofon i SpeechSynthesis.");
       } catch (e: any) {
-        console.warn("[GeminiLive Mobile] Ostrzeżenie przy odblokowywaniu audio/mikrofonu:", e);
-        if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
-          Alert.alert("Dostęp do mikrofonu", "Aplikacja potrzebuje dostępu do mikrofonu, aby rozmawiać na żywo. Odblokuj uprawnienia mikrofonu w przeglądarce.");
-          return;
-        }
+        console.error("[GeminiLive Mobile] Błąd odblokowywania audio/mikrofonu:", e);
+        const errMsg = (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError')
+          ? "Aplikacja wymaga dostępu do mikrofonu. Kliknij ikonę kłódki/ustawień obok adresu w przeglądarce i zezwól na mikrofon."
+          : `Błąd mikrofonu: ${e.message || e.name || e}`;
+        showWebAlert("Dostęp do mikrofonu", errMsg);
+        setLiveErrorMessage(errMsg);
+        setLiveStatusDetail("");
+        return;
       }
     }
 
@@ -1243,6 +1262,7 @@ export default function HomeScreen() {
     await stopVoiceTutorAudio();
     setVoiceTutorShowTranscript(false);
     setLiveOrbStatus("connecting");
+    setLiveStatusDetail("Łączenie z serwerem Gemini Live...");
 
     // Ustalenie bezpiecznego adresu backendu dla środowiska webowego
     let activeBackendUrl = backendUrl;
@@ -1276,6 +1296,8 @@ export default function HomeScreen() {
           throw new Error(tokenData.error || tokenData.message || "Błąd pobierania tokena sesji Gemini Live.");
         }
 
+        setLiveStatusDetail("Nawiązywanie połączenia z lektorem...");
+
         const client = new GeminiLiveClient({
           provider: "google_ai_studio",
           model: "gemini-2.5-flash-native-audio-latest",
@@ -1293,6 +1315,7 @@ export default function HomeScreen() {
             setLiveOrbStatus(status);
             if (status === 'active' || status === 'listening') {
               setIsVoiceTutorBotSpeaking(false);
+              setLiveStatusDetail("");
             }
           },
           onUserVolume: (volume) => {
@@ -1307,6 +1330,7 @@ export default function HomeScreen() {
             setIsVoiceTutorBotSpeaking(isSpeaking);
             if (isSpeaking) {
               setLiveOrbStatus("speaking");
+              setLiveStatusDetail("");
             } else {
               setLiveOrbStatus("listening");
             }
@@ -1337,7 +1361,8 @@ export default function HomeScreen() {
           },
           onError: (err) => {
             console.error("[GeminiLive Mobile] Error:", err);
-            Alert.alert("Gemini Live", err);
+            showWebAlert("Gemini Live", err);
+            setLiveErrorMessage(String(err));
             handleEndVoiceTutorSession();
           },
           onClose: () => {
@@ -1360,7 +1385,8 @@ export default function HomeScreen() {
             preAudioContext.close();
           } catch (e) {}
         }
-        Alert.alert("Gemini Live", err?.message || "Nie udało się połączyć z Gemini Live.");
+        showWebAlert("Gemini Live", err?.message || "Nie udało się połączyć z Gemini Live.");
+        setLiveErrorMessage(err?.message || "Nie udało się połączyć z Gemini Live.");
         handleEndVoiceTutorSession();
         return;
       }
@@ -3305,6 +3331,22 @@ export default function HomeScreen() {
                   {isVoiceTutorActive && orbStatus === "presending" && "Czy to wszystko?..."}
                   {isVoiceTutorActive && orbStatus === "thinking" && "Przetwarzanie..."}
                 </Text>
+
+                {/* Sub-status progress details */}
+                {liveStatusDetail && isVoiceTutorActive && (
+                  <Text style={{ fontSize: 13, color: '#4B5563', marginTop: 6, textAlign: 'center' }}>
+                    {liveStatusDetail}
+                  </Text>
+                )}
+
+                {/* Error Banner */}
+                {liveErrorMessage && (
+                  <View style={{ backgroundColor: '#FEE2E2', borderRadius: 8, padding: 10, marginTop: 12, marginHorizontal: 20 }}>
+                    <Text style={{ fontSize: 13, color: '#DC2626', textAlign: 'center', fontWeight: '500' }}>
+                      ⚠️ {liveErrorMessage}
+                    </Text>
+                  </View>
+                )}
 
                 {/* Waveform component with session timer in the middle */}
                 {isVoiceTutorActive && (
