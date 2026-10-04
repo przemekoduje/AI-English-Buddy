@@ -74,6 +74,10 @@ export class GeminiLiveClient {
     this.currentBotTurnText = '';
     this.currentTurnAudioChunks = [];
     this.botTurnStarted = false;
+
+    // Ochrona przed echem akustycznym z głośników komputera (bez słuchawek)
+    this.lastBotSpeakingEndTime = 0;
+    this.recentBotPhrases = [];
   }
 
   /**
@@ -233,6 +237,10 @@ export class GeminiLiveClient {
           if (this.outputAudioContext) {
             const isSpeaking = this.outputAudioContext.currentTime < this.nextPlayTime - 0.05;
             if (isSpeaking !== this.isBotCurrentlySpeaking) {
+              if (this.isBotCurrentlySpeaking && !isSpeaking) {
+                // Lektor właśnie skończył mówić - zapisujemy czas zakończenia dla okna tłumienia echa
+                this.lastBotSpeakingEndTime = Date.now();
+              }
               this.isBotCurrentlySpeaking = isSpeaking;
               this.onBotSpeaking(isSpeaking);
             }
@@ -242,6 +250,43 @@ export class GeminiLiveClient {
     } catch (e) {
       console.warn("[GeminiLive] Błąd inicjalizacji odtwarzania audio:", e);
     }
+  }
+
+  /**
+   * Sprawdza czy aktywna jest ochrona przed echem akustycznym (lektor mówi lub dźwięk z głośników właśnie wygasł)
+   */
+  isEchoSuppressionActive() {
+    if (this.isBotCurrentlySpeaking) return true;
+    if (Date.now() - (this.lastBotSpeakingEndTime || 0) < 650) return true;
+    return false;
+  }
+
+  /**
+   * Sprawdza czy dany tekst z SpeechRecognition jest echem ostatnich słów wypowiedzianych przez lektora
+   */
+  isMatchingRecentBotText(userText) {
+    if (!userText || this.recentBotPhrases.length === 0) return false;
+    const cleanUser = userText.toLowerCase().replace(/[^a-z0-9\s]/gi, '').trim();
+    if (!cleanUser || cleanUser.length < 3) return false;
+
+    const userWords = cleanUser.split(/\s+/).filter(w => w.length > 2);
+    if (userWords.length === 0) return false;
+
+    for (const phrase of this.recentBotPhrases) {
+      const cleanBot = phrase.toLowerCase().replace(/[^a-z0-9\s]/gi, '').trim();
+      if (cleanBot.includes(cleanUser) || cleanUser.includes(cleanBot)) {
+        return true;
+      }
+      const botWords = new Set(cleanBot.split(/\s+/));
+      let matchCount = 0;
+      for (const w of userWords) {
+        if (botWords.has(w)) matchCount++;
+      }
+      if (matchCount / userWords.length >= 0.6) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -292,6 +337,21 @@ export class GeminiLiveClient {
           sum += inputData[i] * inputData[i];
         }
         const rms = Math.sqrt(sum / inputData.length);
+
+        // Ochrona przed echem akustycznym bez słuchawek:
+        // Kiedy lektor mówi przez głośniki komputera, mikrofon wyłapuje jego głos.
+        if (this.isEchoSuppressionActive()) {
+          // Jeśli uczeń celowo mówi głośno ponad dźwiękiem z głośników -> wtrącenie (Barge-in)
+          if (rms > 0.18) {
+            console.log("[GeminiLive] Wykryto głośne wtrącenie użytkownika (Barge-in). Zatrzymuję lektora.");
+            this.stopBotAudio();
+          } else {
+            // Wyciszamy wskaźnik orba i nie wysyłamy echa lektora z powrotem do Gemini Live
+            this.onUserVolume(0);
+            return;
+          }
+        }
+
         this.onUserVolume(rms);
 
         // Resampling do 16000 Hz, jeśli natywna częstotliwość karty dźwiękowej jest inna (np. 44100 / 48000 Hz)
@@ -341,6 +401,12 @@ export class GeminiLiveClient {
       this.speechRecognition.interimResults = true;
 
       this.speechRecognition.onresult = (event) => {
+        // Jeśli lektor mówi lub dźwięk z głośników właśnie wygasł (okno AEC),
+        // bezwzględnie odrzucamy dźwięk z mikrofonu – to głos z głośników, a nie uczeń!
+        if (this.isEchoSuppressionActive()) {
+          return;
+        }
+
         let interimTranscript = '';
         let finalTranscript = '';
 
@@ -353,7 +419,14 @@ export class GeminiLiveClient {
         }
 
         const text = (finalTranscript || interimTranscript).trim();
-        if (text && text !== this.lastUserTranscript) {
+        if (!text) return;
+
+        // Odrzucenie echa lektora, jeśli treść pokrywa się ze słowami wypowiedzianymi przez bota
+        if (this.isMatchingRecentBotText(text)) {
+          return;
+        }
+
+        if (text !== this.lastUserTranscript) {
           this.lastUserTranscript = text;
           this.onTranscript({
             sender: 'user',
@@ -462,6 +535,10 @@ export class GeminiLiveClient {
     if (message.serverContent && message.serverContent.turnComplete) {
       this.botTurnStarted = false;
       if (this.currentBotTurnText) {
+        this.recentBotPhrases.push(this.currentBotTurnText);
+        if (this.recentBotPhrases.length > 8) {
+          this.recentBotPhrases.shift();
+        }
         this.onTranscript({
           sender: 'bot',
           text: this.currentBotTurnText,
@@ -679,6 +756,9 @@ export class GeminiLiveClient {
       this.nextPlayTime = this.outputAudioContext.currentTime;
     }
 
+    if (this.isBotCurrentlySpeaking) {
+      this.lastBotSpeakingEndTime = Date.now();
+    }
     this.isBotCurrentlySpeaking = false;
     this.onBotSpeaking(false);
   }

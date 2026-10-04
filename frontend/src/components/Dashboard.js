@@ -6,7 +6,7 @@ import { GeminiLiveClient } from "../services/GeminiLiveClient";
 
 // Voice Activity Detection (VAD) thresholds for Classic Mode
 const VOICE_THRESHOLD = 0.012;
-const INTERRUPTION_THRESHOLD = 0.022;
+const INTERRUPTION_THRESHOLD = 0.18; // Podniesiony próg, aby dźwięk z głośników komputera (ok. 0.04-0.10) nie przerywał lektora
 const SILENCE_DURATION = 1500;
 
 function Dashboard({ user }) {
@@ -70,10 +70,15 @@ function Dashboard({ user }) {
   const videoElementRef = useRef(null);
   const transcriptScrollRef = useRef(null);
   const chatMessagesRef = useRef(chatMessages);
+  const liveStatusRef = useRef(liveStatus);
 
   useEffect(() => {
     chatMessagesRef.current = chatMessages;
   }, [chatMessages]);
+
+  useEffect(() => {
+    liveStatusRef.current = liveStatus;
+  }, [liveStatus]);
 
   // Classic Mode Refs
   const mediaRecorderRef = useRef(null);
@@ -326,6 +331,13 @@ function Dashboard({ user }) {
           }
         },
         onTranscript: ({ sender, text, isFinal }) => {
+          // Ochrona przed echem akustycznym bez słuchawek:
+          // Jeśli lektor mówi lub dźwięk z głośników właśnie wygasł, odrzucamy transkrypcję ucznia ("Ty:"),
+          // ponieważ to słowa wypowiedziane przez lektora przechwycone przez mikrofon z głośników.
+          if (sender === "user" && (liveStatusRef.current === "speaking" || geminiLiveRef.current?.isEchoSuppressionActive?.())) {
+            return;
+          }
+
           setChatMessages((prev) => {
             const lastMsg = prev[prev.length - 1];
             // Jeśli ostatnia wiadomość jest od tego samego nadawcy i nie była sfinalizowana, aktualizujemy ją
@@ -827,7 +839,14 @@ function Dashboard({ user }) {
       stopClassicAudio();
       setShowTranscript(false);
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
         streamRef.current = stream;
         setupClassicVAD(stream);
         startClassicRecording();
@@ -850,7 +869,14 @@ function Dashboard({ user }) {
     stopClassicAudio();
     setShowTranscript(false);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
       streamRef.current = stream;
       setupClassicVAD(stream);
       startClassicRecording();
@@ -932,6 +958,26 @@ function Dashboard({ user }) {
     }
   }
 
+  const handleOrbClick = () => {
+    if (!isChatActive) {
+      handleStartSession();
+      return;
+    }
+    // Jeśli lektor mówi, kliknięcie orba natychmiast przerywa jego wypowiedź (Barge-in / przerwanie mowy lektora)
+    if (orbStatus === "speaking") {
+      if (chatMode === "live" && geminiLiveRef.current) {
+        geminiLiveRef.current.stopBotAudio();
+        return;
+      } else if (chatMode === "classic") {
+        stopClassicAudio();
+        startClassicRecording();
+        return;
+      }
+    }
+    // W przeciwnym razie kliknięcie kończy rozmowę
+    handleEndSession();
+  };
+
   const isSplitLayout = isChatActive && showTranscript && chatMessages.length > 0;
 
   return (
@@ -968,8 +1014,8 @@ function Dashboard({ user }) {
             <button
               ref={orbButtonRef}
               className={`tutor-gemini-orb ${orbStatus}`}
-              onClick={isChatActive ? handleEndSession : handleStartSession}
-              title={isChatActive ? "Kliknij, aby zakończyć rozmowę" : "Kliknij, aby rozpocząć rozmowę w czasie rzeczywistym"}
+              onClick={handleOrbClick}
+              title={isChatActive ? (orbStatus === "speaking" ? "Kliknij, aby przerwać lektorowi i odpowiedzieć" : "Kliknij, aby zakończyć rozmowę") : "Kliknij, aby rozpocząć rozmowę w czasie rzeczywistym"}
             >
               <div className="orb-pulse-ring-1"></div>
               <div className="orb-pulse-ring-2"></div>
