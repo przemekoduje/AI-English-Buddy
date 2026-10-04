@@ -1213,6 +1213,16 @@ export default function HomeScreen() {
           if (preAudioContext.state === 'suspended') {
             await preAudioContext.resume();
           }
+          // Trwałe odblokowanie odtwarzania w WebKit (iOS Safari / Chrome)
+          try {
+            const buffer = preAudioContext.createBuffer(1, 1, 22050);
+            const source = preAudioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(preAudioContext.destination);
+            source.start(0);
+          } catch (unlockErr) {
+            console.warn("Silent buffer unlock warning:", unlockErr);
+          }
         }
 
         // Pozyskanie strumienia mikrofonu bezpośrednio w geście dotyku z fallbackiem do podstawowego formatu
