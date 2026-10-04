@@ -36,6 +36,7 @@
   flex: 1;
   width: 100%;
   transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  contain: layout;
 }
 
 .tutor-main-stage.centered {
@@ -55,8 +56,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2rem;
+  gap: 1.5rem;
   flex-shrink: 0;
+  contain: layout;
 }
 
 /* Orb Wrapper & Radar Rings */
@@ -67,6 +69,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  contain: layout size;
+  flex-shrink: 0;
 }
 
 /* Gemini Morphing voice orb */
@@ -82,10 +86,13 @@
   justify-content: center;
   outline: none;
   z-index: 5;
-  transition: transform 0.08s cubic-bezier(0.1, 0.8, 0.3, 1), 
-              background 0.5s ease, 
-              box-shadow 0.5s ease;
+  transform-origin: center center;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
   box-shadow: 0 10px 40px rgba(26, 115, 232, 0.3);
+  transition: background 0.4s ease, box-shadow 0.4s ease;
 }
 
 /* Radar pulse rings */
@@ -98,6 +105,10 @@
   background: transparent;
   pointer-events: none;
   z-index: 1;
+  transform-origin: center center;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   transition: all 0.5s ease;
 }
 
@@ -105,10 +116,11 @@
 .tutor-gemini-orb.inactive {
   background: radial-gradient(circle at 35% 35%, #4285F4, #1A73E8 60%, #1557B0);
   box-shadow: 0 10px 35px rgba(26, 115, 232, 0.35);
+  transition: transform 0.2s ease, background 0.4s ease, box-shadow 0.4s ease;
 }
 
 .tutor-gemini-orb.inactive:hover {
-  transform: scale(1.05) !important;
+  transform: scale(1.05) translateZ(0) !important;
 }
 
 .tutor-gemini-orb.inactive + .orb-pulse-ring-1 {
@@ -254,9 +266,18 @@
   color: var(--slate-500);
   letter-spacing: -0.2px;
   text-align: center;
-  min-height: 24px;
-  max-width: 280px;
-  line-height: 1.4;
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+  max-width: 500px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.35;
+  contain: layout style;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Side Transcript Sliding Drawer (Desktop: Right edge fixed slide out) */
@@ -470,8 +491,8 @@
 }
 
 @keyframes orb-radar {
-  0% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(1.6); opacity: 0; }
+  0% { transform: scale(1) translateZ(0); opacity: 1; }
+  100% { transform: scale(1.6) translateZ(0); opacity: 0; }
 }
 
 @keyframes orb-morph {
@@ -482,29 +503,29 @@
 }
 
 @keyframes orb-breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
+  0%, 100% { transform: scale(1) translateZ(0); }
+  50% { transform: scale(1.04) translateZ(0); }
 }
 
 @keyframes orb-rotate-pulse {
-  0% { transform: rotate(0deg) scale(1); }
-  50% { transform: rotate(180deg) scale(1.06); }
-  100% { transform: rotate(360deg) scale(1); }
+  0% { transform: rotate(0deg) scale(1) translateZ(0); }
+  50% { transform: rotate(180deg) scale(1.06) translateZ(0); }
+  100% { transform: rotate(360deg) scale(1) translateZ(0); }
 }
 
 @keyframes orb-wave-bounce {
-  0%, 100% { transform: scaleY(0.35); }
-  50% { transform: scaleY(1.3); }
+  0%, 100% { transform: scaleY(0.35) translateZ(0); }
+  50% { transform: scaleY(1.3) translateZ(0); }
 }
 
 @keyframes orb-dot-pulse {
-  0%, 100% { transform: scale(0.85); opacity: 0.7; }
-  50% { transform: scale(1.15); opacity: 1; }
+  0%, 100% { transform: scale(0.85) translateZ(0); opacity: 0.7; }
+  50% { transform: scale(1.15) translateZ(0); opacity: 1; }
 }
 
 @keyframes orb-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% { transform: rotate(0deg) translateZ(0); }
+  100% { transform: rotate(360deg) translateZ(0); }
 }
 
 /* Mobile responsive adjustments */
@@ -1229,6 +1250,9 @@
   justify-content: center;
   margin-top: 0.85rem;
   margin-bottom: 0.25rem;
+  contain: layout;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .btn-end-call-prominent {

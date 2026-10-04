@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL } from '../config';
 import "./Dashboard.css";
 import VoiceSessionSummaryModal from "./Notebook/VoiceSessionSummaryModal";
@@ -42,10 +42,16 @@ function Dashboard({ user }) {
   // Stany ogólne czatu
   const [isChatActive, setIsChatActive] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
-  const [rmsVolume, setRmsVolume] = useState(0);
   const [showTranscript, setShowTranscript] = useState(false);
   const [voiceSummary, setVoiceSummary] = useState(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
+  // Refs do płynnej, sprzętowo akcelerowanej animacji orba na GPU bez re-renderowania komponentu
+  const orbButtonRef = useRef(null);
+  const targetScaleRef = useRef(1.0);
+  const currentScaleRef = useRef(1.0);
+  const rafScaleLoopRef = useRef(null);
+  const liveHangoverTimerRef = useRef(null);
 
   // Stany specyficzne dla Gemini Live
   const [liveStatus, setLiveStatus] = useState("inactive"); // 'inactive' | 'connecting' | 'listening' | 'user-speaking' | 'speaking'
@@ -86,6 +92,59 @@ function Dashboard({ user }) {
   const isBotSpeakingRef = useRef(false);
   const isRecordingRef = useRef(false);
   const isProcessingRef = useRef(false);
+
+  // Płynna pętla interpolacji skali orba na GPU (60 FPS bez dotykania React Virtual DOM)
+  const startScaleLoop = useCallback(() => {
+    if (rafScaleLoopRef.current) return;
+
+    const tick = () => {
+      const diff = targetScaleRef.current - currentScaleRef.current;
+      if (Math.abs(diff) > 0.001) {
+        currentScaleRef.current += diff * 0.25;
+        if (orbButtonRef.current) {
+          orbButtonRef.current.style.transform = `scale(${currentScaleRef.current.toFixed(3)}) translateZ(0)`;
+        }
+        rafScaleLoopRef.current = requestAnimationFrame(tick);
+      } else {
+        currentScaleRef.current = targetScaleRef.current;
+        if (orbButtonRef.current) {
+          if (currentScaleRef.current === 1.0) {
+            orbButtonRef.current.style.transform = "";
+          } else {
+            orbButtonRef.current.style.transform = `scale(${currentScaleRef.current.toFixed(3)}) translateZ(0)`;
+          }
+        }
+        if (targetScaleRef.current !== 1.0) {
+          rafScaleLoopRef.current = requestAnimationFrame(tick);
+        } else {
+          rafScaleLoopRef.current = null;
+        }
+      }
+    };
+
+    rafScaleLoopRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  const stopScaleLoop = useCallback(() => {
+    if (rafScaleLoopRef.current) {
+      cancelAnimationFrame(rafScaleLoopRef.current);
+      rafScaleLoopRef.current = null;
+    }
+    targetScaleRef.current = 1.0;
+    currentScaleRef.current = 1.0;
+    if (orbButtonRef.current) {
+      orbButtonRef.current.style.transform = "";
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopScaleLoop();
+      if (liveHangoverTimerRef.current) {
+        clearTimeout(liveHangoverTimerRef.current);
+      }
+    };
+  }, [stopScaleLoop]);
 
   useEffect(() => {
     isBotSpeakingRef.current = isClassicBotSpeaking;
@@ -234,15 +293,33 @@ function Dashboard({ user }) {
           setLiveStatus(status);
         },
         onUserVolume: (volume) => {
-          setRmsVolume(volume);
           if (volume > 0.025) {
+            targetScaleRef.current = 1 + Math.min(volume * 2.2, 0.22);
+            startScaleLoop();
+            if (liveHangoverTimerRef.current) {
+              clearTimeout(liveHangoverTimerRef.current);
+              liveHangoverTimerRef.current = null;
+            }
             setLiveStatus((prev) => (prev === "listening" ? "user-speaking" : prev));
           } else {
-            setLiveStatus((prev) => (prev === "user-speaking" ? "listening" : prev));
+            targetScaleRef.current = 1.0;
+            startScaleLoop();
+            if (!liveHangoverTimerRef.current) {
+              liveHangoverTimerRef.current = setTimeout(() => {
+                setLiveStatus((prev) => (prev === "user-speaking" ? "listening" : prev));
+                liveHangoverTimerRef.current = null;
+              }, 450);
+            }
           }
         },
         onBotSpeaking: (isSpeaking) => {
           if (isSpeaking) {
+            if (liveHangoverTimerRef.current) {
+              clearTimeout(liveHangoverTimerRef.current);
+              liveHangoverTimerRef.current = null;
+            }
+            targetScaleRef.current = 1.0;
+            startScaleLoop();
             setLiveStatus("speaking");
           } else {
             setLiveStatus((prev) => (prev === "speaking" ? "listening" : prev));
@@ -367,6 +444,11 @@ function Dashboard({ user }) {
   };
 
   const stopLiveSession = () => {
+    if (liveHangoverTimerRef.current) {
+      clearTimeout(liveHangoverTimerRef.current);
+      liveHangoverTimerRef.current = null;
+    }
+    stopScaleLoop();
     if (geminiLiveRef.current) {
       geminiLiveRef.current.cleanup();
       geminiLiveRef.current = null;
@@ -453,7 +535,11 @@ function Dashboard({ user }) {
     isUserSpeakingRef.current = false;
     setClassicUserSpeakingState(false);
     interruptionCounterRef.current = 0;
-    setRmsVolume(0);
+    if (liveHangoverTimerRef.current) {
+      clearTimeout(liveHangoverTimerRef.current);
+      liveHangoverTimerRef.current = null;
+    }
+    stopScaleLoop();
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -492,7 +578,13 @@ function Dashboard({ user }) {
         }
         const rms = Math.sqrt(sum / bufferLength);
 
-        setRmsVolume(rms);
+        if (isUserSpeakingRef.current) {
+          targetScaleRef.current = 1 + Math.min(rms * 2.2, 0.22);
+          startScaleLoop();
+        } else {
+          targetScaleRef.current = 1.0;
+          startScaleLoop();
+        }
         handleClassicVoiceActivity(rms);
 
         checkVolumeAnimationRef.current = requestAnimationFrame(checkVolume);
@@ -840,7 +932,6 @@ function Dashboard({ user }) {
     }
   }
 
-  const scaleValue = orbStatus === "user-speaking" ? 1 + rmsVolume * 3.8 : 1;
   const isSplitLayout = isChatActive && showTranscript && chatMessages.length > 0;
 
   return (
@@ -875,9 +966,9 @@ function Dashboard({ user }) {
           {/* Central Gemini Orb Control */}
           <div className="tutor-orb-wrapper">
             <button
+              ref={orbButtonRef}
               className={`tutor-gemini-orb ${orbStatus}`}
               onClick={isChatActive ? handleEndSession : handleStartSession}
-              style={{ transform: `scale(${scaleValue})` }}
               title={isChatActive ? "Kliknij, aby zakończyć rozmowę" : "Kliknij, aby rozpocząć rozmowę w czasie rzeczywistym"}
             >
               <div className="orb-pulse-ring-1"></div>
@@ -914,7 +1005,7 @@ function Dashboard({ user }) {
           </div>
 
           {/* Status text label */}
-          <div className="tutor-status-label" style={{ marginTop: '2rem' }}>
+          <div className="tutor-status-label">
             {orbStatus === "inactive" && "Naciśnij orb, aby rozpocząć rozmowę w czasie rzeczywistym"}
             {orbStatus === "connecting" && "Łączenie z Gemini Live API..."}
             {orbStatus === "speaking" && "Lektor mówi (zacznij mówić, aby wtrącić!)"}
