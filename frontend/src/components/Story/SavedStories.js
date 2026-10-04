@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { API_BASE_URL } from '../../config';
 import "./SavedStories.css";
 
-const SavedStories = ({ user, onSelectStory }) => {
+const SavedStories = ({ user, onSelectStory, onStartLiveChat }) => {
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -245,6 +245,19 @@ const SavedStories = ({ user, onSelectStory }) => {
                 <span className="read-action-text">
                   {editingStoryId === story.id ? "Editing mode" : "Read & Practice →"}
                 </span>
+                {onStartLiveChat && editingStoryId !== story.id && (
+                  <button
+                    type="button"
+                    className="live-chat-card-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStartLiveChat(story.id);
+                    }}
+                    title="Rozpocznij rozmowę na żywo z lektorem AI o tej czytance"
+                  >
+                    🎙️ Chat Live
+                  </button>
+                )}
               </div>
             </div>
           ))}

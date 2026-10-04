@@ -198,6 +198,10 @@ function App() {
                 setCurrentStoryId(id);
                 handleNavigate('workspace');
               }}
+              onStartLiveChat={(storyId) => {
+                localStorage.setItem("buddy_selected_story_id", storyId);
+                handleNavigate('dashboard');
+              }}
             />
           ) : currentView === 'notebook' ? (
             <VocabularyView 

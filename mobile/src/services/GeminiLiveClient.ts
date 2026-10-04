@@ -18,6 +18,7 @@ export interface GeminiLiveOptions {
   model?: string;
   voiceName?: string;
   systemInstruction?: string;
+  initialGreetingPrompt?: string;
   apiBaseUrl?: string;
   sessionToken?: string | null;
   userEmail?: string | null;
@@ -41,6 +42,7 @@ export class GeminiLiveClient {
   public model: string;
   public voiceName: string;
   public systemInstruction: string;
+  public initialGreetingPrompt: string | null = null;
   public apiBaseUrl: string;
   public sessionToken: string | null;
   public userEmail: string | null;
@@ -90,6 +92,7 @@ export class GeminiLiveClient {
     this.voiceName = options.voiceName || 'Puck';
     this.systemInstruction = options.systemInstruction || 
       "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise, conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone.";
+    this.initialGreetingPrompt = options.initialGreetingPrompt || null;
 
     this.audioContext = options.audioContext || null;
     this.mediaStream = options.mediaStream || null;
@@ -498,6 +501,8 @@ export class GeminiLiveClient {
   }
 
   sendInitialGreeting(): void {
+    const greetingText = this.initialGreetingPrompt || 
+      "Hello! Please greet me warmly in English as my friendly tutor in 1 natural spoken sentence, and ask what we should talk about today.";
     const greetingTurn = {
       clientContent: {
         turns: [
@@ -505,7 +510,7 @@ export class GeminiLiveClient {
             role: "user",
             parts: [
               {
-                text: "Hello! Please greet me warmly in English as my friendly tutor in 1 natural spoken sentence, and ask what we should talk about today."
+                text: greetingText
               }
             ]
           }

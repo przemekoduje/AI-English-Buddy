@@ -4720,6 +4720,9 @@ def chat_free():
     transcription = request.form.get('transcription', '').strip()
     voice = request.form.get('voice', 'en-US-BrianNeural').strip()
     ai_mode = request.form.get('ai_mode', 'free').strip()
+    story_title = request.form.get('story_title', '').strip()
+    story_text = request.form.get('story_text', '').strip()
+    exercise_type = request.form.get('exercise_type', '').strip()
 
     if ai_mode in ['openai_full', 'hybrid']:
         try:
@@ -4823,7 +4826,7 @@ def chat_free():
         })
 
     system_prompt = """
-    You are an encouraging and professional English tutor. You are holding a voice-based conversation with a student on any topic they choose (free conversation).
+    You are an encouraging and professional English tutor. You are holding a voice-based conversation with a student.
     
     Instructions:
     1. REACT DIRECTLY & MAINTAIN CONTINUITY:
@@ -4876,6 +4879,34 @@ def chat_free():
     
     If it's the start (no user answer), set "user_evaluation" to null, "polish_insertions" to [], and "vocabulary_additions" to [].
     If there are no errors, insertions, or new vocabulary suggestions, set their respective lists to [].
+    """
+
+    if story_title and story_text:
+        exercise_guide = "General discussion and speaking practice about the story."
+        if exercise_type == 'vocabulary_quiz':
+            exercise_guide = "VOCABULARY PRACTICE & QUIZ: Focus on testing and practicing key vocabulary, idioms, and phrases from this story. Ask the student what specific words mean or prompt them to use them in their own sentences. Give encouraging feedback."
+        elif exercise_type == 'story_discussion':
+            exercise_guide = "STORY DISCUSSION & OPINIONS: Discuss the plot, character decisions, turning points, and themes of the story. Ask open-ended questions and invite the student's personal opinions."
+        elif exercise_type == 'roleplay':
+            exercise_guide = "ROLE-PLAY: Engage in an interactive role-play based on the characters and situations in the story. Stay in character and react dynamically."
+        elif exercise_type == 'summary_challenge':
+            exercise_guide = "SUMMARY CHALLENGE: Guide the student to summarize or retell the story in their own words. Give praise for fluency and ask follow-up questions."
+        elif exercise_type == 'comprehension_qa':
+            exercise_guide = "COMPREHENSION Q&A: Ask clear, specific questions about key events and details from the story to check understanding. Ask one question at a time."
+        elif exercise_type == 'grammar_context':
+            exercise_guide = "GRAMMAR IN CONTEXT: Focus on sentence patterns and grammar structures from the story. Encourage the student to use them in conversation."
+
+        system_prompt += f"""
+
+    SELECTED STORY CONTEXT:
+    Story Title: "{story_title}"
+    Story Content:
+    \"\"\"
+    {story_text}
+    \"\"\"
+
+    EXERCISE FOCUS:
+    {exercise_guide}
     """
 
     user_prompt = "Chat History:\n"

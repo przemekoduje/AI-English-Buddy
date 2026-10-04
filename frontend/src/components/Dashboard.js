@@ -9,6 +9,198 @@ const VOICE_THRESHOLD = 0.012;
 const INTERRUPTION_THRESHOLD = 0.18; // Podniesiony próg, aby dźwięk z głośników komputera (ok. 0.04-0.10) nie przerywał lektora
 const SILENCE_DURATION = 1500;
 
+// Wbudowane czytanki wzorcowe (dostępne od razu dla każdego ucznia)
+export const SAMPLE_STORIES = [
+  {
+    id: "sample-coffee-blend",
+    title: "The Secret Coffee Blend",
+    level: "A2 - B1",
+    category: "Życie codzienne & Kawiarnia",
+    summary: "Tajemniczy klient w starym płaszczu zamawia sekretny napar w edynburskiej piekarni.",
+    text: `Every morning at seven o'clock, Clara opens the doors of 'The Copper Kettle', a small artisan bakery in Edinburgh. The air is always filled with the warm aroma of fresh sourdough bread and ground roasted beans.
+
+Today, a peculiar customer in a vintage tweed coat walked up to the counter. Instead of ordering a regular latte, he glanced around and whispered, "I would like the traveller's blend, extra cinnamon, and no sugar."
+
+Clara was puzzled because that secret recipe had not been on the menu for over ten years. Intrigued, she prepared the drink and asked how he knew about it. It turned out the stranger was the nephew of the original baker from 1954, visiting Scotland for the very first time. They spent the next hour chatting about old family traditions and the secret ingredients of authentic Scottish pastries.`
+  },
+  {
+    id: "sample-job-interview",
+    title: "Job Interview in London",
+    level: "B1 - B2",
+    category: "Kariera & Biznes",
+    summary: "Rozmowa rekrutacyjna na stanowisko Senior Strategist w wieżowcu w Canary Wharf.",
+    text: `David adjusted his tie in the mirrored glass of the high-speed elevator on the thirty-second floor of a skyscraper in Canary Wharf. He was interviewing for the role of Senior Product Strategist at a leading international fintech firm.
+
+The interview panel consisted of three senior executives who welcomed him with firm handshakes. After a brief introduction, the chief executive asked: "How would you handle a critical product launch during an unexpected market downturn?"
+
+David took a steady breath, smiled calmly, and presented a detailed case study from his previous position. He explained how innovative cross-team collaboration and transparent user feedback turned a potential crisis into record-breaking quarterly growth. The interviewers nodded with visible approval and invited him to discuss their upcoming European expansion.`
+  },
+  {
+    id: "sample-jfk-airport",
+    title: "Lost at JFK Airport",
+    level: "A2 - B1",
+    category: "Podróże & Lotnisko",
+    summary: "Przesiadka podczas śnieżycy na lotnisku w Nowym Jorku i wyścig z czasem.",
+    text: `After an exhausting eight-hour transatlantic flight from Warsaw, Mark finally arrived at John F. Kennedy International Airport in New York. Outside the terminal windows, a heavy winter snowstorm was causing chaotic flight delays across the eastern coast.
+
+Looking up at the massive departure monitor, Mark realized with sudden panic that his connecting flight to Chicago had been rescheduled and relocated to Terminal 7. To make matters worse, the boarding gate was scheduled to close in only twenty-five minutes.
+
+He immediately hurried to the customer assistance desk. A cheerful airport officer named Carlos calmly explained the fastest route: "Take the AirTrain red line to Terminal 7, and use the priority transit lane at security." Thanks to the officer's clear directions, Mark dashed through the terminal and reached his gate right as the final boarding announcement was called.`
+  },
+  {
+    id: "sample-startup-pitch",
+    title: "The Eco-Tech Startup Pitch",
+    level: "B1 - B2",
+    category: "Technologia & Ekologia",
+    summary: "Prezentacja innowacyjnej biodegradowalnej baterii przed inwestorami w Berlinie.",
+    text: `In a bright, open co-working space in Berlin, Maya stood confidently in front of five venture capital investors to pitch her clean-tech startup, 'AuraEnergy'.
+
+Her engineering team had engineered a revolutionary biodegradable battery made from organic forest waste. Not only did it eliminate toxic heavy metals, but it could also recharge smartphones in under three minutes without overheating.
+
+While the senior investment partner expressed polite skepticism about scaling mass manufacturing, Maya reached into her backpack, placed a working prototype on the conference table, and plugged in an empty tablet. Within two minutes, the battery indicator jumped to ninety percent. Impressed by the live demonstration, the lead investor leaned forward and proposed a formal term sheet discussion for the following morning.`
+  }
+];
+
+// Dostępne tryby ćwiczeń z lektorem AI
+export const EXERCISE_TYPES = [
+  {
+    id: "story_discussion",
+    icon: "💬",
+    name: "💬 Dyskusja i opinie o fabule",
+    badge: "Dyskusja",
+    description: "Rozmawiajmy o bohaterach, motywach i wydarzeniach. Lektor zadaje pytania otwarte i pyta o Twoje zdanie."
+  },
+  {
+    id: "vocabulary_quiz",
+    icon: "🧠",
+    name: "🧠 Trening słownictwa i quiz słowny",
+    badge: "Słownictwo",
+    description: "Lektor pyta o znaczenie trudniejszych słówek z czytanki, synonimy i prosi o ułożenie zdań."
+  },
+  {
+    id: "roleplay",
+    icon: "🎭",
+    name: "🎭 Odgrywanie ról (Role-Play)",
+    badge: "Role-Play",
+    description: "Wciel się w jednego z bohaterów czytanki! Lektor wcieli się w drugą postać w żywym dialogu."
+  },
+  {
+    id: "summary_challenge",
+    icon: "🎙️",
+    name: "🎙️ Wyzwanie streszczenia (Summary)",
+    badge: "Streszczenie",
+    description: "Opowiedz czytankę własnymi słowami. Lektor słucha, dopytuje o szczegóły i chwali za płynność."
+  },
+  {
+    id: "comprehension_qa",
+    icon: "❓",
+    name: "❓ Pytania ze zrozumienia tekstu (Q&A)",
+    badge: "Zrozumienie",
+    description: "Quiz ze zrozumienia faktów i detali czytanki – sprawdź ile zapamiętałeś z lektury."
+  },
+  {
+    id: "grammar_context",
+    icon: "🔍",
+    name: "🔍 Gramatyka i zwroty w kontekście",
+    badge: "Gramatyka",
+    description: "Ćwiczenie ciekawych struktur zdaniowych, czasów i zwrotów użytych w tym opowiadaniu."
+  }
+];
+
+export function buildTutorPrompts(story, exerciseType) {
+  if (!story) {
+    return {
+      systemInstruction: "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone. Speak only in English.",
+      greetingPrompt: "Hello! Please greet me warmly in English as my friendly tutor, introduce yourself briefly in 1-2 natural sentences, and ask how my day is going."
+    };
+  }
+
+  const title = story.title || "Selected Story";
+  const text = story.text || "";
+
+  let exerciseInstructions = "";
+  let greetingPrompt = "";
+
+  switch (exerciseType) {
+    case "vocabulary_quiz":
+      exerciseInstructions = `EXERCISE FOCUS: VOCABULARY PRACTICE & QUIZ
+- You are practicing key vocabulary, idiomatic expressions, and useful phrases from the story "${title}".
+- Pick one specific word or phrase from the story at a time.
+- Ask the student if they know what it means, or give them a simple clue/definition and ask them to recall the word from the story, or ask them to use it in a spoken sentence.
+- Always provide immediate, encouraging feedback on their pronunciation and usage, and suggest natural synonyms.
+- Keep your answers short (1-2 sentences) so the student speaks most of the time.`;
+      greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention enthusiastically that today we are going to practice vocabulary from the story "${title}". Ask if I'm ready for our first word challenge, in 1-2 friendly sentences.`;
+      break;
+
+    case "story_discussion":
+      exerciseInstructions = `EXERCISE FOCUS: STORY DISCUSSION & PERSONAL OPINIONS
+- You and the student are discussing the story "${title}".
+- Discuss the plot, character decisions, turning points, and underlying themes.
+- Ask open-ended, thought-provoking questions that invite the student to share their own opinions and relate the story to real life.
+- Keep the dialogue dynamic, conversational, and friendly (1-2 sentences per turn).`;
+      greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention that we are going to discuss the story "${title}". Ask me an engaging opening question about what caught my attention in the story, in 1-2 friendly sentences.`;
+      break;
+
+    case "roleplay":
+      exerciseInstructions = `EXERCISE FOCUS: INTERACTIVE ROLE-PLAY
+- Conduct an immersive role-play based on the characters and situation in "${title}".
+- Adopt the persona of one of the characters in the story (or a narrator/interlocutor).
+- Treat the student as the other character.
+- Stay in character, react dynamically to their words, and advance the scene through natural spoken conversation.
+- Keep each turn to 1-2 spoken sentences.`;
+      greetingPrompt = `Hello! Greet me enthusiastically as my English tutor. Propose a fun role-play scenario based on the story "${title}". Tell me which role I can play and which role you will take, and invite me to take the first line!`;
+      break;
+
+    case "summary_challenge":
+      exerciseInstructions = `EXERCISE FOCUS: SUMMARY & RETELLING CHALLENGE
+- Invite the student to summarize or retell the story "${title}" in their own words.
+- Listen attentively without interrupting unnecessarily.
+- When they finish a part of their summary, praise their fluency, highlight 1 or 2 great vocabulary choices, and ask a follow-up question to help them conclude or expand.`;
+      greetingPrompt = `Hello! Greet me warmly as my English tutor. Tell me that today we have a fun Retelling Challenge for the story "${title}". Invite me to summarize what happened in my own words whenever I'm ready!`;
+      break;
+
+    case "comprehension_qa":
+      exerciseInstructions = `EXERCISE FOCUS: COMPREHENSION Q&A
+- Test the student's reading and listening comprehension of "${title}".
+- Ask clear, specific questions about key events, characters, and facts from the text.
+- Ask ONE question at a time.
+- If the student answers correctly, enthusiastically confirm and ask the next question. If they hesitate, give a friendly hint!`;
+      greetingPrompt = `Hello! Greet me warmly as my English tutor. Tell me we are going to do a quick comprehension quiz on the story "${title}", and immediately ask me the very first question!`;
+      break;
+
+    case "grammar_context":
+      exerciseInstructions = `EXERCISE FOCUS: GRAMMAR IN CONTEXT
+- Help the student practice grammar patterns and sentence structures used in "${title}" (e.g. past narratives, modal verbs, conditionals, or reporting speech).
+- Ask the student questions that naturally elicit those grammar structures.
+- If the student makes a grammatical slip, gently model the natural phrasing in your response while keeping the conversation flowing.`;
+      greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention that we're going to practice grammar structures and sentence patterns based on the story "${title}". Ask me a quick opening question in 1-2 friendly sentences.`;
+      break;
+
+    default:
+      exerciseInstructions = `EXERCISE FOCUS: GENERAL STORY DISCUSSION
+- Discuss the story "${title}" with the student. Keep turns concise (1-2 sentences) and interactive.`;
+      greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention that we are talking about the story "${title}", and ask how I'd like to begin!`;
+      break;
+  }
+
+  const systemInstruction = `You are Speakling, an enthusiastic, friendly and warm native English tutor.
+Your goal is to conduct an engaging, interactive spoken English session with the student.
+Speak with a natural, friendly native tone.
+Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, always giving the student plenty of speaking time.
+Speak only in English.
+
+STORY IN CONTEXT:
+Title: "${title}"
+Text:
+"""
+${text}
+"""
+
+${exerciseInstructions}`;
+
+  return { systemInstruction, greetingPrompt };
+}
+
 function Dashboard({ user }) {
   // Tryb rozmowy: 'live' (Gemini Multimodal Live) lub 'classic' (Whisper + OpenAI/DeepSeek + TTS)
   const [chatMode, setChatMode] = useState(() => {
@@ -38,6 +230,66 @@ function Dashboard({ user }) {
 
   // Konfiguracja serwera
   const [serverConfig, setServerConfig] = useState(null);
+
+  // Wybór czytanki (Stories) oraz typu ćwiczenia z lektorem
+  const [userStories, setUserStories] = useState([]);
+  const [selectedStoryId, setSelectedStoryId] = useState(() => {
+    return localStorage.getItem("buddy_selected_story_id") || "";
+  });
+  const [exerciseType, setExerciseType] = useState(() => {
+    return localStorage.getItem("buddy_exercise_type") || "story_discussion";
+  });
+  const [showStoryPreview, setShowStoryPreview] = useState(false);
+  const [isLoadingStories, setIsLoadingStories] = useState(false);
+
+  // Pobieranie zapisanych czytanek użytkownika z backendu
+  const loadStories = useCallback(async () => {
+    if (!user?.token) return;
+    setIsLoadingStories(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/stories`, {
+        headers: { "X-Session-Token": user.token }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const mainStories = Array.isArray(data) ? data.filter((s) => !s.parent_id) : [];
+        setUserStories(mainStories);
+      }
+    } catch (err) {
+      console.warn("Nie udało się pobrać zapisanych historii użytkownika:", err);
+    } finally {
+      setIsLoadingStories(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadStories();
+  }, [loadStories]);
+
+  // Lista wszystkich dostępnych czytanek (wzorcowe + własne użytkownika)
+  const allStories = [
+    ...SAMPLE_STORIES,
+    ...userStories
+  ];
+
+  const selectedStory = allStories.find((s) => s.id === selectedStoryId) || null;
+  const currentExerciseObj = EXERCISE_TYPES.find((ex) => ex.id === exerciseType) || EXERCISE_TYPES[0];
+
+  const handleStorySelectChange = (e) => {
+    const newId = e.target.value;
+    setSelectedStoryId(newId);
+    localStorage.setItem("buddy_selected_story_id", newId);
+    if (newId && exerciseType === "free") {
+      setExerciseType("story_discussion");
+      localStorage.setItem("buddy_exercise_type", "story_discussion");
+    }
+  };
+
+  const handleExerciseTypeChange = (e) => {
+    const newType = e.target.value;
+    setExerciseType(newType);
+    localStorage.setItem("buddy_exercise_type", newType);
+  };
 
   // Stany ogólne czatu
   const [isChatActive, setIsChatActive] = useState(false);
@@ -285,6 +537,9 @@ function Dashboard({ user }) {
     const activeKey = (overrideOptions.apiKey !== undefined ? overrideOptions.apiKey : customApiKey).trim();
 
     try {
+      const currentStory = allStories.find((s) => s.id === selectedStoryId) || null;
+      const { systemInstruction: contextualInstruction, greetingPrompt: contextualGreeting } = buildTutorPrompts(currentStory, exerciseType);
+
       let clientConfig = {
         provider: activeProvider,
         model: activeModel,
@@ -292,8 +547,8 @@ function Dashboard({ user }) {
         apiBaseUrl: API_BASE_URL,
         sessionToken: user?.token || null,
         userEmail: user?.email || null,
-        systemInstruction:
-          "You are Speakling, a friendly, charismatic and encouraging native English tutor. Help the student practice conversational English naturally. Keep responses lively, spoken and concise (1-3 sentences) so the conversation flows seamlessly back and forth.",
+        systemInstruction: contextualInstruction,
+        initialGreetingPrompt: contextualGreeting,
         onStatusChange: (status) => {
           setLiveStatus(status);
         },
@@ -738,6 +993,11 @@ function Dashboard({ user }) {
       formData.append("audio", audioBlob, "user_speech.webm");
       formData.append("history", JSON.stringify(historyForApi));
       formData.append("voice", "en-US-BrianNeural");
+      if (selectedStory) {
+        formData.append("story_title", selectedStory.title || "");
+        formData.append("story_text", selectedStory.text || "");
+        formData.append("exercise_type", exerciseType || "");
+      }
       if (localTranscriptRef.current) {
         formData.append("transcription", localTranscriptRef.current);
       }
@@ -1009,6 +1269,117 @@ function Dashboard({ user }) {
         
         {/* Orb Section */}
         <div className="tutor-orb-section">
+          {/* Story & Exercise Selection Bar */}
+          <div className="tutor-context-bar glass-panel animate-fade-in">
+            <div className="context-bar-header">
+              <div className="context-bar-title-row">
+                <span className="context-icon">📚</span>
+                <div className="context-title-wrap">
+                  <h3 className="context-heading">Rozmowa o czytance i ćwiczenia z AI</h3>
+                  <p className="context-subheading">
+                    Wybierz czytankę i cel ćwiczenia, aby rozmawiać na konkretny temat lub szlifować słownictwo!
+                  </p>
+                </div>
+              </div>
+              {selectedStory && (
+                <button
+                  type="button"
+                  className="btn-preview-story"
+                  onClick={() => setShowStoryPreview(true)}
+                  title="Zobacz pełny tekst czytanki"
+                >
+                  📖 Zobacz tekst
+                </button>
+              )}
+            </div>
+
+            <div className="context-selectors-grid">
+              {/* 1. Lista rozwijana czytanek do wyboru */}
+              <div className="context-field">
+                <label className="context-label" htmlFor="story-select">
+                  <span className="field-icon">📖</span> Czytanka do rozmowy:
+                </label>
+                <div className="select-wrapper">
+                  <select
+                    id="story-select"
+                    className="context-select"
+                    value={selectedStoryId}
+                    onChange={handleStorySelectChange}
+                    disabled={isChatActive}
+                  >
+                    <option value="">🗣️ Rozmowa swobodna (dowolny temat / bez czytanki)</option>
+                    {userStories.length > 0 && (
+                      <optgroup label="📁 Twoje zapisane czytanki">
+                        {userStories.map((story) => (
+                          <option key={story.id} value={story.id}>
+                            📖 {story.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="🌟 Gotowe czytanki Speakling">
+                      {SAMPLE_STORIES.map((story) => (
+                        <option key={story.id} value={story.id}>
+                          🌟 {story.title} ({story.level})
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+              </div>
+
+              {/* 2. Lista rozwijana typów ćwiczeń do wykonania z AI */}
+              <div className="context-field">
+                <label className="context-label" htmlFor="exercise-select">
+                  <span className="field-icon">🎯</span> Typ ćwiczenia z AI:
+                </label>
+                <div className="select-wrapper">
+                  <select
+                    id="exercise-select"
+                    className="context-select"
+                    value={selectedStoryId ? exerciseType : "free"}
+                    onChange={handleExerciseTypeChange}
+                    disabled={isChatActive || !selectedStoryId}
+                  >
+                    {!selectedStoryId ? (
+                      <option value="free">💬 Swobodna konwersacja z lektorem</option>
+                    ) : (
+                      EXERCISE_TYPES.map((ex) => (
+                        <option key={ex.id} value={ex.id}>
+                          {ex.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Informacja o wybranym trybie */}
+            {selectedStory ? (
+              <div className="selected-context-info">
+                <span className="context-pill story-pill">
+                  📖 <strong>{selectedStory.title}</strong>
+                  {selectedStory.level && ` (${selectedStory.level})`}
+                </span>
+                <span className="context-pill exercise-pill" title={currentExerciseObj?.description}>
+                  🎯 <strong>{currentExerciseObj?.badge}:</strong> {currentExerciseObj?.description}
+                </span>
+                {isChatActive && (
+                  <span className="context-pill active-call-pill">
+                    🔒 Aktywne połączenie
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="selected-context-info free-mode">
+                <span className="context-pill neutral-pill">
+                  🗣️ Tryb otwarty – swobodna rozmowa po angielsku na dowolny temat.
+                </span>
+              </div>
+            )}
+          </div>
+
           {/* Central Gemini Orb Control */}
           <div className="tutor-orb-wrapper">
             <button
@@ -1181,6 +1552,49 @@ function Dashboard({ user }) {
           onSwitchToClassicAndStart={handleSwitchToClassicAndStart}
           onClose={() => setShowSettings(false)}
         />
+      )}
+
+      {/* Story Preview Modal */}
+      {showStoryPreview && selectedStory && (
+        <div className="story-preview-modal-overlay animate-fade-in" onClick={() => setShowStoryPreview(false)}>
+          <div className="story-preview-modal-content glass-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="story-preview-header">
+              <div className="story-preview-titles">
+                <span className="story-preview-badge">{selectedStory.level || "Czytanka"}</span>
+                <h3>{selectedStory.title}</h3>
+                {selectedStory.category && <span className="story-preview-category">{selectedStory.category}</span>}
+              </div>
+              <button
+                type="button"
+                className="story-preview-close-btn"
+                onClick={() => setShowStoryPreview(false)}
+                title="Zamknij"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="story-preview-body">
+              {selectedStory.text.split('\n\n').map((paragraph, idx) => (
+                <p key={idx} className="story-preview-paragraph">{paragraph.trim()}</p>
+              ))}
+            </div>
+            <div className="story-preview-footer">
+              <div className="story-exercise-reminder">
+                🎯 Wybrany cel rozmowy: <strong>{currentExerciseObj?.name}</strong>
+              </div>
+              <button
+                type="button"
+                className="btn-start-from-preview"
+                onClick={() => {
+                  setShowStoryPreview(false);
+                  if (!isChatActive) handleOrbClick();
+                }}
+              >
+                {isChatActive ? "Wróć do rozmowy" : "🚀 Rozpocznij rozmowę z lektorem"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

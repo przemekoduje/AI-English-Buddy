@@ -24,6 +24,7 @@ export class GeminiLiveClient {
     this.voiceName = options.voiceName || 'Puck'; // Puck, Charon, Kore, Fenrir, Aoede
     this.systemInstruction = options.systemInstruction || 
       "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise, conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone.";
+    this.initialGreetingPrompt = options.initialGreetingPrompt || null;
 
     // Callbacks
     this.onStatusChange = options.onStatusChange || (() => {});
@@ -570,6 +571,8 @@ export class GeminiLiveClient {
    * Wysyła krótką prośbę o powitanie ucznia natychmiast po połączeniu
    */
   sendInitialGreeting() {
+    const greetingText = this.initialGreetingPrompt || 
+      "Hello! Please greet me warmly in English as my friendly tutor, introduce yourself briefly in 1-2 natural sentences, and ask how my day is going.";
     const greetingTurn = {
       clientContent: {
         turns: [
@@ -577,7 +580,7 @@ export class GeminiLiveClient {
             role: "user",
             parts: [
               {
-                text: "Hello! Please greet me warmly in English as my friendly tutor, introduce yourself briefly in 1-2 natural sentences, and ask how my day is going."
+                text: greetingText
               }
             ]
           }
