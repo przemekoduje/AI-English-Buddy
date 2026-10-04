@@ -3,6 +3,11 @@
  * 
  * Klient połączenia czasu rzeczywistego (WebSockets + Web Audio API) dla technologii 
  * Gemini Multimodal Live API w aplikacji mobilnej Speakling.
+ * 
+ * Zoptymalizowany pod kątem iOS Safari:
+ * - Pojedynczy współdzielony AudioContext dla nagrywania i odtwarzania
+ * - Obsługa pre-inicjalizowanego MediaStream bezpośrednio z gestu użytkownika
+ * - Odporność na ograniczenia WebKit
  */
 
 export interface GeminiLiveOptions {
@@ -16,7 +21,9 @@ export interface GeminiLiveOptions {
   apiBaseUrl?: string;
   sessionToken?: string | null;
   userEmail?: string | null;
-  onStatusChange?: (status: 'inactive' | 'connecting' | 'listening' | 'user-speaking' | 'speaking') => void;
+  mediaStream?: any;
+  audioContext?: any;
+  onStatusChange?: (status: 'inactive' | 'connecting' | 'listening' | 'user-speaking' | 'speaking' | 'active') => void;
   onBotSpeaking?: (isSpeaking: boolean) => void;
   onUserVolume?: (volume: number) => void;
   onBotVolume?: (volume: number) => void;
@@ -37,7 +44,7 @@ export class GeminiLiveClient {
   public sessionToken: string | null;
   public userEmail: string | null;
 
-  public onStatusChange: (status: 'inactive' | 'connecting' | 'listening' | 'user-speaking' | 'speaking') => void;
+  public onStatusChange: (status: 'inactive' | 'connecting' | 'listening' | 'user-speaking' | 'speaking' | 'active') => void;
   public onBotSpeaking: (isSpeaking: boolean) => void;
   public onUserVolume: (volume: number) => void;
   public onBotVolume: (volume: number) => void;
@@ -48,15 +55,12 @@ export class GeminiLiveClient {
   private ws: WebSocket | null = null;
   public isConnected = false;
 
-  private inputAudioContext: any = null;
+  private audioContext: any = null;
   private mediaStream: any = null;
   private audioSourceNode: any = null;
   private scriptProcessorNode: any = null;
   private inputMuteGain: any = null;
-  private speechRecognition: any = null;
-  private lastUserTranscript = '';
 
-  private outputAudioContext: any = null;
   private outputGainNode: any = null;
   private scheduledSources: any[] = [];
   private nextPlayTime = 0;
@@ -83,6 +87,9 @@ export class GeminiLiveClient {
     this.systemInstruction = options.systemInstruction || 
       "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise, conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone.";
 
+    this.audioContext = options.audioContext || null;
+    this.mediaStream = options.mediaStream || null;
+
     this.onStatusChange = options.onStatusChange || (() => {});
     this.onBotSpeaking = options.onBotSpeaking || (() => {});
     this.onUserVolume = options.onUserVolume || (() => {});
@@ -100,37 +107,57 @@ export class GeminiLiveClient {
     this.onStatusChange('connecting');
 
     try {
-      await this.initOutputAudio();
+      await this.initAudio();
 
       const url = this.buildWebSocketUrl();
       if (!url) {
-        throw new Error("Brak prawidłowego adresu WebSocket lub klucza uwierzytelniającego.");
+        throw new Error("Brak prawidłowego adresu WebSocket lub tokena uwierzytelniającego.");
       }
 
       console.log(`[GeminiLive Mobile] Łączenie z WebSocket (${this.provider})...`);
       this.ws = new WebSocket(url);
 
+      const connectTimeout = setTimeout(() => {
+        if (!this.isConnected) {
+          console.warn("[GeminiLive Mobile] Timeout połączenia WebSocket (12s)");
+          this.cleanup();
+          this.onError("Przekroczono limit czasu łączenia z Gemini Live. Sprawdź połączenie.");
+        }
+      }, 12000);
+
       this.ws.onopen = async () => {
-        console.log("[GeminiLive Mobile] Połączenie WebSocket otwarte. Wysyłam ramkę setup...");
+        clearTimeout(connectTimeout);
+        console.log("[GeminiLive Mobile] WebSocket otwarty. Wysyłam ramkę setup...");
         this.sessionStartTime = Date.now();
         this.usageReported = false;
-        this.sendSetupFrame();
         this.isConnected = true;
 
-        await this.initInputAudio();
-        this.onStatusChange('listening');
+        try {
+          this.sendSetupFrame();
+          await this.startRecordingStream();
+          this.onStatusChange('listening');
+        } catch (setupErr: any) {
+          console.error("[GeminiLive Mobile] Błąd w onopen:", setupErr);
+          this.onError("Błąd mikrofonu po połączeniu: " + (setupErr.message || setupErr));
+        }
       };
 
       this.ws.onmessage = async (event: any) => {
-        await this.handleServerMessage(event.data);
+        try {
+          await this.handleServerMessage(event.data);
+        } catch (msgErr) {
+          console.error("[GeminiLive Mobile] Błąd wiadomości serwera:", msgErr);
+        }
       };
 
       this.ws.onerror = (err: any) => {
+        clearTimeout(connectTimeout);
         console.error("[GeminiLive Mobile] Błąd WebSocket:", err);
         this.onError("Błąd połączenia WebSocket z Gemini Live.");
       };
 
       this.ws.onclose = (event: any) => {
+        clearTimeout(connectTimeout);
         console.log(`[GeminiLive Mobile] WebSocket zamknięty (kod: ${event.code}, powód: ${event.reason})`);
         this.cleanup();
         this.isConnected = false;
@@ -140,9 +167,9 @@ export class GeminiLiveClient {
           if (event.reason) {
             friendlyReason = `Google AI Studio: ${event.reason} (kod ${event.code})`;
           } else if (event.code === 1008) {
-            friendlyReason = "Google AI Studio odrzuciło połączenie (kod 1008: Błąd uprawnień). Wybierz model Gemini 2.5 Flash Native Audio.";
+            friendlyReason = "Google AI Studio odrzuciło połączenie (kod 1008: Błąd uprawnień).";
           } else if (event.code === 1006) {
-            friendlyReason = "Połączenie WebSocket z Gemini Live zostało przerwane (kod 1006). Sprawdź sieć.";
+            friendlyReason = "Połączenie WebSocket z Gemini Live zostało przerwane (kod 1006).";
           } else {
             friendlyReason = `Połączenie z Gemini Live zakończone (kod ${event.code}).`;
           }
@@ -212,77 +239,79 @@ export class GeminiLiveClient {
     this.sendJson(setupMessage);
   }
 
-  async initOutputAudio(): Promise<void> {
+  async initAudio(): Promise<void> {
     try {
       if (typeof window === 'undefined') return;
       const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) return;
 
-      if (!this.outputAudioContext || this.outputAudioContext.state === 'closed') {
-        this.outputAudioContext = new AudioContextClass();
+      if (!this.audioContext || this.audioContext.state === 'closed') {
+        this.audioContext = new AudioContextClass();
       }
-      if (this.outputAudioContext.state === 'suspended') {
-        await this.outputAudioContext.resume();
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
       }
-      this.nextPlayTime = this.outputAudioContext.currentTime;
+      this.nextPlayTime = this.audioContext.currentTime;
 
       if (!this.outputGainNode) {
-        this.outputGainNode = this.outputAudioContext.createGain();
+        this.outputGainNode = this.audioContext.createGain();
         this.outputGainNode.gain.value = 1.0;
-        this.outputGainNode.connect(this.outputAudioContext.destination);
+        this.outputGainNode.connect(this.audioContext.destination);
       }
 
       if (!this.checkSpeakingInterval) {
         this.checkSpeakingInterval = setInterval(() => {
-          if (this.outputAudioContext) {
-            const isSpeaking = this.outputAudioContext.currentTime < this.nextPlayTime - 0.05;
+          if (this.audioContext) {
+            const isSpeaking = this.audioContext.currentTime < this.nextPlayTime - 0.05;
             if (isSpeaking !== this.isBotCurrentlySpeaking) {
               this.isBotCurrentlySpeaking = isSpeaking;
               this.onBotSpeaking(isSpeaking);
+              if (!isSpeaking && this.isConnected) {
+                this.onStatusChange('listening');
+              }
             }
           }
         }, 80);
       }
     } catch (e) {
-      console.warn("[GeminiLive Mobile] Błąd inicjalizacji odtwarzania audio:", e);
+      console.warn("[GeminiLive Mobile] Błąd AudioContext:", e);
     }
   }
 
-  async initInputAudio(): Promise<void> {
+  async startRecordingStream(): Promise<void> {
     try {
-      if (typeof navigator === 'undefined' || !navigator.mediaDevices) {
-        throw new Error("Brak wsparcia dla nagrywania audio w tym środowisku.");
-      }
-
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
+      if (!this.mediaStream) {
+        if (typeof navigator === 'undefined' || !navigator.mediaDevices) {
+          throw new Error("Brak wsparcia dla nagrywania audio w tym środowisku.");
         }
-      });
-
-      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
-      this.inputAudioContext = new AudioContextClass();
-      if (this.inputAudioContext.state === 'suspended') {
-        await this.inputAudioContext.resume();
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          }
+        });
       }
 
-      this.audioSourceNode = this.inputAudioContext.createMediaStreamSource(this.mediaStream);
+      if (!this.audioContext) {
+        await this.initAudio();
+      }
 
-      const bufferSize = 2048;
-      this.scriptProcessorNode = this.inputAudioContext.createScriptProcessor(bufferSize, 1, 1);
+      this.audioSourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
-      this.inputMuteGain = this.inputAudioContext.createGain();
+      const bufferSize = 4096;
+      this.scriptProcessorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+      this.inputMuteGain = this.audioContext.createGain();
       this.inputMuteGain.gain.value = 0;
 
       this.audioSourceNode.connect(this.scriptProcessorNode);
       this.scriptProcessorNode.connect(this.inputMuteGain);
-      this.inputMuteGain.connect(this.inputAudioContext.destination);
+      this.inputMuteGain.connect(this.audioContext.destination);
 
       const targetSampleRate = 16000;
-      const nativeSampleRate = this.inputAudioContext.sampleRate;
+      const nativeSampleRate = this.audioContext.sampleRate;
 
       this.scriptProcessorNode.onaudioprocess = (e: any) => {
         if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
@@ -314,56 +343,9 @@ export class GeminiLiveClient {
         this.sendJson(realtimeAudioMessage);
       };
 
-      this.initSpeechRecognition();
     } catch (err: any) {
-      console.error("[GeminiLive Mobile] Błąd konfiguracji mikrofonu:", err);
-      throw new Error("Brak dostępu do mikrofonu: " + err.message);
-    }
-  }
-
-  initSpeechRecognition(): void {
-    if (typeof window === 'undefined') return;
-    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-
-    try {
-      this.speechRecognition = new SpeechRec();
-      this.speechRecognition.lang = 'en-US';
-      this.speechRecognition.continuous = true;
-      this.speechRecognition.interimResults = true;
-
-      this.speechRecognition.onresult = (event: any) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
-          }
-        }
-
-        const text = (finalTranscript || interimTranscript).trim();
-        if (text && text !== this.lastUserTranscript) {
-          this.lastUserTranscript = text;
-          this.onTranscript({
-            sender: 'user',
-            text: text,
-            isFinal: Boolean(finalTranscript)
-          });
-        }
-      };
-
-      this.speechRecognition.onerror = (e: any) => {
-        if (e.error !== 'no-speech') {
-          console.warn("[GeminiLive Mobile] SpeechRecognition:", e.error);
-        }
-      };
-
-      this.speechRecognition.start();
-    } catch (e) {
-      console.warn("[GeminiLive Mobile] Nie udało się wystartować lokalnego SpeechRecognition:", e);
+      console.error("[GeminiLive Mobile] Błąd mikrofonu:", err);
+      throw new Error("Brak dostępu do mikrofonu: " + (err.message || err));
     }
   }
 
@@ -380,7 +362,7 @@ export class GeminiLiveClient {
         message = JSON.parse(text);
       }
     } catch (e) {
-      console.warn("[GeminiLive Mobile] Błąd parsowania ramki JSON:", e);
+      console.warn("[GeminiLive Mobile] Błąd parsowania JSON:", e);
       return;
     }
 
@@ -405,13 +387,13 @@ export class GeminiLiveClient {
 
     if (message.setupComplete) {
       console.log("[GeminiLive Mobile] setupComplete odebrane. Wysyłam powitanie...");
-      this.onStatusChange('active' as any);
+      this.onStatusChange('listening');
       this.sendInitialGreeting();
       return;
     }
 
     if (message.serverContent && message.serverContent.interrupted) {
-      console.log("[GeminiLive Mobile] Wykryto przerwanie (barge-in). Wyciszam bota.");
+      console.log("[GeminiLive Mobile] Wykryto przerwanie (barge-in). Wyciszam lektora.");
       this.stopBotAudio();
       return;
     }
@@ -465,7 +447,7 @@ export class GeminiLiveClient {
             role: "user",
             parts: [
               {
-                text: "Hello! Please greet me warmly in English as my friendly tutor, introduce yourself briefly in 1-2 natural sentences, and ask how my day is going."
+                text: "Hello! Please greet me warmly in English as my friendly tutor in 1 natural spoken sentence, and ask what we should talk about today."
               }
             ]
           }
@@ -477,11 +459,11 @@ export class GeminiLiveClient {
   }
 
   queueAudioChunk(base64Data: string, sampleRate = 24000): void {
-    if (!this.outputAudioContext) return;
+    if (!this.audioContext) return;
 
     try {
-      if (this.outputAudioContext.state === 'suspended') {
-        this.outputAudioContext.resume().catch((err: any) => {
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume().catch((err: any) => {
           console.warn("[GeminiLive Mobile] AudioContext resume error:", err);
         });
       }
@@ -500,18 +482,18 @@ export class GeminiLiveClient {
         });
       }
 
-      const audioBuffer = this.outputAudioContext.createBuffer(1, float32Array.length, sampleRate);
+      const audioBuffer = this.audioContext.createBuffer(1, float32Array.length, sampleRate);
       if (audioBuffer.copyToChannel) {
         audioBuffer.copyToChannel(float32Array, 0);
       } else {
         audioBuffer.getChannelData(0).set(float32Array);
       }
 
-      const sourceNode = this.outputAudioContext.createBufferSource();
+      const sourceNode = this.audioContext.createBufferSource();
       sourceNode.buffer = audioBuffer;
-      sourceNode.connect(this.outputGainNode || this.outputAudioContext.destination);
+      sourceNode.connect(this.outputGainNode || this.audioContext.destination);
 
-      const currentTime = this.outputAudioContext.currentTime;
+      const currentTime = this.audioContext.currentTime;
       const startTime = (this.nextPlayTime < currentTime) ? currentTime : this.nextPlayTime;
       sourceNode.start(startTime);
       this.nextPlayTime = startTime + audioBuffer.duration;
@@ -528,9 +510,10 @@ export class GeminiLiveClient {
       if (!this.isBotCurrentlySpeaking) {
         this.isBotCurrentlySpeaking = true;
         this.onBotSpeaking(true);
+        this.onStatusChange('speaking');
       }
     } catch (e) {
-      console.error("[GeminiLive Mobile] Błąd odtwarzania audio:", e);
+      console.error("[GeminiLive Mobile] Błąd odtwarzania fragmentu audio:", e);
     }
   }
 
@@ -640,8 +623,8 @@ export class GeminiLiveClient {
     this.currentTurnAudioChunks = [];
     this.botTurnStarted = false;
 
-    if (this.outputAudioContext) {
-      this.nextPlayTime = this.outputAudioContext.currentTime;
+    if (this.audioContext) {
+      this.nextPlayTime = this.audioContext.currentTime;
     }
 
     this.isBotCurrentlySpeaking = false;
@@ -764,13 +747,6 @@ export class GeminiLiveClient {
       this.checkSpeakingInterval = null;
     }
 
-    if (this.speechRecognition) {
-      try {
-        this.speechRecognition.stop();
-      } catch (e) {}
-      this.speechRecognition = null;
-    }
-
     if (this.scriptProcessorNode) {
       try {
         this.scriptProcessorNode.disconnect();
@@ -800,26 +776,19 @@ export class GeminiLiveClient {
     }
 
     if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach((track: any) => track.stop());
+      try {
+        this.mediaStream.getTracks().forEach((track: any) => track.stop());
+      } catch (e) {}
       this.mediaStream = null;
     }
 
-    if (this.inputAudioContext) {
+    if (this.audioContext) {
       try {
-        if (this.inputAudioContext.state !== 'closed') {
-          this.inputAudioContext.close();
+        if (this.audioContext.state !== 'closed') {
+          this.audioContext.close();
         }
       } catch (e) {}
-      this.inputAudioContext = null;
-    }
-
-    if (this.outputAudioContext) {
-      try {
-        if (this.outputAudioContext.state !== 'closed') {
-          this.outputAudioContext.close();
-        }
-      } catch (e) {}
-      this.outputAudioContext = null;
+      this.audioContext = null;
     }
 
     if (this.ws) {

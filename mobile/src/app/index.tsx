@@ -1189,9 +1189,32 @@ export default function HomeScreen() {
   };
 
   const handleStartVoiceTutorSession = async () => {
-    // Odblokowanie odtwarzania audio i syntezy mowy na iOS/Safari (musi nastąpić bezpośrednio w akcji kliknięcia)
+    let preAudioContext: any = null;
+    let preMediaStream: any = null;
+
+    // Odblokowanie odtwarzania audio, AudioContext i mikrofonu na iOS/Safari (musi nastąpić bezpośrednio w akcji kliknięcia użytkownika)
     if (Platform.OS === 'web') {
       try {
+        const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          preAudioContext = new AudioContextClass();
+          if (preAudioContext.state === 'suspended') {
+            await preAudioContext.resume();
+          }
+        }
+
+        // Natychmiastowe pozyskanie strumienia mikrofonu bezpośrednio w geście dotyku (kluczowe dla iOS Safari!)
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+          preMediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              channelCount: 1,
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            }
+          });
+        }
+
         const dummyAudio = new Audio();
         dummyAudio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA";
         dummyAudio.play().catch(() => {});
@@ -1201,9 +1224,13 @@ export default function HomeScreen() {
           dummyUtterance.volume = 0;
           window.speechSynthesis.speak(dummyUtterance);
         }
-        console.log("Web: Odblokowano Audio i SpeechSynthesis.");
-      } catch (e) {
-        console.warn("Failed to unlock web audio:", e);
+        console.log("[GeminiLive Mobile] Odblokowano AudioContext, mikrofon i SpeechSynthesis w geście dotyku.");
+      } catch (e: any) {
+        console.warn("[GeminiLive Mobile] Ostrzeżenie przy odblokowywaniu audio/mikrofonu:", e);
+        if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+          Alert.alert("Dostęp do mikrofonu", "Aplikacja potrzebuje dostępu do mikrofonu, aby rozmawiać na żywo. Odblokuj uprawnienia mikrofonu w przeglądarce.");
+          return;
+        }
       }
     }
 
@@ -1217,10 +1244,22 @@ export default function HomeScreen() {
     setVoiceTutorShowTranscript(false);
     setLiveOrbStatus("connecting");
 
+    // Ustalenie bezpiecznego adresu backendu dla środowiska webowego
+    let activeBackendUrl = backendUrl;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+      const hostname = window.location.hostname;
+      if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
+        if (!activeBackendUrl || activeBackendUrl.startsWith('http://') || activeBackendUrl.includes('192.168.')) {
+          activeBackendUrl = 'https://ai-english-buddy-backend-665075210565.europe-west1.run.app';
+        }
+      }
+    }
+
     // Inicjalizacja Gemini Live WebSocket (identyczna technologia jak wersja Desktop)
     if (Platform.OS === 'web') {
       try {
-        const tokenRes = await fetch(`${backendUrl}/api/live/token`, {
+        console.log("[GeminiLive Mobile] Pobieranie tokena sesji z:", `${activeBackendUrl}/api/live/token`);
+        const tokenRes = await fetch(`${activeBackendUrl}/api/live/token`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1243,9 +1282,11 @@ export default function HomeScreen() {
           voiceName: "Puck",
           token: tokenData.token,
           wsUrl: tokenData.ws_url,
-          apiBaseUrl: backendUrl,
+          apiBaseUrl: activeBackendUrl,
           sessionToken: user?.token || null,
           userEmail: user?.email || null,
+          audioContext: preAudioContext,
+          mediaStream: preMediaStream,
           systemInstruction:
             "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise, conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone.",
           onStatusChange: (status) => {
@@ -1308,12 +1349,24 @@ export default function HomeScreen() {
         await client.connect();
         return;
       } catch (err: any) {
-        console.warn("[GeminiLive Mobile] Fallback do trybu klasycznego:", err);
-        // W razie problemów fallback do nagrywania klasycznego
+        console.error("[GeminiLive Mobile] Błąd połączenia z Gemini Live:", err);
+        if (preMediaStream) {
+          try {
+            preMediaStream.getTracks().forEach((t: any) => t.stop());
+          } catch (e) {}
+        }
+        if (preAudioContext && preAudioContext.state !== 'closed') {
+          try {
+            preAudioContext.close();
+          } catch (e) {}
+        }
+        Alert.alert("Gemini Live", err?.message || "Nie udało się połączyć z Gemini Live.");
+        handleEndVoiceTutorSession();
+        return;
       }
     }
 
-    // Tryb klasyczny (nagrywanie całościowe)
+    // Tryb klasyczny (tylko na natywnym React Native)
     await startVoiceTutorRecording();
   };
 
@@ -1335,7 +1388,16 @@ export default function HomeScreen() {
     if (voiceTutorMessages.length > 0) {
       setIsVoiceTutorGeneratingSummary(true);
       try {
-        const response = await fetch(`${backendUrl}/api/chat-free/summary`, {
+        let activeBackendUrl = backendUrl;
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+          const hostname = window.location.hostname;
+          if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
+            if (!activeBackendUrl || activeBackendUrl.startsWith('http://') || activeBackendUrl.includes('192.168.')) {
+              activeBackendUrl = 'https://ai-english-buddy-backend-665075210565.europe-west1.run.app';
+            }
+          }
+        }
+        const response = await fetch(`${activeBackendUrl}/api/chat-free/summary`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1452,7 +1514,15 @@ export default function HomeScreen() {
         let storedIP = await AsyncStorage.getItem('buddy_backend_url');
         const dynamicIP = getInitialBackendUrl();
 
-
+        if (typeof window !== 'undefined' && window.location) {
+          const hostname = window.location.hostname;
+          if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
+            if (!storedIP || storedIP.startsWith('http://') || storedIP.includes('192.168.') || storedIP.includes('localhost')) {
+              storedIP = 'https://ai-english-buddy-backend-665075210565.europe-west1.run.app';
+              await AsyncStorage.setItem('buddy_backend_url', storedIP);
+            }
+          }
+        }
 
         if (!storedIP) {
           storedIP = getInitialBackendUrl();
@@ -3229,8 +3299,8 @@ export default function HomeScreen() {
                   {!isVoiceTutorActive && "Gotowy do rozmowy"}
                   {isVoiceTutorActive && orbStatus === "inactive" && "Łączenie..."}
                   {isVoiceTutorActive && orbStatus === "connecting" && "Łączenie z Gemini Live..."}
+                  {isVoiceTutorActive && (orbStatus === "listening" || orbStatus === "active") && "Słucham Cię..."}
                   {isVoiceTutorActive && orbStatus === "speaking" && "Lektor mówi..."}
-                  {isVoiceTutorActive && orbStatus === "listening" && "Słucham Cię..."}
                   {isVoiceTutorActive && orbStatus === "user-speaking" && "Mówisz..."}
                   {isVoiceTutorActive && orbStatus === "presending" && "Czy to wszystko?..."}
                   {isVoiceTutorActive && orbStatus === "thinking" && "Przetwarzanie..."}
