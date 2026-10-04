@@ -29,7 +29,9 @@ if [ -f "portal/index.html" ]; then
 fi
 
 echo "=== 4. Publikacja połączonej aplikacji na Firebase Hosting ==="
-npx firebase-tools deploy --only hosting
+# Główny projekt (ai-english-buddy-150e5) jest zawieszony – domyślnie wdrażamy na hosting zastępczy
+FIREBASE_PROJECT="${FIREBASE_PROJECT:-speakling-live-temp}"
+npx firebase-tools deploy --only hosting --project "$FIREBASE_PROJECT"
 
 echo "=== WDROŻENIE ZAKOŃCZONE SUKCESEM! ==="
 echo "Portal główny: https://przemokoduje.com/"
