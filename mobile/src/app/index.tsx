@@ -387,6 +387,7 @@ export default function HomeScreen() {
   const [liveStatusDetail, setLiveStatusDetail] = useState<string>('');
   const [liveErrorMessage, setLiveErrorMessage] = useState<string | null>(null);
   const geminiLiveClientRef = useRef<GeminiLiveClient | null>(null);
+  const liveMediaStreamRef = useRef<any>(null);
 
   const showWebAlert = (title: string, msg: string) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
@@ -471,10 +472,30 @@ export default function HomeScreen() {
   useEffect(() => {
     return () => {
       geminiLiveClientRef.current?.cleanup();
+      if (liveMediaStreamRef.current) {
+        try {
+          liveMediaStreamRef.current.getTracks().forEach((t: any) => t.stop());
+        } catch (e) {}
+        liveMediaStreamRef.current = null;
+      }
       stopVoiceTutorAudio();
       stopVoiceTutorRecordingLocally();
       cleanupVoiceTutorVAD();
     };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleBeforeUnload = () => {
+        if (liveMediaStreamRef.current) {
+          try {
+            liveMediaStreamRef.current.getTracks().forEach((t: any) => t.stop());
+          } catch (e) {}
+        }
+      };
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
   }, []);
 
   const stopVoiceTutorAudio = async () => {
@@ -1225,16 +1246,35 @@ export default function HomeScreen() {
           }
         }
 
-        // Pozyskanie strumienia mikrofonu bezpośrednio w geście dotyku z fallbackiem do podstawowego formatu
-        if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-          try {
-            preMediaStream = await navigator.mediaDevices.getUserMedia({
-              audio: { echoCancellation: true }
-            });
-          } catch (strictErr) {
-            console.warn("[GeminiLive Mobile] Fallback do audio: true", strictErr);
-            preMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Sprawdzenie, czy mamy już aktywny strumień mikrofonu w tej sesji strony (zapobiega powtarzającym się pytaniom iOS o uprawnienia)
+        let activeStream = liveMediaStreamRef.current;
+        const isStreamValid = activeStream &&
+          typeof activeStream.getTracks === 'function' &&
+          activeStream.getTracks().length > 0 &&
+          activeStream.getTracks().some((t: any) => t.readyState === 'live');
+
+        if (isStreamValid) {
+          activeStream.getTracks().forEach((t: any) => { t.enabled = true; });
+          preMediaStream = activeStream;
+          console.log("[GeminiLive Mobile] Ponowne użycie zapamiętanego strumienia mikrofonu (brak monitu o uprawnienia).");
+        } else {
+          // Pozyskanie strumienia mikrofonu bezpośrednio w geście dotyku z pełną redukcją echa
+          if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+            try {
+              preMediaStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                  channelCount: 1,
+                  echoCancellation: true,
+                  noiseSuppression: true,
+                  autoGainControl: true,
+                }
+              });
+            } catch (strictErr) {
+              console.warn("[GeminiLive Mobile] Fallback do audio: true", strictErr);
+              preMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
           }
+          liveMediaStreamRef.current = preMediaStream;
         }
 
         if (!preMediaStream) {
@@ -1319,6 +1359,7 @@ export default function HomeScreen() {
           userEmail: user?.email || null,
           audioContext: preAudioContext,
           mediaStream: preMediaStream,
+          reuseMediaStream: true,
           systemInstruction:
             "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise, conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone.",
           onStatusChange: (status) => {
@@ -1385,7 +1426,7 @@ export default function HomeScreen() {
         return;
       } catch (err: any) {
         console.error("[GeminiLive Mobile] Błąd połączenia z Gemini Live:", err);
-        if (preMediaStream) {
+        if (preMediaStream && preMediaStream !== liveMediaStreamRef.current) {
           try {
             preMediaStream.getTracks().forEach((t: any) => t.stop());
           } catch (e) {}
@@ -1414,6 +1455,13 @@ export default function HomeScreen() {
     if (geminiLiveClientRef.current) {
       geminiLiveClientRef.current.cleanup();
       geminiLiveClientRef.current = null;
+    }
+
+    // Wyciszamy mikrofon w zapamiętanym strumieniu (bez niszczenia ścieżek, by uniknąć monitu przy kolejnym starcie)
+    if (liveMediaStreamRef.current) {
+      try {
+        liveMediaStreamRef.current.getTracks().forEach((t: any) => { t.enabled = false; });
+      } catch (e) {}
     }
 
     await stopVoiceTutorAudio();
@@ -3272,7 +3320,14 @@ export default function HomeScreen() {
             <View style={styles.voiceTutorContainer}>
               
               {/* Main Stage */}
-              <View style={styles.voiceTutorStage}>
+              <View 
+                style={styles.voiceTutorStage}
+                onTouchStart={() => {
+                  if (isVoiceTutorActive && geminiLiveClientRef.current) {
+                    geminiLiveClientRef.current.resumeAudioContextIfSuspended();
+                  }
+                }}
+              >
                 
                 {/* Outlined Microphone / Active Voice Orb Button */}
                 <View style={{ alignItems: 'center' }}>

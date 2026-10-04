@@ -23,6 +23,7 @@ export interface GeminiLiveOptions {
   userEmail?: string | null;
   mediaStream?: any;
   audioContext?: any;
+  reuseMediaStream?: boolean;
   onStatusChange?: (status: 'inactive' | 'connecting' | 'listening' | 'user-speaking' | 'speaking' | 'active') => void;
   onBotSpeaking?: (isSpeaking: boolean) => void;
   onUserVolume?: (volume: number) => void;
@@ -43,6 +44,7 @@ export class GeminiLiveClient {
   public apiBaseUrl: string;
   public sessionToken: string | null;
   public userEmail: string | null;
+  public reuseMediaStream: boolean = false;
 
   public onStatusChange: (status: 'inactive' | 'connecting' | 'listening' | 'user-speaking' | 'speaking' | 'active') => void;
   public onBotSpeaking: (isSpeaking: boolean) => void;
@@ -62,6 +64,8 @@ export class GeminiLiveClient {
   private inputMuteGain: any = null;
 
   private outputGainNode: any = null;
+  private keepAliveOsc: any = null;
+  private keepAliveGain: any = null;
   private scheduledSources: any[] = [];
   private nextPlayTime = 0;
   private isBotCurrentlySpeaking = false;
@@ -89,6 +93,7 @@ export class GeminiLiveClient {
 
     this.audioContext = options.audioContext || null;
     this.mediaStream = options.mediaStream || null;
+    this.reuseMediaStream = !!options.reuseMediaStream;
 
     this.onStatusChange = options.onStatusChange || (() => {});
     this.onBotSpeaking = options.onBotSpeaking || (() => {});
@@ -259,9 +264,33 @@ export class GeminiLiveClient {
         this.outputGainNode.connect(this.audioContext.destination);
       }
 
+      // Keep-alive oscillator (zapobiega uśpieniu AudioContext przez iOS WebKit)
+      if (!this.keepAliveOsc) {
+        try {
+          const osc = this.audioContext.createOscillator();
+          const silentGain = this.audioContext.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = 440;
+          silentGain.gain.value = 0.00001; // Całkowicie niesłyszalne (-100 dBFS), lecz utrzymuje wątek Web Audio aktywny
+          osc.connect(silentGain);
+          silentGain.connect(this.audioContext.destination);
+          osc.start();
+          this.keepAliveOsc = osc;
+          this.keepAliveGain = silentGain;
+          console.log("[GeminiLive Mobile] Aktywowano keep-alive oscylator (ochrona przed zawieszeniem WebKit).");
+        } catch (oscErr) {
+          console.warn("[GeminiLive Mobile] Błąd inicjalizacji keep-alive oscylatora:", oscErr);
+        }
+      }
+
       if (!this.checkSpeakingInterval) {
         this.checkSpeakingInterval = setInterval(() => {
           if (this.audioContext) {
+            // W razie nieoczekiwanego uśpienia przez system próbujemy wznowić
+            if (this.audioContext.state === 'suspended' && this.isConnected) {
+              this.audioContext.resume().catch(() => {});
+            }
+
             const isSpeaking = this.audioContext.currentTime < this.nextPlayTime - 0.05;
             if (isSpeaking !== this.isBotCurrentlySpeaking) {
               this.isBotCurrentlySpeaking = isSpeaking;
@@ -278,6 +307,17 @@ export class GeminiLiveClient {
     }
   }
 
+  public async resumeAudioContextIfSuspended(): Promise<void> {
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+        console.log("[GeminiLive Mobile] AudioContext wznowiony przez akcję użytkownika.");
+      } catch (e) {
+        console.warn("[GeminiLive Mobile] Błąd resumeAudioContext:", e);
+      }
+    }
+  }
+
   async startRecordingStream(): Promise<void> {
     try {
       if (!this.mediaStream) {
@@ -287,7 +327,10 @@ export class GeminiLiveClient {
         try {
           this.mediaStream = await navigator.mediaDevices.getUserMedia({
             audio: {
-              echoCancellation: true
+              channelCount: 1,
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
             }
           });
         } catch (e) {
@@ -496,7 +539,10 @@ export class GeminiLiveClient {
       sourceNode.connect(this.outputGainNode || this.audioContext.destination);
 
       const currentTime = this.audioContext.currentTime;
-      const startTime = (this.nextPlayTime < currentTime) ? currentTime : this.nextPlayTime;
+      if (this.nextPlayTime < currentTime || this.nextPlayTime > currentTime + 1.5) {
+        this.nextPlayTime = currentTime;
+      }
+      const startTime = this.nextPlayTime;
       sourceNode.start(startTime);
       this.nextPlayTime = startTime + audioBuffer.duration;
 
@@ -770,6 +816,21 @@ export class GeminiLiveClient {
       this.audioSourceNode = null;
     }
 
+    if (this.keepAliveOsc) {
+      try {
+        this.keepAliveOsc.stop();
+        this.keepAliveOsc.disconnect();
+      } catch (e) {}
+      this.keepAliveOsc = null;
+    }
+
+    if (this.keepAliveGain) {
+      try {
+        this.keepAliveGain.disconnect();
+      } catch (e) {}
+      this.keepAliveGain = null;
+    }
+
     if (this.outputGainNode) {
       try {
         this.outputGainNode.disconnect();
@@ -779,7 +840,14 @@ export class GeminiLiveClient {
 
     if (this.mediaStream) {
       try {
-        this.mediaStream.getTracks().forEach((track: any) => track.stop());
+        if (this.reuseMediaStream) {
+          // Wyciszamy ścieżki, żeby mikrofon nie był aktywny, ale nie niszczymy MediaStream
+          this.mediaStream.getTracks().forEach((track: any) => {
+            track.enabled = false;
+          });
+        } else {
+          this.mediaStream.getTracks().forEach((track: any) => track.stop());
+        }
       } catch (e) {}
       this.mediaStream = null;
     }
