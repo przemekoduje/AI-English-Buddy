@@ -935,6 +935,91 @@ def get_audio_content_type(audio_file):
         return "audio/mp4"
     return audio_file.content_type or "audio/webm"
 
+
+# Modele Gemini używane do zamiany mowy na tekst (w kolejności prób).
+# gemini-3.5-transcribe to dedykowany model ASR (zwraca part 'audioTranscription'),
+# gemini-flash-lite-latest to szybki model multimodalny jako zapas.
+GEMINI_TRANSCRIBE_MODELS = ["gemini-3.5-transcribe", "gemini-flash-lite-latest"]
+TRANSCRIBE_PROMPT = (
+    "Transcribe the spoken audio verbatim in its original language. "
+    "Output ONLY the plain transcription text, nothing else. "
+    "No markdown, no commentary, no quotation marks. If there is no speech, output nothing."
+)
+
+
+def _normalize_audio_mime(mime_type):
+    mime = (mime_type or "audio/webm").split(";")[0].strip().lower()
+    if mime in ("audio/x-m4a", "audio/m4a"):
+        return "audio/mp4"
+    if mime in ("audio/x-wav", "audio/wave"):
+        return "audio/wav"
+    return mime
+
+
+def transcribe_audio_bytes(audio_bytes, mime_type="audio/webm", user_email=None, feature="transcribe", timeout=20):
+    """Zamienia mowę na tekst: najpierw Google Gemini, potem Hugging Face Whisper jako zapas.
+    Zwraca pusty string, jeśli nic nie rozpoznano lub wszystkie usługi zawiodły."""
+    if not audio_bytes:
+        return ""
+    mime = _normalize_audio_mime(mime_type)
+
+    gemini_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
+    if gemini_key:
+        audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+        for g_model in GEMINI_TRANSCRIBE_MODELS:
+            try:
+                parts = [{"inline_data": {"mime_type": mime, "data": audio_b64}}]
+                if "transcribe" not in g_model:
+                    parts.append({"text": TRANSCRIBE_PROMPT})
+                payload = {"contents": [{"parts": parts}]}
+                if "transcribe" not in g_model:
+                    payload["generationConfig"] = {"temperature": 0.0}
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={gemini_key}"
+                res = requests.post(url, json=payload, timeout=timeout)
+                if not res.ok:
+                    print(f"Gemini STT ({g_model}) error {res.status_code}: {res.text[:300]}", flush=True)
+                    continue
+                data = res.json()
+                text_chunks = []
+                for cand in data.get("candidates", [])[:1]:
+                    for part in (cand.get("content") or {}).get("parts", []):
+                        chunk = part.get("text") or (part.get("audioTranscription") or {}).get("text") or ""
+                        if chunk:
+                            text_chunks.append(chunk)
+                text = " ".join(text_chunks).strip()
+                try:
+                    usage = data.get("usageMetadata", {}) or {}
+                    log_api_usage(
+                        user_email=user_email or "guest@speakling.ai",
+                        service="gemini",
+                        feature=f"{feature}_gemini",
+                        model=g_model,
+                        prompt_tokens=usage.get("promptTokenCount", 0) or 0,
+                        completion_tokens=usage.get("candidatesTokenCount", 0) or 0
+                    )
+                except Exception as e_log:
+                    print(f"Error logging Gemini STT usage: {e_log}", flush=True)
+                # Pusta odpowiedź przy poprawnym statusie = brak mowy; nie ma sensu pytać kolejnego modelu.
+                return text
+            except Exception as e_gem:
+                print(f"Gemini STT ({g_model}) exception: {e_gem}", flush=True)
+
+    hf_token = os.getenv("HF_API_TOKEN") or os.getenv("HF_TOKEN")
+    if hf_token:
+        try:
+            hf_res = requests.post(
+                "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo",
+                headers={"Authorization": f"Bearer {hf_token}", "Content-Type": mime},
+                data=audio_bytes,
+                timeout=30
+            )
+            if hf_res.ok:
+                return (hf_res.json().get("text", "") or "").strip()
+            print(f"HF Whisper STT error {hf_res.status_code}: {hf_res.text[:300]}", flush=True)
+        except Exception as hf_err:
+            print(f"HF Whisper STT exception: {hf_err}", flush=True)
+    return ""
+
 def get_user_from_request():
     if 'db' not in globals() or db is None:
         return None
@@ -3885,36 +3970,17 @@ def evaluate_mastery():
             return jsonify({"error": "No audio file or transcription text provided."}), 400
         
         audio_file = request.files['audio']
-        
-        # HF Inference API for Whisper (new router domain for 2026)
-        HF_TOKEN = os.getenv("HF_API_TOKEN")
-        API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
         try:
-            # 1. Transkrypcja
+            # 1. Transkrypcja (Gemini, zapas: Hugging Face Whisper)
             audio_data = audio_file.read()
-            print(f"Sending audio to Whisper Turbo... Size: {len(audio_data)} bytes")
-            
-            # Jawna specyfikacja formatu
-            asr_headers = headers.copy()
-            asr_headers["Content-Type"] = get_audio_content_type(audio_file)
-            
-            response = requests.post(API_URL, headers=asr_headers, data=audio_data, timeout=30)
-            
-            if response.status_code != 200:
-                print(f"Whisper API error: {response.status_code} - {response.text}")
-                try:
-                    error_info = response.json()
-                except:
-                    error_info = {"error": response.text[:500]}
-                    
-                if isinstance(error_info, dict) and "estimated_time" in error_info:
-                     return jsonify({"error": "AI model is warming up. Please try again in 20-30 seconds.", "details": error_info}), 503
-                return jsonify({"error": "Transcription failed", "details": error_info}), 500
-                
-            transcription_result = response.json()
-            transcription = transcription_result.get("text", "")
+            print(f"Sending audio to STT (Gemini/HF)... Size: {len(audio_data)} bytes")
+            transcription = transcribe_audio_bytes(
+                audio_data,
+                mime_type=get_audio_content_type(audio_file),
+                user_email=get_user_from_request(),
+                feature="mastery_evaluate_stt"
+            )
             
             if not transcription:
                  print("Whisper returned empty transcription.")
@@ -4383,23 +4449,15 @@ def evaluate_story_answer():
             return jsonify({"error": "Brak pliku audio lub gotowej transkrypcji."}), 400
 
         audio_file = request.files['audio']
-        
-        HF_TOKEN = os.getenv("HF_API_TOKEN")
-        API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
         try:
             audio_data = audio_file.read()
-            asr_headers = headers.copy()
-            asr_headers["Content-Type"] = get_audio_content_type(audio_file)
-            
-            response = requests.post(API_URL, headers=asr_headers, data=audio_data, timeout=30)
-            if response.status_code != 200:
-                print(f"Whisper error: {response.status_code} - {response.text}")
-                return jsonify({"error": "Nie udało się przeprowadzić transkrypcji mowy."}), 500
-                
-            transcription_result = response.json()
-            transcription = transcription_result.get("text", "")
+            transcription = transcribe_audio_bytes(
+                audio_data,
+                mime_type=get_audio_content_type(audio_file),
+                user_email=user_email,
+                feature="story_evaluate_answer_stt"
+            )
             if not transcription:
                 return jsonify({"error": "Nie wykryto mowy. Spróbuj mówić głośniej."}), 400
         except Exception as e:
@@ -4525,56 +4583,17 @@ def chat_next():
 
     if not transcription and 'audio' in request.files:
         audio_file = request.files['audio']
-        
-        # Try OpenAI Whisper first
-        if openai_client:
-            try:
-                audio_file.seek(0)
-                transcription_response = openai_client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=(audio_file.filename or "answer.webm", audio_file.stream, audio_file.content_type or "audio/webm"),
-                    language="en"
-                )
-                transcription = transcription_response.text.strip()
-                # Log usage
-                try:
-                    audio_file.seek(0, 2)
-                    file_size = audio_file.tell()
-                    audio_file.seek(0)
-                    estimated_duration = max(1.0, file_size / 6000.0)
-                except:
-                    estimated_duration = 5.0
-                log_api_usage(
-                    user_email=user_email,
-                    service="openai",
-                    feature="story_chat_next_whisper",
-                    model="whisper-1",
-                    quantity=estimated_duration
-                )
-                print(f"DEBUG chat-next: OpenAI Transcription = '{transcription}'")
-            except Exception as e:
-                print(f"OpenAI Whisper error in chat-next: {e}")
-
-        # Fallback to Hugging Face if OpenAI failed or is not available
-        if not transcription:
-            HF_TOKEN = os.getenv("HF_API_TOKEN")
-            API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
-            headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-
-            try:
-                audio_file.seek(0)
-                audio_data = audio_file.read()
-                asr_headers = headers.copy()
-                asr_headers["Content-Type"] = get_audio_content_type(audio_file)
-                
-                response = requests.post(API_URL, headers=asr_headers, data=audio_data, timeout=30)
-                if response.status_code == 200:
-                    transcription_result = response.json()
-                    transcription = transcription_result.get("text", "").strip()
-                else:
-                    print(f"Whisper error: {response.status_code} - {response.text}")
-            except Exception as e:
-                print(f"Whisper error in chat: {e}")
+        try:
+            audio_file.seek(0)
+            transcription = transcribe_audio_bytes(
+                audio_file.read(),
+                mime_type=get_audio_content_type(audio_file),
+                user_email=user_email,
+                feature="story_chat_next_stt"
+            )
+            print(f"DEBUG chat-next: Transcription = '{transcription}'")
+        except Exception as e:
+            print(f"STT error in chat-next: {e}")
 
     # Usunięcie typowych halucynacji Whisper dla ciszy/szumów
     whisper_hallucinations = [
@@ -4747,63 +4766,19 @@ def chat_free():
     if not transcription and 'audio' in request.files:
         audio_file = request.files['audio']
         print("DEBUG chat-free: Found 'audio' in request.files", flush=True)
-        
-        # Use OpenAI Whisper API if available
-        if openai_client:
-            print("DEBUG chat-free: Using OpenAI Whisper API for transcription...", flush=True)
-            try:
-                audio_file.seek(0)
-                transcription_response = openai_client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=(audio_file.filename or "user_speech.webm", audio_file.stream, audio_file.content_type or "audio/webm"),
-                    language="en"
-                )
-                transcription = transcription_response.text.strip()
-                # Log usage
-                try:
-                    audio_file.seek(0, 2)
-                    file_size = audio_file.tell()
-                    audio_file.seek(0)
-                    estimated_duration = max(1.0, file_size / 6000.0)
-                except:
-                    estimated_duration = 5.0
-                log_api_usage(
-                    user_email=user_email,
-                    service="openai",
-                    feature="chat_free_whisper",
-                    model="whisper-1",
-                    quantity=estimated_duration
-                )
-                print(f"DEBUG chat-free: OpenAI Transcription = '{transcription}'", flush=True)
-            except Exception as e:
-                print(f"OpenAI Whisper error in chat-free: {e}", flush=True)
-        else:
-            print("DEBUG chat-free: OpenAI Whisper fallback skipped because openai_client is not configured.", flush=True)
-            
-        # Fallback to Hugging Face
-        if not transcription:
-            print("DEBUG chat-free: Using Hugging Face Whisper API for transcription...", flush=True)
-            HF_TOKEN = os.getenv("HF_API_TOKEN")
-            API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
-            headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-
-            try:
-                audio_file.seek(0)
-                audio_data = audio_file.read()
-                print(f"DEBUG chat-free: Read {len(audio_data)} bytes of audio data", flush=True)
-                asr_headers = headers.copy()
-                asr_headers["Content-Type"] = get_audio_content_type(audio_file)
-                
-                response = requests.post(API_URL, headers=asr_headers, data=audio_data, timeout=30)
-                print(f"DEBUG chat-free: Whisper API response code = {response.status_code}", flush=True)
-                if response.status_code == 200:
-                    transcription_result = response.json()
-                    transcription = transcription_result.get("text", "").strip()
-                    print(f"DEBUG chat-free: Transcription = '{transcription}'", flush=True)
-                else:
-                    print(f"Whisper error in chat-free: {response.status_code} - {response.text}", flush=True)
-            except Exception as e:
-                print(f"Whisper error in chat-free: {e}", flush=True)
+        try:
+            audio_file.seek(0)
+            audio_data = audio_file.read()
+            print(f"DEBUG chat-free: Read {len(audio_data)} bytes of audio data", flush=True)
+            transcription = transcribe_audio_bytes(
+                audio_data,
+                mime_type=get_audio_content_type(audio_file),
+                user_email=user_email,
+                feature="chat_free_stt"
+            )
+            print(f"DEBUG chat-free: Transcription = '{transcription}'", flush=True)
+        except Exception as e:
+            print(f"STT error in chat-free: {e}", flush=True)
 
     # Usunięcie typowych halucynacji Whisper dla ciszy/szumów
     whisper_hallucinations = [
@@ -4919,39 +4894,17 @@ def chat_free():
     else:
         user_prompt += "Latest Student's Answer: (None, this is the start)\n"
 
-    # Determine client and model based on ai_mode
-    active_client = client
-    active_model = MODEL_NAME
-    
-    if ai_mode in ['openai_full', 'hybrid']:
-        if not openai_client:
-            return jsonify({"error": "Wybrany tryb płatny wymaga klucza OPENAI_API_KEY w pliku .env"}), 400
-        active_client = openai_client
-        active_model = "gpt-4o-mini"
-    else: # free
-        if openai_client:
-            active_client = openai_client
-            active_model = "gpt-4o-mini"
-        elif deepseek_client:
-            active_client = deepseek_client
-            active_model = "deepseek-chat"
-        else:
-            active_client = client
-            active_model = MODEL_NAME
-
-    if not active_client:
-        return jsonify({"error": "AI client is currently unavailable."}), 500
-
+    # Model wybierany przez wspólny łańcuch dostawców (AI_PROVIDER, domyślnie Gemini) z automatycznym
+    # przełączaniem na zapasowych dostawców. Poziom "cheap" (Flash-Lite) zapewnia niskie opóźnienie
+    # w rozmowie głosowej (odpowiednik wcześniej używanego gpt-4o-mini).
     try:
         ai_response = track_chat_completion(
             user_email=user_email,
-            feature="chat_free", model_tier="advanced",
+            feature="chat_free", model_tier="cheap",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
-            ],
-            custom_client=active_client,
-            custom_model=active_model
+            ]
         )
         raw_json = ai_response.choices[0].message.content.strip()
         if raw_json.startswith("```"):
@@ -5202,98 +5155,16 @@ def live_transcribe():
     if not audio_bytes or len(audio_bytes) < 300:
         return jsonify({"text": ""}), 200
 
-    text = ""
-    gemini_key = get_gemini_api_key()
-
-    # 1. Próba transkrypcji przez Google Gemini (najszybsza, natywna dla ekosystemu Gemini Live)
-    if gemini_key:
-        try:
-            import base64
-            for g_model in ["gemini-3.8-flash", "gemini-2.5-flash-native-audio-latest"]:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={gemini_key}"
-                payload = {
-                    "contents": [{
-                        "parts": [
-                            {
-                                "inline_data": {
-                                    "mime_type": "audio/wav",
-                                    "data": base64.b64encode(audio_bytes).decode("utf-8")
-                                }
-                            },
-                            {
-                                "text": "Transcribe the spoken audio verbatim in its original language. Output ONLY the plain transcription text, nothing else. No markdown, no commentary, no quotation marks."
-                            }
-                        ]
-                    }],
-                    "generationConfig": {
-                        "temperature": 0.0
-                    }
-                }
-                res = requests.post(url, json=payload, timeout=8)
-                if res.ok:
-                    data = res.json()
-                    cands = data.get("candidates", [])
-                    if cands and "content" in cands[0] and "parts" in cands[0]["content"]:
-                        part_text = cands[0]["content"]["parts"][0].get("text", "").strip()
-                        if part_text:
-                            text = part_text
-                            break
-            if text:
-                try:
-                    duration_secs = max(1.0, len(audio_bytes) / 48000.0)
-                    u_email = get_user_from_request() or request.form.get("user_email") or "guest@speakling.ai"
-                    log_api_usage(
-                        user_email=u_email,
-                        service="google_gemini",
-                        feature="live_transcribe_gemini",
-                        model="gemini-3.8-flash",
-                        quantity=duration_secs
-                    )
-                except Exception as e_log:
-                    print(f"Error logging gemini live_transcribe usage: {e_log}", flush=True)
-        except Exception as e_gem:
-            print(f"Gemini audio transcription error in live_transcribe: {e_gem}", flush=True)
-
-    # 2. Próba transkrypcji przez OpenAI Whisper (jeśli openai_client jest dostępny z poprawnym kluczem OpenAI)
-    if not text and openai_client and OPENAI_API_KEY:
-        try:
-            from io import BytesIO
-            audio_stream = BytesIO(audio_bytes)
-            audio_stream.name = "turn.wav"
-            res = openai_client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_stream,
-                language="en"
-            )
-            text = res.text.strip() if res and hasattr(res, 'text') else ""
-            if text:
-                try:
-                    duration_secs = max(1.0, len(audio_bytes) / 48000.0)
-                    u_email = get_user_from_request() or request.form.get("user_email") or "guest@speakling.ai"
-                    log_api_usage(
-                        user_email=u_email,
-                        service="openai",
-                        feature="live_transcribe_whisper",
-                        model="whisper-1",
-                        quantity=duration_secs
-                    )
-                except Exception as e_log:
-                    print(f"Error logging live_transcribe usage: {e_log}", flush=True)
-        except Exception as e:
-            print(f"OpenAI Whisper error in live_transcribe: {e}", flush=True)
-
-    # 3. Próba fallbacku przez Hugging Face Inference API
-    if not text:
-        try:
-            HF_TOKEN = os.getenv("HF_TOKEN")
-            if HF_TOKEN:
-                API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
-                headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-                hf_res = requests.post(API_URL, headers=headers, data=audio_bytes, timeout=8)
-                if hf_res.ok:
-                    text = hf_res.json().get("text", "").strip()
-        except Exception as hf_err:
-            print(f"HF Whisper error in live_transcribe: {hf_err}", flush=True)
+    get_gemini_api_key()  # upewnij się, że klucz Gemini jest załadowany
+    u_email = get_user_from_request() or request.form.get("user_email") or "guest@speakling.ai"
+    # Gemini (gemini-3.5-transcribe -> gemini-flash-lite-latest), zapas: Hugging Face Whisper
+    text = transcribe_audio_bytes(
+        audio_bytes,
+        mime_type="audio/wav",
+        user_email=u_email,
+        feature="live_transcribe",
+        timeout=10
+    )
 
     # Filter out typical Whisper hallucinations for silence/noise
     whisper_hallucinations = [
