@@ -167,7 +167,7 @@ export class GeminiLiveClient {
 
     if (this.provider === 'google_ai_studio') {
       if (this.token) {
-        return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(this.token)}`;
+        return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?key=${encodeURIComponent(this.token)}`;
       }
       if (this.apiKey) {
         return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(this.apiKey)}`;
