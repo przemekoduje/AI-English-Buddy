@@ -586,32 +586,40 @@ function Dashboard({ user }) {
           }
         },
         onTranscript: ({ sender, text, isFinal }) => {
+          if (!text || !text.trim()) return;
+
           // Ochrona przed echem akustycznym bez słuchawek:
-          // Jeśli lektor mówi lub dźwięk z głośników właśnie wygasł, odrzucamy transkrypcję ucznia ("Ty:"),
-          // ponieważ to słowa wypowiedziane przez lektora przechwycone przez mikrofon z głośników.
           if (sender === "user" && (liveStatusRef.current === "speaking" || geminiLiveRef.current?.isEchoSuppressionActive?.())) {
             return;
           }
 
           setChatMessages((prev) => {
             const lastMsg = prev[prev.length - 1];
-            // Jeśli ostatnia wiadomość jest od tego samego nadawcy i nie była sfinalizowana, aktualizujemy ją
-            if (lastMsg && lastMsg.sender === sender && !lastMsg.isFinal) {
+            if (lastMsg && lastMsg.sender === sender) {
               const updated = [...prev];
+              const newText = text.trim();
+              const existingText = (lastMsg.text || "").trim();
+
+              let textToUse = newText;
+              if (existingText && !lastMsg.isFinal && newText.length < existingText.length && !isFinal) {
+                if (existingText.toLowerCase().includes(newText.toLowerCase())) {
+                  textToUse = existingText;
+                }
+              }
+
               updated[updated.length - 1] = {
                 ...lastMsg,
-                text: text,
-                isFinal: isFinal,
+                text: textToUse,
+                isFinal: lastMsg.isFinal || isFinal,
               };
               return updated;
             } else {
-              // W przeciwnym razie dodajemy nową wiadomość
               return [
                 ...prev,
                 {
                   id: `${sender}-${Date.now()}`,
                   sender: sender,
-                  text: text,
+                  text: text.trim(),
                   isFinal: isFinal,
                 },
               ];
@@ -923,14 +931,12 @@ function Dashboard({ user }) {
         rec.continuous = true;
         rec.interimResults = false;
         rec.onresult = (event) => {
-          let finalTranscript = "";
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              finalTranscript += event.results[i][0].transcript + " ";
-            }
+          let fullTranscript = "";
+          for (let i = 0; i < event.results.length; ++i) {
+            fullTranscript += event.results[i][0].transcript + " ";
           }
-          if (finalTranscript.trim()) {
-            localTranscriptRef.current = (localTranscriptRef.current + " " + finalTranscript.trim()).trim();
+          if (fullTranscript.trim()) {
+            localTranscriptRef.current = fullTranscript.trim();
           }
         };
         recognitionRef.current = rec;

@@ -447,6 +447,7 @@ export class GeminiLiveClient {
       return;
     }
 
+    let hasPartText = false;
     if (message.serverContent && message.serverContent.modelTurn) {
       const parts = message.serverContent.modelTurn.parts || [];
 
@@ -462,6 +463,7 @@ export class GeminiLiveClient {
         }
 
         if (part.text && !part.thought) {
+          hasPartText = true;
           this.currentBotTurnText += part.text;
           this.onTranscript({
             sender: 'bot',
@@ -474,7 +476,7 @@ export class GeminiLiveClient {
 
     if (message.serverContent) {
       const outTr = message.serverContent.outputTranscription || message.serverContent.output_transcription;
-      if (outTr && outTr.text) {
+      if (outTr && outTr.text && !hasPartText) {
         this.currentBotTurnText += outTr.text;
         this.onTranscript({
           sender: 'bot',

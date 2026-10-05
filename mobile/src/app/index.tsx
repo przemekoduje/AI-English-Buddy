@@ -617,14 +617,12 @@ export default function HomeScreen() {
             rec.continuous = true;
             rec.interimResults = false;
             rec.onresult = (event: any) => {
-              let finalTranscript = "";
-              for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                  finalTranscript += event.results[i][0].transcript + " ";
-                }
+              let fullTranscript = "";
+              for (let i = 0; i < event.results.length; ++i) {
+                fullTranscript += event.results[i][0].transcript + " ";
               }
-              if (finalTranscript.trim()) {
-                webLocalTranscriptRef.current = (webLocalTranscriptRef.current + " " + finalTranscript.trim()).trim();
+              if (fullTranscript.trim()) {
+                webLocalTranscriptRef.current = fullTranscript.trim();
                 console.log("Mobile Web Local SpeechRecognition transcript so far:", webLocalTranscriptRef.current);
               }
             };
@@ -1387,14 +1385,25 @@ export default function HomeScreen() {
             }
           },
           onTranscript: ({ sender, text, isFinal }) => {
+            if (!text || !text.trim()) return;
             setVoiceTutorMessages((prev) => {
               const lastMsg = prev[prev.length - 1];
-              if (lastMsg && lastMsg.sender === sender && !lastMsg.isFinal) {
+              if (lastMsg && lastMsg.sender === sender) {
                 const updated = [...prev];
+                const newText = text.trim();
+                const existingText = (lastMsg.text || "").trim();
+
+                let textToUse = newText;
+                if (existingText && !lastMsg.isFinal && newText.length < existingText.length && !isFinal) {
+                  if (existingText.toLowerCase().includes(newText.toLowerCase())) {
+                    textToUse = existingText;
+                  }
+                }
+
                 updated[updated.length - 1] = {
                   ...lastMsg,
-                  text: text,
-                  isFinal: isFinal,
+                  text: textToUse,
+                  isFinal: lastMsg.isFinal || isFinal,
                 };
                 return updated;
               } else {
@@ -1403,7 +1412,7 @@ export default function HomeScreen() {
                   {
                     id: `${sender}-${Date.now()}`,
                     sender: sender,
-                    text: text,
+                    text: text.trim(),
                     isFinal: isFinal,
                   },
                 ];
@@ -2944,14 +2953,12 @@ export default function HomeScreen() {
             rec.continuous = true;
             rec.interimResults = false;
             rec.onresult = (event: any) => {
-              let finalTranscript = "";
-              for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                  finalTranscript += event.results[i][0].transcript + " ";
-                }
+              let fullTranscript = "";
+              for (let i = 0; i < event.results.length; ++i) {
+                fullTranscript += event.results[i][0].transcript + " ";
               }
-              if (finalTranscript.trim()) {
-                (window as any)._storyChatLocalTranscript = (((window as any)._storyChatLocalTranscript || "") + " " + finalTranscript.trim()).trim();
+              if (fullTranscript.trim()) {
+                (window as any)._storyChatLocalTranscript = fullTranscript.trim();
                 console.log("Story Chat Web Local SpeechRecognition:", (window as any)._storyChatLocalTranscript);
               }
             };

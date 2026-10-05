@@ -409,18 +409,18 @@ export class GeminiLiveClient {
           return;
         }
 
-        let interimTranscript = '';
-        let finalTranscript = '';
+        let fullTranscript = '';
+        let hasFinal = false;
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
+        for (let i = 0; i < event.results.length; ++i) {
+          const res = event.results[i];
+          if (res.isFinal) {
+            hasFinal = true;
           }
+          fullTranscript += res[0].transcript + ' ';
         }
 
-        const text = (finalTranscript || interimTranscript).trim();
+        const text = fullTranscript.trim();
         if (!text) return;
 
         // Odrzucenie echa lektora, jeśli treść pokrywa się ze słowami wypowiedzianymi przez bota
@@ -433,7 +433,7 @@ export class GeminiLiveClient {
           this.onTranscript({
             sender: 'user',
             text: text,
-            isFinal: Boolean(finalTranscript)
+            isFinal: hasFinal
           });
         }
       };
@@ -506,6 +506,7 @@ export class GeminiLiveClient {
     }
 
     // 2. Obsługa treści generowanych przez model
+    let hasPartText = false;
     if (message.serverContent && message.serverContent.modelTurn) {
       const parts = message.serverContent.modelTurn.parts || [];
 
@@ -523,6 +524,7 @@ export class GeminiLiveClient {
 
         // Tekst wypowiedzi lektora (pomijamy myśli modelu: part.thought === true)
         if (part.text && !part.thought) {
+          hasPartText = true;
           this.currentBotTurnText += part.text;
           this.onTranscript({
             sender: 'bot',
@@ -536,7 +538,7 @@ export class GeminiLiveClient {
     // Bezpośrednia transkrypcja mowy lektora ze strumienia outputTranscription (jeśli przesłana przez Gemini)
     if (message.serverContent) {
       const outTr = message.serverContent.outputTranscription || message.serverContent.output_transcription;
-      if (outTr && outTr.text) {
+      if (outTr && outTr.text && !hasPartText) {
         this.currentBotTurnText += outTr.text;
         this.onTranscript({
           sender: 'bot',
