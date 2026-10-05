@@ -46,6 +46,8 @@ export class GeminiLiveClient {
     this.scriptProcessorNode = null;
     this.speechRecognition = null;
     this.lastUserTranscript = '';
+    this.speechRecognitionStartIndex = 0;
+    this.lastSpeechResultLength = 0;
 
     // Web Audio Output (Odtwarzanie Gemini)
     this.outputAudioContext = null;
@@ -389,6 +391,11 @@ export class GeminiLiveClient {
     }
   }
 
+  resetUserTurnIndex() {
+    this.speechRecognitionStartIndex = this.lastSpeechResultLength || 0;
+    this.lastUserTranscript = '';
+  }
+
   /**
    * Pomocnicze rozpoznawanie mowy przeglądarki (do zapisu słów ucznia w transkrypcji)
    */
@@ -402,7 +409,14 @@ export class GeminiLiveClient {
       this.speechRecognition.continuous = true;
       this.speechRecognition.interimResults = true;
 
+      this.speechRecognitionStartIndex = 0;
+      this.lastSpeechResultLength = 0;
+      this.lastUserTranscript = '';
+
       this.speechRecognition.onresult = (event) => {
+        if (!event || !event.results) return;
+        this.lastSpeechResultLength = event.results.length;
+
         // Jeśli lektor mówi lub dźwięk z głośników właśnie wygasł (okno AEC),
         // bezwzględnie odrzucamy dźwięk z mikrofonu – to głos z głośników, a nie uczeń!
         if (this.isEchoSuppressionActive()) {
@@ -412,7 +426,9 @@ export class GeminiLiveClient {
         let fullTranscript = '';
         let hasFinal = false;
 
-        for (let i = 0; i < event.results.length; ++i) {
+        const startIndex = Math.min(this.speechRecognitionStartIndex || 0, event.results.length);
+
+        for (let i = startIndex; i < event.results.length; ++i) {
           const res = event.results[i];
           if (res.isFinal) {
             hasFinal = true;
@@ -548,9 +564,10 @@ export class GeminiLiveClient {
       }
     }
 
-    // 3. Koniec tury lektora
+    // 3. Koniec tura lektora
     if (message.serverContent && message.serverContent.turnComplete) {
       this.botTurnStarted = false;
+      this.resetUserTurnIndex();
       if (this.currentBotTurnText) {
         this.recentBotPhrases.push(this.currentBotTurnText);
         if (this.recentBotPhrases.length > 8) {
@@ -573,6 +590,7 @@ export class GeminiLiveClient {
    * Wysyła krótką prośbę o powitanie ucznia natychmiast po połączeniu
    */
   sendInitialGreeting() {
+    this.resetUserTurnIndex();
     const greetingText = this.initialGreetingPrompt || 
       "Hello! Please greet me warmly in English as my friendly tutor, introduce yourself briefly in 1-2 natural sentences, and ask how my day is going.";
     const greetingTurn = {
@@ -614,6 +632,7 @@ export class GeminiLiveClient {
 
       if (!this.botTurnStarted) {
         this.botTurnStarted = true;
+        this.resetUserTurnIndex();
         this.onTranscript({
           sender: 'bot',
           text: '🎙️ Speaking...',
@@ -772,6 +791,7 @@ export class GeminiLiveClient {
     this.currentTurnAudioChunks = [];
     const wasTurnStarted = this.botTurnStarted;
     this.botTurnStarted = false;
+    this.resetUserTurnIndex();
 
     if (this.outputAudioContext) {
       this.nextPlayTime = this.outputAudioContext.currentTime;
