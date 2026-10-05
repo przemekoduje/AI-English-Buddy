@@ -818,7 +818,7 @@ def get_candidate_providers(custom_client=None, custom_model=None, model_tier="c
 
     preferred = os.getenv("AI_PROVIDER", "gemini" if GEMINI_API_KEY else "openai").lower()
     
-    gemini_model = "gemini-pro-latest" if model_tier == "advanced" else "gemini-flash-lite-latest"
+    gemini_model = "gemini-3.5-flash" if model_tier == "advanced" else "gemini-flash-lite-latest"
     openai_model = "gpt-4o" if model_tier == "advanced" else "gpt-4o-mini"
     deepseek_model = "deepseek-chat"
 
