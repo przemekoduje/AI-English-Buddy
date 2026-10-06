@@ -245,8 +245,106 @@ export default function HomeScreen() {
       ...(options.headers || {}),
       'bypass-tunnel-reminder': 'true',
     };
+    if (user?.token) {
+      headers['Authorization'] = `Bearer ${user.token}`;
+    }
     return fetch(url, { ...options, headers });
   };
+
+  // Helper function to build grounded tutor prompts for mobile Live Chat
+  function buildMobileTutorPrompts(storyTitle?: string, storyText?: string, exerciseType: string = 'vocabulary_quiz', userSavedVocab: any[] = []) {
+    if (!storyText || !storyText.trim()) {
+      return {
+        systemInstruction: "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone. Speak only in English.",
+        greetingPrompt: "Hello! Please greet me warmly in English as my friendly tutor, introduce yourself briefly in 1-2 natural sentences, and ask how my day is going."
+      };
+    }
+
+    const title = storyTitle || "Selected Story";
+    const text = storyText || "";
+
+    const storyLower = text.toLowerCase();
+    const savedMatches = (userSavedVocab || [])
+      .filter(v => v && v.original)
+      .filter(v => storyLower.includes(v.original.trim().toLowerCase()))
+      .map(v => ({ original: v.original.trim(), translated: v.translated ? v.translated.trim() : '' }));
+
+    const rawWords = text.match(/\b[A-Za-z]{5,}\b/g) || [];
+    const stopWords = new Set(["about", "after", "again", "always", "because", "before", "being", "between", "could", "first", "found", "great", "having", "other", "their", "there", "these", "thing", "think", "those", "through", "under", "where", "which", "while", "would"]);
+    const seen = new Set<string>();
+    const targetWordsList: { original: string; translated: string }[] = [];
+
+    for (const item of savedMatches) {
+      const key = item.original.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        targetWordsList.push(item);
+      }
+    }
+
+    for (const w of rawWords) {
+      const lower = w.toLowerCase();
+      if (!seen.has(lower) && !stopWords.has(lower)) {
+        seen.add(lower);
+        targetWordsList.push({ original: w, translated: '' });
+        if (targetWordsList.length >= 6) break;
+      }
+    }
+
+    const targetWordsFormatted = targetWordsList.map((w, idx) => 
+      `  Word ${idx + 1}: ENGLISH TARGET WORD "${w.original}"${w.translated ? ` (Polish translation hint: "${w.translated}")` : ''}`
+    ).join("\n");
+
+    const word1 = targetWordsList[0]?.original || "key word";
+    const word2 = targetWordsList[1]?.original || "next word";
+    const word3 = targetWordsList[2]?.original || "third word";
+    const word4 = targetWordsList[3]?.original || "fourth word";
+
+    const exerciseInstructions = `EXERCISE FOCUS: MULTI-TURN VOCABULARY QUIZ & PRACTICE
+- You are an ENGLISH tutor practicing key ENGLISH vocabulary taken EXCLUSIVELY from the selected story "${title}".
+- PRE-APPROVED SEQUENTIAL TARGET WORDS FOR THIS SESSION:
+${targetWordsFormatted}
+
+CRITICAL RULES FOR VOCABULARY EXERCISES (MUST FOLLOW AT ALL COSTS):
+1. MULTI-TURN SEQUENTIAL PROGRESSION:
+   - Turn 1: Greet the student and quiz them on Word 1 ("${word1}"). Ask if they know what "${word1}" means in the story "${title}".
+   - Turn 2: Once the student answers or attempts Word 1, provide brief praise/correction, and IMMEDIATELY move on to Word 2 ("${word2}")!
+   - Turn 3: Next, move on to Word 3 ("${word3}"), then Word 4 ("${word4}"), and so on.
+   - NEVER stop after only 1 word! Always continue to the next Word in the sequential list above.
+
+2. TARGET TERMS MUST BE IN ENGLISH ONLY:
+   - You are teaching ENGLISH to a Polish speaker.
+   - The target word presented to the student MUST ALWAYS BE THE ENGLISH WORD (e.g. "Do you know what the English word '${word1}' means in our story?", "Can you use '${word2}' in a sentence?").
+   - NEVER quiz Polish words or ask "Co oznacza zbieracz?".
+   - Polish translations are ONLY helpful hints/meanings FOR the English target word.
+
+3. STRICT GROUNDING IN STORY FACTS:
+   - All questions, context sentences, definitions, and explanations MUST relate to the events, characters, and facts in "${title}".`;
+
+    const greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention enthusiastically that today we are going to practice key ENGLISH vocabulary from the story "${title}". Immediately introduce our first target ENGLISH word ("${word1}") and ask me if I know what it means in 1-2 friendly spoken sentences.`;
+
+    const systemInstruction = `You are Speakling, an enthusiastic, friendly and warm native English tutor.
+Your goal is to conduct an engaging, interactive spoken English session with a student who is learning ENGLISH.
+Speak with a natural, friendly native tone.
+Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, always giving the student plenty of speaking time.
+Speak only in English.
+
+STRICT CONSTRAINTS & GROUNDING (MUST FOLLOW AT ALL TIMES):
+1. MANDATORY STORY FAMILIARITY & BOUNDARY: You must thoroughly read, familiarize yourself with, and memorize the selected story text provided below ("${title}"). You MUST ONLY refer to, discuss, ask about, and use content, characters, facts, and events from THIS SPECIFIC STORY. Absolutely NO inventing outside stories, external topics, or hallucinating facts outside this text ("Bez wymyślania nowych treści"). If the student asks you what the text is about, give a clear, accurate summary of the story text below.
+2. TARGET TERMS MUST BE IN ENGLISH: You are an ENGLISH tutor teaching ENGLISH to a Polish native speaker. The target term presented in any exercise, question, or quiz MUST ALWAYS BE THE ENGLISH WORD (e.g. "Do you know what '${word1}' means?", "How would you use '${word2}' in a sentence?"). NEVER quiz Polish words or ask "Co oznacza zbieracz?". Polish translations may only be given as helpful hints/meanings FOR the English target word.
+3. MULTI-TURN SEQUENTIAL VOCABULARY QUIZ: In vocabulary practice, progress sequentially through the target ENGLISH words list: Word 1 -> Word 2 -> Word 3 -> Word 4. Never stop after just one word.
+
+SELECTED STORY IN CONTEXT:
+Title: "${title}"
+${targetWordsFormatted ? `\nPRE-APPROVED SEQUENTIAL TARGET WORDS FOR THIS SESSION:\n${targetWordsFormatted}\n` : ''}Full Story Text:
+"""
+${text}
+"""
+
+${exerciseInstructions}`;
+
+    return { systemInstruction, greetingPrompt };
+  }
 
   // Auth States
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -1346,6 +1444,10 @@ export default function HomeScreen() {
 
         setLiveStatusDetail("Nawiązywanie połączenia z lektorem...");
 
+        const activeTitle = currentStoryTitle || "Selected Story";
+        const activeText = generatedText || "";
+        const { systemInstruction: contextualInstruction, greetingPrompt: contextualGreeting } = buildMobileTutorPrompts(activeTitle, activeText, 'vocabulary_quiz', notebookWords);
+
         const client = new GeminiLiveClient({
           provider: "google_ai_studio",
           model: "gemini-2.5-flash-native-audio-latest",
@@ -1358,8 +1460,8 @@ export default function HomeScreen() {
           audioContext: preAudioContext,
           mediaStream: preMediaStream,
           reuseMediaStream: true,
-          systemInstruction:
-            "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise, conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone.",
+          systemInstruction: contextualInstruction,
+          initialGreetingPrompt: contextualGreeting,
           onStatusChange: (status) => {
             setLiveOrbStatus(status);
             if (status === 'active' || status === 'listening') {
