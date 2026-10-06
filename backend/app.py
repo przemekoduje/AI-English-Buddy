@@ -4613,12 +4613,12 @@ def chat_next():
         })
 
     system_prompt = f"""
-    You are an encouraging and professional English tutor. You are holding a voice-based conversation with a student about a specific reading text.
+    You are an encouraging and professional English tutor holding a voice-based conversation with a student about a specific reading text.
     
     STRICT CONSTRAINTS & GROUNDING (MUST FOLLOW AT ALL TIMES):
-    1. MANDATORY STORY FAMILIARITY: Read and thoroughly familiarize yourself with the selected story text below.
-    2. STRICT STORY SCOPE: Refer ONLY to the content, facts, events, and characters of this specific reading text. DO NOT invent new stories, external topics, or hallucinate facts outside this text ("Bez wymyślania nowych treści").
-    3. STRICT VOCABULARY SCOPE: All vocabulary items, words, and idioms tested or discussed MUST come directly from this reading text or its vocabulary.
+    1. MANDATORY STORY FAMILIARITY & BOUNDARY: Read and thoroughly familiarize yourself with the selected story text below. Refer ONLY to the content, facts, events, and characters of this specific reading text. DO NOT invent new stories, external topics, or hallucinate facts outside this text ("Bez wymyślania nowych treści").
+    2. TARGET TERMS MUST BE IN ENGLISH: You are an ENGLISH tutor teaching ENGLISH to a Polish speaker. Any target term tested, quizzed, or discussed MUST ALWAYS BE THE ENGLISH WORD (e.g., "What does the English word 'sourdough' mean?", "How would you use 'puzzled' in a sentence?"). NEVER ask questions using Polish words as target terms (e.g. NEVER ask "Co oznacza zbieracz?", NEVER quiz Polish terms). Polish translations may ONLY be given as helpful hints/meanings FOR the English target term.
+    3. PRIORITIZE SAVED UNKNOWN VOCABULARY: Prioritize testing the student on ENGLISH words from their saved notebook and story vocabulary.
     
     Story context:
     "{story_text}"
@@ -4864,7 +4864,7 @@ def chat_free():
     if story_title and story_text:
         exercise_guide = "General discussion and speaking practice about the story."
         if exercise_type == 'vocabulary_quiz':
-            exercise_guide = "VOCABULARY PRACTICE & QUIZ: Focus exclusively on testing and practicing key vocabulary, idioms, and phrases taken directly from this story. Do NOT quiz words outside this text."
+            exercise_guide = "VOCABULARY PRACTICE & QUIZ: Focus exclusively on testing and practicing key ENGLISH vocabulary, idioms, and phrases taken directly from this story (or saved notebook vocabulary). Always state target terms in ENGLISH. Do NOT quiz Polish words or outside text."
         elif exercise_type == 'story_discussion':
             exercise_guide = "STORY DISCUSSION & OPINIONS: Discuss ONLY the plot, character decisions, turning points, and themes present in this story. Ask open-ended questions grounded strictly in story events."
         elif exercise_type == 'roleplay':
@@ -4876,16 +4876,34 @@ def chat_free():
         elif exercise_type == 'grammar_context':
             exercise_guide = "GRAMMAR IN CONTEXT: Focus on sentence patterns and grammar structures from the story. Encourage the student to use them in conversation."
 
+        # Fetch user's saved unknown vocabulary for this story/text if user is authenticated
+        saved_vocab_str = ""
+        if user_email:
+            try:
+                vocab_docs = db.collection('vocabulary').where('user_email', '==', user_email).stream()
+                matching_saved = []
+                story_lower = story_text.lower()
+                for vd in vocab_docs:
+                    vdata = vd.to_dict()
+                    orig = (vdata.get('original') or '').strip()
+                    trans = (vdata.get('translated') or '').strip()
+                    if orig and (orig.lower() in story_lower or vdata.get('story_id') == request.form.get('story_id')):
+                        matching_saved.append(f"- ENGLISH TARGET WORD: \"{orig}\" (Polish translation hint: \"{trans}\")")
+                if matching_saved:
+                    saved_vocab_str = "\n    STUDENT'S SAVED UNKNOWN VOCABULARY FOR THIS STORY (NOTEBOOK):\n    " + "\n    ".join(matching_saved) + "\n"
+            except Exception as ve:
+                print(f"Error fetching saved vocab for chat-free: {ve}")
+
         system_prompt += f"""
 
     STRICT CONSTRAINTS & GROUNDING (MUST FOLLOW AT ALL TIMES):
-    1. MANDATORY STORY FAMILIARITY: You must thoroughly familiarize yourself with the selected reading text ("{story_title}") provided below.
-    2. STRICT STORY SCOPE: Refer ONLY to the content, facts, events, and characters of this specific reading text. DO NOT invent new stories, external topics, or hallucinate facts outside this text ("Bez wymyślania nowych treści").
-    3. STRICT VOCABULARY SCOPE: All vocabulary items, words, and idioms tested or practiced MUST be drawn directly from this reading text or its vocabulary.
+    1. MANDATORY STORY FAMILIARITY & BOUNDARY: You must thoroughly familiarize yourself with the selected reading text ("{story_title}") provided below. Refer ONLY to the content, facts, events, and characters of this specific reading text. DO NOT invent new stories, external topics, or hallucinate facts outside this text ("Bez wymyślania nowych treści").
+    2. TARGET TERMS MUST BE IN ENGLISH: You are an ENGLISH tutor teaching ENGLISH to a Polish speaker. The target terms to be tested, quizzed, or practiced MUST ALWAYS BE THE ENGLISH WORDS (e.g. "Do you know what 'sourdough' means?", "How would you use 'puzzled' in a sentence?"). NEVER ask questions using Polish words as the target term (e.g. NEVER ask "Co oznacza zbieracz?", NEVER quiz Polish terms). Polish translations may ONLY be given as helpful hints/meanings FOR the English target term.
+    3. PRIORITIZE STUDENT'S SAVED UNKNOWN WORDS: Focus primarily on testing the student on their saved unknown ENGLISH words listed below!
 
     SELECTED STORY CONTEXT:
     Story Title: "{story_title}"
-    Story Content:
+    {saved_vocab_str}Story Content:
     \"\"\"
     {story_text}
     \"\"\"
