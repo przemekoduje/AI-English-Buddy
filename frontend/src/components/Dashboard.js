@@ -285,7 +285,6 @@ STRICT CONSTRAINTS & GROUNDING (MUST FOLLOW AT ALL TIMES):
 3. MULTI-TURN SEQUENTIAL VOCABULARY QUIZ: In vocabulary practice, progress sequentially through the target ENGLISH words list: Word 1 -> Word 2 -> Word 3 -> Word 4. Never stop after just one word.
 
 SELECTED STORY IN CONTEXT:
-Title: "${title}"
 ${targetWordsFormatted ? `\nPRE-APPROVED SEQUENTIAL TARGET WORDS FOR THIS SESSION:\n${targetWordsFormatted}\n` : ''}Full Story Text:
 """
 ${text}
@@ -293,7 +292,17 @@ ${text}
 
 ${exerciseInstructions}`;
 
-  return { systemInstruction, greetingPrompt };
+  const storyHeaderPrompt = `[STRICT CONTEXT FOR THIS VOICE SESSION - READ AND MEMORIZE THIS STORY]
+Story Title: "${title}"
+Full Reading Passage Text:
+"""
+${text}
+"""
+${targetWordsFormatted ? `Pre-approved Target English Vocabulary:\n${targetWordsFormatted}\n` : ''}`;
+
+  const finalGreetingPrompt = `${storyHeaderPrompt}\nINSTRUCTION FOR TUTOR (FIRST TURN):\n${greetingPrompt}`;
+
+  return { systemInstruction, greetingPrompt: finalGreetingPrompt };
 }
 
 function Dashboard({ user }) {

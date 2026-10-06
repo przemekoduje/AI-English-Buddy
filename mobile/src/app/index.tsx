@@ -321,7 +321,16 @@ CRITICAL RULES FOR VOCABULARY EXERCISES (MUST FOLLOW AT ALL COSTS):
 3. STRICT GROUNDING IN STORY FACTS:
    - All questions, context sentences, definitions, and explanations MUST relate to the events, characters, and facts in "${title}".`;
 
-    const greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention enthusiastically that today we are going to practice key ENGLISH vocabulary from the story "${title}". Immediately introduce our first target ENGLISH word ("${word1}") and ask me if I know what it means in 1-2 friendly spoken sentences.`;
+    const greetingPrompt = `[STRICT CONTEXT FOR THIS VOICE SESSION - READ AND MEMORIZE THIS STORY]
+Story Title: "${title}"
+Full Reading Passage Text:
+"""
+${text}
+"""
+${targetWordsFormatted ? `Pre-approved Target English Vocabulary:\n${targetWordsFormatted}\n` : ''}
+
+INSTRUCTION FOR TUTOR (FIRST TURN):
+Please greet me warmly in English as my friendly tutor. Mention enthusiastically that today we are going to practice key ENGLISH vocabulary from the story "${title}". Immediately introduce our first target ENGLISH word ("${word1}") and ask me if I know what it means in 1-2 friendly spoken sentences.`;
 
     const systemInstruction = `You are Speakling, an enthusiastic, friendly and warm native English tutor.
 Your goal is to conduct an engaging, interactive spoken English session with a student who is learning ENGLISH.
@@ -1444,8 +1453,13 @@ ${exerciseInstructions}`;
 
         setLiveStatusDetail("Nawiązywanie połączenia z lektorem...");
 
-        const activeTitle = currentStoryTitle || "Selected Story";
-        const activeText = generatedText || "";
+        const fallbackStory = (savedStories && savedStories.length > 0) ? savedStories[0] : {
+          title: "The Magic Garden",
+          text: `Once upon a time, in a small quiet village, there was a hidden garden. The garden was not ordinary; it was magical. Ancient oak trees stood like guardians, their leaves whispering secrets to the wind. In the center of the garden grew a luminous silver flower, known to blossom only when someone with a pure heart spoke a secret wish. One chilly evening, a young curious girl named Clara discovered the rusty iron gate covered in ivy. She opened it slowly and stepped inside. As she approached the silver flower, she whispered, 'I wish for my grandfather to heal.' Instantly, the flower emitted a warm golden glow that spread across the village. The next morning, her grandfather woke up feeling strong and full of joy.`
+        };
+
+        const activeTitle = currentStoryTitle || fallbackStory.title;
+        const activeText = (generatedText && generatedText.trim()) ? generatedText : fallbackStory.text;
         const { systemInstruction: contextualInstruction, greetingPrompt: contextualGreeting } = buildMobileTutorPrompts(activeTitle, activeText, 'vocabulary_quiz', notebookWords);
 
         const client = new GeminiLiveClient({
@@ -1843,12 +1857,11 @@ ${exerciseInstructions}`;
   };
 
   useEffect(() => {
-    if (user && currentView === 'stories') {
+    if (user) {
       fetchSavedStories();
-    } else if (user && currentView === 'notebook') {
       fetchNotebookWords();
     }
-  }, [user, currentView]);
+  }, [user]);
 
   // --- Media Buddy Hooks and Handlers ---
   // Poll player current time when playing
