@@ -117,6 +117,9 @@ export function buildTutorPrompts(story, exerciseType) {
 
   const title = story.title || "Selected Story";
   const text = story.text || "";
+  const storyVocab = Array.isArray(story.vocabulary) 
+    ? story.vocabulary.join(", ") 
+    : (typeof story.vocabulary === "string" ? story.vocabulary : (story.vocabulary_analysis?.key_words?.join(", ") || ""));
 
   let exerciseInstructions = "";
   let greetingPrompt = "";
@@ -124,61 +127,64 @@ export function buildTutorPrompts(story, exerciseType) {
   switch (exerciseType) {
     case "vocabulary_quiz":
       exerciseInstructions = `EXERCISE FOCUS: VOCABULARY PRACTICE & QUIZ
-- You are practicing key vocabulary, idiomatic expressions, and useful phrases from the story "${title}".
+- You are practicing key vocabulary, idiomatic expressions, and useful phrases taken EXCLUSIVELY from the selected story "${title}".
+- CRITICAL REQUIREMENT FOR VOCABULARY: Every single word, expression, or phrase you test, quiz, or discuss MUST come directly from the text of this story (or key story vocabulary list). DO NOT bring up or test any outside or unrelated English words.
 - Pick one specific word or phrase from the story at a time.
-- Ask the student if they know what it means, or give them a simple clue/definition and ask them to recall the word from the story, or ask them to use it in a spoken sentence.
-- Always provide immediate, encouraging feedback on their pronunciation and usage, and suggest natural synonyms.
+- Ask the student if they know what it means in the story context, or give them a simple clue/definition and ask them to recall the word from the story, or ask them to use it in a sentence related to story events.
+- Always provide immediate, encouraging feedback on their pronunciation and usage, and explain its exact meaning in the story context.
 - Keep your answers short (1-2 sentences) so the student speaks most of the time.`;
-      greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention enthusiastically that today we are going to practice vocabulary from the story "${title}". Ask if I'm ready for our first word challenge, in 1-2 friendly sentences.`;
+      greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention enthusiastically that today we are going to practice vocabulary taken directly from the story "${title}". Ask if I'm ready for our first word challenge from the text, in 1-2 friendly sentences.`;
       break;
 
     case "story_discussion":
       exerciseInstructions = `EXERCISE FOCUS: STORY DISCUSSION & PERSONAL OPINIONS
 - You and the student are discussing the story "${title}".
-- Discuss the plot, character decisions, turning points, and underlying themes.
-- Ask open-ended, thought-provoking questions that invite the student to share their own opinions and relate the story to real life.
+- Discuss ONLY the plot, character decisions, turning points, facts, and underlying themes directly present in this reading text.
+- Ask open-ended, thought-provoking questions about events in this story and invite the student's personal opinions on them.
+- Strictly adhere to the story context and facts without inventing outside plots, off-topic stories, or fake events.
 - Keep the dialogue dynamic, conversational, and friendly (1-2 sentences per turn).`;
       greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention that we are going to discuss the story "${title}". Ask me an engaging opening question about what caught my attention in the story, in 1-2 friendly sentences.`;
       break;
 
     case "roleplay":
       exerciseInstructions = `EXERCISE FOCUS: INTERACTIVE ROLE-PLAY
-- Conduct an immersive role-play based on the characters and situation in "${title}".
-- Adopt the persona of one of the characters in the story (or a narrator/interlocutor).
-- Treat the student as the other character.
-- Stay in character, react dynamically to their words, and advance the scene through natural spoken conversation.
+- Conduct an immersive role-play based strictly on the characters and situation in "${title}".
+- Adopt the persona of one of the specific characters from the story.
+- Treat the student as another character from the story.
+- Stay strictly in character according to the story setting, react dynamically to their words, and advance the scene based on the story plot. Do not invent unrelated fantasy or off-topic plots.
 - Keep each turn to 1-2 spoken sentences.`;
-      greetingPrompt = `Hello! Greet me enthusiastically as my English tutor. Propose a fun role-play scenario based on the story "${title}". Tell me which role I can play and which role you will take, and invite me to take the first line!`;
+      greetingPrompt = `Hello! Greet me enthusiastically as my English tutor. Propose a fun role-play scenario based directly on the story "${title}". Tell me which role I can play and which role you will take, and invite me to take the first line!`;
       break;
 
     case "summary_challenge":
       exerciseInstructions = `EXERCISE FOCUS: SUMMARY & RETELLING CHALLENGE
-- Invite the student to summarize or retell the story "${title}" in their own words.
+- Invite the student to summarize or retell the story "${title}" in their own words based on the provided text.
 - Listen attentively without interrupting unnecessarily.
-- When they finish a part of their summary, praise their fluency, highlight 1 or 2 great vocabulary choices, and ask a follow-up question to help them conclude or expand.`;
+- When they finish a part of their summary, praise their fluency, highlight 1 or 2 great vocabulary choices from the story, check accuracy against actual story events, and ask a follow-up question to help them conclude or expand.`;
       greetingPrompt = `Hello! Greet me warmly as my English tutor. Tell me that today we have a fun Retelling Challenge for the story "${title}". Invite me to summarize what happened in my own words whenever I'm ready!`;
       break;
 
     case "comprehension_qa":
       exerciseInstructions = `EXERCISE FOCUS: COMPREHENSION Q&A
-- Test the student's reading and listening comprehension of "${title}".
-- Ask clear, specific questions about key events, characters, and facts from the text.
+- Test the student's reading and listening comprehension strictly of "${title}".
+- Ask clear, specific questions about key events, character actions, facts, and details directly mentioned in the text.
 - Ask ONE question at a time.
-- If the student answers correctly, enthusiastically confirm and ask the next question. If they hesitate, give a friendly hint!`;
-      greetingPrompt = `Hello! Greet me warmly as my English tutor. Tell me we are going to do a quick comprehension quiz on the story "${title}", and immediately ask me the very first question!`;
+- Verify that their answer matches the facts of the story. If correct, enthusiastically confirm and ask the next question. If they hesitate or get it wrong, give a friendly hint based on the story text!`;
+      greetingPrompt = `Hello! Greet me warmly as my English tutor. Tell me we are going to do a quick comprehension quiz on the story "${title}", and immediately ask me the very first question about the story!`;
       break;
 
     case "grammar_context":
       exerciseInstructions = `EXERCISE FOCUS: GRAMMAR IN CONTEXT
 - Help the student practice grammar patterns and sentence structures used in "${title}" (e.g. past narratives, modal verbs, conditionals, or reporting speech).
-- Ask the student questions that naturally elicit those grammar structures.
+- Ask the student questions about story events that naturally elicit those grammar structures.
+- All sentence examples and contexts must be based on the story.
 - If the student makes a grammatical slip, gently model the natural phrasing in your response while keeping the conversation flowing.`;
       greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention that we're going to practice grammar structures and sentence patterns based on the story "${title}". Ask me a quick opening question in 1-2 friendly sentences.`;
       break;
 
     default:
       exerciseInstructions = `EXERCISE FOCUS: GENERAL STORY DISCUSSION
-- Discuss the story "${title}" with the student. Keep turns concise (1-2 sentences) and interactive.`;
+- Discuss the story "${title}" with the student. Stick strictly to the content and vocabulary of this story. Keep turns concise (1-2 sentences) and interactive.`;
       greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention that we are talking about the story "${title}", and ask how I'd like to begin!`;
       break;
   }
@@ -189,9 +195,14 @@ Speak with a natural, friendly native tone.
 Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, always giving the student plenty of speaking time.
 Speak only in English.
 
-STORY IN CONTEXT:
+STRICT CONSTRAINTS & GROUNDING (MUST FOLLOW AT ALL TIMES):
+1. MANDATORY STORY FAMILIARITY: You must thoroughly read, familiarize yourself with, and memorize the selected story text provided below ("${title}").
+2. STRICT SCOPE - DO NOT INVENT OUTSIDE CONTENT: You MUST ONLY refer to, discuss, ask about, and use content, characters, facts, and events from THIS SPECIFIC STORY. Absolutely NO inventing outside stories, external topics, or hallucinating facts outside this text ("Bez wymyślania nowych treści").
+3. STRICT VOCABULARY SCOPE: All vocabulary words, idiomatic expressions, or phrases tested, practiced, or highlighted MUST be drawn strictly from the text or vocabulary belonging to this selected story. Do NOT quiz or introduce arbitrary words from outside this text.
+
+SELECTED STORY IN CONTEXT:
 Title: "${title}"
-Text:
+${storyVocab ? `Key Vocabulary: ${storyVocab}\n` : ''}Text:
 """
 ${text}
 """

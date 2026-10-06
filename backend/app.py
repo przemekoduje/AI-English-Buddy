@@ -4613,7 +4613,12 @@ def chat_next():
         })
 
     system_prompt = f"""
-    You are an encouraging and professional English tutor. You are holding a voice-based conversation with a student about the following story:
+    You are an encouraging and professional English tutor. You are holding a voice-based conversation with a student about a specific reading text.
+    
+    STRICT CONSTRAINTS & GROUNDING (MUST FOLLOW AT ALL TIMES):
+    1. MANDATORY STORY FAMILIARITY: Read and thoroughly familiarize yourself with the selected story text below.
+    2. STRICT STORY SCOPE: Refer ONLY to the content, facts, events, and characters of this specific reading text. DO NOT invent new stories, external topics, or hallucinate facts outside this text ("Bez wymyślania nowych treści").
+    3. STRICT VOCABULARY SCOPE: All vocabulary items, words, and idioms tested or discussed MUST come directly from this reading text or its vocabulary.
     
     Story context:
     "{story_text}"
@@ -4859,19 +4864,24 @@ def chat_free():
     if story_title and story_text:
         exercise_guide = "General discussion and speaking practice about the story."
         if exercise_type == 'vocabulary_quiz':
-            exercise_guide = "VOCABULARY PRACTICE & QUIZ: Focus on testing and practicing key vocabulary, idioms, and phrases from this story. Ask the student what specific words mean or prompt them to use them in their own sentences. Give encouraging feedback."
+            exercise_guide = "VOCABULARY PRACTICE & QUIZ: Focus exclusively on testing and practicing key vocabulary, idioms, and phrases taken directly from this story. Do NOT quiz words outside this text."
         elif exercise_type == 'story_discussion':
-            exercise_guide = "STORY DISCUSSION & OPINIONS: Discuss the plot, character decisions, turning points, and themes of the story. Ask open-ended questions and invite the student's personal opinions."
+            exercise_guide = "STORY DISCUSSION & OPINIONS: Discuss ONLY the plot, character decisions, turning points, and themes present in this story. Ask open-ended questions grounded strictly in story events."
         elif exercise_type == 'roleplay':
-            exercise_guide = "ROLE-PLAY: Engage in an interactive role-play based on the characters and situations in the story. Stay in character and react dynamically."
+            exercise_guide = "ROLE-PLAY: Engage in an interactive role-play based strictly on the characters and situations in the story. Stay in character according to story facts."
         elif exercise_type == 'summary_challenge':
-            exercise_guide = "SUMMARY CHALLENGE: Guide the student to summarize or retell the story in their own words. Give praise for fluency and ask follow-up questions."
+            exercise_guide = "SUMMARY CHALLENGE: Guide the student to summarize or retell the story in their own words. Check accuracy against story facts and praise fluency."
         elif exercise_type == 'comprehension_qa':
-            exercise_guide = "COMPREHENSION Q&A: Ask clear, specific questions about key events and details from the story to check understanding. Ask one question at a time."
+            exercise_guide = "COMPREHENSION Q&A: Ask clear, specific questions about key events and details directly mentioned in the story to check understanding. Ask one question at a time."
         elif exercise_type == 'grammar_context':
             exercise_guide = "GRAMMAR IN CONTEXT: Focus on sentence patterns and grammar structures from the story. Encourage the student to use them in conversation."
 
         system_prompt += f"""
+
+    STRICT CONSTRAINTS & GROUNDING (MUST FOLLOW AT ALL TIMES):
+    1. MANDATORY STORY FAMILIARITY: You must thoroughly familiarize yourself with the selected reading text ("{story_title}") provided below.
+    2. STRICT STORY SCOPE: Refer ONLY to the content, facts, events, and characters of this specific reading text. DO NOT invent new stories, external topics, or hallucinate facts outside this text ("Bez wymyślania nowych treści").
+    3. STRICT VOCABULARY SCOPE: All vocabulary items, words, and idioms tested or practiced MUST be drawn directly from this reading text or its vocabulary.
 
     SELECTED STORY CONTEXT:
     Story Title: "{story_title}"
