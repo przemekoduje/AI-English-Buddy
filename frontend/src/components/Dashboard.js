@@ -107,6 +107,66 @@ export const EXERCISE_TYPES = [
   }
 ];
 
+export function extractStoryTargetWords(story, userSavedVocab = []) {
+  if (!story || !story.text) return [];
+  
+  const storyLower = story.text.toLowerCase();
+
+  // 1. User saved words for this story or in story text
+  const savedMatches = (userSavedVocab || [])
+    .filter(v => v && v.original)
+    .filter(v => (v.story_id && story.id && v.story_id === story.id) || storyLower.includes(v.original.trim().toLowerCase()))
+    .map(v => ({ original: v.original.trim(), translated: v.translated ? v.translated.trim() : '' }));
+
+  // 2. Story predefined vocabulary
+  let predefined = [];
+  if (Array.isArray(story.vocabulary)) {
+    predefined = story.vocabulary;
+  } else if (typeof story.vocabulary === 'string') {
+    predefined = story.vocabulary.split(',').map(s => s.trim());
+  } else if (story.vocabulary_analysis?.key_words) {
+    predefined = story.vocabulary_analysis.key_words;
+  }
+
+  const predefinedClean = predefined.map(w => {
+    if (typeof w === 'string' && w.includes('-')) {
+      const parts = w.split('-');
+      return { original: parts[0].trim(), translated: parts[1].trim() };
+    }
+    return { original: typeof w === 'string' ? w.trim() : (w?.original || ''), translated: w?.translated || '' };
+  }).filter(w => w.original && w.original.length > 0);
+
+  // Combine saved first, then predefined
+  const combined = [...savedMatches, ...predefinedClean];
+  
+  // Deduplicate by lowercased original word
+  const seen = new Set();
+  const result = [];
+  for (const item of combined) {
+    const key = item.original.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(item);
+    }
+  }
+
+  // If still fewer than 5 words, extract prominent English words/phrases from text
+  if (result.length < 5) {
+    const rawWords = story.text.match(/\b[A-Za-z]{5,}\b/g) || [];
+    const stopWords = new Set(["about", "after", "again", "always", "because", "before", "being", "between", "could", "first", "found", "great", "having", "other", "their", "there", "these", "thing", "think", "those", "through", "under", "where", "which", "while", "would"]);
+    for (const w of rawWords) {
+      const lower = w.toLowerCase();
+      if (!seen.has(lower) && !stopWords.has(lower)) {
+        seen.add(lower);
+        result.push({ original: w, translated: '' });
+        if (result.length >= 6) break;
+      }
+    }
+  }
+
+  return result;
+}
+
 export function buildTutorPrompts(story, exerciseType, userSavedVocab = []) {
   if (!story) {
     return {
@@ -118,52 +178,55 @@ export function buildTutorPrompts(story, exerciseType, userSavedVocab = []) {
   const title = story.title || "Selected Story";
   const text = story.text || "";
 
-  // 1. Wyciągamy zapisane nieznane słówka użytkownika dla tej czytanki
-  const storyLower = text.toLowerCase();
-  const matchedSavedWords = (userSavedVocab || []).filter((v) => {
-    if (!v || !v.original) return false;
-    const origLower = v.original.trim().toLowerCase();
-    if (v.story_id && v.story_id === story.id) return true;
-    return storyLower.includes(origLower);
-  });
+  // Sequenced target words for this session
+  const targetWordsList = extractStoryTargetWords(story, userSavedVocab);
+  const targetWordsFormatted = targetWordsList.map((w, idx) => 
+    `  Word ${idx + 1}: ENGLISH TARGET WORD "${w.original}"${w.translated ? ` (Polish translation hint: "${w.translated}")` : ''}`
+  ).join("\n");
 
-  const savedVocabFormatted = matchedSavedWords.length > 0
-    ? matchedSavedWords.map(v => `- ENGLISH TARGET WORD: "${v.original.trim()}" (Polish translation hint: "${v.translated || ''}")`).join("\n")
-    : "";
-
-  const firstEnglishSavedWord = matchedSavedWords.length > 0 ? matchedSavedWords[0].original.trim() : "";
-
-  // 2. Wyciągamy kluczowe słownictwo czytanki
-  const storyVocabList = Array.isArray(story.vocabulary) 
-    ? story.vocabulary.join(", ") 
-    : (typeof story.vocabulary === "string" ? story.vocabulary : (story.vocabulary_analysis?.key_words?.join(", ") || ""));
+  const word1 = targetWordsList[0]?.original || "key word";
+  const word2 = targetWordsList[1]?.original || "next word";
+  const word3 = targetWordsList[2]?.original || "third word";
+  const word4 = targetWordsList[3]?.original || "fourth word";
 
   let exerciseInstructions = "";
   let greetingPrompt = "";
 
   switch (exerciseType) {
     case "vocabulary_quiz":
-      exerciseInstructions = `EXERCISE FOCUS: VOCABULARY PRACTICE & QUIZ
-- You are an ENGLISH tutor practicing key ENGLISH vocabulary, idiomatic expressions, and phrases taken EXCLUSIVELY from the selected story "${title}".
-- CRITICAL RULE FOR TARGET TERMS (ENGLISH ONLY): Always state the target term in ENGLISH (e.g., "What does the English word '${firstEnglishSavedWord || 'sourdough'}' mean?", "Can you use the word 'puzzled' in a sentence?"). NEVER quiz or ask about a Polish word as the target term (e.g. NEVER ask "Co oznacza zbieracz?"). You are teaching ENGLISH to a Polish speaker, so the subject of every question MUST ALWAYS BE THE ENGLISH WORD.
-- PRIORITIZE USER'S SAVED UNKNOWN WORDS: Focus primarily on testing the student on the ENGLISH words they marked as unknown in their notebook.
-- Pick ONE specific ENGLISH word from the list or story text at a time.
-- Ask the student if they know what the ENGLISH word means in the context of the story, or give a definition/clue and ask them to recall the ENGLISH word from the story, or ask them to use it in a sentence related to story events.
-- Always provide immediate, encouraging feedback on their pronunciation and usage, and explain its exact meaning in the story context.
-- Keep your answers short (1-2 sentences) so the student speaks most of the time.`;
+      exerciseInstructions = `EXERCISE FOCUS: MULTI-TURN VOCABULARY QUIZ & PRACTICE
+- You are an ENGLISH tutor practicing key ENGLISH vocabulary taken EXCLUSIVELY from the selected story "${title}".
+- PRE-APPROVED SEQUENTIAL TARGET WORDS FOR THIS SESSION:
+${targetWordsFormatted}
 
-      greetingPrompt = firstEnglishSavedWord
-        ? `Hello! Greet me warmly as my English tutor. Mention enthusiastically that today we are going to practice vocabulary taken directly from the story "${title}". Immediately introduce our first target ENGLISH word from my saved notebook ("${firstEnglishSavedWord}") and ask me if I know what it means in 1-2 friendly spoken sentences.`
-        : `Hello! Greet me warmly as my English tutor. Mention enthusiastically that today we are going to practice key ENGLISH vocabulary taken directly from the story "${title}". Pick the first key ENGLISH word from the story text, introduce it, and ask if I know what it means, in 1-2 friendly spoken sentences.`;
+CRITICAL RULES FOR VOCABULARY EXERCISES (MUST FOLLOW AT ALL COSTS):
+1. MULTI-TURN SEQUENTIAL PROGRESSION:
+   - Turn 1: Greet the student and quiz them on Word 1 ("${word1}"). Ask if they know what "${word1}" means in the story "${title}".
+   - Turn 2: Once the student answers or attempts Word 1, provide brief praise/correction, and IMMEDIATELY move on to Word 2 ("${word2}")!
+   - Turn 3: Next, move on to Word 3 ("${word3}"), then Word 4 ("${word4}"), and so on.
+   - NEVER stop after only 1 word! Always continue to the next Word in the sequential list above.
+
+2. TARGET TERMS MUST BE IN ENGLISH ONLY:
+   - You are teaching ENGLISH to a Polish speaker.
+   - The target word presented to the student MUST ALWAYS BE THE ENGLISH WORD (e.g. "Do you know what the English word '${word1}' means in our story?", "Can you use '${word2}' in a sentence?").
+   - NEVER quiz Polish words or ask "Co oznacza zbieracz?".
+   - Polish translations are ONLY helpful hints/meanings FOR the English target word.
+
+3. STRICT GROUNDING IN STORY FACTS:
+   - All questions, context sentences, definitions, and explanations MUST relate to the events, characters, and facts in "${title}".`;
+
+      greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention enthusiastically that today we are going to practice key ENGLISH vocabulary from the story "${title}". Immediately introduce our first target ENGLISH word ("${word1}") and ask me if I know what it means in 1-2 friendly spoken sentences.`;
       break;
 
     case "story_discussion":
-      exerciseInstructions = `EXERCISE FOCUS: STORY DISCUSSION & PERSONAL OPINIONS
-- You and the student are discussing the story "${title}".
+      exerciseInstructions = `EXERCISE FOCUS: STORY DISCUSSION & KNOWLEDGE CHECK
+- You are discussing the reading passage "${title}" with the student.
+- DEMONSTRATE FULL MASTERY OF THE STORY: You know every detail, plot point, character, and event in this story.
+- If the student asks what the story is about, give a concise, engaging 2-sentence summary of the story facts.
 - Discuss ONLY the plot, character decisions, turning points, facts, and underlying themes directly present in this reading text.
-- Ask open-ended, thought-provoking questions about events in this story and invite the student's personal opinions on them.
+- Ask open-ended, thought-provoking questions about story events and invite the student's personal opinions.
 - Strictly adhere to the story context and facts without inventing outside plots, off-topic stories, or fake events ("Bez wymyślania nowych treści").
-- Keep the dialogue dynamic, conversational, and friendly (1-2 sentences per turn).`;
+- Keep responses short (1-2 sentences per turn).`;
       greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention that we are going to discuss the story "${title}". Ask me an engaging opening question about what caught my attention in the story, in 1-2 friendly sentences.`;
       break;
 
@@ -217,13 +280,13 @@ Keep your spoken responses concise (1-2 sentences at a time), conversational, an
 Speak only in English.
 
 STRICT CONSTRAINTS & GROUNDING (MUST FOLLOW AT ALL TIMES):
-1. MANDATORY STORY FAMILIARITY & BOUNDARY: You must thoroughly read, familiarize yourself with, and memorize the selected story text provided below ("${title}"). You MUST ONLY refer to, discuss, ask about, and use content, characters, facts, and events from THIS SPECIFIC STORY. Absolutely NO inventing outside stories, external topics, or hallucinating facts outside this text ("Bez wymyślania nowych treści").
-2. TARGET TERMS MUST BE IN ENGLISH: You are an ENGLISH tutor teaching ENGLISH to a Polish native speaker. The target term presented in any exercise, question, or quiz MUST ALWAYS BE THE ENGLISH WORD (e.g. "Do you know what 'sourdough' means?", "How would you use 'puzzled' in a sentence?"). NEVER quiz Polish words or ask "Co oznacza zbieracz?". Polish translations may only be given as helpful hints/meanings FOR the English target word.
-3. PRIORITIZE STUDENT'S SAVED UNKNOWN WORDS: The student marked specific ENGLISH words as unknown in their notebook (listed below). Focus primarily on these exact ENGLISH words during vocabulary practice and quizzes!
+1. MANDATORY STORY FAMILIARITY & BOUNDARY: You must thoroughly read, familiarize yourself with, and memorize the selected story text provided below ("${title}"). You MUST ONLY refer to, discuss, ask about, and use content, characters, facts, and events from THIS SPECIFIC STORY. Absolutely NO inventing outside stories, external topics, or hallucinating facts outside this text ("Bez wymyślania nowych treści"). If the student asks you what the text is about, give a clear, accurate summary of the story text below.
+2. TARGET TERMS MUST BE IN ENGLISH: You are an ENGLISH tutor teaching ENGLISH to a Polish native speaker. The target term presented in any exercise, question, or quiz MUST ALWAYS BE THE ENGLISH WORD (e.g. "Do you know what '${word1}' means?", "How would you use '${word2}' in a sentence?"). NEVER quiz Polish words or ask "Co oznacza zbieracz?". Polish translations may only be given as helpful hints/meanings FOR the English target word.
+3. MULTI-TURN SEQUENTIAL VOCABULARY QUIZ: In vocabulary practice, progress sequentially through the target ENGLISH words list: Word 1 -> Word 2 -> Word 3 -> Word 4. Never stop after just one word.
 
 SELECTED STORY IN CONTEXT:
 Title: "${title}"
-${savedVocabFormatted ? `\nSTUDENT'S SAVED UNKNOWN VOCABULARY FOR THIS STORY (NOTEBOOK):\n${savedVocabFormatted}\n` : ''}${storyVocabList ? `Story Key Words: ${storyVocabList}\n` : ''}Story Text:
+${targetWordsFormatted ? `\nPRE-APPROVED SEQUENTIAL TARGET WORDS FOR THIS SESSION:\n${targetWordsFormatted}\n` : ''}Full Story Text:
 """
 ${text}
 """
@@ -267,7 +330,7 @@ function Dashboard({ user }) {
   const [userStories, setUserStories] = useState([]);
   const [userVocabulary, setUserVocabulary] = useState([]);
   const [selectedStoryId, setSelectedStoryId] = useState(() => {
-    return localStorage.getItem("buddy_selected_story_id") || "";
+    return localStorage.getItem("buddy_selected_story_id") || SAMPLE_STORIES[0].id;
   });
   const [exerciseType, setExerciseType] = useState(() => {
     return localStorage.getItem("buddy_exercise_type") || "story_discussion";
