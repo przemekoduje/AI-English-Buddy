@@ -374,7 +374,7 @@ const Reader = ({
 
     hoverTimerRef.current = setTimeout(() => {
       setHoveredIndex(index);
-    }, 600); // 600ms responsive delay
+    }, 1500); // 1500ms responsive delay
   };
 
   const handleTokenHover = (index, tIdx) => {
@@ -397,7 +397,7 @@ const Reader = ({
       if (hoveredTokenIndexRef.current !== null) {
         setHoveredTokenIndex(hoveredTokenIndexRef.current);
       }
-    }, 600);
+    }, 1500);
   };
 
   const handleMouseLeave = () => {
