@@ -362,6 +362,19 @@ const Reader = ({
     }
   }, [currentChunkIndex]);
 
+  const handleContextMenu = (e, index, tIdx = null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+    }
+    setHoveredIndex(index);
+    if (tIdx !== null) {
+      setHoveredTokenIndex(tIdx);
+      hoveredTokenIndexRef.current = tIdx;
+    }
+  };
+
   const handleMouseEnter = (index) => {
     const isDesktop = window.matchMedia("(hover: hover)").matches;
     if (!isDesktop) return;
@@ -374,7 +387,7 @@ const Reader = ({
 
     hoverTimerRef.current = setTimeout(() => {
       setHoveredIndex(index);
-    }, 1500); // 1500ms responsive delay
+    }, 3000); // 3000ms responsive delay
   };
 
   const handleTokenHover = (index, tIdx) => {
@@ -397,7 +410,7 @@ const Reader = ({
       if (hoveredTokenIndexRef.current !== null) {
         setHoveredTokenIndex(hoveredTokenIndexRef.current);
       }
-    }, 1500);
+    }, 3000);
   };
 
   const handleMouseLeave = () => {
@@ -408,7 +421,7 @@ const Reader = ({
       setHoveredIndex(null);
       setHoveredTokenIndex(null);
       hoveredTokenIndexRef.current = null;
-    }, 300); // 300ms debounce
+    }, 800); // 800ms debounce
   };
 
   const handleTextSelectionWrapper = (e) => {
@@ -572,6 +585,7 @@ const Reader = ({
               className={`story-sentence ${isCurrentReading ? "reading-now" : ""}`}
               onMouseEnter={() => handleMouseEnter(index)}
               onMouseLeave={handleMouseLeave}
+              onContextMenu={(e) => handleContextMenu(e, index)}
             >
               {tokens.map((token, tIdx) => {
                 const isWord = /[\w\u00C0-\u017F'-]+/.test(token);
@@ -585,6 +599,7 @@ const Reader = ({
                       key={tIdx}
                       className={`reader-word ${isHighlighted ? "active-highlight" : ""}`}
                       onMouseEnter={() => handleTokenHover(index, tIdx)}
+                      onContextMenu={(e) => handleContextMenu(e, index, tIdx)}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (onWordClick) {
@@ -602,6 +617,7 @@ const Reader = ({
                       key={tIdx}
                       style={isPopupTarget ? { position: "relative", display: "inline-block" } : undefined}
                       onMouseEnter={() => handleTokenHover(index, tIdx)}
+                      onContextMenu={(e) => handleContextMenu(e, index, tIdx)}
                     >
                       {token}
                       {isPopupTarget && renderHoverPopup()}
