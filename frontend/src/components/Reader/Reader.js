@@ -424,6 +424,19 @@ const Reader = ({
     }, 800); // 800ms debounce
   };
 
+  const handleClosePopup = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+    }
+    setHoveredIndex(null);
+    setHoveredTokenIndex(null);
+    hoveredTokenIndexRef.current = null;
+  };
+
   const handleTextSelectionWrapper = (e) => {
     if (onTextSelection) onTextSelection(e);
   };
@@ -574,6 +587,17 @@ const Reader = ({
                     <path d="M6 6h12v12H6z"/>
                   </svg>
                   <span className="btn-text">Stop</span>
+                </button>
+                
+                <button
+                  className="sentence-hover-btn close-btn"
+                  onClick={handleClosePopup}
+                  title="Close menu"
+                >
+                  <svg className="hover-btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                  </svg>
+                  <span className="btn-text">Close</span>
                 </button>
               </span>
             </span>
