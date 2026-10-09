@@ -3880,13 +3880,13 @@ def prepare_mastery_content():
     try:
         # Prompt prosi AI o podział tekstu na zdania i tłumaczenie każdego z nich.
         mastery_prompt = f"""
-        Objective: Split the following English text into logical, natural sentences and provide its HIGH-QUALITY Polish translation. Additionally, split each sentence into smaller phrasal segments (3-5 words) for pronunciation practice.
+        Objective: Split the following English text into logical, natural sentences and provide its HIGH-QUALITY Polish translation. Additionally, split each sentence into smaller phrasal segments ONLY if the sentence is long/complex, and ALWAYS split it at commas. If the sentence is short, do NOT split it.
         
         Rules:
         1. Split the text into a JSON list of objects.
         2. Each object MUST have "en" (original English sentence), "pl" (natural Polish translation), and "segments" (a list of short, logical English phrases from that sentence).
         3. The Polish text must be encoded in UTF-8.
-        4. Focus segments on natural breathing points or grammatical boundaries.
+        4. CRITICAL: If the sentence is short, do NOT split it (the 'segments' list should contain just the whole sentence). If the sentence is long/complex, split it into segments ONLY at commas.
         5. Do NOT split sentences on periods belonging to common abbreviations (such as Mr., Mrs., Ms., Dr., Prof., Sr., Jr., St., e.g., i.e., vs., a.m., p.m.). These must remain within their parent sentence.
 
         Text to analyze:

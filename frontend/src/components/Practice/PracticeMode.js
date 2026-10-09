@@ -188,7 +188,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       voiceToUse = "pl-PL-MarekNeural";
     }
 
-    const rate = phase === 2 ? 0.7 : phase === 3 ? 1.0 : 0.9;
+    const rate = phase === 2 ? 0.85 : 0.9;
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
@@ -886,15 +886,15 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       <div className="practice-content">
         <header className="practice-header">
           <div className="phase-indicator">
-            {[1, 2, 3, 4].map(p => (
+            {[1, 2, 3].map(p => (
               <span key={p} className={`dot ${phase >= p ? "active" : ""} ${p === phase ? "current" : ""}`} onClick={() => changePhase(p)}>
                 {p}
               </span>
             ))}
           </div>
           <div className="header-titles">
-             <h2>Phase {phase}: {phase === 1 ? "Immersion" : phase === 2 ? "Precision" : phase === 3 ? "Shadowing" : "Mastery"}</h2>
-             <p className="sub-hint">{phase === 1 ? "Absorb the rhythm" : phase === 2 ? "Break it down" : phase === 3 ? "Synchronize" : "Final Challenge"}</p>
+             <h2>Phase {phase}: {phase === 1 ? "Immersion" : phase === 2 ? "Shadowing" : "Mastery"}</h2>
+             <p className="sub-hint">{phase === 1 ? "Absorb the rhythm" : phase === 2 ? "Break down & Synchronize" : "Final Challenge"}</p>
           </div>
           <button className="exit-btn" onClick={onExit}>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -944,7 +944,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                   </div>
                 )}
 
-                {phase === 4 && evaluation && !isEvaluating && (
+                {phase === 3 && evaluation && !isEvaluating && (
                   <div className="evaluation-result-box">
                     <div className="eval-score-circle">{evaluation.score}%</div>
                     <div className="eval-feedback">
@@ -964,7 +964,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                     {currentLang === "pl" ? "Hear EN" : "Hear PL"}
                   </button>
                 )}
-                {phase === 4 ? (
+                {phase === 3 ? (
                   <>
                     <button className={`ctrl-btn record-btn ${isRecording ? "active" : ""}`} onClick={isRecording ? stopRecording : startRecording}>
                       {isRecording ? (
@@ -1031,7 +1031,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
         <footer className="practice-footer">
            <button className="step-btn" onClick={onExit}>Close</button>
-           <button className="step-btn active" onClick={() => changePhase(phase < 4 ? phase + 1 : phase)}>Next Phase →</button>
+           <button className="step-btn active" onClick={() => changePhase(phase < 3 ? phase + 1 : phase)}>Next Phase →</button>
         </footer>
       </div>
       {translationModalData && (
