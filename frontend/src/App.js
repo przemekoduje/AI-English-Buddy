@@ -13,6 +13,7 @@ import MediaBuddy from './components/Media/MediaBuddy';
 import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 import AdminDashboard from './components/Admin/AdminDashboard';
+import GoodToKnow from './components/GoodToKnow';
 
 function App() {
   const [currentView, setCurrentView] = useState(() => {
@@ -172,6 +173,7 @@ function App() {
       case 'notebook': return 'My Vocabulary';
       case 'media': return 'Media Buddy';
       case 'admin': return 'Panel Administratora';
+      case 'good-to-know': return 'Good to know';
       default: return 'Speakling';
     }
   };
@@ -216,6 +218,8 @@ function App() {
             <AdminDashboard 
               user={user}
             />
+          ) : currentView === 'good-to-know' ? (
+            <GoodToKnow />
           ) : (
             <Workspace 
               onNavigateToDashboard={() => handleNavigate('dashboard')} 

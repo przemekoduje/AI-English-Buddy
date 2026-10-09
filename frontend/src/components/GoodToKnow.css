@@ -1,0 +1,202 @@
+.good-to-know-container {
+  padding: 2rem;
+  overflow-y: auto;
+  height: 100%;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.good-to-know-content {
+  max-width: 900px;
+  margin: 0 auto;
+  padding-bottom: 3rem;
+}
+
+.gtk-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.gtk-header h2 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, #1A73E8, #a953ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+}
+
+.gtk-section {
+  margin-bottom: 3rem;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.section-number {
+  background: linear-gradient(135deg, #1A73E8, #a953ff);
+  color: white;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.gtk-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.gtk-card {
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gtk-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.gtk-card h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: #a953ff;
+}
+
+.gtk-card p {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.gtk-card strong {
+  color: var(--text-primary);
+}
+
+.gtk-card em {
+  color: #1A73E8;
+  font-style: normal;
+  font-weight: 600;
+  background: rgba(26, 115, 232, 0.1);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+/* Breathing Exercise */
+.breathing-widget {
+  padding: 2rem;
+  border-radius: 16px;
+  text-align: center;
+  background: linear-gradient(145deg, rgba(30,30,40,0.8), rgba(20,20,30,0.9));
+  margin-top: 1rem;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.breathing-widget h4 {
+  font-size: 1.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.breathing-hint {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-bottom: 2.5rem;
+}
+
+.breathing-circle-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 250px;
+  margin-bottom: 1.5rem;
+}
+
+.breathing-circle {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #4facfe, #00f2fe);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  cursor: pointer;
+  box-shadow: 0 0 30px rgba(0, 242, 254, 0.3);
+  /* Tranzitions matching exact phases */
+  transition-property: transform, background, box-shadow;
+}
+
+.breathing-circle.idle {
+  transform: scale(1);
+  transition: transform 1s ease;
+  background: radial-gradient(circle at 30% 30%, #444, #222);
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+.breathing-circle.inhale {
+  transform: scale(1.6);
+  transition: transform 4s linear;
+  background: radial-gradient(circle at 30% 30%, #4facfe, #00f2fe);
+  box-shadow: 0 0 40px rgba(0, 242, 254, 0.6);
+}
+
+.breathing-circle.hold {
+  transform: scale(1.6);
+  transition: transform 7s linear; /* Keeps the scale for 7s without change */
+  background: radial-gradient(circle at 30% 30%, #a953ff, #1A73E8);
+  box-shadow: 0 0 40px rgba(169, 83, 255, 0.6);
+}
+
+.breathing-circle.exhale {
+  transform: scale(1);
+  transition: transform 8s linear;
+  background: radial-gradient(circle at 30% 30%, #4facfe, #00f2fe);
+  box-shadow: 0 0 20px rgba(0, 242, 254, 0.3);
+}
+
+.breathing-text {
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+
+.breathing-timer {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-top: 5px;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .gtk-header h2 {
+    font-size: 2rem;
+  }
+  .gtk-card {
+    padding: 1.25rem;
+  }
+}

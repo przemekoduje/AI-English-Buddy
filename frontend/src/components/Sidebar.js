@@ -80,12 +80,20 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
       )
     },
     {
-      id: 'settings',
-      label: 'Settings',
+      id: 'good-to-know',
+      label: 'Good to know',
       icon: (
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          <path d="M9 21h6" />
+          <path d="M12 2v2" />
+          <path d="M12 17v4" />
+          <path d="M22 12h-2" />
+          <path d="M4 12H2" />
+          <path d="M19.07 4.93l-1.41 1.41" />
+          <path d="M6.34 17.66l-1.41 1.41" />
+          <path d="M19.07 19.07l-1.41-1.41" />
+          <path d="M6.34 6.34L4.93 4.93" />
+          <circle cx="12" cy="12" r="5" />
         </svg>
       )
     },
@@ -163,10 +171,18 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
                     <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                   </svg>
                 </button>
-                <button className="profile-action-btn" title="Ustawienia" onClick={() => onNavigate('settings')}>
+                <button className="profile-action-btn" title="Good to know" onClick={() => onNavigate('good-to-know')}>
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    <path d="M9 21h6" />
+                    <path d="M12 2v2" />
+                    <path d="M12 17v4" />
+                    <path d="M22 12h-2" />
+                    <path d="M4 12H2" />
+                    <path d="M19.07 4.93l-1.41 1.41" />
+                    <path d="M6.34 17.66l-1.41 1.41" />
+                    <path d="M19.07 19.07l-1.41-1.41" />
+                    <path d="M6.34 6.34L4.93 4.93" />
+                    <circle cx="12" cy="12" r="5" />
                   </svg>
                 </button>
                 <button className="logout-btn" onClick={onLogout} title="Wyloguj">
@@ -181,10 +197,18 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
                     <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                   </svg>
                 </button>
-                <button className="logout-icon-btn" title="Ustawienia" onClick={() => onNavigate('settings')}>
+                <button className="logout-icon-btn" title="Good to know" onClick={() => onNavigate('good-to-know')}>
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    <path d="M9 21h6" />
+                    <path d="M12 2v2" />
+                    <path d="M12 17v4" />
+                    <path d="M22 12h-2" />
+                    <path d="M4 12H2" />
+                    <path d="M19.07 4.93l-1.41 1.41" />
+                    <path d="M6.34 17.66l-1.41 1.41" />
+                    <path d="M19.07 19.07l-1.41-1.41" />
+                    <path d="M6.34 6.34L4.93 4.93" />
+                    <circle cx="12" cy="12" r="5" />
                   </svg>
                 </button>
                 <button className="logout-icon-btn" onClick={onLogout} title="Wyloguj">
