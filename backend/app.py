@@ -3880,13 +3880,17 @@ def prepare_mastery_content():
     try:
         # Prompt prosi AI o podział tekstu na zdania i tłumaczenie każdego z nich.
         mastery_prompt = f"""
-        Objective: Split the following English text into logical, natural sentences and provide its HIGH-QUALITY Polish translation. Additionally, split each sentence into smaller phrasal segments ONLY if the sentence is long/complex, and ALWAYS split it at commas. If the sentence is short, do NOT split it.
+        Objective: Split the following English text into logical, natural sentences and provide its HIGH-QUALITY Polish translation. Additionally, you will create a 'segments' array for each sentence.
         
         Rules:
         1. Split the text into a JSON list of objects.
-        2. Each object MUST have "en" (original English sentence), "pl" (natural Polish translation), and "segments" (a list of short, logical English phrases from that sentence).
+        2. Each object MUST have "en" (original English sentence), "pl" (natural Polish translation), and "segments" (a list of string segments from that sentence).
         3. The Polish text must be encoded in UTF-8.
-        4. CRITICAL: If the sentence is short, do NOT split it (the 'segments' list should contain just the whole sentence). If the sentence is long/complex, split it into segments ONLY at commas.
+        4. CRITICAL RULES FOR 'segments' ARRAY:
+           - NEVER split sentences randomly or at conjunctions.
+           - ONLY split a sentence if it contains a comma (,). 
+           - You MUST split strictly at the commas.
+           - If a sentence does NOT contain any commas, do NOT split it at all. In that case, the 'segments' list MUST contain exactly one item (the entire original sentence).
         5. Do NOT split sentences on periods belonging to common abbreviations (such as Mr., Mrs., Ms., Dr., Prof., Sr., Jr., St., e.g., i.e., vs., a.m., p.m.). These must remain within their parent sentence.
 
         Text to analyze:
