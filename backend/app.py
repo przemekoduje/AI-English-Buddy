@@ -3957,6 +3957,26 @@ def prepare_mastery_content():
                 i += 1
             mastery_data = merged_data
 
+        # ENFORCE STRICT COMMA SPLITTING
+        if isinstance(mastery_data, list):
+            for item in mastery_data:
+                en_text = item.get("en", "").strip()
+                if "," in en_text:
+                    parts = en_text.split(",")
+                    new_segments = []
+                    for idx, part in enumerate(parts):
+                        part = part.strip()
+                        if not part:
+                            continue
+                        # Dołącz przecinek do wszystkich części oprócz ostatniej, żeby utrzymać sens interpunkcyjny
+                        if idx < len(parts) - 1:
+                            new_segments.append(part + ",")
+                        else:
+                            new_segments.append(part)
+                    item["segments"] = new_segments
+                else:
+                    item["segments"] = [en_text]
+
         return jsonify(mastery_data), 200
 
     except Exception as e:
