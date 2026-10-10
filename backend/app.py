@@ -4258,6 +4258,34 @@ def generate_gtts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
         print(f"gTTS fallback error: {e_gtts}", flush=True)
         return b""
 
+async def get_edge_audio_with_retry(text_to_speak, primary_voice="en-US-BrianNeural"):
+    voices_to_try = [primary_voice]
+    if "en-US" in primary_voice or "Brian" in primary_voice or "Guy" in primary_voice or "Neural" in primary_voice:
+        for alt_v in ["en-US-BrianNeural", "en-US-GuyNeural", "en-US-ChristopherNeural", "en-GB-RyanNeural"]:
+            if alt_v not in voices_to_try:
+                voices_to_try.append(alt_v)
+    elif "pl-PL" in primary_voice or "Marek" in primary_voice:
+        for alt_v in ["pl-PL-MarekNeural"]:
+            if alt_v not in voices_to_try:
+                voices_to_try.append(alt_v)
+
+    for v in voices_to_try:
+        for attempt in range(2):
+            try:
+                communicate = edge_tts.Communicate(text_to_speak, v)
+                audio_data = b""
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        audio_data += chunk["data"]
+                if audio_data and len(audio_data) > 100:
+                    print(f"Edge TTS succeeded with male voice '{v}' (attempt {attempt + 1})", flush=True)
+                    return audio_data
+            except Exception as e_edge:
+                print(f"Edge TTS error for voice '{v}' (attempt {attempt + 1}): {e_edge}", flush=True)
+                await asyncio.sleep(0.15)
+                
+    return b""
+
 def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_email=None):
     if "Neural" not in voice:
         voice = "en-US-BrianNeural"
@@ -4274,8 +4302,8 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
         
         if ai_mode == "openai_full" and openai_client and "pl-PL" not in voice:
             try:
-                openai_voice = "alloy"
-                if "Brian" in voice or "Marek" in voice:
+                openai_voice = "onyx"
+                if "Brian" in voice or "Marek" in voice or "Guy" in voice:
                     openai_voice = "onyx"
                 elif "Jenny" in voice or "Emma" in voice or "Aria" in voice:
                     openai_voice = "nova"
@@ -4286,7 +4314,6 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
                     input=full_clean_text
                 )
                 audio_data = response.read()
-                # Log usage
                 log_api_usage(
                     user_email=user_email,
                     service="openai",
@@ -4298,15 +4325,8 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
             except Exception as e:
                 print(f"OpenAI TTS error, falling back to Edge TTS: {e}", flush=True)
                 
-        async def get_single_audio():
-            communicate = edge_tts.Communicate(full_clean_text, voice)
-            audio_data = b""
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_data += chunk["data"]
-            return audio_data
         try:
-            data = asyncio.run(get_single_audio())
+            data = asyncio.run(get_edge_audio_with_retry(full_clean_text, voice))
             if not data:
                 data = generate_gtts_bytes(full_clean_text, voice)
             return base64.b64encode(data).decode('utf-8')
@@ -4338,8 +4358,8 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
         print(f"DEBUG TTS: Synthesizing segment '{segment_text}' with voice '{segment_voice}'", flush=True)
         if ai_mode == "openai_full" and openai_client and "en-US" in segment_voice:
             try:
-                openai_voice = "alloy"
-                if "Brian" in segment_voice or "Marek" in segment_voice:
+                openai_voice = "onyx"
+                if "Brian" in segment_voice or "Marek" in segment_voice or "Guy" in segment_voice:
                     openai_voice = "onyx"
                 elif "Jenny" in segment_voice or "Emma" in segment_voice or "Aria" in segment_voice:
                     openai_voice = "nova"
@@ -4350,7 +4370,6 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
                     input=segment_text
                 )
                 audio_data = response.read()
-                # Log usage
                 log_api_usage(
                     user_email=user_email,
                     service="openai",
@@ -4362,16 +4381,9 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
             except Exception as e:
                 print(f"OpenAI TTS segment error: {e}, falling back to Edge TTS...", flush=True)
                 
-        try:
-            communicate = edge_tts.Communicate(segment_text, segment_voice)
-            audio_data = b""
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_data += chunk["data"]
-            if audio_data:
-                return audio_data
-        except Exception as e:
-            print(f"Edge TTS segment error: {e}, falling back to gTTS...", flush=True)
+        data = await get_edge_audio_with_retry(segment_text, segment_voice)
+        if data:
+            return data
             
         return generate_gtts_bytes(segment_text, segment_voice)
         
