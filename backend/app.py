@@ -4246,6 +4246,18 @@ def get_voice_pair(selected_voice):
             
     return en_voice, pl_voice
 
+def generate_gtts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
+    try:
+        from gtts import gTTS
+        lang = 'pl' if ('pl-PL' in voice_name or 'Marek' in voice_name or 'Zofia' in voice_name) else 'en'
+        fp = io.BytesIO()
+        tts = gTTS(text=text_to_speak, lang=lang)
+        tts.write_to_fp(fp)
+        return fp.getvalue()
+    except Exception as e_gtts:
+        print(f"gTTS fallback error: {e_gtts}", flush=True)
+        return b""
+
 def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_email=None):
     if "Neural" not in voice:
         voice = "en-US-BrianNeural"
@@ -4295,10 +4307,13 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
             return audio_data
         try:
             data = asyncio.run(get_single_audio())
+            if not data:
+                data = generate_gtts_bytes(full_clean_text, voice)
             return base64.b64encode(data).decode('utf-8')
         except Exception as e:
-            print(f"Error generating TTS in single helper: {e}", flush=True)
-            return ""
+            print(f"Error generating TTS in single helper: {e}, using gTTS fallback...", flush=True)
+            data = generate_gtts_bytes(full_clean_text, voice)
+            return base64.b64encode(data).decode('utf-8')
 
     # Otherwise, split by tags
     en_voice, pl_voice = get_voice_pair(voice)
@@ -4347,12 +4362,18 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
             except Exception as e:
                 print(f"OpenAI TTS segment error: {e}, falling back to Edge TTS...", flush=True)
                 
-        communicate = edge_tts.Communicate(segment_text, segment_voice)
-        audio_data = b""
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio_data += chunk["data"]
-        return audio_data
+        try:
+            communicate = edge_tts.Communicate(segment_text, segment_voice)
+            audio_data = b""
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_data += chunk["data"]
+            if audio_data:
+                return audio_data
+        except Exception as e:
+            print(f"Edge TTS segment error: {e}, falling back to gTTS...", flush=True)
+            
+        return generate_gtts_bytes(segment_text, segment_voice)
         
     async def get_all_audio():
         tasks = []
@@ -4364,10 +4385,13 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
 
     try:
         data = asyncio.run(get_all_audio())
+        if not data:
+            data = generate_gtts_bytes(text, voice)
         return base64.b64encode(data).decode('utf-8')
     except Exception as e:
-        print(f"Error generating TTS in bilingual helper: {e}", flush=True)
-        return ""
+        print(f"Error generating TTS in bilingual helper: {e}, using gTTS fallback...", flush=True)
+        data = generate_gtts_bytes(text, voice)
+        return base64.b64encode(data).decode('utf-8')
 
 @app.route("/api/tts", methods=['GET', 'POST'])
 def get_tts_audio():
