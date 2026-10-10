@@ -725,9 +725,13 @@ function Dashboard({ user }) {
               const existingText = (lastMsg.text || "").trim();
 
               let textToUse = newText;
-              if (existingText && !lastMsg.isFinal && newText.length < existingText.length && !isFinal) {
-                if (existingText.toLowerCase().includes(newText.toLowerCase())) {
-                  textToUse = existingText;
+              if (existingText && !lastMsg.isFinal && sender === "user") {
+                if (newText.length < existingText.length && !isFinal) {
+                  if (existingText.toLowerCase().includes(newText.toLowerCase())) {
+                    textToUse = existingText;
+                  } else if (!existingText.toLowerCase().endsWith(newText.toLowerCase())) {
+                    textToUse = `${existingText} ${newText}`;
+                  }
                 }
               }
 
