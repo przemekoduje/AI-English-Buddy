@@ -249,9 +249,6 @@ export class GeminiLiveClient {
               if (this.isBotCurrentlySpeaking && !isSpeaking) {
                 // Lektor właśnie skończył mówić - zapisujemy czas zakończenia dla okna tłumienia echa
                 this.lastBotSpeakingEndTime = Date.now();
-              } else if (isSpeaking) {
-                // Lektor zaczyna mówić - zamykamy poprzednią turę użytkownika
-                this.resetUserTurnIndex();
               }
               this.isBotCurrentlySpeaking = isSpeaking;
               this.onBotSpeaking(isSpeaking);
@@ -532,6 +529,11 @@ export class GeminiLiveClient {
     // 2. Obsługa treści generowanych przez model
     let hasPartText = false;
     if (message.serverContent && message.serverContent.modelTurn) {
+      if (!this.botTurnStarted) {
+        this.botTurnStarted = true;
+        this.currentBotTurnText = '';
+        this.resetUserTurnIndex();
+      }
       const parts = message.serverContent.modelTurn.parts || [];
 
       for (const part of parts) {

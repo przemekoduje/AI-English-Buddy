@@ -1414,7 +1414,6 @@ function Dashboard({ user }) {
 
       {/* Header Section from Figma */}
       <header className="chat-live-header-section">
-        <span className="chat-live-eyebrow">YOUR ENGLISH, ONE CONVERSATION AT A TIME</span>
         <h1 className="chat-live-title">
           {isChatActive ? `You’re doing great, ${userName}.` : 'A little practice. A lot of confidence.'}
         </h1>
@@ -1431,7 +1430,6 @@ function Dashboard({ user }) {
         <div className="chat-live-ready-card">
           <div className="card-top-bar">
             <span className="badge-purple-pill">Gemini Live · Voice practice</span>
-            <span className="badge-level-text">English · B2</span>
           </div>
 
           <div className="card-center-stage">
