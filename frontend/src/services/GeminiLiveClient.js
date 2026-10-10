@@ -249,6 +249,9 @@ export class GeminiLiveClient {
               if (this.isBotCurrentlySpeaking && !isSpeaking) {
                 // Lektor właśnie skończył mówić - zapisujemy czas zakończenia dla okna tłumienia echa
                 this.lastBotSpeakingEndTime = Date.now();
+              } else if (isSpeaking) {
+                // Lektor zaczyna mówić - zamykamy poprzednią turę użytkownika
+                this.resetUserTurnIndex();
               }
               this.isBotCurrentlySpeaking = isSpeaking;
               this.onBotSpeaking(isSpeaking);

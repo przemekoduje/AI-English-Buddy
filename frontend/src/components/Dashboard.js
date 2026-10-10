@@ -61,43 +61,6 @@ While the senior investment partner expressed polite skepticism about scaling ma
   }
 ];
 
-const mergeUserTranscripts = (existing, incoming) => {
-  const e = (existing || "").trim();
-  const inc = (incoming || "").trim();
-  if (!e) return inc;
-  if (!inc) return e;
-
-  const eLower = e.toLowerCase();
-  const incLower = inc.toLowerCase();
-
-  if (incLower.startsWith(eLower)) {
-    return inc;
-  }
-  if (eLower.includes(incLower)) {
-    return e;
-  }
-
-  const eWords = e.split(/\s+/);
-  const incWords = inc.split(/\s+/);
-
-  let maxOverlap = 0;
-  for (let len = Math.min(eWords.length, incWords.length); len >= 1; len--) {
-    const eTail = eWords.slice(eWords.length - len).join(" ").toLowerCase();
-    const incHead = incWords.slice(0, len).join(" ").toLowerCase();
-    if (eTail === incHead) {
-      maxOverlap = len;
-      break;
-    }
-  }
-
-  if (maxOverlap > 0) {
-    const suffix = incWords.slice(maxOverlap).join(" ");
-    return suffix ? `${e} ${suffix}` : e;
-  }
-
-  return `${e} ${inc}`;
-};
-
 // Dostępne tryby ćwiczeń z lektorem AI
 export const EXERCISE_TYPES = [
   {
@@ -146,7 +109,7 @@ export const EXERCISE_TYPES = [
 
 export function extractStoryTargetWords(story, userSavedVocab = []) {
   if (!story || !story.text) return [];
-  
+
   const storyLower = story.text.toLowerCase();
 
   // 1. User saved words for this story or in story text
@@ -175,7 +138,7 @@ export function extractStoryTargetWords(story, userSavedVocab = []) {
 
   // Combine saved first, then predefined
   const combined = [...savedMatches, ...predefinedClean];
-  
+
   // Deduplicate by lowercased original word
   const seen = new Set();
   const result = [];
@@ -217,7 +180,7 @@ export function buildTutorPrompts(story, exerciseType, userSavedVocab = []) {
 
   // Sequenced target words for this session
   const targetWordsList = extractStoryTargetWords(story, userSavedVocab);
-  const targetWordsFormatted = targetWordsList.map((w, idx) => 
+  const targetWordsFormatted = targetWordsList.map((w, idx) =>
     `  Word ${idx + 1}: ENGLISH TARGET WORD "${w.original}"${w.translated ? ` (Polish translation hint: "${w.translated}")` : ''}`
   ).join("\n");
 
@@ -759,15 +722,10 @@ function Dashboard({ user }) {
             if (lastMsg && lastMsg.sender === sender) {
               const updated = [...prev];
               const newText = text.trim();
-              const existingText = (lastMsg.text || "").trim();
-
-              const textToUse = sender === "user"
-                ? mergeUserTranscripts(existingText, newText)
-                : newText;
 
               updated[updated.length - 1] = {
                 ...lastMsg,
-                text: textToUse,
+                text: newText,
                 isFinal: lastMsg.isFinal || isFinal,
               };
               return updated;
@@ -953,12 +911,12 @@ function Dashboard({ user }) {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch (e) {}
+      } catch (e) { }
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       try {
         mediaRecorderRef.current.stop();
-      } catch (e) {}
+      } catch (e) { }
     }
     setIsClassicRecording(false);
   };
@@ -976,14 +934,14 @@ function Dashboard({ user }) {
       if (audioContextRef.current.state !== "closed") {
         try {
           audioContextRef.current.close();
-        } catch (e) {}
+        } catch (e) { }
       }
       audioContextRef.current = null;
     }
     if (microphoneRef.current) {
       try {
         microphoneRef.current.disconnect();
-      } catch (e) {}
+      } catch (e) { }
       microphoneRef.current = null;
     }
     analyserRef.current = null;
@@ -1121,7 +1079,7 @@ function Dashboard({ user }) {
         };
         recognitionRef.current = rec;
         rec.start();
-      } catch (e) {}
+      } catch (e) { }
     }
 
     try {
@@ -1149,7 +1107,7 @@ function Dashboard({ user }) {
         };
         mediaRecorder.start();
         setIsClassicRecording(true);
-      } catch (e) {}
+      } catch (e) { }
     }
   };
 
@@ -1157,12 +1115,12 @@ function Dashboard({ user }) {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch (e) {}
+      } catch (e) { }
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       try {
         mediaRecorderRef.current.stop();
-      } catch (e) {}
+      } catch (e) { }
     }
     setIsClassicRecording(false);
   };
@@ -1246,7 +1204,7 @@ function Dashboard({ user }) {
         };
         window.speechSynthesis.speak(utterance);
         return;
-      } catch (err) {}
+      } catch (err) { }
     }
 
     if (cachedBase64) {
@@ -1493,15 +1451,14 @@ function Dashboard({ user }) {
               </button>
             </div>
 
-            <h2 className="ready-stage-heading">Ready when you are</h2>
             <p className="ready-stage-hint">Try: "Let’s talk about my first week at a new job."</p>
 
             <button type="button" className="btn-figma-start-primary" onClick={handleOrbClick}>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" y1="19" x2="12" y2="23"/>
-                <line x1="8" y1="23" x2="16" y2="23"/>
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
               </svg>
               <span>Start a conversation</span>
             </button>
@@ -1549,8 +1506,8 @@ function Dashboard({ user }) {
             <div className="active-control-dock">
               <button className="dock-btn" title="Microphone">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                 </svg>
               </button>
               <button className="dock-btn" onClick={handleToggleCamera} title="Camera">
@@ -1693,8 +1650,8 @@ function Dashboard({ user }) {
             <div className="starter-card-top">
               <div className="starter-icon-wrap blue">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                 </svg>
               </div>
               {selectedStory && (
