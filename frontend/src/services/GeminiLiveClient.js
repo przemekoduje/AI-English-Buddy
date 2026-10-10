@@ -46,8 +46,10 @@ export class GeminiLiveClient {
     this.scriptProcessorNode = null;
     this.speechRecognition = null;
     this.lastUserTranscript = '';
+    this.userTurnAccumulatedText = '';
     this.speechRecognitionStartIndex = 0;
     this.lastSpeechResultLength = 0;
+    this.isDestroyed = false;
 
     // Web Audio Output (Odtwarzanie Gemini)
     this.outputAudioContext = null;
@@ -397,8 +399,9 @@ export class GeminiLiveClient {
   }
 
   resetUserTurnIndex() {
-    this.speechRecognitionStartIndex = this.lastSpeechResultLength || 0;
+    this.userTurnAccumulatedText = '';
     this.lastUserTranscript = '';
+    this.speechRecognitionStartIndex = 0;
   }
 
   /**
@@ -408,67 +411,111 @@ export class GeminiLiveClient {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRec) return;
 
-    try {
-      this.speechRecognition = new SpeechRec();
-      this.speechRecognition.lang = 'en-US';
-      this.speechRecognition.continuous = true;
-      this.speechRecognition.interimResults = true;
+    this.userTurnAccumulatedText = '';
+    this.lastUserTranscript = '';
 
-      this.speechRecognitionStartIndex = 0;
-      this.lastSpeechResultLength = 0;
-      this.lastUserTranscript = '';
+    const startRec = () => {
+      if (this.isDestroyed || !this.isConnected) return;
 
-      this.speechRecognition.onresult = (event) => {
-        if (!event || !event.results) return;
-        this.lastSpeechResultLength = event.results.length;
-
-        // Jeśli lektor mówi lub dźwięk z głośników właśnie wygasł (okno AEC),
-        // bezwzględnie odrzucamy dźwięk z mikrofonu – to głos z głośników, a nie uczeń!
-        if (this.isEchoSuppressionActive()) {
-          return;
+      try {
+        if (this.speechRecognition) {
+          try {
+            this.speechRecognition.onresult = null;
+            this.speechRecognition.onend = null;
+            this.speechRecognition.onerror = null;
+            this.speechRecognition.stop();
+          } catch (e) {}
         }
 
-        let fullTranscript = '';
-        let hasFinal = false;
+        const rec = new SpeechRec();
+        this.speechRecognition = rec;
+        rec.lang = 'en-US';
+        rec.continuous = true;
+        rec.interimResults = true;
 
-        const startIndex = Math.min(this.speechRecognitionStartIndex || 0, event.results.length);
+        rec.onresult = (event) => {
+          if (!event || !event.results) return;
 
-        for (let i = startIndex; i < event.results.length; ++i) {
-          const res = event.results[i];
-          if (res.isFinal) {
-            hasFinal = true;
+          // Ochrona przed echem akustycznym bez słuchawek:
+          // Jeśli lektor mówi lub dźwięk z głośników właśnie wygasł, odrzucamy dźwięk
+          if (this.isEchoSuppressionActive()) {
+            return;
           }
-          fullTranscript += res[0].transcript + ' ';
-        }
 
-        const text = fullTranscript.trim();
-        if (!text) return;
+          let sessionFinalText = '';
+          let sessionInterimText = '';
+          let hasFinal = false;
 
-        // Odrzucenie echa lektora, jeśli treść pokrywa się ze słowami wypowiedzianymi przez bota
-        if (this.isMatchingRecentBotText(text)) {
-          return;
-        }
+          for (let i = 0; i < event.results.length; ++i) {
+            const res = event.results[i];
+            const transcriptPart = res[0] ? res[0].transcript : '';
+            if (res.isFinal) {
+              hasFinal = true;
+              sessionFinalText += transcriptPart + ' ';
+            } else {
+              sessionInterimText += transcriptPart + ' ';
+            }
+          }
 
-        if (text !== this.lastUserTranscript) {
-          this.lastUserTranscript = text;
-          this.onTranscript({
-            sender: 'user',
-            text: text,
-            isFinal: hasFinal
-          });
-        }
-      };
+          // Łączymy dotychczas zgromadzoną historię tury + część finalną tej sesji + część interim
+          const fullText = [
+            this.userTurnAccumulatedText,
+            sessionFinalText,
+            sessionInterimText
+          ]
+            .map((s) => (s ? s.trim() : ''))
+            .filter(Boolean)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
 
-      this.speechRecognition.onerror = (e) => {
-        if (e.error !== 'no-speech') {
-          console.warn("[GeminiLive] SpeechRecognition info:", e.error);
-        }
-      };
+          if (!fullText) return;
 
-      this.speechRecognition.start();
-    } catch (e) {
-      console.warn("[GeminiLive] Nie udało się wystartować lokalnego SpeechRecognition:", e);
-    }
+          // Odrzucenie echa lektora, jeśli treść pokrywa się ze słowami wypowiedzianymi przez bota
+          if (this.isMatchingRecentBotText(fullText)) {
+            return;
+          }
+
+          if (fullText !== this.lastUserTranscript) {
+            this.lastUserTranscript = fullText;
+            this.onTranscript({
+              sender: 'user',
+              text: fullText,
+              isFinal: hasFinal
+            });
+          }
+        };
+
+        rec.onend = () => {
+          // Po automatycznym zatrzymaniu przez przeglądarkę (np. po milczeniu/pauzie):
+          // Zapisujemy całą dotychczas wygenerowaną wypowiedź w userTurnAccumulatedText
+          if (this.lastUserTranscript && this.lastUserTranscript.trim()) {
+            this.userTurnAccumulatedText = this.lastUserTranscript.trim();
+          }
+
+          // Auto-restart jeśli połączenie jest aktywne i klient nie został zniszczony
+          if (this.isConnected && !this.isDestroyed) {
+            setTimeout(() => {
+              if (this.isConnected && !this.isDestroyed) {
+                startRec();
+              }
+            }, 100);
+          }
+        };
+
+        rec.onerror = (e) => {
+          if (e.error !== 'no-speech' && e.error !== 'aborted') {
+            console.warn("[GeminiLive] SpeechRecognition info:", e.error);
+          }
+        };
+
+        rec.start();
+      } catch (e) {
+        console.warn("[GeminiLive] Nie udało się wystartować lokalnego SpeechRecognition:", e);
+      }
+    };
+
+    startRec();
   }
 
   /**
@@ -1018,6 +1065,7 @@ export class GeminiLiveClient {
    * Pełne sprzątanie zasobów
    */
   cleanup() {
+    this.isDestroyed = true;
     this.reportSessionUsage();
     this.isConnected = false;
 
