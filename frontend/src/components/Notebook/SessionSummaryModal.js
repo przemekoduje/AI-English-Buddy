@@ -193,7 +193,7 @@ const SessionSummaryModal = ({ summary, user, onClose, onSendEmail, onAddWord })
                             </div>
                           )}
                           <p className="forgotten-reason">
-                            💡 <strong>Dlaczego warto zapisać:</strong> {item.reason_pl}
+                            <strong>Dlaczego warto zapisać:</strong> {item.reason_pl}
                           </p>
                         </div>
                       );

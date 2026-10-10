@@ -131,16 +131,18 @@ export class GeminiLiveClient {
 
         if (event.code !== 1000 && event.code !== 1005) {
           let friendlyReason = "";
-          if (event.reason) {
-            friendlyReason = `Google AI Studio: ${event.reason} (kod ${event.code})`;
+          if (event.reason && (event.reason.includes("invalid authentication") || event.code === 1008)) {
+            friendlyReason = "Invalid Google AI Studio API Key. Please paste a valid API key (starting with AIzaSy) in Settings or switch to Classic Mode (OpenAI).";
+          } else if (event.reason) {
+            friendlyReason = `Google AI Studio: ${event.reason} (code ${event.code})`;
           } else if (event.code === 1008) {
-            friendlyReason = "Google AI Studio odrzuciło połączenie (kod 1008: Błąd modelu lub uprawnień). Wybierz model Gemini 2.5 Flash Native Audio lub sprawdź klucz API.";
+            friendlyReason = "Google AI Studio rejected connection (code 1008). Please check your Google AI Studio API key in Settings or switch to OpenAI mode.";
           } else if (event.code === 1007) {
-            friendlyReason = "Google AI Studio zgłosiło błąd formatu danych lub nieobsługiwany model (kod 1007).";
+            friendlyReason = "Google AI Studio reported data format or unsupported model error (code 1007).";
           } else if (event.code === 1006) {
-            friendlyReason = "Połączenie WebSocket z Gemini Live zostało przerwane (kod 1006). Sprawdź czy klucz API jest aktywny i czy sieć nie blokuje WebSockets.";
+            friendlyReason = "Gemini Live WebSocket connection closed unexpectedly (code 1006). Please verify your API key.";
           } else {
-            friendlyReason = `Połączenie z Gemini Live zostało zakończone (kod ${event.code}).`;
+            friendlyReason = `Gemini Live connection closed (code ${event.code}).`;
           }
           this.onError(friendlyReason);
         }
@@ -167,7 +169,7 @@ export class GeminiLiveClient {
 
     if (this.provider === 'google_ai_studio') {
       if (this.token) {
-        return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?key=${encodeURIComponent(this.token)}`;
+        return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(this.token)}`;
       }
       if (this.apiKey) {
         return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(this.apiKey)}`;

@@ -1,6 +1,8 @@
 .mission-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
   background-color: var(--surface);
 }
 
@@ -11,12 +13,18 @@
   position: relative;
   z-index: 101;
   min-width: 0;
+  height: 100vh;
+  overflow: hidden;
   background: var(--surface);
 }
 
 .view-container {
-  padding: 0 1.5rem 2rem 1.5rem;
+  padding: 0;
   flex: 1;
+  height: calc(100vh - 64px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Responsive */

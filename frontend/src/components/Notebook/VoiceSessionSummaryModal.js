@@ -132,7 +132,7 @@ const VoiceSessionSummaryModal = ({ summary, user, onClose, onAddWord }) => {
                       </p>
                     </div>
                     <p className="forgotten-reason" style={{ background: "rgba(239, 68, 68, 0.05)", color: "#991b1b" }}>
-                      💡 <strong>Komentarz:</strong> {item.explanation_pl}
+                      <strong>Komentarz:</strong> {item.explanation_pl}
                     </p>
                   </div>
                 ))}

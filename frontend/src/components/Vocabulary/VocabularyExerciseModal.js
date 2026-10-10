@@ -112,7 +112,7 @@ const VocabularyExerciseModal = ({ notebookWords, user, onClose }) => {
                   className="btn-secondary"
                   style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
                 >
-                  💡 Pokaż słówka, których należy użyć
+                  Pokaż słówka, których należy użyć
                 </button>
               )}
             </div>

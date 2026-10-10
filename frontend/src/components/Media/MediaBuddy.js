@@ -41,7 +41,7 @@ const CURATED_SOURCES = [
   },
   {
     id: "ted_talks",
-    name: "💡 TED Talks (Inspirujące przemówienia)",
+    name: "TED Talks (Inspirujące przemówienia)",
     videos: [
       {
         youtubeId: "5MgBikgcWnY",
@@ -1489,7 +1489,7 @@ function MediaBuddy({ user }) {
                             className="btn-secondary"
                             style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
                           >
-                            💡 Pokaż podpowiedź ze słówkami
+                            Pokaż podpowiedź ze słówkami
                           </button>
                         )}
                       </div>

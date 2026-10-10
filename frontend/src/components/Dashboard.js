@@ -65,45 +65,45 @@ While the senior investment partner expressed polite skepticism about scaling ma
 export const EXERCISE_TYPES = [
   {
     id: "story_discussion",
-    icon: "💬",
-    name: "💬 Dyskusja i opinie o fabule",
-    badge: "Dyskusja",
-    description: "Rozmawiajmy o bohaterach, motywach i wydarzeniach. Lektor zadaje pytania otwarte i pyta o Twoje zdanie."
+    icon: "",
+    name: "Story Discussion & Opinion",
+    badge: "Discussion",
+    description: "Discuss characters, motives, and plot events. The tutor asks open-ended questions about your opinion."
   },
   {
     id: "vocabulary_quiz",
-    icon: "🧠",
-    name: "🧠 Trening słownictwa i quiz słowny",
-    badge: "Słownictwo",
-    description: "Lektor pyta o znaczenie trudniejszych słówek z czytanki, synonimy i prosi o ułożenie zdań."
+    icon: "",
+    name: "Vocabulary Training & Quiz",
+    badge: "Vocabulary",
+    description: "The tutor quizzes key words from the story, asks for synonyms, and practices sentence building."
   },
   {
     id: "roleplay",
-    icon: "🎭",
-    name: "🎭 Odgrywanie ról (Role-Play)",
+    icon: "",
+    name: "Interactive Role-Play",
     badge: "Role-Play",
-    description: "Wciel się w jednego z bohaterów czytanki! Lektor wcieli się w drugą postać w żywym dialogu."
+    description: "Step into the shoes of a story character! The tutor plays the counterpart in a dynamic conversation."
   },
   {
     id: "summary_challenge",
-    icon: "🎙️",
-    name: "🎙️ Wyzwanie streszczenia (Summary)",
-    badge: "Streszczenie",
-    description: "Opowiedz czytankę własnymi słowami. Lektor słucha, dopytuje o szczegóły i chwali za płynność."
+    icon: "",
+    name: "Summary & Retelling Challenge",
+    badge: "Summary",
+    description: "Retell the story in your own words. The tutor listens, asks for details, and encourages fluency."
   },
   {
     id: "comprehension_qa",
-    icon: "❓",
-    name: "❓ Pytania ze zrozumienia tekstu (Q&A)",
-    badge: "Zrozumienie",
-    description: "Quiz ze zrozumienia faktów i detali czytanki – sprawdź ile zapamiętałeś z lektury."
+    icon: "",
+    name: "Comprehension Q&A",
+    badge: "Comprehension",
+    description: "Reading comprehension quiz on facts and key details to test how much you remembered."
   },
   {
     id: "grammar_context",
-    icon: "🔍",
-    name: "🔍 Gramatyka i zwroty w kontekście",
-    badge: "Gramatyka",
-    description: "Ćwiczenie ciekawych struktur zdaniowych, czasów i zwrotów użytych w tym opowiadaniu."
+    icon: "",
+    name: "Grammar & Phrases in Context",
+    badge: "Grammar",
+    description: "Practice interesting sentence structures, tenses, and key expressions used in this story."
   }
 ];
 
@@ -1368,25 +1368,29 @@ function Dashboard({ user }) {
     handleEndSession();
   };
 
-  const isSplitLayout = isChatActive && showTranscript && chatMessages.length > 0;
+  const isSplitLayout = isChatActive;
+  const userName = user?.name || (user?.email ? user.email.split('@')[0] : 'Anna');
+
+  const handleStarterCardClick = (storyId, topicTitle) => {
+    setSelectedStoryId(storyId);
+    if (!isChatActive) {
+      handleOrbClick();
+    }
+  };
 
   return (
-    <div className="tutor-gemini-container">
-      {/* Settings Icon placed over TopBar */}
-      <div style={{ position: 'fixed', top: '15px', right: '32px', zIndex: 60 }}>
-        <button
-          onClick={() => setShowSettings(true)}
-          title="Ustawienia"
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--slate-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <div className="tutor-figma-container">
+      {/* Floating Settings Button */}
+      <div className="figma-settings-fab">
+        <button onClick={() => setShowSettings(true)} title="Ustawienia" className="fab-btn">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </button>
       </div>
 
-      {/* Floating Error Notification */}
+      {/* Floating Error Banner */}
       {errorMessage && (
         <div className="tutor-error-banner animate-fade-in">
           <span>⚠️ {errorMessage}</span>
@@ -1394,237 +1398,347 @@ function Dashboard({ user }) {
         </div>
       )}
 
-      {/* Main Action Stage */}
-      <div className={`tutor-main-stage ${isSplitLayout ? "split" : "centered"}`}>
-        
-        {/* Orb Section */}
-        <div className="tutor-orb-section">
-          {/* Story & Exercise Selection Bar */}
-          <div className="tutor-context-bar glass-panel animate-fade-in">
-            <div className="context-bar-header">
-              <div className="context-bar-title-row">
-                <span className="context-icon">📚</span>
-                <div className="context-title-wrap">
-                  <h3 className="context-heading">Rozmowa o czytance i ćwiczenia z AI</h3>
-                  <p className="context-subheading">
-                    Wybierz czytankę i cel ćwiczenia, aby rozmawiać na konkretny temat lub szlifować słownictwo!
-                  </p>
+      {/* Header Section from Figma */}
+      <header className="chat-live-header-section">
+        <span className="chat-live-eyebrow">YOUR ENGLISH, ONE CONVERSATION AT A TIME</span>
+        <h1 className="chat-live-title">
+          {isChatActive ? `You’re doing great, ${userName}.` : 'A little practice. A lot of confidence.'}
+        </h1>
+        <p className="chat-live-subtitle">
+          {isChatActive
+            ? 'Keep going. Your buddy is listening — there’s no rush.'
+            : 'A patient AI buddy for everyday English. Find your voice at your own pace.'}
+        </p>
+      </header>
+
+      {/* Main Experience Grid */}
+      {!isChatActive ? (
+        /* READY STATE CARD (Image 1) */
+        <div className="chat-live-ready-card">
+          <div className="card-top-bar">
+            <span className="badge-purple-pill">Gemini Live · Voice practice</span>
+            <span className="badge-level-text">English · B2</span>
+          </div>
+
+          <div className="card-center-stage">
+            <div className="figma-orb-wrapper">
+              <button
+                ref={orbButtonRef}
+                className={`figma-gemini-orb ${orbStatus}`}
+                onClick={handleOrbClick}
+                title="Start a conversation"
+              >
+                <div className="orb-halo-ring"></div>
+                <div className="orb-inner-wave">
+                  <span className="wave-bar bar-1"></span>
+                  <span className="wave-bar bar-2"></span>
+                  <span className="wave-bar bar-3"></span>
                 </div>
+              </button>
+            </div>
+
+            <h2 className="ready-stage-heading">Ready when you are</h2>
+            <p className="ready-stage-hint">Try: "Let’s talk about my first week at a new job."</p>
+
+            <button type="button" className="btn-figma-start-primary" onClick={handleOrbClick}>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+              <span>Start a conversation</span>
+            </button>
+
+            <span className="ready-mic-notice">
+              Microphone access is requested when you start. You stay in control.
+            </span>
+          </div>
+        </div>
+      ) : (
+        /* ACTIVE / LISTENING STATE VIEW WITH SIDE TRANSCRIPT (Image 2) */
+        <div className="chat-live-active-container">
+          <div className="active-call-main-card">
+            <div className="active-card-top">
+              <span className="status-pill-green">
+                <span className="green-pulse-dot"></span>
+                Connected · Gemini Live
+              </span>
+              <span className="session-timer">Session 03:24</span>
+            </div>
+
+            <div className="active-orb-center">
+              <div className="figma-orb-wrapper active">
+                <button className={`figma-gemini-orb ${orbStatus}`} onClick={handleOrbClick}>
+                  <div className="orb-halo-ring active"></div>
+                  <div className="orb-inner-wave">
+                    <span className="wave-bar bar-1"></span>
+                    <span className="wave-bar bar-2"></span>
+                    <span className="wave-bar bar-3"></span>
+                  </div>
+                </button>
+              </div>
+
+              <h2 className="active-stage-heading">
+                {orbStatus === "speaking" ? "Tutor speaking..." : orbStatus === "listening" ? "Listening to you..." : "Listening..."}
+              </h2>
+              <p className="active-stage-caption">
+                {chatMessages.length > 0
+                  ? `"${chatMessages[chatMessages.length - 1].text.slice(0, 60)}..."`
+                  : '"I had to adapt to a new routine..."'}
+              </p>
+            </div>
+
+            {/* Bottom Floating Control Dock */}
+            <div className="active-control-dock">
+              <button className="dock-btn" title="Microphone">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                </svg>
+              </button>
+              <button className="dock-btn" onClick={handleToggleCamera} title="Camera">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="23 7 16 12 23 17 23 7" />
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                </svg>
+              </button>
+              <button className="dock-btn" title="Share screen">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+              </button>
+              <button className={`dock-btn ${showTranscript ? 'active' : ''}`} onClick={() => setShowTranscript(!showTranscript)} title="Transcript view">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 6h16M4 12h16M4 18h11" />
+                </svg>
+              </button>
+              <span className="dock-divider"></span>
+              <button className="dock-btn-end" onClick={handleEndSession}>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <rect x="5" y="5" width="14" height="14" rx="2" />
+                </svg>
+                <span>End session</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Right Live Transcript Side Drawer */}
+          {showTranscript && (
+            <div className="active-transcript-drawer">
+              <div className="drawer-header-row">
+                <h3 className="drawer-title">Live transcript</h3>
+                <button className="drawer-close-btn" onClick={() => setShowTranscript(false)}>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="drawer-filter-bar">
+                <span className="lang-filter-pill">English + Polski</span>
+                <button className="copy-all-btn" title="Kopiuj tekst">
+                  📋
+                </button>
+              </div>
+
+              <div className="drawer-scroll-list" ref={transcriptScrollRef}>
+                {chatMessages.length === 0 ? (
+                  <>
+                    <div className="transcript-msg-card bot">
+                      <div className="msg-card-meta">
+                        <span className="speaker-tag buddy">Buddy</span>
+                        <span className="msg-time">03:01</span>
+                      </div>
+                      <p className="msg-en-text">What helped you settle into your new role?</p>
+                      <p className="msg-pl-sub">Co pomogło Ci odnaleźć się w nowej roli?</p>
+                      <div className="msg-card-actions">
+                        <button className="msg-action-btn">📋</button>
+                        <button className="msg-action-btn save-word">+ Save word</button>
+                      </div>
+                    </div>
+
+                    <div className="transcript-msg-card user">
+                      <div className="msg-card-meta">
+                        <span className="speaker-tag you">You</span>
+                        <span className="msg-time">03:12</span>
+                      </div>
+                      <p className="msg-en-text">I had to adapt to a new routine, but my colleagues were supportive.</p>
+                      <p className="msg-pl-sub">Musiałam dostosować się do nowej rutyny, ale moi koledzy byli wspierający.</p>
+                      <div className="msg-card-actions">
+                        <button className="msg-action-btn">📋</button>
+                        <button className="msg-action-btn save-word">+ Save word</button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  chatMessages.map((msg) => {
+                    const isBot = msg.sender === "bot";
+                    return (
+                      <div key={msg.id} className={`transcript-msg-card ${isBot ? "bot" : "user"}`}>
+                        <div className="msg-card-meta">
+                          <span className={`speaker-tag ${isBot ? "buddy" : "you"}`}>{isBot ? "Buddy" : "You"}</span>
+                          <span className="msg-time">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <p className="msg-en-text">{msg.text}</p>
+                        <div className="msg-card-actions">
+                          <button className="msg-action-btn">📋</button>
+                          <button className="msg-action-btn save-word">+ Save word</button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="drawer-footer-live-status">
+                <span className="live-bars">
+                  <span className="bar"></span><span className="bar"></span><span className="bar"></span>
+                </span>
+                <span>Listening · transcript updates here</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bottom Conversation Starters Cards Grid (Figma Footer Section) */}
+      <section className="chat-live-starters-section">
+        <div className="starters-header-row">
+          <h3 className="starters-section-title">
+            {isChatActive ? 'Continue the conversation' : 'Not sure where to begin?'}
+          </h3>
+          <span className="starters-section-sub">Choose a conversation starter or customized story topic</span>
+        </div>
+
+        <div className="starters-grid">
+          {/* Card 1: Rozmowa o czytance (Story & Exercise Configurator) */}
+          <div className="starter-card config-starter-card">
+            <div className="starter-card-top">
+              <div className="starter-icon-wrap blue">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
               </div>
               {selectedStory && (
                 <button
                   type="button"
-                  className="btn-preview-story"
-                  onClick={() => setShowStoryPreview(true)}
-                  title="Zobacz pełny tekst czytanki"
+                  className="starter-preview-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowStoryPreview(true);
+                  }}
+                  title="View story text"
                 >
-                  📖 Zobacz tekst
+                  View text
                 </button>
               )}
             </div>
 
-            <div className="context-selectors-grid">
-              {/* 1. Lista rozwijana czytanek do wyboru */}
-              <div className="context-field">
-                <label className="context-label" htmlFor="story-select">
-                  <span className="field-icon">📖</span> Czytanka do rozmowy:
-                </label>
-                <div className="select-wrapper">
-                  <select
-                    id="story-select"
-                    className="context-select"
-                    value={selectedStoryId}
-                    onChange={handleStorySelectChange}
-                    disabled={isChatActive}
-                  >
-                    <option value="">🗣️ Rozmowa swobodna (dowolny temat / bez czytanki)</option>
-                    {userStories.length > 0 && (
-                      <optgroup label="📁 Twoje zapisane czytanki">
-                        {userStories.map((story) => (
-                          <option key={story.id} value={story.id}>
-                            📖 {story.title}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    <optgroup label="🌟 Gotowe czytanki Speakling">
-                      {SAMPLE_STORIES.map((story) => (
-                        <option key={story.id} value={story.id}>
-                          🌟 {story.title} ({story.level})
-                        </option>
-                      ))}
-                    </optgroup>
-                  </select>
-                </div>
+            <h4 className="starter-title">Story Practice</h4>
+
+            <div className="starter-selects-container">
+              <div className="starter-select-item">
+                <label className="starter-select-label">Story:</label>
+                <select
+                  value={selectedStoryId}
+                  onChange={handleStorySelectChange}
+                  onClick={(e) => e.stopPropagation()}
+                  className="starter-compact-select"
+                >
+                  {allStories.map((story) => (
+                    <option key={story.id} value={story.id}>
+                      {story.title}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* 2. Lista rozwijana typów ćwiczeń do wykonania z AI */}
-              <div className="context-field">
-                <label className="context-label" htmlFor="exercise-select">
-                  <span className="field-icon">🎯</span> Typ ćwiczenia z AI:
-                </label>
-                <div className="select-wrapper">
-                  <select
-                    id="exercise-select"
-                    className="context-select"
-                    value={selectedStoryId ? exerciseType : "free"}
-                    onChange={handleExerciseTypeChange}
-                    disabled={isChatActive || !selectedStoryId}
-                  >
-                    {!selectedStoryId ? (
-                      <option value="free">💬 Swobodna konwersacja z lektorem</option>
-                    ) : (
-                      EXERCISE_TYPES.map((ex) => (
-                        <option key={ex.id} value={ex.id}>
-                          {ex.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
+              <div className="starter-select-item">
+                <label className="starter-select-label">Exercise goal:</label>
+                <select
+                  value={exerciseType}
+                  onChange={handleExerciseTypeChange}
+                  onClick={(e) => e.stopPropagation()}
+                  className="starter-compact-select"
+                >
+                  {EXERCISE_TYPES.map((ex) => (
+                    <option key={ex.id} value={ex.id}>
+                      {ex.badge}: {ex.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            {/* Informacja o wybranym trybie */}
-            {selectedStory ? (
-              <div className="selected-context-info">
-                <span className="context-pill story-pill">
-                  📖 <strong>{selectedStory.title}</strong>
-                  {selectedStory.level && ` (${selectedStory.level})`}
-                </span>
-                <span className="context-pill exercise-pill" title={currentExerciseObj?.description}>
-                  🎯 <strong>{currentExerciseObj?.badge}:</strong> {currentExerciseObj?.description}
-                </span>
-                {isChatActive && (
-                  <span className="context-pill active-call-pill">
-                    🔒 Aktywne połączenie
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="selected-context-info free-mode">
-                <span className="context-pill neutral-pill">
-                  🗣️ Tryb otwarty – swobodna rozmowa po angielsku na dowolny temat.
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Central Gemini Orb Control */}
-          <div className="tutor-orb-wrapper">
-            <button
-              ref={orbButtonRef}
-              className={`tutor-gemini-orb ${orbStatus}`}
-              onClick={handleOrbClick}
-              title={isChatActive ? (orbStatus === "speaking" ? "Kliknij, aby przerwać lektorowi i odpowiedzieć" : "Kliknij, aby zakończyć rozmowę") : "Kliknij, aby rozpocząć rozmowę w czasie rzeczywistym"}
-            >
-              <div className="orb-pulse-ring-1"></div>
-              <div className="orb-pulse-ring-2"></div>
-              <div className="orb-core">
-                {orbStatus === "inactive" && (
-                  <svg viewBox="0 0 24 24" className="orb-mic-svg">
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                  </svg>
-                )}
-                {orbStatus === "speaking" && (
-                  <div className="orb-wave-container">
-                    <span className="wave-bar bar-1"></span>
-                    <span className="wave-bar bar-2"></span>
-                    <span className="wave-bar bar-3"></span>
-                  </div>
-                )}
-                {orbStatus === "listening" && (
-                  <div className="orb-pulse-dot"></div>
-                )}
-                {orbStatus === "user-speaking" && (
-                  <div className="orb-wave-container green">
-                    <span className="wave-bar bar-1"></span>
-                    <span className="wave-bar bar-2"></span>
-                    <span className="wave-bar bar-3"></span>
-                  </div>
-                )}
-                {(orbStatus === "thinking" || orbStatus === "connecting") && (
-                  <div className="orb-spinner"></div>
-                )}
-              </div>
-            </button>
-          </div>
-
-          {/* Status text label */}
-          <div className="tutor-status-label">
-            {orbStatus === "inactive" && "Naciśnij orb, aby rozpocząć rozmowę w czasie rzeczywistym"}
-            {orbStatus === "connecting" && "Łączenie z Gemini Live API..."}
-            {orbStatus === "speaking" && "Lektor mówi (zacznij mówić, aby wtrącić!)"}
-            {orbStatus === "listening" && "Słucham... powiedz coś po angielsku"}
-            {orbStatus === "user-speaking" && "Mówisz..."}
-            {orbStatus === "thinking" && "Lektor myśli..."}
-          </div>
-
-
-
-          {/* Przycisk zakończenia rozmowy i przejścia do podsumowania */}
-          {isChatActive && (
-            <div className="tutor-active-call-controls animate-fade-in">
-              <button
-                type="button"
-                className="btn-end-call-prominent"
-                onClick={handleEndSession}
-                title="Zakończ rozmowę i wygeneruj raport postępów"
-              >
-                <span className="end-call-icon">🛑</span> Zakończ rozmowę i zobacz podsumowanie
-              </button>
+            <div className="starter-card-bottom-row" onClick={() => handleOrbClick()}>
+              <span className="starter-badge purple">
+                {currentExerciseObj ? currentExerciseObj.badge : 'Stories'}
+              </span>
+              <span className="starter-arrow">↗</span>
             </div>
-          )}
+          </div>
 
-          {/* Controls Bar: Transcript Button (Only visible after initiating chat) */}
-          <div className="tutor-action-buttons-row">
+          {/* Starter Card 1 */}
+          <div className="starter-card" onClick={() => handleStarterCardClick('sample-job-interview', 'A new beginning')}>
+            <div className="starter-card-top">
+              <div className="starter-icon-wrap blue">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                </svg>
+              </div>
+              <span className="starter-arrow">↗</span>
+            </div>
+            <h4 className="starter-title">A new beginning</h4>
+            <p className="starter-desc">Talk about your first week at work.</p>
+            <span className="starter-badge">Business · B2</span>
+          </div>
 
-            {/* Toggle Transcript button */}
-            {chatMessages.length > 0 && (
-              <button 
-                className={`tutor-transcript-toggle-btn ${showTranscript ? "active" : ""}`}
-                onClick={() => setShowTranscript(!showTranscript)}
-              >
-                {showTranscript ? "🙈 Ukryj tekst" : "👁 Pokaż tekst"}
-              </button>
-            )}
+          {/* Starter Card 2 */}
+          <div className="starter-card" onClick={() => handleStarterCardClick('sample-jfk-airport', 'A weekend in Kraków')}>
+            <div className="starter-card-top">
+              <div className="starter-icon-wrap blue">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3.5c-.5-.5-2.5 0-4 1.5L13.5 8.5l-8.2-1.8c-.5-.1-.9.1-1.2.4L3 8.3c-.3.3-.3.9 0 1.2l5.4 3.6L6 15.5l-2.4-.6c-.4-.1-.8.1-1 .4l-.6.6c-.2.2-.2.6 0 .8l2.4 1.8 1.8 2.4c.2.2.6.2.8 0l.6-.6c.3-.2.5-.6.4-1L7.5 18l2.4-2.4 3.6 5.4c.3.3.9.3 1.2 0l1.2-1.1c.3-.3.5-.7.4-1.2z" />
+                </svg>
+              </div>
+              <span className="starter-arrow">↗</span>
+            </div>
+            <h4 className="starter-title">A weekend in Kraków</h4>
+            <p className="starter-desc">Plan a trip and ask for directions.</p>
+            <span className="starter-badge">Travel · B1</span>
+          </div>
+
+          {/* Starter Card 3 */}
+          <div className="starter-card" onClick={() => handleStarterCardClick('sample-coffee-blend', 'Small talk, big progress')}>
+            <div className="starter-card-top">
+              <div className="starter-icon-wrap blue">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
+                  <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
+                  <line x1="6" y1="1" x2="6" y2="4" />
+                  <line x1="10" y1="1" x2="10" y2="4" />
+                  <line x1="14" y1="1" x2="14" y2="4" />
+                </svg>
+              </div>
+              <span className="starter-arrow">↗</span>
+            </div>
+            <h4 className="starter-title">Small talk, big progress</h4>
+            <p className="starter-desc">Share the little things in your day.</p>
+            <span className="starter-badge">Daily Life · A2</span>
           </div>
         </div>
-
-        {/* Side Transcript Section */}
-        {(isChatActive || isGeneratingSummary || showTranscript) && chatMessages.length > 0 && (
-          <div className={`tutor-side-transcript glass-panel ${showTranscript ? "open" : ""}`}>
-            <div className="side-transcript-header-row">
-              <h3 className="side-transcript-header">Zapis rozmowy na żywo</h3>
-              <span className="live-tag">LIVE</span>
-            </div>
-            <div className="transcript-scroll-area" ref={transcriptScrollRef}>
-              {chatMessages.map((msg) => {
-                const isBot = msg.sender === "bot";
-                return (
-                  <div key={msg.id} className={`transcript-bubble ${isBot ? "bot" : "user"}`}>
-                    <span className="bubble-speaker">{isBot ? "Lektor:" : "Ty:"}</span>
-                    <p className="bubble-text">{msg.text}</p>
-                    {!isBot && msg.evaluation && (
-                      <div className="transcript-evaluation">
-                        🏆 Ocena: <strong>{msg.evaluation.score}/100</strong>. {msg.evaluation.feedback}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-      </div>
+      </section>
 
       {/* Multimodal Camera PIP Window */}
       {isCameraActive && (
         <div className="tutor-camera-pip glass-panel animate-zoom">
           <div className="pip-header">
-            <span className="pip-badge">📷 Multimodal Vision</span>
+            <span className="pip-badge">Multimodal Vision</span>
             <button className="pip-close-btn" onClick={handleToggleCamera}>✕</button>
           </div>
           <video
@@ -1634,7 +1748,7 @@ function Dashboard({ user }) {
             playsInline
             muted
           />
-          <div className="pip-footer">Lektor analizuje obraz z kamery w czasie rzeczywistym.</div>
+          <div className="pip-footer">The tutor is analyzing your camera feed in real time.</div>
         </div>
       )}
 
@@ -1659,9 +1773,9 @@ function Dashboard({ user }) {
           `}</style>
           <div className="summary-modal-content glass-panel animate-zoom" style={{ maxWidth: "420px", padding: "2.5rem", display: "flex", flexDirection: "column", alignItems: "center", gap: "1.25rem", background: "white" }}>
             <div className="spinner" style={{ width: "40px", height: "40px", border: "4px solid #e2e8f0", borderTop: "4px solid #1a73e8", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
-            <h3 style={{ margin: 0, textAlign: "center", fontSize: "1.2rem", color: "var(--slate-800)" }}>Generowanie podsumowania lekcji...</h3>
+            <h3 style={{ margin: 0, textAlign: "center", fontSize: "1.2rem", color: "var(--slate-800)" }}>Generating session summary...</h3>
             <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--slate-500)", textAlign: "center", lineHeight: "1.4" }}>
-              Analizuję Twoje błędy gramatyczne, płynność oraz nowe słownictwo, aby przygotować raport z lekcji.
+              Analyzing your grammar, fluency, and vocabulary to prepare your report.
             </p>
           </div>
         </div>
@@ -1710,7 +1824,7 @@ function Dashboard({ user }) {
             </div>
             <div className="story-preview-footer">
               <div className="story-exercise-reminder">
-                🎯 Wybrany cel rozmowy: <strong>{currentExerciseObj?.name}</strong>
+                Wybrany cel rozmowy: <strong>{currentExerciseObj?.name}</strong>
               </div>
               <button
                 type="button"
@@ -1720,7 +1834,7 @@ function Dashboard({ user }) {
                   if (!isChatActive) handleOrbClick();
                 }}
               >
-                {isChatActive ? "Wróć do rozmowy" : "🚀 Rozpocznij rozmowę z lektorem"}
+                {isChatActive ? "Wróć do rozmowy" : "Rozpocznij rozmowę z lektorem"}
               </button>
             </div>
           </div>
@@ -1761,7 +1875,7 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
     <div className="live-settings-modal-overlay">
       <div className="live-settings-modal-card glass-panel animate-zoom">
         <div className="live-settings-modal-header">
-          <h3>⚙️ Settings</h3>
+          <h3>Settings</h3>
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
 
@@ -1770,11 +1884,11 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
           {currentSettings.mode === "live" ? (
             <span className="live-technology-badge">
               <span className="badge-pulse-dot"></span>
-              ⚡ Gemini Multimodal Live API • {currentSettings.provider === "vertex_ai" ? "Vertex AI (GCP)" : "Google AI Studio"} ({currentSettings.voice})
+              Gemini Multimodal Live API • {currentSettings.provider === "vertex_ai" ? "Vertex AI (GCP)" : "Google AI Studio"} ({currentSettings.voice})
             </span>
           ) : (
             <span className="classic-technology-badge">
-              🎙️ Tryb Klasyczny (Whisper + OpenAI / DeepSeek)
+              Tryb Klasyczny (Whisper + OpenAI / DeepSeek)
             </span>
           )}
         </div>
@@ -1782,45 +1896,45 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
         {/* Shortcut to switch to Classic Mode */}
         <div className="modal-classic-shortcut">
           <div className="shortcut-text">
-            <strong>💡 Nie masz klucza Gemini API?</strong>
-            <p>Możesz od razu rozmawiać w trybie OpenAI / DeepSeek (nie wymaga klucza Gemini).</p>
+            <strong>No Gemini API key?</strong>
+            <p>You can practice immediately in OpenAI mode (no Gemini key required).</p>
           </div>
           <button
             type="button"
             className="btn-shortcut-classic"
             onClick={onSwitchToClassicAndStart}
           >
-            🚀 Włącz tryb OpenAI
+            Switch to OpenAI mode
           </button>
         </div>
 
         <form onSubmit={handleSaveAndStart} className="live-settings-form">
-          {/* Wybór Trybu */}
+          {/* Practice Mode */}
           <div className="settings-field-group">
-            <label className="settings-label">Tryb działania:</label>
+            <label className="settings-label">Practice Mode:</label>
             <div className="settings-radio-toggle">
               <button
                 type="button"
                 className={`toggle-option ${mode === "live" ? "active" : ""}`}
                 onClick={() => setMode("live")}
               >
-                ⚡ Gemini Multimodal Live (Czas rzeczywisty)
+                Gemini Multimodal Live (Real-time)
               </button>
               <button
                 type="button"
                 className={`toggle-option ${mode === "classic" ? "active" : ""}`}
                 onClick={() => setMode("classic")}
               >
-                🎙️ Klasyczny (Whisper + OpenAI / TTS)
+                Classic (Whisper + OpenAI / TTS)
               </button>
             </div>
           </div>
 
           {mode === "live" && (
             <>
-              {/* Wybór Dostawcy */}
+              {/* Live Provider */}
               <div className="settings-field-group">
-                <label className="settings-label">Dostawca technologii Live:</label>
+                <label className="settings-label">Live Provider:</label>
                 <select
                   value={provider}
                   onChange={(e) => setProvider(e.target.value)}
@@ -1831,14 +1945,14 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
                 </select>
                 <span className="settings-hint">
                   {provider === "google_ai_studio"
-                    ? "Domyślna, ultra-szybka opcja z natywnym przesyłem JSON WebSockets."
-                    : "Wymaga uwierzytelnienia GCP dla konta chmurowego z usługą Vertex AI."}
+                    ? "Default ultra-fast native WebSocket streaming."
+                    : "Requires GCP cloud authentication with Vertex AI enabled."}
                 </span>
               </div>
 
-              {/* Wybór Głosu Gemini */}
+              {/* Tutor Voice */}
               <div className="settings-field-group">
-                <label className="settings-label">Głos lektora Gemini:</label>
+                <label className="settings-label">Tutor Voice:</label>
                 <select
                   value={voice}
                   onChange={(e) => setVoice(e.target.value)}
@@ -1852,9 +1966,9 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
                 </select>
               </div>
 
-              {/* Wybór Modelu */}
+              {/* Gemini Model */}
               <div className="settings-field-group">
-                <label className="settings-label">Model Gemini Live:</label>
+                <label className="settings-label">Gemini Model:</label>
                 <select
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
@@ -1867,16 +1981,16 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
                 </select>
               </div>
 
-              {/* Opcjonalny Własny Klucz Google AI Studio */}
+              {/* Google AI Studio API Key */}
               {provider === "google_ai_studio" && (
                 <div className="settings-field-group">
                   <div className="label-with-badge">
                     <label className="settings-label">
-                      Klucz API Google AI Studio:
+                      Google AI Studio API Key:
                       {apiKey.trim() ? (
-                        <span className="status-badge-ok"> (Wprowadzony)</span>
+                        <span className="status-badge-ok"> (Saved)</span>
                       ) : serverConfig?.gemini_api_key_configured ? (
-                        <span className="status-badge-ok"> (Skonfigurowany na serwerze)</span>
+                        <span className="status-badge-ok"> (Configured on server)</span>
                       ) : null}
                     </label>
                     <a
@@ -1885,7 +1999,7 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
                       rel="noreferrer"
                       className="api-key-link"
                     >
-                      Pobierz bezpłatny klucz ↗
+                      Get free API key ↗
                     </a>
                   </div>
                   <div className="input-with-action">
@@ -1893,7 +2007,7 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
                       type={showKey ? "text" : "password"}
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
-                      placeholder={serverConfig?.gemini_api_key_configured ? "Używam klucza skonfigurowanego na serwerze (opcjonalnie podaj własny)" : "Wklej swój klucz API z Google AI Studio (AIzaSy...)"}
+                      placeholder={serverConfig?.gemini_api_key_configured ? "Using server API key (optionally enter custom key)" : "Paste your Google AI Studio API key (AIzaSy...)"}
                       className="settings-input"
                     />
                     <button
@@ -1901,11 +2015,11 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
                       className="eye-toggle-btn"
                       onClick={() => setShowKey(!showKey)}
                     >
-                      {showKey ? "Ukryj" : "Pokaż"}
+                      {showKey ? "Hide" : "Show"}
                     </button>
                   </div>
                   <span className="settings-hint">
-                    Klucz jest bezpiecznie zapamiętywany w Twojej przeglądarce i przekazywany bezpośrednio do Google.
+                    Your API key is securely saved in your browser and passed directly to Google.
                   </span>
                 </div>
               )}
@@ -1914,13 +2028,13 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
 
           <div className="live-settings-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
-              Anuluj
+              Cancel
             </button>
             <button type="button" className="btn-save-only" onClick={handleSaveOnly}>
-              Tylko zapisz
+              Save only
             </button>
             <button type="button" className="btn-primary btn-save-start" onClick={handleSaveAndStart}>
-              🟢 Zapisz i Włącz Orb
+              Save & Start Orb
             </button>
           </div>
         </form>

@@ -5402,7 +5402,7 @@ def get_live_token():
         return jsonify({
             "token": token,
             "model": model,
-            "ws_url": f"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?key={token}",
+            "ws_url": f"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token={token}",
             "provider": "google_ai_studio"
         })
     except Exception as e:

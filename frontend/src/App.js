@@ -19,7 +19,7 @@ function App() {
   const [currentView, setCurrentView] = useState(() => {
     const savedView = localStorage.getItem("buddy_current_view");
     if (savedView) return savedView;
-    return window.innerWidth <= 768 ? 'dashboard' : 'workspace';
+    return 'dashboard';
   });
   const [user, setUser] = useState(() => {
     const stored = localStorage.getItem("buddy_user");
@@ -187,7 +187,7 @@ function App() {
       <Sidebar currentView={currentView} onNavigate={handleNavigate} user={user} onLogout={handleLogout} isAdmin={isAdmin} />
       
       <main className="main-content">
-        {currentView !== 'workspace' && <TopBar title={getPageTitle()} />}
+        {currentView !== 'workspace' && <TopBar title={getPageTitle()} user={user} />}
         <div className="view-container">
           {currentView === 'dashboard' ? (
             <Dashboard onNavigateToWorkspace={() => handleNavigate('workspace')} user={user} />
