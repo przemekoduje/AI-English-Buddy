@@ -46,9 +46,8 @@ export class GeminiLiveClient {
     this.scriptProcessorNode = null;
     this.speechRecognition = null;
     this.lastUserTranscript = '';
-    this.userTurnAccumulatedText = '';
-    this.currentTurnId = 0;
-    this.speechRecognitionStartIndex = 0;
+    this.savedTurnPrefixText = '';
+    this.userTurnStartIndex = 0;
     this.lastSpeechResultLength = 0;
     this.isDestroyed = false;
 
@@ -401,123 +400,127 @@ export class GeminiLiveClient {
   }
 
   resetUserTurnIndex() {
-    this.userTurnAccumulatedText = '';
+    this.userTurnStartIndex = this.lastSpeechResultLength || 0;
+    this.savedTurnPrefixText = '';
     this.lastUserTranscript = '';
-    this.restartSpeechRecognition();
-  }
-
-  restartSpeechRecognition() {
-    if (this.isDestroyed || !this.isConnected) return;
-    if (this.speechRecognition) {
-      try {
-        this.speechRecognition.onresult = null;
-        this.speechRecognition.onend = null;
-        this.speechRecognition.onerror = null;
-        this.speechRecognition.stop();
-      } catch (e) {}
-      this.speechRecognition = null;
-    }
-    this.startSpeechRecognitionInstance();
   }
 
   /**
    * Pomocnicze rozpoznawanie mowy przeglądarki (do zapisu słów ucznia w transkrypcji)
    */
   initSpeechRecognition() {
-    this.resetUserTurnIndex();
-  }
-
-  startSpeechRecognitionInstance() {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRec || this.isDestroyed || !this.isConnected) return;
+    if (!SpeechRec) return;
 
-    try {
-      const rec = new SpeechRec();
-      this.speechRecognition = rec;
-      rec.lang = 'en-US';
-      rec.continuous = true;
-      rec.interimResults = true;
+    this.userTurnStartIndex = 0;
+    this.savedTurnPrefixText = '';
+    this.lastSpeechResultLength = 0;
+    this.lastUserTranscript = '';
 
-      rec.onresult = (event) => {
-        if (!event || !event.results) return;
+    const startRec = () => {
+      if (this.isDestroyed || !this.isConnected) return;
 
-        // Ochrona przed echem akustycznym bez słuchawek:
-        // Jeśli lektor mówi lub dźwięk z głośników właśnie wygasł, odrzucamy dźwięk
-        if (this.isEchoSuppressionActive()) {
-          return;
+      try {
+        if (this.speechRecognition) {
+          try {
+            this.speechRecognition.onresult = null;
+            this.speechRecognition.onend = null;
+            this.speechRecognition.onerror = null;
+            this.speechRecognition.abort();
+          } catch (e) {}
+          this.speechRecognition = null;
         }
 
-        let sessionFinalText = '';
-        let sessionInterimText = '';
-        let hasFinal = false;
+        const rec = new SpeechRec();
+        this.speechRecognition = rec;
+        rec.lang = 'en-US';
+        rec.continuous = true;
+        rec.interimResults = true;
 
-        for (let i = 0; i < event.results.length; ++i) {
-          const res = event.results[i];
-          const transcriptPart = res[0] ? res[0].transcript : '';
-          if (res.isFinal) {
-            hasFinal = true;
-            sessionFinalText += transcriptPart + ' ';
-          } else {
-            sessionInterimText += transcriptPart + ' ';
+        rec.onresult = (event) => {
+          if (!event || !event.results) return;
+          this.lastSpeechResultLength = event.results.length;
+
+          // Ochrona przed echem akustycznym bez słuchawek:
+          // Jeśli lektor mówi lub dźwięk z głośników właśnie wygasł, odrzucamy dźwięk
+          if (this.isEchoSuppressionActive()) {
+            return;
           }
-        }
 
-        // Łączymy dotychczas zgromadzoną historię TEJ tury + część finalną tej sesji + część interim
-        const fullText = [
-          this.userTurnAccumulatedText,
-          sessionFinalText,
-          sessionInterimText
-        ]
-          .map((s) => (s ? s.trim() : ''))
-          .filter(Boolean)
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .trim();
+          // Jeśli Chrome zresetował wyniki (nowa sesja po onend), zerujemy userTurnStartIndex
+          if (event.results.length < this.userTurnStartIndex) {
+            this.userTurnStartIndex = 0;
+          }
 
-        if (!fullText) return;
+          let sessionText = '';
+          let hasFinal = false;
 
-        // Odrzucenie echa lektora, jeśli treść pokrywa się ze słowami wypowiedzianymi przez bota
-        if (this.isMatchingRecentBotText(fullText)) {
-          return;
-        }
-
-        if (fullText !== this.lastUserTranscript) {
-          this.lastUserTranscript = fullText;
-          this.onTranscript({
-            sender: 'user',
-            text: fullText,
-            isFinal: hasFinal
-          });
-        }
-      };
-
-      rec.onend = () => {
-        // Po automatycznym zatrzymaniu przez przeglądarkę (np. po milczeniu/pauzie):
-        // Zapisujemy całą dotychczas wygenerowaną wypowiedź w userTurnAccumulatedText
-        if (this.lastUserTranscript && this.lastUserTranscript.trim()) {
-          this.userTurnAccumulatedText = this.lastUserTranscript.trim();
-        }
-
-        // Auto-restart jeśli połączenie jest aktywne, klient nie został zniszczony i lektor nie mówi
-        if (this.isConnected && !this.isDestroyed && !this.isBotCurrentlySpeaking) {
-          setTimeout(() => {
-            if (this.isConnected && !this.isDestroyed && !this.isBotCurrentlySpeaking) {
-              this.startSpeechRecognitionInstance();
+          const startIdx = Math.min(this.userTurnStartIndex || 0, event.results.length);
+          for (let i = startIdx; i < event.results.length; ++i) {
+            const res = event.results[i];
+            if (res.isFinal) {
+              hasFinal = true;
             }
-          }, 100);
-        }
-      };
+            if (res[0] && res[0].transcript) {
+              sessionText += res[0].transcript + ' ';
+            }
+          }
 
-      rec.onerror = (e) => {
-        if (e.error !== 'no-speech' && e.error !== 'aborted') {
-          console.warn("[GeminiLive] SpeechRecognition info:", e.error);
-        }
-      };
+          const combined = [this.savedTurnPrefixText, sessionText]
+            .map((s) => (s ? s.trim() : ''))
+            .filter(Boolean)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
 
-      rec.start();
-    } catch (e) {
-      console.warn("[GeminiLive] Nie udało się wystartować lokalnego SpeechRecognition:", e);
-    }
+          if (!combined) return;
+
+          // Odrzucenie echa lektora, jeśli treść pokrywa się ze słowami wypowiedzianymi przez bota
+          if (this.isMatchingRecentBotText(combined)) {
+            return;
+          }
+
+          if (combined !== this.lastUserTranscript) {
+            this.lastUserTranscript = combined;
+            this.onTranscript({
+              sender: 'user',
+              text: combined,
+              isFinal: hasFinal
+            });
+          }
+        };
+
+        rec.onend = () => {
+          // Po automatycznym zatrzymaniu przez przeglądarkę (np. po milczeniu/pauzie):
+          // Zapisujemy dotychczas wygenerowany tekst tury w savedTurnPrefixText
+          if (this.lastUserTranscript && this.lastUserTranscript.trim()) {
+            this.savedTurnPrefixText = this.lastUserTranscript.trim();
+          }
+          this.userTurnStartIndex = 0;
+
+          // Auto-restart jeśli połączenie jest aktywne, klient nie został zniszczony i lektor nie mówi
+          if (this.isConnected && !this.isDestroyed && !this.isBotCurrentlySpeaking) {
+            setTimeout(() => {
+              if (this.isConnected && !this.isDestroyed && !this.isBotCurrentlySpeaking) {
+                startRec();
+              }
+            }, 100);
+          }
+        };
+
+        rec.onerror = (e) => {
+          if (e.error !== 'no-speech' && e.error !== 'aborted') {
+            console.warn("[GeminiLive] SpeechRecognition info:", e.error);
+          }
+        };
+
+        rec.start();
+      } catch (e) {
+        console.warn("[GeminiLive] Nie udało się wystartować lokalnego SpeechRecognition:", e);
+      }
+    };
+
+    startRec();
   }
 
   /**
