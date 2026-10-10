@@ -1,517 +1,254 @@
 /* ==========================================================================
-   GoodToKnow Component Base Styles
+   GoodToKnow Component — Light Theme Style
    ========================================================================== */
 .good-to-know-container {
-  padding: 2.5rem 1.5rem;
+  padding: 2rem 1.5rem;
   overflow-y: auto;
   height: 100%;
-  color: var(--text-primary, #f8fafc);
-  background: var(--bg-primary, #0f172a);
+  color: var(--gray-900, #202124);
+  background: var(--bg-main, #ffffff);
 }
 
 .good-to-know-content {
-  max-width: 960px;
+  max-width: 900px;
   margin: 0 auto;
-  padding-bottom: 4rem;
+  padding-bottom: 3rem;
 }
 
 .gtk-header {
   text-align: center;
-  margin-bottom: 3.5rem;
+  margin-bottom: 3rem;
 }
 
 .gtk-header h2 {
-  font-size: 2.5rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  margin-bottom: 0.75rem;
-  background: linear-gradient(135deg, #38bdf8, #818cf8, #c084fc);
+  font-size: 2.3rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, #1A73E8, #a953ff);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .subtitle {
-  color: #94a3b8;
-  font-size: 1.15rem;
-  max-width: 600px;
-  margin: 0 auto;
+  color: var(--gray-500, #5f6368);
+  font-size: 1.1rem;
 }
 
 .gtk-section {
-  margin-bottom: 3.5rem;
+  margin-bottom: 3rem;
 }
 
 .section-title {
   font-size: 1.4rem;
-  font-weight: 700;
-  margin-bottom: 1.75rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  color: #f1f5f9;
+  gap: 1rem;
+  color: var(--gray-900, #202124);
 }
 
 .section-number {
-  background: linear-gradient(135deg, #6366f1, #a855f7);
-  color: white;
-  width: 34px;
-  height: 34px;
+  background: linear-gradient(135deg, #1A73E8, #a953ff);
+  color: #ffffff;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 50%;
   font-size: 1.1rem;
   font-weight: 700;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 2px 6px rgba(26, 115, 232, 0.3);
 }
 
 .gtk-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.25rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1.75rem;
 }
 
 .gtk-card {
   padding: 1.5rem;
-  border-radius: 16px;
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid var(--gray-300, #e0e0e0);
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .gtk-card:hover {
-  transform: translateY(-4px);
-  background: rgba(30, 41, 59, 0.75);
-  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.3), 0 0 20px rgba(99, 102, 241, 0.15);
-  border-color: rgba(168, 85, 247, 0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(60, 64, 67, 0.15);
+  border-color: #1A73E8;
 }
 
 .gtk-card h4 {
   font-size: 1.1rem;
   font-weight: 600;
   margin-bottom: 0.75rem;
-  color: #c084fc;
+  color: #1A73E8;
 }
 
 .gtk-card p {
   font-size: 0.95rem;
-  line-height: 1.65;
-  color: #cbd5e1;
+  line-height: 1.6;
+  color: var(--gray-700, #3c4043);
 }
 
 .gtk-card strong {
-  color: #f8fafc;
+  color: var(--gray-900, #202124);
 }
 
 .gtk-card em {
-  color: #38bdf8;
+  color: #1A73E8;
   font-style: normal;
   font-weight: 600;
-  background: rgba(56, 189, 248, 0.12);
-  padding: 0.15rem 0.45rem;
-  border-radius: 6px;
-  border: 1px solid rgba(56, 189, 248, 0.2);
+  background: rgba(26, 115, 232, 0.08);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
 }
 
 /* ==========================================================================
-   Redesigned Breathing Exercise Widget (4-7-8)
+   Breathing Exercise Widget — Clean Light Style & Vibrant Animation
    ========================================================================== */
-.breathing-widget-container {
-  position: relative;
-  overflow: hidden;
-  padding: 2.5rem 2rem;
-  border-radius: 24px;
+.breathing-widget {
+  padding: 2rem;
+  border-radius: 16px;
   text-align: center;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.98) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 60px rgba(99, 102, 241, 0.08);
+  background: #ffffff;
+  border: 1px solid var(--gray-300, #e0e0e0);
+  box-shadow: 0 2px 8px rgba(60, 64, 67, 0.08);
   margin-top: 1.5rem;
-  transition: border-color 0.5s ease, box-shadow 0.5s ease;
 }
 
-.breathing-widget-glow {
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.08), transparent 60%);
-  pointer-events: none;
-  transition: background 0.8s ease;
-}
-
-.breathing-widget-container.inhale .breathing-widget-glow {
-  background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.22), transparent 60%);
-}
-
-.breathing-widget-container.hold .breathing-widget-glow {
-  background: radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.22), transparent 60%);
-}
-
-.breathing-widget-container.exhale .breathing-widget-glow {
-  background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.22), transparent 60%);
-}
-
-/* Header */
-.breathing-header {
-  position: relative;
-  z-index: 2;
-  margin-bottom: 2rem;
-}
-
-.breathing-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.9rem;
-  border-radius: 999px;
-  background: rgba(99, 102, 241, 0.15);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  color: #818cf8;
-  font-size: 0.825rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  margin-bottom: 0.85rem;
-}
-
-.breath-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.breathing-title {
-  font-size: 1.65rem;
+.breathing-widget h4 {
+  font-size: 1.3rem;
   font-weight: 700;
-  color: #f8fafc;
-  margin-bottom: 0.5rem;
-  letter-spacing: -0.01em;
+  color: var(--gray-900, #202124);
+  margin-bottom: 0.4rem;
 }
 
-.breathing-subtitle {
-  color: #94a3b8;
+.breathing-hint {
+  color: var(--gray-500, #5f6368);
   font-size: 0.95rem;
-  max-width: 520px;
-  margin: 0 auto;
-  line-height: 1.5;
-}
-
-/* Steps Bar */
-.breathing-steps-bar {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  margin-bottom: 2.5rem;
-  flex-wrap: wrap;
-}
-
-.step-item {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.85rem;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #64748b;
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.step-num {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.step-label {
-  color: #94a3b8;
-}
-
-.step-duration {
-  font-size: 0.75rem;
-  opacity: 0.7;
-}
-
-.step-divider {
-  color: #475569;
-  font-size: 1.1rem;
-}
-
-.step-item.active {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-}
-
-.step-item.active.inhale {
-  background: rgba(56, 189, 248, 0.18);
-  border-color: #38bdf8;
-  color: #f0f9ff;
-}
-
-.step-item.active.inhale .step-label { color: #38bdf8; font-weight: 700; }
-.step-item.active.inhale .step-num { background: #38bdf8; color: #0f172a; }
-
-.step-item.active.hold {
-  background: rgba(168, 85, 247, 0.18);
-  border-color: #a855f7;
-  color: #faf5ff;
-}
-
-.step-item.active.hold .step-label { color: #c084fc; font-weight: 700; }
-.step-item.active.hold .step-num { background: #a855f7; color: #0f172a; }
-
-.step-item.active.exhale {
-  background: rgba(16, 185, 129, 0.18);
-  border-color: #10b981;
-  color: #ecfdf5;
-}
-
-.step-item.active.exhale .step-label { color: #34d399; font-weight: 700; }
-.step-item.active.exhale .step-num { background: #10b981; color: #0f172a; }
-
-/* Breathing Stage & Orb */
-.breathing-stage {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 280px;
   margin-bottom: 2rem;
 }
 
-.ripple-aura {
-  position: absolute;
-  width: 170px;
-  height: 170px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.15);
-  pointer-events: none;
-  transition: all 0.5s ease;
+.breathing-circle-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 250px;
+  margin-bottom: 1.75rem;
 }
 
-.aura-1 {
-  animation: pulseAura1 4s infinite ease-in-out;
-}
-
-.aura-2 {
-  animation: pulseAura2 4s infinite ease-in-out 1s;
-}
-
-@keyframes pulseAura1 {
-  0%, 100% { transform: scale(1); opacity: 0.2; }
-  50% { transform: scale(1.4); opacity: 0.5; }
-}
-
-@keyframes pulseAura2 {
-  0%, 100% { transform: scale(1.1); opacity: 0.1; }
-  50% { transform: scale(1.65); opacity: 0.35; }
-}
-
-.breathing-widget-container.inhale .ripple-aura {
-  border-color: rgba(56, 189, 248, 0.4);
-}
-
-.breathing-widget-container.hold .ripple-aura {
-  border-color: rgba(168, 85, 247, 0.4);
-}
-
-.breathing-widget-container.exhale .ripple-aura {
-  border-color: rgba(16, 185, 129, 0.4);
-}
-
-/* Breathing Orb Core */
-.breathing-orb {
-  position: relative;
-  width: 170px;
-  height: 170px;
+.breathing-circle {
+  width: 140px;
+  height: 140px;
   border-radius: 50%;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
+  align-items: center;
+  color: #ffffff;
   cursor: pointer;
   user-select: none;
-  box-shadow: 0 0 35px rgba(0, 0, 0, 0.5);
   transition-property: transform, background, box-shadow;
+}
+
+.breathing-circle.idle {
   transform: scale(1);
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+  background: linear-gradient(135deg, #1A73E8, #a953ff);
+  box-shadow: 0 8px 24px rgba(26, 115, 232, 0.35);
 }
 
-.breathing-orb.idle {
-  background: radial-gradient(circle at 35% 35%, #3b82f6, #1e1b4b);
-  box-shadow: 0 0 30px rgba(59, 130, 246, 0.35), inset 0 0 15px rgba(255, 255, 255, 0.2);
-  animation: ambientOrb 3s infinite ease-in-out;
+.breathing-circle.idle:hover {
+  transform: scale(1.06);
+  box-shadow: 0 12px 30px rgba(26, 115, 232, 0.45);
 }
 
-@keyframes ambientOrb {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(59, 130, 246, 0.35); }
-  50% { transform: scale(1.06); box-shadow: 0 0 45px rgba(99, 102, 241, 0.55); }
-}
-
-.breathing-orb.inhale {
-  transform: scale(1.5);
+.breathing-circle.inhale {
+  transform: scale(1.55);
   transition: transform 4s linear, background 0.8s ease, box-shadow 0.8s ease;
-  background: radial-gradient(circle at 35% 35%, #38bdf8, #0284c7);
-  box-shadow: 0 0 60px rgba(56, 189, 248, 0.65), inset 0 0 25px rgba(255, 255, 255, 0.4);
+  background: linear-gradient(135deg, #00c6ff, #0072ff);
+  box-shadow: 0 14px 40px rgba(0, 198, 255, 0.45);
 }
 
-.breathing-orb.hold {
-  transform: scale(1.5);
+.breathing-circle.hold {
+  transform: scale(1.55);
   transition: transform 7s linear, background 0.8s ease, box-shadow 0.8s ease;
-  background: radial-gradient(circle at 35% 35%, #c084fc, #7e22ce);
-  box-shadow: 0 0 60px rgba(192, 132, 252, 0.65), inset 0 0 25px rgba(255, 255, 255, 0.4);
+  background: linear-gradient(135deg, #a953ff, #6366f1);
+  box-shadow: 0 14px 40px rgba(169, 83, 255, 0.45);
 }
 
-.breathing-orb.exhale {
+.breathing-circle.exhale {
   transform: scale(1);
   transition: transform 8s linear, background 0.8s ease, box-shadow 0.8s ease;
-  background: radial-gradient(circle at 35% 35%, #34d399, #059669);
-  box-shadow: 0 0 40px rgba(52, 211, 153, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.3);
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
 }
 
-.orb-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 1rem;
-  color: white;
-  z-index: 3;
-}
-
-.orb-phase-name {
-  font-size: 0.85rem;
+.breathing-text {
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.9;
-  margin-bottom: 0.2rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.3px;
+  pointer-events: none;
 }
 
-.orb-countdown {
-  font-size: 2.5rem;
+.breathing-timer {
+  font-size: 2.1rem;
   font-weight: 800;
+  margin-top: 2px;
+  pointer-events: none;
   line-height: 1;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-.orb-countdown sub {
-  font-size: 1.1rem;
-  font-weight: 500;
-  margin-left: 2px;
-  bottom: 0;
-}
-
-.orb-play-icon {
-  margin: 0.4rem 0;
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3));
-  transition: transform 0.2s ease;
-}
-
-.breathing-orb:hover .orb-play-icon {
-  transform: scale(1.15);
-}
-
-.orb-instruction {
-  font-size: 0.725rem;
-  opacity: 0.85;
-  margin-top: 0.35rem;
-  max-width: 120px;
-  line-height: 1.25;
-}
-
-/* Controls */
-.breathing-controls {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.btn-breathing-action {
+/* Styled Action Button */
+.btn-breathing {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.85rem 1.8rem;
-  border-radius: 999px;
-  font-size: 1rem;
+  justify-content: center;
+  padding: 0.75rem 2rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  cursor: pointer;
-  border: none;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-}
-
-.btn-breathing-action.start {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white;
-}
-
-.btn-breathing-action.start:hover {
-  transform: translateY(-2px);
-  background: linear-gradient(135deg, #4f46e5, #7c3aed);
-  box-shadow: 0 12px 25px rgba(99, 102, 241, 0.4);
-}
-
-.btn-breathing-action.stop {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #fca5a5;
-}
-
-.btn-breathing-action.stop:hover {
-  background: rgba(239, 68, 68, 0.25);
-  border-color: #ef4444;
-  color: #ffffff;
-  transform: translateY(-2px);
-}
-
-.cycles-counter {
-  font-size: 0.9rem;
-  color: #94a3b8;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 0.35rem 0.9rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, #1A73E8, #a953ff);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(26, 115, 232, 0.3);
+  transition: all 0.2s ease;
 }
 
-.cycles-counter strong {
-  color: #38bdf8;
-  font-weight: 700;
+.btn-breathing:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(26, 115, 232, 0.45);
+  background: linear-gradient(135deg, #1557b0, #9333ea);
+}
+
+.btn-breathing.active {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  box-shadow: none;
+}
+
+.btn-breathing.active:hover {
+  background: #fecaca;
+  transform: translateY(-1px);
 }
 
 @media (max-width: 768px) {
   .gtk-header h2 {
-    font-size: 2rem;
+    font-size: 1.8rem;
   }
   .gtk-card {
     padding: 1.25rem;
   }
-  .breathing-widget-container {
-    padding: 1.75rem 1rem;
-  }
-  .breathing-title {
-    font-size: 1.4rem;
-  }
-  .breathing-stage {
-    height: 240px;
+  .breathing-widget {
+    padding: 1.5rem 1rem;
   }
 }
