@@ -61,6 +61,43 @@ While the senior investment partner expressed polite skepticism about scaling ma
   }
 ];
 
+const mergeUserTranscripts = (existing, incoming) => {
+  const e = (existing || "").trim();
+  const inc = (incoming || "").trim();
+  if (!e) return inc;
+  if (!inc) return e;
+
+  const eLower = e.toLowerCase();
+  const incLower = inc.toLowerCase();
+
+  if (incLower.startsWith(eLower)) {
+    return inc;
+  }
+  if (eLower.includes(incLower)) {
+    return e;
+  }
+
+  const eWords = e.split(/\s+/);
+  const incWords = inc.split(/\s+/);
+
+  let maxOverlap = 0;
+  for (let len = Math.min(eWords.length, incWords.length); len >= 1; len--) {
+    const eTail = eWords.slice(eWords.length - len).join(" ").toLowerCase();
+    const incHead = incWords.slice(0, len).join(" ").toLowerCase();
+    if (eTail === incHead) {
+      maxOverlap = len;
+      break;
+    }
+  }
+
+  if (maxOverlap > 0) {
+    const suffix = incWords.slice(maxOverlap).join(" ");
+    return suffix ? `${e} ${suffix}` : e;
+  }
+
+  return `${e} ${inc}`;
+};
+
 // Dostępne tryby ćwiczeń z lektorem AI
 export const EXERCISE_TYPES = [
   {
@@ -724,16 +761,9 @@ function Dashboard({ user }) {
               const newText = text.trim();
               const existingText = (lastMsg.text || "").trim();
 
-              let textToUse = newText;
-              if (existingText && !lastMsg.isFinal && sender === "user") {
-                if (newText.length < existingText.length && !isFinal) {
-                  if (existingText.toLowerCase().includes(newText.toLowerCase())) {
-                    textToUse = existingText;
-                  } else if (!existingText.toLowerCase().endsWith(newText.toLowerCase())) {
-                    textToUse = `${existingText} ${newText}`;
-                  }
-                }
-              }
+              const textToUse = sender === "user"
+                ? mergeUserTranscripts(existingText, newText)
+                : newText;
 
               updated[updated.length - 1] = {
                 ...lastMsg,
@@ -1566,7 +1596,10 @@ function Dashboard({ user }) {
               <div className="drawer-filter-bar">
                 <span className="lang-filter-pill">English + Polski</span>
                 <button className="copy-all-btn" title="Kopiuj tekst">
-                  📋
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
                 </button>
               </div>
 
@@ -1581,7 +1614,12 @@ function Dashboard({ user }) {
                       <p className="msg-en-text">What helped you settle into your new role?</p>
                       <p className="msg-pl-sub">Co pomogło Ci odnaleźć się w nowej roli?</p>
                       <div className="msg-card-actions">
-                        <button className="msg-action-btn">📋</button>
+                        <button className="msg-action-btn" title="Copy">
+                          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          </svg>
+                        </button>
                         <button className="msg-action-btn save-word">+ Save word</button>
                       </div>
                     </div>
@@ -1594,7 +1632,12 @@ function Dashboard({ user }) {
                       <p className="msg-en-text">I had to adapt to a new routine, but my colleagues were supportive.</p>
                       <p className="msg-pl-sub">Musiałam dostosować się do nowej rutyny, ale moi koledzy byli wspierający.</p>
                       <div className="msg-card-actions">
-                        <button className="msg-action-btn">📋</button>
+                        <button className="msg-action-btn" title="Copy">
+                          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          </svg>
+                        </button>
                         <button className="msg-action-btn save-word">+ Save word</button>
                       </div>
                     </div>
@@ -1610,7 +1653,12 @@ function Dashboard({ user }) {
                         </div>
                         <p className="msg-en-text">{msg.text}</p>
                         <div className="msg-card-actions">
-                          <button className="msg-action-btn">📋</button>
+                          <button className="msg-action-btn" title="Copy">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                          </button>
                           <button className="msg-action-btn save-word">+ Save word</button>
                         </div>
                       </div>
