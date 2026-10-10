@@ -204,6 +204,7 @@ function App() {
                 localStorage.setItem("buddy_selected_story_id", storyId);
                 handleNavigate('dashboard');
               }}
+              onCreateStory={() => handleNavigate('workspace')}
             />
           ) : currentView === 'notebook' ? (
             <VocabularyView 
