@@ -137,7 +137,7 @@ function Workspace({
   const [suggestedTopics, setSuggestedTopics] = useState([]);
   const voices = PREMIUM_VOICES;
   const [selectedVoiceURI, setSelectedVoiceURI] = useState('en-US-BrianNeural');
-  const [speechRate, setSpeechRate] = useState(0.9);
+  const [speechRate, setSpeechRate] = useState(1.0);
   const [speechPitch, setSpeechPitch] = useState(1);
   const [notebookWords, setNotebookWords] = useState([]);
   const [menuVisible, setMenuVisible] = useState(false);

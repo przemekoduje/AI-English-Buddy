@@ -4246,6 +4246,14 @@ def get_voice_pair(selected_voice):
             
     return en_voice, pl_voice
 
+gcp_tts_client = None
+try:
+    from google.cloud import texttospeech
+    gcp_tts_client = texttospeech.TextToSpeechClient()
+    print("Google Cloud Text-to-Speech client successfully initialized.", flush=True)
+except Exception as e_gcp_init:
+    print(f"Google Cloud TTS client init note: {e_gcp_init}", flush=True)
+
 def generate_gtts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
     try:
         from gtts import gTTS
@@ -4257,6 +4265,31 @@ def generate_gtts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
     except Exception as e_gtts:
         print(f"gTTS fallback error: {e_gtts}", flush=True)
         return b""
+
+def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
+    if gcp_tts_client:
+        try:
+            from google.cloud import texttospeech
+            is_pl = ('pl-PL' in voice_name or 'Marek' in voice_name or 'Zofia' in voice_name)
+            gcp_voice_name = "pl-PL-Wavenet-B" if is_pl else "en-US-Neural2-D"
+            lang_code = "pl-PL" if is_pl else "en-US"
+            
+            s_input = texttospeech.SynthesisInput(text=text_to_speak)
+            s_voice = texttospeech.VoiceSelectionParams(language_code=lang_code, name=gcp_voice_name)
+            s_audio_config = texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3,
+                speaking_rate=1.0
+            )
+            response = gcp_tts_client.synthesize_speech(
+                request={'input': s_input, 'voice': s_voice, 'audio_config': s_audio_config}
+            )
+            if response.audio_content and len(response.audio_content) > 100:
+                print(f"Google Cloud TTS generated male voice audio ({gcp_voice_name})", flush=True)
+                return response.audio_content
+        except Exception as e_gcp:
+            print(f"Google Cloud TTS error: {e_gcp}, falling back...", flush=True)
+
+    return generate_gtts_bytes(text_to_speak, voice_name)
 
 async def get_edge_audio_with_retry(text_to_speak, primary_voice="en-US-BrianNeural"):
     voices_to_try = [primary_voice]
@@ -4323,16 +4356,16 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
                 )
                 return base64.b64encode(audio_data).decode('utf-8')
             except Exception as e:
-                print(f"OpenAI TTS error, falling back to Edge TTS: {e}", flush=True)
+                print(f"OpenAI TTS error, falling back to GCP/Edge TTS: {e}", flush=True)
                 
         try:
             data = asyncio.run(get_edge_audio_with_retry(full_clean_text, voice))
             if not data:
-                data = generate_gtts_bytes(full_clean_text, voice)
+                data = generate_gcp_male_tts_bytes(full_clean_text, voice)
             return base64.b64encode(data).decode('utf-8')
         except Exception as e:
-            print(f"Error generating TTS in single helper: {e}, using gTTS fallback...", flush=True)
-            data = generate_gtts_bytes(full_clean_text, voice)
+            print(f"Error generating TTS in single helper: {e}, using GCP male fallback...", flush=True)
+            data = generate_gcp_male_tts_bytes(full_clean_text, voice)
             return base64.b64encode(data).decode('utf-8')
 
     # Otherwise, split by tags
@@ -4379,13 +4412,13 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
                 )
                 return audio_data
             except Exception as e:
-                print(f"OpenAI TTS segment error: {e}, falling back to Edge TTS...", flush=True)
+                print(f"OpenAI TTS segment error: {e}, falling back to Edge/GCP TTS...", flush=True)
                 
         data = await get_edge_audio_with_retry(segment_text, segment_voice)
         if data:
             return data
             
-        return generate_gtts_bytes(segment_text, segment_voice)
+        return generate_gcp_male_tts_bytes(segment_text, segment_voice)
         
     async def get_all_audio():
         tasks = []
@@ -4398,11 +4431,11 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
     try:
         data = asyncio.run(get_all_audio())
         if not data:
-            data = generate_gtts_bytes(text, voice)
+            data = generate_gcp_male_tts_bytes(text, voice)
         return base64.b64encode(data).decode('utf-8')
     except Exception as e:
-        print(f"Error generating TTS in bilingual helper: {e}, using gTTS fallback...", flush=True)
-        data = generate_gtts_bytes(text, voice)
+        print(f"Error generating TTS in bilingual helper: {e}, using GCP male fallback...", flush=True)
+        data = generate_gcp_male_tts_bytes(text, voice)
         return base64.b64encode(data).decode('utf-8')
 
 @app.route("/api/tts", methods=['GET', 'POST'])
