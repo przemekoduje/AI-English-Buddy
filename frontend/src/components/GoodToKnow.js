@@ -4,6 +4,7 @@ import './GoodToKnow.css';
 const BreathingExercise = () => {
   const [phase, setPhase] = useState('idle'); // idle, inhale, hold, exhale
   const [timeLeft, setTimeLeft] = useState(0);
+  const [cycles, setCycles] = useState(0);
 
   useEffect(() => {
     if (phase === 'idle') return;
@@ -19,6 +20,7 @@ const BreathingExercise = () => {
         setPhase('exhale');
         setTimeLeft(8);
       } else if (phase === 'exhale') {
+        setCycles(prev => prev + 1);
         setPhase('inhale');
         setTimeLeft(4);
       }
@@ -29,34 +31,113 @@ const BreathingExercise = () => {
     if (phase === 'idle') {
       setPhase('inhale');
       setTimeLeft(4);
+      setCycles(0);
     } else {
       setPhase('idle');
       setTimeLeft(0);
     }
   };
 
-  const getPhaseText = () => {
-    if (phase === 'idle') return 'Start 4-7-8';
-    if (phase === 'inhale') return 'Wdech (4s)';
-    if (phase === 'hold') return 'Zatrzymaj (7s)';
-    if (phase === 'exhale') return 'Wydech (8s)';
+  const getPhaseTitle = () => {
+    if (phase === 'idle') return 'Gotowy?';
+    if (phase === 'inhale') return 'WDECH';
+    if (phase === 'hold') return 'ZATRZYMAJ';
+    if (phase === 'exhale') return 'WYDECH';
+  };
+
+  const getPhaseInstruction = () => {
+    if (phase === 'idle') return 'Kliknij, aby zacząć';
+    if (phase === 'inhale') return 'Nosem, powoli i głęboko';
+    if (phase === 'hold') return 'Utrzymaj powietrze w płucach';
+    if (phase === 'exhale') return 'Ustami, swobodnie i długo';
   };
 
   return (
-    <div className="breathing-widget glass-panel">
-      <h4>Ćwiczenie Oddechowe (4-7-8)</h4>
-      <p className="breathing-hint">Przed sesją zrób kilka cykli. To wyciszy Twój układ nerwowy.</p>
+    <div className={`breathing-widget-container ${phase}`}>
+      <div className="breathing-widget-glow" />
       
-      <div className="breathing-circle-container">
-        <div className={`breathing-circle ${phase}`} onClick={toggleExercise}>
-          <span className="breathing-text">{getPhaseText()}</span>
-          {phase !== 'idle' && <span className="breathing-timer">{timeLeft}s</span>}
+      {/* Header */}
+      <div className="breathing-header">
+        <div className="breathing-badge">
+          <svg className="breath-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" fill="none" opacity="0.4" />
+            <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.8" />
+          </svg>
+          Technika Oddechowa 4-7-8
+        </div>
+        <h3 className="breathing-title">Ćwiczenie Oddechowe</h3>
+        <p className="breathing-subtitle">Przed sesją zrób kilka cykli. To wyciszy Twój układ nerwowy i przygotuje mózg do nauki.</p>
+      </div>
+
+      {/* Phase Steps Indicator */}
+      <div className="breathing-steps-bar">
+        <div className={`step-item ${phase === 'inhale' ? 'active inhale' : ''}`}>
+          <span className="step-num">1</span>
+          <span className="step-label">Wdech</span>
+          <span className="step-duration">4s</span>
+        </div>
+        <div className="step-divider">›</div>
+        <div className={`step-item ${phase === 'hold' ? 'active hold' : ''}`}>
+          <span className="step-num">2</span>
+          <span className="step-label">Zatrzymaj</span>
+          <span className="step-duration">7s</span>
+        </div>
+        <div className="step-divider">›</div>
+        <div className={`step-item ${phase === 'exhale' ? 'active exhale' : ''}`}>
+          <span className="step-num">3</span>
+          <span className="step-label">Wydech</span>
+          <span className="step-duration">8s</span>
         </div>
       </div>
-      
-      <button className="btn-secondary" style={{ marginTop: '1rem' }} onClick={toggleExercise}>
-        {phase === 'idle' ? 'Rozpocznij relaks' : 'Zakończ'}
-      </button>
+
+      {/* Circle & Animation Area */}
+      <div className="breathing-stage">
+        <div className="ripple-aura aura-1"></div>
+        <div className="ripple-aura aura-2"></div>
+
+        <div className={`breathing-orb ${phase}`} onClick={toggleExercise}>
+          <div className="orb-content">
+            <span className="orb-phase-name">{getPhaseTitle()}</span>
+            {phase !== 'idle' ? (
+              <span className="orb-countdown">{timeLeft}<sub>s</sub></span>
+            ) : (
+              <div className="orb-play-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="36" height="36">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+            )}
+            <span className="orb-instruction">{getPhaseInstruction()}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer & Controls */}
+      <div className="breathing-controls">
+        <button className={`btn-breathing-action ${phase !== 'idle' ? 'stop' : 'start'}`} onClick={toggleExercise}>
+          {phase === 'idle' ? (
+            <>
+              <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              Rozpocznij relaks
+            </>
+          ) : (
+            <>
+              <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                <path d="M6 6h12v12H6z" />
+              </svg>
+              Zakończ ćwiczenie
+            </>
+          )}
+        </button>
+
+        {cycles > 0 && (
+          <div className="cycles-counter">
+            <span className="cycles-icon">✨</span> Ukończone cykle: <strong>{cycles}</strong>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

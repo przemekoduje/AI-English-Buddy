@@ -1,195 +1,501 @@
+/* ==========================================================================
+   GoodToKnow Component Base Styles
+   ========================================================================== */
 .good-to-know-container {
-  padding: 2rem;
+  padding: 2.5rem 1.5rem;
   overflow-y: auto;
   height: 100%;
-  color: var(--text-primary);
-  background: var(--bg-primary);
+  color: var(--text-primary, #f8fafc);
+  background: var(--bg-primary, #0f172a);
 }
 
 .good-to-know-content {
-  max-width: 900px;
+  max-width: 960px;
   margin: 0 auto;
-  padding-bottom: 3rem;
+  padding-bottom: 4rem;
 }
 
 .gtk-header {
   text-align: center;
-  margin-bottom: 3rem;
+  margin-bottom: 3.5rem;
 }
 
 .gtk-header h2 {
   font-size: 2.5rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, #1A73E8, #a953ff);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.75rem;
+  background: linear-gradient(135deg, #38bdf8, #818cf8, #c084fc);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .subtitle {
-  color: var(--text-secondary);
-  font-size: 1.1rem;
+  color: #94a3b8;
+  font-size: 1.15rem;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .gtk-section {
-  margin-bottom: 3rem;
+  margin-bottom: 3.5rem;
 }
 
 .section-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 1.5rem;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 1.75rem;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.85rem;
+  color: #f1f5f9;
 }
 
 .section-number {
-  background: linear-gradient(135deg, #1A73E8, #a953ff);
+  background: linear-gradient(135deg, #6366f1, #a855f7);
   color: white;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  font-size: 1.2rem;
-  font-weight: bold;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .gtk-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
   margin-bottom: 2rem;
 }
 
 .gtk-card {
   padding: 1.5rem;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 16px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .gtk-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-4px);
+  background: rgba(30, 41, 59, 0.75);
+  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.3), 0 0 20px rgba(99, 102, 241, 0.15);
+  border-color: rgba(168, 85, 247, 0.3);
 }
 
 .gtk-card h4 {
   font-size: 1.1rem;
   font-weight: 600;
   margin-bottom: 0.75rem;
-  color: #a953ff;
+  color: #c084fc;
 }
 
 .gtk-card p {
   font-size: 0.95rem;
-  line-height: 1.6;
-  color: var(--text-secondary);
+  line-height: 1.65;
+  color: #cbd5e1;
 }
 
 .gtk-card strong {
-  color: var(--text-primary);
+  color: #f8fafc;
 }
 
 .gtk-card em {
-  color: #1A73E8;
+  color: #38bdf8;
   font-style: normal;
   font-weight: 600;
-  background: rgba(26, 115, 232, 0.1);
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.12);
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
 }
 
-/* Breathing Exercise */
-.breathing-widget {
-  padding: 2rem;
-  border-radius: 16px;
+/* ==========================================================================
+   Redesigned Breathing Exercise Widget (4-7-8)
+   ========================================================================== */
+.breathing-widget-container {
+  position: relative;
+  overflow: hidden;
+  padding: 2.5rem 2rem;
+  border-radius: 24px;
   text-align: center;
-  background: linear-gradient(145deg, rgba(30,30,40,0.8), rgba(20,20,30,0.9));
-  margin-top: 1rem;
-  border: 1px solid rgba(255,255,255,0.05);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.98) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 60px rgba(99, 102, 241, 0.08);
+  margin-top: 1.5rem;
+  transition: border-color 0.5s ease, box-shadow 0.5s ease;
 }
 
-.breathing-widget h4 {
-  font-size: 1.3rem;
+.breathing-widget-glow {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.08), transparent 60%);
+  pointer-events: none;
+  transition: background 0.8s ease;
+}
+
+.breathing-widget-container.inhale .breathing-widget-glow {
+  background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.22), transparent 60%);
+}
+
+.breathing-widget-container.hold .breathing-widget-glow {
+  background: radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.22), transparent 60%);
+}
+
+.breathing-widget-container.exhale .breathing-widget-glow {
+  background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.22), transparent 60%);
+}
+
+/* Header */
+.breathing-header {
+  position: relative;
+  z-index: 2;
+  margin-bottom: 2rem;
+}
+
+.breathing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #818cf8;
+  font-size: 0.825rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  margin-bottom: 0.85rem;
+}
+
+.breath-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.breathing-title {
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: #f8fafc;
   margin-bottom: 0.5rem;
+  letter-spacing: -0.01em;
 }
 
-.breathing-hint {
-  color: var(--text-secondary);
+.breathing-subtitle {
+  color: #94a3b8;
   font-size: 0.95rem;
-  margin-bottom: 2.5rem;
+  max-width: 520px;
+  margin: 0 auto;
+  line-height: 1.5;
 }
 
-.breathing-circle-container {
+/* Steps Bar */
+.breathing-steps-bar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.step-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.step-label {
+  color: #94a3b8;
+}
+
+.step-duration {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.step-divider {
+  color: #475569;
+  font-size: 1.1rem;
+}
+
+.step-item.active {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.step-item.active.inhale {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: #38bdf8;
+  color: #f0f9ff;
+}
+
+.step-item.active.inhale .step-label { color: #38bdf8; font-weight: 700; }
+.step-item.active.inhale .step-num { background: #38bdf8; color: #0f172a; }
+
+.step-item.active.hold {
+  background: rgba(168, 85, 247, 0.18);
+  border-color: #a855f7;
+  color: #faf5ff;
+}
+
+.step-item.active.hold .step-label { color: #c084fc; font-weight: 700; }
+.step-item.active.hold .step-num { background: #a855f7; color: #0f172a; }
+
+.step-item.active.exhale {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+  color: #ecfdf5;
+}
+
+.step-item.active.exhale .step-label { color: #34d399; font-weight: 700; }
+.step-item.active.exhale .step-num { background: #10b981; color: #0f172a; }
+
+/* Breathing Stage & Orb */
+.breathing-stage {
+  position: relative;
+  z-index: 2;
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 250px;
-  margin-bottom: 1.5rem;
+  height: 280px;
+  margin-bottom: 2rem;
 }
 
-.breathing-circle {
-  width: 140px;
-  height: 140px;
+.ripple-aura {
+  position: absolute;
+  width: 170px;
+  height: 170px;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #4facfe, #00f2fe);
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  pointer-events: none;
+  transition: all 0.5s ease;
+}
+
+.aura-1 {
+  animation: pulseAura1 4s infinite ease-in-out;
+}
+
+.aura-2 {
+  animation: pulseAura2 4s infinite ease-in-out 1s;
+}
+
+@keyframes pulseAura1 {
+  0%, 100% { transform: scale(1); opacity: 0.2; }
+  50% { transform: scale(1.4); opacity: 0.5; }
+}
+
+@keyframes pulseAura2 {
+  0%, 100% { transform: scale(1.1); opacity: 0.1; }
+  50% { transform: scale(1.65); opacity: 0.35; }
+}
+
+.breathing-widget-container.inhale .ripple-aura {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.breathing-widget-container.hold .ripple-aura {
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+.breathing-widget-container.exhale .ripple-aura {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+/* Breathing Orb Core */
+.breathing-orb {
+  position: relative;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 0 35px rgba(0, 0, 0, 0.5);
+  transition-property: transform, background, box-shadow;
+  transform: scale(1);
+}
+
+.breathing-orb.idle {
+  background: radial-gradient(circle at 35% 35%, #3b82f6, #1e1b4b);
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.35), inset 0 0 15px rgba(255, 255, 255, 0.2);
+  animation: ambientOrb 3s infinite ease-in-out;
+}
+
+@keyframes ambientOrb {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(59, 130, 246, 0.35); }
+  50% { transform: scale(1.06); box-shadow: 0 0 45px rgba(99, 102, 241, 0.55); }
+}
+
+.breathing-orb.inhale {
+  transform: scale(1.5);
+  transition: transform 4s linear, background 0.8s ease, box-shadow 0.8s ease;
+  background: radial-gradient(circle at 35% 35%, #38bdf8, #0284c7);
+  box-shadow: 0 0 60px rgba(56, 189, 248, 0.65), inset 0 0 25px rgba(255, 255, 255, 0.4);
+}
+
+.breathing-orb.hold {
+  transform: scale(1.5);
+  transition: transform 7s linear, background 0.8s ease, box-shadow 0.8s ease;
+  background: radial-gradient(circle at 35% 35%, #c084fc, #7e22ce);
+  box-shadow: 0 0 60px rgba(192, 132, 252, 0.65), inset 0 0 25px rgba(255, 255, 255, 0.4);
+}
+
+.breathing-orb.exhale {
+  transform: scale(1);
+  transition: transform 8s linear, background 0.8s ease, box-shadow 0.8s ease;
+  background: radial-gradient(circle at 35% 35%, #34d399, #059669);
+  box-shadow: 0 0 40px rgba(52, 211, 153, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.orb-content {
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1rem;
   color: white;
-  cursor: pointer;
-  box-shadow: 0 0 30px rgba(0, 242, 254, 0.3);
-  /* Tranzitions matching exact phases */
-  transition-property: transform, background, box-shadow;
+  z-index: 3;
 }
 
-.breathing-circle.idle {
-  transform: scale(1);
-  transition: transform 1s ease;
-  background: radial-gradient(circle at 30% 30%, #444, #222);
-  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+.orb-phase-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.9;
+  margin-bottom: 0.2rem;
 }
 
-.breathing-circle.inhale {
-  transform: scale(1.6);
-  transition: transform 4s linear;
-  background: radial-gradient(circle at 30% 30%, #4facfe, #00f2fe);
-  box-shadow: 0 0 40px rgba(0, 242, 254, 0.6);
+.orb-countdown {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-.breathing-circle.hold {
-  transform: scale(1.6);
-  transition: transform 7s linear; /* Keeps the scale for 7s without change */
-  background: radial-gradient(circle at 30% 30%, #a953ff, #1A73E8);
-  box-shadow: 0 0 40px rgba(169, 83, 255, 0.6);
+.orb-countdown sub {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin-left: 2px;
+  bottom: 0;
 }
 
-.breathing-circle.exhale {
-  transform: scale(1);
-  transition: transform 8s linear;
-  background: radial-gradient(circle at 30% 30%, #4facfe, #00f2fe);
-  box-shadow: 0 0 20px rgba(0, 242, 254, 0.3);
+.orb-play-icon {
+  margin: 0.4rem 0;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3));
+  transition: transform 0.2s ease;
 }
 
-.breathing-text {
-  font-weight: 600;
+.breathing-orb:hover .orb-play-icon {
+  transform: scale(1.15);
+}
+
+.orb-instruction {
+  font-size: 0.725rem;
+  opacity: 0.85;
+  margin-top: 0.35rem;
+  max-width: 120px;
+  line-height: 1.25;
+}
+
+/* Controls */
+.breathing-controls {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-breathing-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1.8rem;
+  border-radius: 999px;
   font-size: 1rem;
-  letter-spacing: 0.5px;
-  pointer-events: none;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
 }
 
-.breathing-timer {
-  font-size: 2rem;
-  font-weight: bold;
-  margin-top: 5px;
-  pointer-events: none;
+.btn-breathing-action.start {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+}
+
+.btn-breathing-action.start:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  box-shadow: 0 12px 25px rgba(99, 102, 241, 0.4);
+}
+
+.btn-breathing-action.stop {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.btn-breathing-action.stop:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #ffffff;
+  transform: translateY(-2px);
+}
+
+.cycles-counter {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cycles-counter strong {
+  color: #38bdf8;
+  font-weight: 700;
 }
 
 @media (max-width: 768px) {
@@ -198,5 +504,14 @@
   }
   .gtk-card {
     padding: 1.25rem;
+  }
+  .breathing-widget-container {
+    padding: 1.75rem 1rem;
+  }
+  .breathing-title {
+    font-size: 1.4rem;
+  }
+  .breathing-stage {
+    height: 240px;
   }
 }
