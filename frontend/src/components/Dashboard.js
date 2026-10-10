@@ -776,7 +776,7 @@ function Dashboard({ user }) {
         }
 
         // Pobieramy token efemeryczny z backendu (podając klucz użytkownika jeśli obecny)
-        const tokenRes = await fetch(`${API_BASE_URL}/api/live/token`, {
+        let tokenRes = await fetch(`${API_BASE_URL}/api/live/token`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -788,7 +788,31 @@ function Dashboard({ user }) {
           }),
         });
 
-        const tokenData = await tokenRes.json();
+        let tokenData = await tokenRes.json();
+
+        // Jeśli podany z localStorage klucz zwrócił błąd, spróbuj użyć klucza serwera
+        if ((!tokenRes.ok || tokenData.error) && activeKey) {
+          const fallbackRes = await fetch(`${API_BASE_URL}/api/live/token`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Session-Token": user?.token || "",
+            },
+            body: JSON.stringify({
+              model: activeModel,
+            }),
+          });
+          if (fallbackRes.ok) {
+            const fallbackData = await fallbackRes.json();
+            if (!fallbackData.error) {
+              tokenData = fallbackData;
+              tokenRes = fallbackRes;
+              setCustomApiKey("");
+              localStorage.removeItem("buddy_gemini_api_key");
+            }
+          }
+        }
+
         if (!tokenRes.ok || tokenData.error) {
           if (tokenData.error === "NO_API_KEY") {
             setShowSettings(true);
