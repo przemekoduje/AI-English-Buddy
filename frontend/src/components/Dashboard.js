@@ -1475,7 +1475,6 @@ function Dashboard({ user }) {
                 <span className="green-pulse-dot"></span>
                 Connected · Gemini Live
               </span>
-              <span className="session-timer">Session 03:24</span>
             </div>
 
             <div className="active-orb-center">
