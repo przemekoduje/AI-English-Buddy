@@ -164,6 +164,9 @@ export class GeminiLiveClient {
    */
   buildWebSocketUrl() {
     if (this.wsUrl) {
+      if (this.wsUrl.includes("BidiGenerateContentConstrained") && this.wsUrl.includes("?key=")) {
+        return this.wsUrl.replace("?key=", "?access_token=");
+      }
       return this.wsUrl;
     }
 

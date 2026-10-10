@@ -762,12 +762,10 @@ function Dashboard({ user }) {
         },
       };
 
-      // 1. Sprawdzamy czy użytkownik ma wpisany własny klucz API w ustawieniach
-      if (activeProvider === "google_ai_studio" && activeKey) {
-        clientConfig.apiKey = activeKey;
-      } else if (activeProvider === "google_ai_studio") {
-        // Jeśli nie ma klucza w przeglądarce i serwer nie ma GEMINI_API_KEY
-        if (!serverConfig?.gemini_api_key_configured) {
+      // 1. Zawsze generujemy token efemeryczny (przez /api/live/token),
+      // ponieważ bezpośrednie klucze API nie są akceptowane na punkcie BidiGenerateContent bez CreateAuthToken
+      if (activeProvider === "google_ai_studio") {
+        if (!activeKey && !serverConfig?.gemini_api_key_configured) {
           setShowSettings(true);
           setErrorMessage(
             "Wklej swój bezpłatny klucz API z Google AI Studio poniżej lub przełącz jednym kliknięciem na tryb OpenAI / DeepSeek!"
@@ -777,7 +775,7 @@ function Dashboard({ user }) {
           return;
         }
 
-        // Pobieramy token efemeryczny z backendu
+        // Pobieramy token efemeryczny z backendu (podając klucz użytkownika jeśli obecny)
         const tokenRes = await fetch(`${API_BASE_URL}/api/live/token`, {
           method: "POST",
           headers: {
