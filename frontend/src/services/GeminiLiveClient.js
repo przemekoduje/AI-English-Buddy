@@ -47,6 +47,7 @@ export class GeminiLiveClient {
     this.speechRecognition = null;
     this.lastUserTranscript = '';
     this.userTurnAccumulatedText = '';
+    this.currentTurnId = 0;
     this.speechRecognitionStartIndex = 0;
     this.lastSpeechResultLength = 0;
     this.isDestroyed = false;
@@ -249,8 +250,9 @@ export class GeminiLiveClient {
             const isSpeaking = this.outputAudioContext.currentTime < this.nextPlayTime - 0.05;
             if (isSpeaking !== this.isBotCurrentlySpeaking) {
               if (this.isBotCurrentlySpeaking && !isSpeaking) {
-                // Lektor właśnie skończył mówić - zapisujemy czas zakończenia dla okna tłumienia echa
+                // Lektor właśnie skończył mówić - zapisujemy czas zakończenia dla okna tłumienia echa i resetujemy indeks tury ucznia
                 this.lastBotSpeakingEndTime = Date.now();
+                this.resetUserTurnIndex();
               }
               this.isBotCurrentlySpeaking = isSpeaking;
               this.onBotSpeaking(isSpeaking);
@@ -399,6 +401,7 @@ export class GeminiLiveClient {
   }
 
   resetUserTurnIndex() {
+    this.currentTurnId = (this.currentTurnId || 0) + 1;
     this.userTurnAccumulatedText = '';
     this.lastUserTranscript = '';
     this.speechRecognitionStartIndex = 0;
@@ -411,11 +414,11 @@ export class GeminiLiveClient {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRec) return;
 
-    this.userTurnAccumulatedText = '';
-    this.lastUserTranscript = '';
+    this.resetUserTurnIndex();
 
     const startRec = () => {
       if (this.isDestroyed || !this.isConnected) return;
+      const instanceTurnId = this.currentTurnId;
 
       try {
         if (this.speechRecognition) {
@@ -435,6 +438,11 @@ export class GeminiLiveClient {
 
         rec.onresult = (event) => {
           if (!event || !event.results) return;
+
+          // Jeśli tura użytkownika uległa zmianie (bot zaczął odpowiadać lub skończył mówić) -> odrzucamy stary wynik
+          if (this.currentTurnId !== instanceTurnId) {
+            return;
+          }
 
           // Ochrona przed echem akustycznym bez słuchawek:
           // Jeśli lektor mówi lub dźwięk z głośników właśnie wygasł, odrzucamy dźwięk
@@ -457,7 +465,7 @@ export class GeminiLiveClient {
             }
           }
 
-          // Łączymy dotychczas zgromadzoną historię tury + część finalną tej sesji + część interim
+          // Łączymy dotychczas zgromadzoną historię TEJ tury + część finalną tej sesji + część interim
           const fullText = [
             this.userTurnAccumulatedText,
             sessionFinalText,
@@ -488,9 +496,11 @@ export class GeminiLiveClient {
 
         rec.onend = () => {
           // Po automatycznym zatrzymaniu przez przeglądarkę (np. po milczeniu/pauzie):
-          // Zapisujemy całą dotychczas wygenerowaną wypowiedź w userTurnAccumulatedText
-          if (this.lastUserTranscript && this.lastUserTranscript.trim()) {
-            this.userTurnAccumulatedText = this.lastUserTranscript.trim();
+          // Zapisujemy całą dotychczas wygenerowaną wypowiedź w userTurnAccumulatedText TYLKO jeśli tura się nie zmieniła!
+          if (this.currentTurnId === instanceTurnId) {
+            if (this.lastUserTranscript && this.lastUserTranscript.trim()) {
+              this.userTurnAccumulatedText = this.lastUserTranscript.trim();
+            }
           }
 
           // Auto-restart jeśli połączenie jest aktywne i klient nie został zniszczony
