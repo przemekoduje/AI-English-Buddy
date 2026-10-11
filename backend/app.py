@@ -3256,6 +3256,14 @@ def delete_vocabulary(original_word):
     story_id = request.args.get('story_id')
 
     try:
+        # Sprawdź najpierw czy original_word to ID dokumentu
+        doc_ref = db.collection('vocabulary').document(original_word)
+        doc = doc_ref.get()
+        if doc.exists and doc.to_dict().get('user_email') == user_email:
+            doc_ref.delete()
+            return jsonify({"message": "Usunięto wyrażenie ze słownika"}), 200
+
+        # W przeciwnym razie usuń po polu original
         query = db.collection('vocabulary').where('user_email', '==', user_email).where('original', '==', original_word)
         if story_id:
             query = query.where('story_id', '==', story_id)
@@ -3267,6 +3275,45 @@ def delete_vocabulary(original_word):
         return jsonify({"message": f"Usunięto {deleted_count} wyrażeń ze słownika"}), 200
     except Exception as e:
         return jsonify({"error": f"Błąd podczas usuwania ze słownika: {e}"}), 500
+
+
+@app.route("/api/vocabulary/<string:word_id>", methods=['PUT'])
+def update_vocabulary(word_id):
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    data = request.get_json() or {}
+    try:
+        # Szukaj dokumentu po ID lub po polu original
+        target_doc_ref = None
+        doc = db.collection('vocabulary').document(word_id).get()
+        if doc.exists and doc.to_dict().get('user_email') == user_email:
+            target_doc_ref = db.collection('vocabulary').document(word_id)
+        else:
+            matches = db.collection('vocabulary').where('user_email', '==', user_email).where('original', '==', word_id).limit(1).get()
+            for m in matches:
+                target_doc_ref = db.collection('vocabulary').document(m.id)
+                break
+
+        if not target_doc_ref:
+            return jsonify({"error": "Słówko nie zostało znalezione"}), 404
+
+        update_fields = {}
+        allowed = ['original', 'translated', 'status', 'context_sentence', 'topic', 'level', 'definition', 'part_of_speech', 'phonetic']
+        for k in allowed:
+            if k in data:
+                update_fields[k] = data[k]
+
+        if update_fields:
+            target_doc_ref.update(update_fields)
+
+        updated_doc = target_doc_ref.get()
+        res = updated_doc.to_dict()
+        res['id'] = target_doc_ref.id
+        return jsonify(res), 200
+    except Exception as e:
+        return jsonify({"error": f"Błąd aktualizacji słówka: {e}"}), 500
 
 
 @app.route("/api/vocabulary/<string:word_id>/mnemonic", methods=['POST'])

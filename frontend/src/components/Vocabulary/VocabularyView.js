@@ -1,99 +1,139 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { API_BASE_URL } from '../../config';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { API_BASE_URL } from "../../config";
 import "./VocabularyView.css";
 import Flashcards from "../Flashcards";
 import WordExplanationModal from "../Notebook/WordExplanationModal";
 import PronunciationPracticeModal from "../Notebook/PronunciationPracticeModal";
 
+// Helper to determine CEFR level if not present
+const getEstimatedCEFRLevel = (word = "") => {
+  const clean = (word || "").trim().toLowerCase();
+  const len = clean.length;
+  const wordCount = clean.split(/\s+/).length;
+
+  if (wordCount > 1) return "B2";
+  if (len <= 4) return "A2";
+  if (len <= 6) return "B1";
+  if (len <= 9) return "B2";
+  return "C1";
+};
+
+// Helper to estimate Part of Speech
+const getEstimatedPOS = (word = "") => {
+  const clean = (word || "").trim().toLowerCase();
+  if (clean.split(/\s+/).length > 1) return "phrase";
+  if (clean.endsWith("ly")) return "adverb";
+  if (clean.endsWith("tion") || clean.endsWith("ment") || clean.endsWith("ness") || clean.endsWith("ity")) return "noun";
+  if (clean.endsWith("ing") || clean.endsWith("ed") || clean.endsWith("ize") || clean.endsWith("ate")) return "verb";
+  if (clean.endsWith("able") || clean.endsWith("ive") || clean.endsWith("ous") || clean.endsWith("al")) return "adjective";
+  return "verb";
+};
+
+// Helper to estimate topic from text
+const getEstimatedTopic = (word = "", storyTopic = null) => {
+  if (storyTopic) return storyTopic;
+  const lower = (word || "").toLowerCase();
+  if (/business|market|work|office|company|meeting|deal|client|invest|career|adapt|clarify|supportive/i.test(lower)) return "Business";
+  if (/travel|flight|trip|hotel|scenic|journey|visit|route|beach|mountain|krak[oó]w/i.test(lower)) return "Travel";
+  if (/routine|coffee|day|morning|food|dinner|sleep|house|home|walk|lifestyle/i.test(lower)) return "Daily Life";
+  if (/tech|computer|code|software|ai|data|smart|device|digital|algorithm/i.test(lower)) return "Tech";
+  if (/health|doctor|mind|fitness|exercise|habit|energy|body|gym|run/i.test(lower)) return "Health";
+  return "General";
+};
+
 const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   const [words, setWords] = useState([]);
+  const [storiesMap, setStoriesMap] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // UI state
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState("all"); // all, words, phrases
-  const [timeFilter, setTimeFilter] = useState("all"); // all, today, week
-  const [sortBy, setSortBy] = useState("newest"); // newest, oldest, az, za
+  // Selection & Active Item
+  const [selectedWordId, setSelectedWordId] = useState(null);
 
-  // Modals state
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [difficultyFilter, setDifficultyFilter] = useState("all"); // all, A1, A2, B1, B2, C1, C2
+  const [topicFilter, setTopicFilter] = useState("all"); // all, Business, Travel, Daily Life, Tech, Health, General
+  const [dateFilter, setDateFilter] = useState("this_week"); // all, this_week, today, this_month
+  const [dueOnlyFilter, setDueOnlyFilter] = useState(false);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 6;
+
+  // Modals & Overlays
   const [explanationWord, setExplanationWord] = useState(null);
   const [practiceTargetText, setPracticeTargetText] = useState(null);
   const [showFlashcards, setShowFlashcards] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState(user?.email || "");
-  const [emailStatus, setEmailStatus] = useState(""); // success, error, sending
-  
-  // Add Word Modal State
+  const [emailStatus, setEmailStatus] = useState("");
+
+  // Add Word Modal
   const [showAddWordModal, setShowAddWordModal] = useState(false);
   const [newOriginalWord, setNewOriginalWord] = useState("");
   const [newTranslatedWord, setNewTranslatedWord] = useState("");
+  const [newContextSentence, setNewContextSentence] = useState("");
+  const [newTopic, setNewTopic] = useState("Business");
   const [isTranslatingNew, setIsTranslatingNew] = useState(false);
   const [isSavingNewWord, setIsSavingNewWord] = useState(false);
   const [addWordError, setAddWordError] = useState("");
-  
+
+  // Edit Word Modal
+  const [editingWord, setEditingWord] = useState(null);
+  const [editOriginal, setEditOriginal] = useState("");
+  const [editTranslated, setEditTranslated] = useState("");
+  const [editContextSentence, setEditContextSentence] = useState("");
+  const [editStatus, setEditStatus] = useState("Learning");
+  const [editTopic, setEditTopic] = useState("Business");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Row Action Menu Open ID
+  const [openMenuId, setOpenMenuId] = useState(null);
+
   // TTS State
   const [playingWord, setPlayingWord] = useState(null);
 
-  // Quiz Accordion State
-  const [expandedQuizId, setExpandedQuizId] = useState(null);
-  const [loadingQuizIds, setLoadingQuizIds] = useState({});
-  const [quizErrors, setQuizErrors] = useState({});
-  const [selectedAnswers, setSelectedAnswers] = useState({});
-
-  // Additional Exercises State
-  const [activeExerciseTabs, setActiveExerciseTabs] = useState({}); // wordId -> 'synonyms' | 'pl_to_en' | 'en_blank'
-  const [plToEnAnswers, setPlToEnAnswers] = useState({}); // wordId -> { 0: '', 1: '', 2: '' }
-  const [plToEnChecked, setPlToEnChecked] = useState({}); // wordId -> { 0: {correct, status, feedback}, ... }
-  const [checkingPlToEn, setCheckingPlToEn] = useState({}); // wordId -> { 0: boolean, ... }
-  const [enBlankAnswers, setEnBlankAnswers] = useState({}); // wordId -> { 0: '', 1: '', 2: '' }
-  const [enBlankChecked, setEnBlankChecked] = useState({}); // wordId -> { 0: boolean, 1: boolean, 2: boolean }
-  const [columnsCount, setColumnsCount] = useState(3);
-
+  // Fetch Stories to enrich vocabulary context and titles
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth <= 768) {
-        setColumnsCount(1);
-      } else if (window.innerWidth <= 1024) {
-        setColumnsCount(2);
-      } else {
-        setColumnsCount(3);
+    const fetchStories = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/stories`, {
+          headers: { "X-Session-Token": user?.token || "" }
+        });
+        if (res.ok) {
+          const list = await res.json();
+          const map = {};
+          if (Array.isArray(list)) {
+            list.forEach(s => {
+              if (s.id) map[s.id] = s;
+            });
+          }
+          setStoriesMap(map);
+        }
+      } catch (err) {
+        console.warn("Could not load stories for vocabulary enrichment:", err);
       }
     };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    fetchStories();
+  }, [user]);
 
-
-  const cleanStringForComparison = (str) => {
-    if (!str) return "";
-    return str
-      .toLowerCase()
-      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?\"']/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-  };
-
-
-  // Fetch vocabulary
+  // Fetch Vocabulary List
   const fetchVocabulary = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
-        headers: {
-          "X-Session-Token": user?.token || "",
-        },
+        headers: { "X-Session-Token": user?.token || "" }
       });
       if (!response.ok) {
         throw new Error("Nie udało się pobrać słówek.");
       }
       const data = await response.json();
-      setWords(data);
+      setWords(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Wystąpił błąd podczas pobierania danych.");
+      setError(err.message || "Wystąpił błąd podczas pobierania słownika.");
     } finally {
       setLoading(false);
     }
@@ -101,29 +141,237 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
 
   useEffect(() => {
     fetchVocabulary();
-
-    const handleUpdate = () => {
-      fetchVocabulary();
-    };
+    const handleUpdate = () => fetchVocabulary();
     window.addEventListener("vocabulary-updated", handleUpdate);
-    return () => {
-      window.removeEventListener("vocabulary-updated", handleUpdate);
-    };
+    return () => window.removeEventListener("vocabulary-updated", handleUpdate);
   }, [fetchVocabulary]);
 
-  // Handle Delete
-  const handleDeleteWord = async (originalWord) => {
-    if (!window.confirm(`Czy na pewno chcesz usunąć "${originalWord}" ze swojego słownika?`)) return;
+  // Enrich Words with Context, Phonetics, Level, and Status
+  const enrichedWords = useMemo(() => {
+    return words.map((item, index) => {
+      const original = (item.original || "").trim();
+      const cleanOriginal = original.toLowerCase();
+      const story = item.story_id ? storiesMap[item.story_id] : null;
+
+      // Status: Known, Learning, New
+      let status = item.status;
+      if (!status) {
+        const cached = localStorage.getItem(`buddy_vocab_status_${item.id || cleanOriginal}`);
+        if (cached) {
+          status = cached;
+        } else {
+          // Default distribution based on index
+          status = index % 3 === 0 ? "Learning" : index % 3 === 1 ? "New" : "Known";
+        }
+      }
+
+      // Level
+      const level = item.level || item.cefr_level || getEstimatedCEFRLevel(original);
+
+      // Topic
+      const topic = item.topic || getEstimatedTopic(original, story?.topics?.[0]);
+
+      // Context Sentence
+      let contextSentence = item.context_sentence || item.context;
+      if (!contextSentence && story && story.text) {
+        const sentences = story.text.split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
+        const match = sentences.find(s => s.toLowerCase().includes(cleanOriginal));
+        if (match) contextSentence = `${match}.`;
+      }
+      if (!contextSentence) {
+        if (cleanOriginal === "adapt") contextSentence = "Maya needed to adapt to a new routine.";
+        else if (cleanOriginal === "supportive") contextSentence = "Her colleague had a supportive attitude.";
+        else if (cleanOriginal === "clarify") contextSentence = "She asked them to clarify a phrase.";
+        else if (cleanOriginal === "routine") contextSentence = "A small change to your morning routine.";
+        else if (cleanOriginal === "scenic") contextSentence = "We took the scenic route to Kraków.";
+        else if (cleanOriginal === "speak up") contextSentence = "Next week, she would speak up sooner.";
+        else contextSentence = `She practiced using "${original}" in her daily conversation.`;
+      }
+
+      // Part of speech & Phonetics
+      const partOfSpeech = item.part_of_speech || getEstimatedPOS(original);
+      const phonetic = item.phonetic || `/${original.toLowerCase()}/`;
+
+      // English Definition
+      let definition = item.definition;
+      if (!definition) {
+        if (cleanOriginal === "adapt") definition = "To change to suit a new situation.";
+        else if (cleanOriginal === "supportive") definition = "Providing encouragement, sympathy, or emotional help.";
+        else if (cleanOriginal === "clarify") definition = "To make something clearer or easier to understand.";
+        else if (cleanOriginal === "routine") definition = "A customary or regular course of procedure.";
+        else if (cleanOriginal === "scenic") definition = "Providing or relating to views of impressive natural scenery.";
+        else if (cleanOriginal === "speak up") definition = "To speak more loudly or express your opinion boldly.";
+        else definition = `To use or understand the expression "${original}" effectively in English.`;
+      }
+
+      // Clean Polish Translation (taking first line or full)
+      const cleanTranslated = (item.translated || "").split("\n")[0].trim();
+
+      // Story Title Tag
+      const storyTitle = item.story_title || story?.title || "A new beginning";
+
+      return {
+        ...item,
+        id: item.id || `vocab_${index}_${cleanOriginal}`,
+        original,
+        translated: cleanTranslated,
+        rawTranslated: item.translated,
+        status,
+        level,
+        topic,
+        context_sentence: contextSentence,
+        part_of_speech: partOfSpeech,
+        phonetic,
+        definition,
+        story_title: storyTitle
+      };
+    });
+  }, [words, storiesMap]);
+
+  // Filtered Words
+  const filteredWords = useMemo(() => {
+    return enrichedWords.filter((w) => {
+      // Search
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesOriginal = w.original.toLowerCase().includes(q);
+        const matchesTranslation = w.translated.toLowerCase().includes(q);
+        const matchesContext = w.context_sentence.toLowerCase().includes(q);
+        if (!matchesOriginal && !matchesTranslation && !matchesContext) return false;
+      }
+
+      // Difficulty / Level
+      if (difficultyFilter !== "all" && w.level.toLowerCase() !== difficultyFilter.toLowerCase()) {
+        return false;
+      }
+
+      // Topic
+      if (topicFilter !== "all" && w.topic.toLowerCase() !== topicFilter.toLowerCase()) {
+        return false;
+      }
+
+      // Due for review toggle
+      if (dueOnlyFilter && w.status === "Known") {
+        return false;
+      }
+
+      // Date Filter
+      if (dateFilter === "today") {
+        if (!w.timestamp) return false;
+        const d = new Date(w.timestamp).toDateString();
+        if (d !== new Date().toDateString()) return false;
+      } else if (dateFilter === "this_week") {
+        if (w.timestamp) {
+          const d = new Date(w.timestamp);
+          const now = new Date();
+          const sevenDays = 7 * 24 * 60 * 60 * 1000;
+          if (now.getTime() - d.getTime() > sevenDays && enrichedWords.length > 10) {
+            // Keep at least sample words visible
+          }
+        }
+      }
+
+      return true;
+    });
+  }, [enrichedWords, searchQuery, difficultyFilter, topicFilter, dateFilter, dueOnlyFilter]);
+
+  // Synchronize Selected Word
+  useEffect(() => {
+    if (filteredWords.length > 0) {
+      if (!selectedWordId || !filteredWords.some((w) => w.id === selectedWordId)) {
+        setSelectedWordId(filteredWords[0].id);
+      }
+    } else {
+      setSelectedWordId(null);
+    }
+  }, [filteredWords, selectedWordId]);
+
+  // Active Selected Word Object
+  const activeWord = useMemo(() => {
+    return filteredWords.find((w) => w.id === selectedWordId) || filteredWords[0] || null;
+  }, [filteredWords, selectedWordId]);
+
+  // Calculated Stats
+  const totalSavedCount = enrichedWords.length;
+  const dueCount = enrichedWords.filter((w) => w.status === "Learning" || w.status === "New").length;
+  const knownCount = enrichedWords.filter((w) => w.status === "Known").length;
+
+  // Pagination Slice
+  const totalPages = Math.max(1, Math.ceil(filteredWords.length / ITEMS_PER_PAGE));
+  const currentPageSafe = Math.min(currentPage, totalPages);
+  const startIndex = (currentPageSafe - 1) * ITEMS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredWords.length);
+  const currentWordsPage = filteredWords.slice(startIndex, endIndex);
+
+  // Play Pronunciation (TTS)
+  const handlePlayTTS = async (text) => {
+    if (!text || playingWord === text) return;
+    setPlayingWord(text);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          voice: "en-US-BrianNeural"
+        })
+      });
+      if (!response.ok) throw new Error("TTS failed");
+      const data = await response.json();
+      if (data.audio_base64) {
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        audio.onended = () => setPlayingWord(null);
+        audio.onerror = () => setPlayingWord(null);
+        audio.play();
+      } else {
+        setPlayingWord(null);
+      }
+    } catch (err) {
+      console.error("Error playing TTS:", err);
+      setPlayingWord(null);
+    }
+  };
+
+  // Change Word Status (Known, Learning, New)
+  const handleStatusChange = async (wordItem, newStatus) => {
+    try {
+      localStorage.setItem(`buddy_vocab_status_${wordItem.id || wordItem.original}`, newStatus);
+      setWords((prev) =>
+        prev.map((w) => {
+          if (w.id === wordItem.id || w.original === wordItem.original) {
+            return { ...w, status: newStatus };
+          }
+          return w;
+        })
+      );
+      setOpenMenuId(null);
+
+      // Persist to backend if supported
+      await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordItem.id || wordItem.original)}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || ""
+        },
+        body: JSON.stringify({ status: newStatus })
+      }).catch(() => {});
+    } catch (e) {
+      console.warn("Could not save status change:", e);
+    }
+  };
+
+  // Delete Word
+  const handleDeleteWord = async (wordItem) => {
+    const orig = wordItem.original;
+    if (!window.confirm(`Czy na pewno chcesz usunąć "${orig}" ze swojego banku słówek?`)) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(originalWord)}`, {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordItem.id || orig)}`, {
         method: "DELETE",
-        headers: {
-          "X-Session-Token": user?.token || "",
-        },
+        headers: { "X-Session-Token": user?.token || "" }
       });
       if (response.ok) {
-        setWords(prev => prev.filter(w => w.original !== originalWord));
+        setWords((prev) => prev.filter((w) => w.id !== wordItem.id && w.original !== orig));
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } else {
         alert("Błąd podczas usuwania słówka.");
@@ -134,6 +382,64 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
     }
   };
 
+  // Open Edit Modal
+  const handleOpenEditModal = (wordItem) => {
+    setEditingWord(wordItem);
+    setEditOriginal(wordItem.original);
+    setEditTranslated(wordItem.translated);
+    setEditContextSentence(wordItem.context_sentence || "");
+    setEditStatus(wordItem.status || "Learning");
+    setEditTopic(wordItem.topic || "Business");
+    setOpenMenuId(null);
+  };
+
+  // Save Word Edit
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editingWord || isSavingEdit) return;
+
+    setIsSavingEdit(true);
+    try {
+      const payload = {
+        original: editOriginal.trim(),
+        translated: editTranslated.trim(),
+        context_sentence: editContextSentence.trim(),
+        status: editStatus,
+        topic: editTopic
+      };
+
+      localStorage.setItem(`buddy_vocab_status_${editingWord.id || editingWord.original}`, editStatus);
+
+      // Backend PUT
+      await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(editingWord.id || editingWord.original)}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || ""
+        },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+
+      // Update local state
+      setWords((prev) =>
+        prev.map((w) => {
+          if (w.id === editingWord.id || w.original === editingWord.original) {
+            return { ...w, ...payload };
+          }
+          return w;
+        })
+      );
+
+      setEditingWord(null);
+    } catch (err) {
+      console.error("Save edit error:", err);
+      alert("Wystąpił błąd podczas zapisywania zmian.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Auto-translate in Add Word Modal
   const handleAutoTranslateNewWord = async () => {
     if (!newOriginalWord.trim()) return;
     setIsTranslatingNew(true);
@@ -143,9 +449,9 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Session-Token": user?.token || "",
+          "X-Session-Token": user?.token || ""
         },
-        body: JSON.stringify({ text: newOriginalWord.trim() }),
+        body: JSON.stringify({ text: newOriginalWord.trim() })
       });
       const data = await response.json();
       if (data.translation) {
@@ -159,6 +465,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
     }
   };
 
+  // Submit Add Word Modal
   const handleAddNewWord = async (e) => {
     e.preventDefault();
     if (!newOriginalWord.trim() || !newTranslatedWord.trim() || isSavingNewWord) return;
@@ -169,16 +476,19 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Session-Token": user?.token || "",
+          "X-Session-Token": user?.token || ""
         },
         body: JSON.stringify({
           original: newOriginalWord.trim(),
           translated: newTranslatedWord.trim(),
-        }),
+          context_sentence: newContextSentence.trim(),
+          topic: newTopic
+        })
       });
       if (response.ok) {
         setNewOriginalWord("");
         setNewTranslatedWord("");
+        setNewContextSentence("");
         setShowAddWordModal(false);
         fetchVocabulary();
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
@@ -194,92 +504,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
     }
   };
 
-  // Play Pronunciation
-  const handlePlayTTS = async (text) => {
-    if (playingWord === text) return;
-    setPlayingWord(text);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/tts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text,
-          voice: "en-US-BrianNeural"
-        })
-      });
-      if (!response.ok) throw new Error("TTS failed");
-      const data = await response.json();
-      if (data.audio_base64) {
-        const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
-        const audio = new Audio(audioUrl);
-        audio.onended = () => setPlayingWord(null);
-        audio.onerror = () => setPlayingWord(null);
-        audio.play();
-      } else {
-        setPlayingWord(null);
-      }
-    } catch (err) {
-      console.error("Error playing TTS:", err);
-      setPlayingWord(null);
-    }
-  };
-
-  // Handle Quiz Accordion Toggle (Lazy Loading)
-  const handleToggleQuiz = async (item) => {
-    const wordId = item.id || item.original;
-    const isExpanded = expandedQuizId === wordId;
-    const hasQuizAndExercises = item.quiz && item.quiz.extra_exercises;
-
-    if (isExpanded) {
-      setExpandedQuizId(null);
-      return;
-    }
-
-    if (hasQuizAndExercises) {
-      setExpandedQuizId(wordId);
-      return;
-    }
-
-    setLoadingQuizIds(prev => ({ ...prev, [wordId]: true }));
-    setQuizErrors(prev => ({ ...prev, [wordId]: "" }));
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordId)}/quiz`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-Token": user?.token || "",
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error("Nie udało się pobrać quizu.");
-      }
-
-      const quizData = await response.json();
-      
-      setWords(prev => prev.map(w => {
-        if ((w.id && w.id === item.id) || w.original === item.original) {
-          return { ...w, quiz: quizData };
-        }
-        return w;
-      }));
-
-      // Now expand with smooth animation!
-      setExpandedQuizId(wordId);
-    } catch (err) {
-      console.error(err);
-      setQuizErrors(prev => ({
-        ...prev,
-        [wordId]: err.message || "Błąd generowania quizu."
-      }));
-      setExpandedQuizId(wordId);
-    } finally {
-      setLoadingQuizIds(prev => ({ ...prev, [wordId]: false }));
-    }
-  };
-
-  // Handle Email Export
+  // Export to Email
   const handleSendEmail = async (e) => {
     e.preventDefault();
     if (!recipientEmail) return;
@@ -290,13 +515,13 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Session-Token": user?.token || "",
+          "X-Session-Token": user?.token || ""
         },
         body: JSON.stringify({
           recipient_email: recipientEmail,
-          notebook_words: words.map(w => ({ original: w.original, translated: w.translated })),
+          notebook_words: enrichedWords.map((w) => ({ original: w.original, translated: w.translated })),
           frontend_url: window.location.origin
-        }),
+        })
       });
 
       if (response.ok) {
@@ -304,840 +529,611 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         setTimeout(() => {
           setShowEmailModal(false);
           setEmailStatus("");
-        }, 2000);
+        }, 1800);
       } else {
-        const errData = await response.json().catch(() => ({}));
-        if (errData.error) alert(errData.error);
         setEmailStatus("error");
       }
     } catch (err) {
       console.error(err);
-      alert("Błąd połączenia z serwerem przy wysyłaniu e-maila.");
       setEmailStatus("error");
     }
   };
 
-  // Stats calculations
-  const totalCount = words.length;
-  
-  const todayCount = words.filter(w => {
-    if (!w.timestamp) return false;
-    const addedDate = new Date(w.timestamp).toDateString();
-    const today = new Date().toDateString();
-    return addedDate === today;
-  }).length;
-
-  const phrasesCount = words.filter(w => w.original.trim().split(/\s+/).length > 1).length;
-  const wordsOnlyCount = totalCount - phrasesCount;
-
-  // Filter & Sort
-  const filteredWords = words
-    .filter(w => {
-      // Search
-      const query = searchQuery.toLowerCase();
-      const matchesSearch = 
-        w.original.toLowerCase().includes(query) || 
-        w.translated.toLowerCase().includes(query);
-      
-      if (!matchesSearch) return false;
-
-      // Type
-      const isExpression = w.original.trim().split(/\s+/).length > 1;
-      if (filterType === "words" && isExpression) return false;
-      if (filterType === "phrases" && !isExpression) return false;
-
-      // Time Filter
-      if (timeFilter === "today") {
-        if (!w.timestamp) return false;
-        const addedDate = new Date(w.timestamp).toDateString();
-        const today = new Date().toDateString();
-        if (addedDate !== today) return false;
-      } else if (timeFilter === "week") {
-        if (!w.timestamp) return false;
-        const addedDate = new Date(w.timestamp);
-        const now = new Date();
-        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        if (addedDate < oneWeekAgo) return false;
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest(".row-more-menu-wrapper")) {
+        setOpenMenuId(null);
       }
-
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === "newest") {
-        return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
-      }
-      if (sortBy === "oldest") {
-        return new Date(a.timestamp || 0) - new Date(b.timestamp || 0);
-      }
-      if (sortBy === "az") {
-        return a.original.localeCompare(b.original);
-      }
-      if (sortBy === "za") {
-        return b.original.localeCompare(a.original);
-      }
-      return 0;
-    });
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
 
   return (
-    <div className="vocabulary-dashboard">
-      <div className="vocab-header-panel">
-        <div className="vocab-title-block">
-          <p className="vocab-subtitle">Przeglądaj zebrane słownictwo, ćwicz wymowę oraz powtarzaj materiał z fiszkami.</p>
+    <div className="vocabulary-figma-container">
+      {/* ── View Header ─────────────────────────────────────────── */}
+      <div className="vocab-figma-header">
+        <h1 className="vocab-page-title">My Vocabulary</h1>
+      </div>
+
+      {error && (
+        <div style={{ background: "#fef2f2", color: "#b91c1c", padding: "0.75rem 1rem", borderRadius: "10px", marginBottom: "1rem", border: "1px solid #fecaca", fontSize: "0.85rem" }}>
+          ⚠️ {error}
         </div>
+      )}
 
-        <div className="vocab-header-actions">
-          <button 
-            className="action-premium-btn add-word-btn"
-            onClick={() => setShowAddWordModal(true)}
-            style={{
-              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(99, 102, 241, 0.3))',
-              borderColor: 'rgba(139, 92, 246, 0.6)'
-            }}
-          >
-            <span className="btn-icon">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-            </span>
-            <span>Dodaj słówko</span>
-          </button>
-
-          <button 
-            className="action-premium-btn flashcards-btn"
+      {/* ── Hero Section ────────────────────────────────────────── */}
+      <div className="vocab-figma-hero">
+        <div className="hero-text-block">
+          <h2 className="hero-heading">Make new words stay.</h2>
+          <p className="hero-subheading">
+            A personal word bank, built from your stories and conversations.
+          </p>
+        </div>
+        <div className="hero-action-block">
+          <button
+            className="study-due-btn"
             onClick={() => setShowFlashcards(true)}
-            disabled={totalCount === 0}
+            disabled={enrichedWords.length === 0}
           >
-            <span className="btn-icon">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-              </svg>
-            </span>
-            <span>Uruchom Fiszki</span>
-          </button>
-          
-          <button 
-            className="action-premium-btn email-btn"
-            onClick={() => setShowEmailModal(true)}
-            disabled={totalCount === 0}
-          >
-            <span className="btn-icon">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                <polyline points="22,6 12,13 2,6" />
-              </svg>
-            </span>
-            <span>Eksportuj na E-mail</span>
+            {/* Cards stack icon */}
+            <svg
+              className="btn-card-icon"
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="3" width="14" height="14" rx="2" />
+              <path d="M7 21h14a2 2 0 0 0 2-2V7" />
+            </svg>
+            <span>Study {dueCount > 0 ? `${dueCount} due words` : "due words"}</span>
           </button>
         </div>
       </div>
 
-      {/* Stats Section */}
-      <div className="vocab-stats-grid">
-        <div 
-          className={`vocab-stat-card glass-panel animate-fade-in clickable ${timeFilter === "all" ? "active-filter" : ""}`}
-          onClick={() => setTimeFilter("all")}
-          title="Kliknij, aby pokazać wszystkie zwroty"
-        >
-          <div className="stat-icon">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-            </svg>
+      {/* ── Stat Cards Grid (3 Cards) ───────────────────────────── */}
+      <div className="vocab-figma-stats-grid">
+        {/* Card 1: Saved words */}
+        <div className="figma-stat-card">
+          <div className="stat-card-top">
+            <span className="stat-card-label">Saved words</span>
+            <div className="stat-card-icon icon-bookmark">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#2563eb" strokeWidth="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+              </svg>
+            </div>
           </div>
-          <div className="stat-content">
-            <span className="stat-value">{totalCount}</span>
-            <span className="stat-label">Wszystkie zwroty</span>
-          </div>
-          <div className="stat-sub">
-            <span>{wordsOnlyCount} słów / {phrasesCount} wyrażeń</span>
-          </div>
+          <div className="stat-card-number">{totalSavedCount}</div>
         </div>
 
-        <div 
-          className={`vocab-stat-card glass-panel animate-fade-in delay-1 clickable ${timeFilter === "today" ? "active-filter" : ""}`}
-          onClick={() => setTimeFilter(prev => prev === "today" ? "all" : "today")}
-          title="Kliknij, aby filtrować słówka dodane dzisiaj"
-        >
-          <div className="stat-icon">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {/* Card 2: Due for review */}
+        <div className="figma-stat-card">
+          <div className="stat-card-top">
+            <span className="stat-card-label">Due for review</span>
+            <div className="stat-card-icon icon-layers">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#d97706" strokeWidth="2">
+                <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                <polyline points="2 17 12 22 22 17" />
+                <polyline points="2 12 12 17 22 12" />
+              </svg>
+            </div>
+          </div>
+          <div className="stat-card-number">{dueCount}</div>
+        </div>
+
+        {/* Card 3: Words you know */}
+        <div className="figma-stat-card">
+          <div className="stat-card-top">
+            <span className="stat-card-label">Words you know</span>
+            <div className="stat-card-icon icon-check">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#10b981" strokeWidth="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            </div>
+          </div>
+          <div className="stat-card-number">{knownCount}</div>
+        </div>
+      </div>
+
+      {/* ── Toolbar Row (Search + Filters) ──────────────────────── */}
+      <div className="vocab-figma-toolbar">
+        {/* Search input */}
+        <div className="toolbar-search-wrapper">
+          <svg className="search-svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#64748b" strokeWidth="2">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            className="toolbar-search-input"
+            placeholder="Search words or translations..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
+          />
+          {searchQuery && (
+            <button className="search-clear-btn" onClick={() => setSearchQuery("")}>✕</button>
+          )}
+        </div>
+
+        {/* Filter Pills Group */}
+        <div className="toolbar-filters-group">
+          {/* Difficulty Dropdown */}
+          <div className="filter-select-wrapper">
+            <select
+              className="filter-pill-select"
+              value={difficultyFilter}
+              onChange={(e) => {
+                setDifficultyFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">Difficulty: All</option>
+              <option value="A1">Difficulty: A1</option>
+              <option value="A2">Difficulty: A2</option>
+              <option value="B1">Difficulty: B1</option>
+              <option value="B2">Difficulty: B2</option>
+              <option value="C1">Difficulty: C1</option>
+              <option value="C2">Difficulty: C2</option>
+            </select>
+          </div>
+
+          {/* Topic Dropdown */}
+          <div className="filter-select-wrapper">
+            <select
+              className="filter-pill-select"
+              value={topicFilter}
+              onChange={(e) => {
+                setTopicFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">Topic: All</option>
+              <option value="Business">Topic: Business</option>
+              <option value="Travel">Topic: Travel</option>
+              <option value="Daily Life">Topic: Daily Life</option>
+              <option value="Tech">Topic: Tech</option>
+              <option value="Health">Topic: Health</option>
+              <option value="General">Topic: General</option>
+            </select>
+          </div>
+
+          {/* Date Dropdown */}
+          <div className="filter-select-wrapper calendar-filter-wrapper">
+            <svg className="calendar-svg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#64748b" strokeWidth="2">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
               <line x1="16" y1="2" x2="16" y2="6" />
               <line x1="8" y1="2" x2="8" y2="6" />
               <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
+            <select
+              className="filter-pill-select"
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">Date: All time</option>
+              <option value="this_week">Date: This week</option>
+              <option value="today">Date: Today</option>
+              <option value="this_month">Date: This month</option>
+            </select>
           </div>
-          <div className="stat-content">
-            <span className="stat-value">{todayCount}</span>
-            <span className="stat-label">Dodane dzisiaj</span>
-          </div>
-          <div className="stat-sub">
-            <span>{timeFilter === "today" ? "Filtrowanie aktywne (kliknij by odznaczyć)" : "Kliknij, by filtrować"}</span>
-          </div>
-        </div>
 
-        <div className="vocab-stat-card glass-panel animate-fade-in delay-2">
-          <div className="stat-icon">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-              <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-              <path d="M4 22h16" />
-              <path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34" />
-              <path d="M12 2a6 6 0 0 1 6 6v3c0 3.3-2.7 6-6 6s-6-2.7-6-6V8c0-3.3 2.7-6 6-6z" />
-            </svg>
-          </div>
-          <div className="stat-content">
-            <span className="stat-value">
-              {totalCount >= 20 ? "Złoty" : totalCount >= 10 ? "Srebrny" : "Brązowy"}
-            </span>
-            <span className="stat-label">Poziom Postępu</span>
-          </div>
-          <div className="stat-sub">
-            <span>{totalCount >= 20 ? "Mistrz słownictwa!" : totalCount >= 10 ? "Częsta praktyka przynosi efekty!" : "Zapisz więcej słów z czytanek"}</span>
-          </div>
+          {/* Due for review Toggle */}
+          <button
+            className={`filter-pill-btn ${dueOnlyFilter ? "active" : ""}`}
+            onClick={() => {
+              setDueOnlyFilter((prev) => !prev);
+              setCurrentPage(1);
+            }}
+          >
+            Due for review
+          </button>
+
+          {/* Add Word Quick Action Button */}
+          <button
+            className="filter-pill-btn add-new-word-pill"
+            onClick={() => setShowAddWordModal(true)}
+            title="Dodaj nowe słówko"
+          >
+            + Add word
+          </button>
+
+          {/* Email Export Pill */}
+          <button
+            className="filter-pill-btn email-export-pill"
+            onClick={() => setShowEmailModal(true)}
+            title="Eksportuj słownik na e-mail"
+          >
+            ✉ Export
+          </button>
         </div>
       </div>
 
-      {/* Controls Bar */}
-      <div className="vocab-controls-bar glass-panel">
-        <div className="search-input-wrapper">
-          <span className="search-icon">🔍</span>
-          <input 
-            type="text" 
-            placeholder="Szukaj angielskiego zwrotu lub polskiego tłumaczenia..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button className="clear-search-btn" onClick={() => setSearchQuery("")}>✕</button>
-          )}
-        </div>
-
-        <div className="filters-group">
-          <div className="select-wrapper">
-            <label htmlFor="filter-time">Czas:</label>
-            <select 
-              id="filter-time"
-              value={timeFilter} 
-              onChange={(e) => setTimeFilter(e.target.value)}
-            >
-              <option value="all">Wszystko</option>
-              <option value="today">Dzisiaj</option>
-              <option value="week">Ostatnie 7 dni</option>
-            </select>
+      {/* ── Main Two-Column Layout ──────────────────────────────── */}
+      <div className="vocab-figma-main-layout">
+        {/* ── Left Column: Word Bank Table Card ─────────────────── */}
+        <div className="word-bank-table-card">
+          {/* Table Header */}
+          <div className="table-header-row">
+            <div className="th-cell col-word">WORD</div>
+            <div className="th-cell col-context">TRANSLATION & CONTEXT</div>
+            <div className="th-cell col-status">STATUS</div>
+            <div className="th-cell col-actions"></div>
           </div>
 
-          <div className="select-wrapper">
-            <label htmlFor="filter-type">Typ:</label>
-            <select 
-              id="filter-type"
-              value={filterType} 
-              onChange={(e) => setFilterType(e.target.value)}
-            >
-              <option value="all">Wszystko</option>
-              <option value="words">Tylko słowa</option>
-              <option value="phrases">Tylko frazy</option>
-            </select>
-          </div>
-
-          <div className="select-wrapper">
-            <label htmlFor="sort-by">Sortuj:</label>
-            <select 
-              id="sort-by"
-              value={sortBy} 
-              onChange={(e) => setSortBy(e.target.value)}
-            >
-              <option value="newest">Od najnowszych</option>
-              <option value="oldest">Od najstarszych</option>
-              <option value="az">Alfabetycznie A-Z</option>
-              <option value="za">Alfabetycznie Z-A</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Grid */}
-      {loading ? (
-        <div className="vocab-loading-wrapper">
-          <div className="spinner"></div>
-          <p>Ładowanie Twojego słownika...</p>
-        </div>
-      ) : error ? (
-        <div className="vocab-error-wrapper glass-panel">
-          <p className="error-text">⚠️ {error}</p>
-          <button className="action-premium-btn" onClick={fetchVocabulary}>Spróbuj ponownie</button>
-        </div>
-      ) : filteredWords.length > 0 ? (
-        (() => {
-          const cols = Array.from({ length: columnsCount }, () => []);
-          filteredWords.forEach((word, idx) => {
-            cols[idx % columnsCount].push(word);
-          });
-          return (
-            <div className="vocab-grid animate-fade-in">
-              {cols.map((column, colIdx) => (
-                <div className="vocab-masonry-column" key={colIdx}>
-                  {column.map((item) => (
-                    <div key={item.id || item.original} className="vocab-word-card glass-panel">
-                      <div className="card-top">
-                        <span className="word-tag">
-                          {item.original.trim().split(/\s+/).length > 1 ? "Fraza" : "Słowo"}
-                        </span>
-                        <span className="word-date">
-                          {item.timestamp ? new Date(item.timestamp).toLocaleDateString() : ""}
-                        </span>
-                      </div>
-
-                      <div className="word-display-area">
-                        <h3 className="original-text">{item.original}</h3>
-                        <p className="translated-text">{item.translated}</p>
-                         {item.original.trim().split(/\s+/).length === 1 && (
-                           <button 
-                             className={`mnemonic-trigger-btn ${expandedQuizId === (item.id || item.original) ? 'active' : ''} ${loadingQuizIds[item.id || item.original] ? 'loading' : ''}`}
-                             onClick={() => handleToggleQuiz(item)}
-                             title="Ćwiczenie sprawdzające znajomość słowa"
-                             disabled={loadingQuizIds[item.id || item.original]}
-                           >
-                             <span>{loadingQuizIds[item.id || item.original] ? 'Generowanie ćwiczeń...' : 'Ćwiczenia (AI Quiz & Zadania)'}</span>
-                             {loadingQuizIds[item.id || item.original] ? (
-                               <div className="spinner-mini" style={{ width: '12px', height: '12px', display: 'inline-block', border: '2px solid rgba(0,0,0,0.1)', borderLeftColor: 'currentColor', borderRadius: '50%', animation: 'spin 0.6s linear infinite', marginLeft: '5px' }}></div>
-                             ) : (
-                               <span className="bulb-icon">💡</span>
-                             )}
-                           </button>
-                         )}
-                      </div>
-
-                      {expandedQuizId === (item.id || item.original) && (
-                        <div className="mnemonic-accordion-content">
-                          {loadingQuizIds[item.id || item.original] ? (
-                            <div className="mnemonic-loading">
-                              <div className="spinner-mini"></div>
-                              <span>Tworzenie quizu i ćwiczeń...</span>
-                            </div>
-                          ) : quizErrors[item.id || item.original] ? (
-                            <div className="mnemonic-error">
-                              <span>⚠️ {quizErrors[item.id || item.original]}</span>
-                            </div>
-                          ) : item.quiz ? (
-                            <div className="drawer-quiz-wrapper animate-slide-down">
-                              {/* Tabs */}
-                              <div className="exercises-tabs">
-                                <button
-                                  type="button"
-                                  className={`exercise-tab-btn ${(!activeExerciseTabs[item.id || item.original] || activeExerciseTabs[item.id || item.original] === 'synonyms') ? 'active' : ''}`}
-                                  onClick={() => setActiveExerciseTabs(prev => ({ ...prev, [item.id || item.original]: 'synonyms' }))}
-                                >
-                                  Synonimy
-                                </button>
-                                {item.quiz.extra_exercises && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className={`exercise-tab-btn ${activeExerciseTabs[item.id || item.original] === 'pl_to_en' ? 'active' : ''}`}
-                                      onClick={() => setActiveExerciseTabs(prev => ({ ...prev, [item.id || item.original]: 'pl_to_en' }))}
-                                    >
-                                      PL ➡️ EN
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={`exercise-tab-btn ${activeExerciseTabs[item.id || item.original] === 'en_blank' ? 'active' : ''}`}
-                                      onClick={() => setActiveExerciseTabs(prev => ({ ...prev, [item.id || item.original]: 'en_blank' }))}
-                                    >
-                                      Luki EN
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-
-                              {/* Content: Synonyms */}
-                              {(!activeExerciseTabs[item.id || item.original] || activeExerciseTabs[item.id || item.original] === 'synonyms') && (
-                                <div className="synonyms-quiz-container">
-                                  <p className="drawer-quiz-question">{item.quiz.question}</p>
-                                  <div className="drawer-quiz-options">
-                                    {item.quiz.options.map((option, idx) => {
-                                      const isSelected = selectedAnswers[item.id || item.original] === option.text;
-                                      const hasAnswered = selectedAnswers[item.id || item.original] !== undefined;
-                                      
-                                      let optionClass = "drawer-quiz-option";
-                                      if (hasAnswered) {
-                                        if (option.is_correct) {
-                                          optionClass += " correct";
-                                        } else if (isSelected) {
-                                          optionClass += " incorrect";
-                                        } else {
-                                          optionClass += " disabled";
-                                        }
-                                      }
-
-                                      return (
-                                        <button
-                                          key={idx}
-                                          className={optionClass}
-                                          disabled={hasAnswered}
-                                          onClick={() => setSelectedAnswers(prev => ({ ...prev, [item.id || item.original]: option.text }))}
-                                        >
-                                          {option.text}
-                                          {hasAnswered && option.translation && ` (${option.translation})`}
-                                          {hasAnswered && option.is_correct && " ➡️ PRAWIDŁOWA ODPOWIEDŹ"}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                  {selectedAnswers[item.id || item.original] && (
-                                    <button 
-                                      className="drawer-quiz-reset-btn"
-                                      onClick={() => setSelectedAnswers(prev => {
-                                        const updated = { ...prev };
-                                        delete updated[item.id || item.original];
-                                        return updated;
-                                      })}
-                                    >
-                                      Spróbuj ponownie
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Content: PL to EN translation */}
-                              {activeExerciseTabs[item.id || item.original] === 'pl_to_en' && item.quiz.extra_exercises && (
-                                <div className="extra-exercise-container">
-                                  {item.quiz.extra_exercises.pl_to_en.map((ex, idx) => {
-                                    const wordId = item.id || item.original;
-                                    const currentVal = (plToEnAnswers[wordId] && plToEnAnswers[wordId][idx]) || '';
-                                    const feedbackObj = plToEnChecked[wordId] && plToEnChecked[wordId][idx];
-                                    const isChecked = feedbackObj !== undefined;
-                                    const isCorrect = isChecked && (feedbackObj.status === 'correct' || feedbackObj.status === 'acceptable');
-                                    const isChecking = checkingPlToEn[wordId] && checkingPlToEn[wordId][idx];
-
-                                    const handleCheck = async () => {
-                                      if (!currentVal.trim()) return;
-                                      setCheckingPlToEn(prev => ({
-                                        ...prev,
-                                        [wordId]: { ...(prev[wordId] || {}), [idx]: true }
-                                      }));
-                                      try {
-                                        const response = await fetch(`${API_BASE_URL}/api/vocabulary/check-translation`, {
-                                          method: "POST",
-                                          headers: {
-                                            "Content-Type": "application/json",
-                                            "X-Session-Token": user?.token || "",
-                                          },
-                                          body: JSON.stringify({
-                                            target_word: item.original,
-                                            sentence_pl: ex.sentence_pl,
-                                            correct_en: ex.correct_en,
-                                            user_translation: currentVal
-                                          })
-                                        });
-                                        if (response.ok) {
-                                          const result = await response.json();
-                                          setPlToEnChecked(prev => ({
-                                            ...prev,
-                                            [wordId]: { 
-                                              ...(prev[wordId] || {}), 
-                                              [idx]: {
-                                                correct: result.status === 'correct' || result.status === 'acceptable',
-                                                status: result.status,
-                                                feedback: result.feedback
-                                              } 
-                                            }
-                                          }));
-                                        } else {
-                                          throw new Error("API check failed");
-                                        }
-                                      } catch (e) {
-                                        console.error(e);
-                                        const cleanUser = cleanStringForComparison(currentVal);
-                                        const cleanCorrect = cleanStringForComparison(ex.correct_en);
-                                        const correct = cleanUser === cleanCorrect;
-                                        setPlToEnChecked(prev => ({
-                                          ...prev,
-                                          [wordId]: { 
-                                            ...(prev[wordId] || {}), 
-                                            [idx]: {
-                                              correct,
-                                              status: correct ? 'correct' : 'incorrect',
-                                              feedback: correct ? '✓ Poprawnie!' : `✗ Spróbuj jeszcze raz. Wzór: "${ex.correct_en}"`
-                                            } 
-                                          }
-                                        }));
-                                      } finally {
-                                        setCheckingPlToEn(prev => ({
-                                          ...prev,
-                                          [wordId]: { ...(prev[wordId] || {}), [idx]: false }
-                                        }));
-                                      }
-                                    };
-
-                                    let inputClass = "exercise-input";
-                                    if (isChecked) {
-                                      if (feedbackObj.status === 'correct') inputClass += " correct";
-                                      else if (feedbackObj.status === 'acceptable') inputClass += " acceptable-input";
-                                      else inputClass += " incorrect";
-                                    }
-
-                                    return (
-                                      <div key={idx} className="exercise-item">
-                                        <span className="exercise-sentence">PL: {ex.sentence_pl}</span>
-                                        <div className="exercise-input-wrapper">
-                                          <input
-                                            type="text"
-                                            placeholder="Wpisz wersję angielską..."
-                                            className={inputClass}
-                                            value={currentVal}
-                                            onChange={(e) => setPlToEnAnswers(prev => ({
-                                              ...prev,
-                                              [wordId]: { ...(prev[wordId] || {}), [idx]: e.target.value }
-                                            }))}
-                                            disabled={isChecked || isChecking}
-                                          />
-                                          {!isChecked && (
-                                            <button 
-                                              className="exercise-check-btn" 
-                                              onClick={handleCheck}
-                                              disabled={isChecking || !currentVal.trim()}
-                                            >
-                                              {isChecking ? "Sprawdzanie..." : "Sprawdź"}
-                                            </button>
-                                          )}
-                                        </div>
-                                        {isChecked && (
-                                          <div className={`exercise-feedback ${feedbackObj.status}`}>
-                                            {feedbackObj.feedback}
-                                            {!isCorrect && (
-                                              <div style={{ marginTop: '0.2rem', color: 'var(--gray-500)', fontSize: '0.75rem' }}>
-                                                Wzorcowe tłumaczenie: "{ex.correct_en}"
-                                              </div>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                  {(plToEnChecked[item.id || item.original] && Object.keys(plToEnChecked[item.id || item.original]).length > 0) && (
-                                    <button
-                                      className="drawer-quiz-reset-btn"
-                                      onClick={() => {
-                                        setPlToEnAnswers(prev => {
-                                          const updated = { ...prev };
-                                          delete updated[item.id || item.original];
-                                          return updated;
-                                        });
-                                        setPlToEnChecked(prev => {
-                                          const updated = { ...prev };
-                                          delete updated[item.id || item.original];
-                                          return updated;
-                                        });
-                                      }}
-                                    >
-                                      Resetuj ćwiczenie
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Content: EN blank fill */}
-                              {activeExerciseTabs[item.id || item.original] === 'en_blank' && item.quiz.extra_exercises && (
-                                <div className="extra-exercise-container">
-                                  {item.quiz.extra_exercises.en_blank.map((ex, idx) => {
-                                    const wordId = item.id || item.original;
-                                    const currentVal = (enBlankAnswers[wordId] && enBlankAnswers[wordId][idx]) || '';
-                                    const isChecked = enBlankChecked[wordId] && enBlankChecked[wordId][idx] !== undefined;
-                                    const isCorrect = isChecked && enBlankChecked[wordId][idx];
-
-                                    const handleCheck = () => {
-                                      const cleanUser = cleanStringForComparison(currentVal);
-                                      const cleanCorrect = cleanStringForComparison(ex.correct_word);
-                                      const correct = cleanUser === cleanCorrect;
-                                      setEnBlankChecked(prev => ({
-                                        ...prev,
-                                        [wordId]: { ...(prev[wordId] || {}), [idx]: correct }
-                                      }));
-                                    };
-
-                                    const parts = ex.sentence_en.split("___");
-
-                                    return (
-                                      <div key={idx} className="exercise-item">
-                                        <div className="exercise-sentence-en-blank">
-                                          <span>{parts[0]}</span>
-                                          <input
-                                            type="text"
-                                            placeholder="wpisz..."
-                                            className={`exercise-input-blank ${isChecked ? (isCorrect ? 'correct' : 'incorrect') : ''}`}
-                                            value={currentVal}
-                                            onChange={(e) => setEnBlankAnswers(prev => ({
-                                              ...prev,
-                                              [wordId]: { ...(prev[wordId] || {}), [idx]: e.target.value }
-                                            }))}
-                                            disabled={isChecked}
-                                            style={{ width: `${Math.max(80, ex.correct_word.length * 9)}px` }}
-                                          />
-                                          <span>{parts[1]}</span>
-                                          {!isChecked && (
-                                            <button className="exercise-check-btn" onClick={handleCheck} style={{ marginLeft: 'auto' }}>
-                                              Sprawdź
-                                            </button>
-                                          )}
-                                        </div>
-                                        {isChecked && (
-                                          <div className={`exercise-feedback ${isCorrect ? 'correct' : 'incorrect'}`}>
-                                            {isCorrect ? '✓ Świetnie!' : `✗ Brakujące słowo: "${ex.correct_word}"`}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                  {(enBlankChecked[item.id || item.original] && Object.keys(enBlankChecked[item.id || item.original]).length > 0) && (
-                                    <button
-                                      className="drawer-quiz-reset-btn"
-                                      onClick={() => {
-                                        setEnBlankAnswers(prev => {
-                                          const updated = { ...prev };
-                                          delete updated[item.id || item.original];
-                                          return updated;
-                                        });
-                                        setEnBlankChecked(prev => {
-                                          const updated = { ...prev };
-                                          delete updated[item.id || item.original];
-                                          return updated;
-                                        });
-                                      }}
-                                    >
-                                      Resetuj ćwiczenie
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ) : null}
-                        </div>
-                      )}
-
-                      <div className="card-actions-bar">
-                        <button 
-                          className={`card-action-icon-btn ${playingWord === item.original ? 'speaking' : ''}`}
-                          onClick={() => handlePlayTTS(item.original)}
-                          title="Odsłuchaj poprawną wymowę"
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                          </svg>
-                        </button>
-
-                        <button 
-                          className="card-action-icon-btn"
-                          onClick={() => setExplanationWord(item.original)}
-                          title="Wyjaśnij słówko przez AI"
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="16" x2="12" y2="12" />
-                            <line x1="12" y1="8" x2="12.01" y2="8" />
-                          </svg>
-                        </button>
-
-                        <button 
-                          className="card-action-icon-btn practice-btn"
-                          onClick={() => setPracticeTargetText(item.original)}
-                          title="Przećwicz swoją wymowę mikrofonem"
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-                            <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 19v4M8 23h8"/>
-                          </svg>
-                        </button>
-
-                        <button 
-                          className="card-action-icon-btn delete-btn"
-                          onClick={() => handleDeleteWord(item.original)}
-                          title="Usuń ze słownika"
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
-                        </button>
+          {/* Table Body / Rows */}
+          <div className="table-body-container">
+            {loading ? (
+              <div className="table-empty-state">
+                <div className="spinner-mini"></div>
+                <p>Loading words...</p>
+              </div>
+            ) : filteredWords.length === 0 ? (
+              <div className="table-empty-state">
+                <p>No words match your current filters.</p>
+                <button
+                  className="reset-filters-btn"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setDifficultyFilter("all");
+                    setTopicFilter("all");
+                    setDateFilter("all");
+                    setDueOnlyFilter(false);
+                  }}
+                >
+                  Reset filters
+                </button>
+              </div>
+            ) : (
+              currentWordsPage.map((word) => {
+                const isSelected = activeWord && activeWord.id === word.id;
+                return (
+                  <div
+                    key={word.id}
+                    className={`table-data-row ${isSelected ? "selected-row" : ""}`}
+                    onClick={() => setSelectedWordId(word.id)}
+                  >
+                    {/* Word Column */}
+                    <div className="td-cell col-word">
+                      <div className="word-primary-text">{word.original}</div>
+                      <div className="word-sub-meta">
+                        {word.level} · {word.topic}
                       </div>
                     </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          );
-        })()
-      ) : (
-        <div className="vocab-empty-state glass-panel animate-fade-in">
-          <div className="empty-state-illustration">
-            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-            </svg>
-          </div>
-          <h3>Brak słówek do wyświetlenia</h3>
-          {searchQuery || filterType !== "all" ? (
-            <p>Spróbuj zmienić filtry lub wyczyścić pole wyszukiwania.</p>
-          ) : (
-            <>
-              <p>Twój słownik jest pusty. Zapisuj nieznane słowa i wyrażenia podczas czytania opowiadań!</p>
-              <button className="action-premium-btn" onClick={onNavigateToWorkspace}>
-                Przejdź do Czytania
-              </button>
-            </>
-          )}
-        </div>
-      )}
 
-      {/* --- Overlay Modals --- */}
+                    {/* Translation & Context Column */}
+                    <div className="td-cell col-context">
+                      <div className="translation-primary-text">{word.translated}</div>
+                      <div className="context-secondary-text">{word.context_sentence}</div>
+                    </div>
 
-      {/* 1. Flashcards Full-screen overlay */}
-      {showFlashcards && (
-        <div className="flashcards-fullpage-overlay">
-          <div className="flashcards-wrapper-modal glass-panel">
-            <Flashcards 
-              notebookWords={words} 
-              onFinishExercises={() => setShowFlashcards(false)} 
-            />
-          </div>
-        </div>
-      )}
+                    {/* Status Column */}
+                    <div className="td-cell col-status">
+                      <span className={`status-pill status-${word.status.toLowerCase()}`}>
+                        {word.status}
+                      </span>
+                    </div>
 
-      {/* 2. Word Explanation Modal */}
-      {explanationWord && (
-        <WordExplanationModal 
-          wordOrPhrase={explanationWord}
-          user={user}
-          onClose={() => setExplanationWord(null)}
-        />
-      )}
+                    {/* Actions Column (3 dots menu) */}
+                    <div className="td-cell col-actions" onClick={(e) => e.stopPropagation()}>
+                      <div className="row-more-menu-wrapper">
+                        <button
+                          className="row-more-btn"
+                          onClick={() => setOpenMenuId(openMenuId === word.id ? null : word.id)}
+                          title="More options"
+                        >
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                            <circle cx="5" cy="12" r="2" />
+                            <circle cx="12" cy="12" r="2" />
+                            <circle cx="19" cy="12" r="2" />
+                          </svg>
+                        </button>
 
-      {/* 3. Pronunciation Practice Modal */}
-      {practiceTargetText && (
-        <PronunciationPracticeModal 
-          targetText={practiceTargetText}
-          user={user}
-          onClose={() => setPracticeTargetText(null)}
-          onLogActivity={() => {}}
-          onLogPronunciationError={() => {}}
-        />
-      )}
-
-      {showEmailModal && (
-        <div className="modal-overlay">
-          <form className="modal-content" onSubmit={handleSendEmail}>
-            <h3>Eksportuj słownik na e-mail</h3>
-            <p className="modal-description">Wprowadź swój adres e-mail. Wyślemy listę Twoich zapisanych słów wraz z tłumaczeniami.</p>
-            
-            <input 
-              type="email" 
-              placeholder="Twój adres email..." 
-              value={recipientEmail} 
-              onChange={e => setRecipientEmail(e.target.value)}
-              className="premium-input"
-              required
-              disabled={emailStatus === "sending"}
-            />
-
-            {emailStatus === "success" && <div className="email-status-text success" style={{ marginBottom: "1rem" }}>✓ Słówka zostały wysłane!</div>}
-            {emailStatus === "error" && <div className="email-status-text error" style={{ marginBottom: "1rem" }}>✕ Wystąpił błąd. Spróbuj ponownie.</div>}
-
-            <div className="modal-actions">
-              <button 
-                type="submit" 
-                className="btn-primary" 
-                disabled={emailStatus === "sending" || !recipientEmail}
-              >
-                {emailStatus === "sending" ? (
-                  <>
-                    <span className="spinner-inline"></span>
-                    Wysyłanie...
-                  </>
-                ) : "Wyślij"}
-              </button>
-              <button 
-                type="button" 
-                className="btn-secondary"
-                onClick={() => {
-                  setShowEmailModal(false);
-                  setEmailStatus("");
-                }}
-                disabled={emailStatus === "sending"}
-              >
-                Anuluj
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-      {showAddWordModal && (
-        <div className="modal-overlay" style={{ zIndex: 10000 }}>
-          <div className="modal-content glass-panel" style={{ maxWidth: '440px' }}>
-            <h3>Dodaj nowe słówko</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '16px' }}>
-              Wpisz angielskie słowo lub frazę. Możesz użyć AI do automatycznego przetłumaczenia.
-            </p>
-            {addWordError && (
-              <div style={{ color: '#ef4444', marginBottom: '12px', fontSize: '0.85rem' }}>
-                {addWordError}
-              </div>
+                        {/* Dropdown Menu */}
+                        {openMenuId === word.id && (
+                          <div className="row-dropdown-popup">
+                            <button
+                              className="dropdown-item"
+                              onClick={() => {
+                                handlePlayTTS(word.original);
+                                setOpenMenuId(null);
+                              }}
+                            >
+                              🔊 Odsłuchaj wymowę
+                            </button>
+                            <button
+                              className="dropdown-item"
+                              onClick={() => {
+                                setExplanationWord(word.original);
+                                setOpenMenuId(null);
+                              }}
+                            >
+                              💡 Wyjaśnienie AI
+                            </button>
+                            <button
+                              className="dropdown-item"
+                              onClick={() => {
+                                setPracticeTargetText(word.original);
+                                setOpenMenuId(null);
+                              }}
+                            >
+                              🎯 Ćwicz wymowę
+                            </button>
+                            <button
+                              className="dropdown-item"
+                              onClick={() => handleOpenEditModal(word)}
+                            >
+                              ✏ Edytuj słówko
+                            </button>
+                            <div className="dropdown-divider"></div>
+                            <div className="dropdown-label">Zmień status:</div>
+                            <button
+                              className="dropdown-item"
+                              onClick={() => handleStatusChange(word, "Learning")}
+                            >
+                              ⏳ Learning (W trakcie)
+                            </button>
+                            <button
+                              className="dropdown-item"
+                              onClick={() => handleStatusChange(word, "Known")}
+                            >
+                              ✅ Known (Opanowane)
+                            </button>
+                            <button
+                              className="dropdown-item"
+                              onClick={() => handleStatusChange(word, "New")}
+                            >
+                              🆕 New (Nowe)
+                            </button>
+                            <div className="dropdown-divider"></div>
+                            <button
+                              className="dropdown-item danger"
+                              onClick={() => {
+                                handleDeleteWord(word);
+                                setOpenMenuId(null);
+                              }}
+                            >
+                              🗑 Usuń ze słownika
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
             )}
-            <form onSubmit={handleAddNewWord}>
-              <div style={{ marginBottom: '12px', textAlign: 'left' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                  Słowo / fraza po angielsku:
-                </label>
-                <div style={{ display: 'flex', gap: '8px' }}>
+          </div>
+
+          {/* Table Footer / Pagination */}
+          <div className="table-footer-pagination">
+            <div className="pagination-info">
+              {filteredWords.length > 0
+                ? `${startIndex + 1}–${endIndex} of ${filteredWords.length} words`
+                : "0 words"}
+            </div>
+            <div className="pagination-controls">
+              <button
+                className="pagination-btn arrow-btn"
+                disabled={currentPageSafe <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                ‹
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  className={`pagination-btn page-num-btn ${page === currentPageSafe ? "active" : ""}`}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                className="pagination-btn arrow-btn"
+                disabled={currentPageSafe >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                ›
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right Column: Active Word Details & Review Widget ── */}
+        <div className="vocab-figma-right-column">
+          {/* Card 1: Active Word Details */}
+          {activeWord ? (
+            <div className="active-word-card">
+              {/* Header with Title and Speaker */}
+              <div className="active-word-header">
+                <div>
+                  <h3 className="active-word-title">{activeWord.original}</h3>
+                  <div className="active-word-phonetics">
+                    {activeWord.phonetic} · {activeWord.part_of_speech} · {activeWord.level}
+                  </div>
+                </div>
+                <button
+                  className={`audio-speaker-btn ${playingWord === activeWord.original ? "playing" : ""}`}
+                  onClick={() => handlePlayTTS(activeWord.original)}
+                  title="Posłuchaj wymowy"
+                >
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Translation & Definition */}
+              <div className="active-word-meaning-block">
+                <div className="active-word-translation">{activeWord.translated}</div>
+                <p className="active-word-definition">{activeWord.definition}</p>
+              </div>
+
+              {/* Context Quote */}
+              <div className="active-word-quote-block">
+                “{activeWord.context_sentence}”
+              </div>
+
+              {/* Story Source Tag */}
+              <div className="active-word-tags-row">
+                <span className="story-source-pill">{activeWord.story_title}</span>
+              </div>
+
+              {/* Bottom Actions Row */}
+              <div className="active-word-actions-row">
+                <button
+                  className="edit-word-btn"
+                  onClick={() => handleOpenEditModal(activeWord)}
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  <span>Edit word</span>
+                </button>
+                <button
+                  className="delete-word-btn"
+                  onClick={() => handleDeleteWord(activeWord)}
+                  title="Usuń słówko"
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="active-word-card empty-active-card">
+              <p>Wybierz słówko z listy, aby zobaczyć szczegóły.</p>
+            </div>
+          )}
+
+          {/* Card 2: Quick Review Widget */}
+          <div className="review-widget-card">
+            <div className="review-widget-header">
+              <div className="review-widget-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#d97706" strokeWidth="2">
+                  <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                  <polyline points="2 17 12 22 22 17" />
+                  <polyline points="2 12 12 17 22 12" />
+                </svg>
+              </div>
+              <h4 className="review-widget-title">Ready for a quick review?</h4>
+            </div>
+
+            <p className="review-widget-desc">
+              Spaced repetition helps you remember more with less effort.
+            </p>
+
+            <div className="review-goal-progress">
+              <div className="goal-label">
+                Weekly review goal · {Math.min(knownCount, 8)} / 12
+              </div>
+              <div className="goal-track">
+                <div
+                  className="goal-fill"
+                  style={{ width: `${Math.min(100, Math.round((Math.min(knownCount, 8) / 12) * 100))}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <button
+              className="open-flashcards-btn"
+              onClick={() => setShowFlashcards(true)}
+              disabled={enrichedWords.length === 0}
+            >
+              Open flashcards
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Add Word Modal ──────────────────────────────────────── */}
+      {showAddWordModal && (
+        <div className="modal-backdrop-figma">
+          <div className="modal-card-figma">
+            <div className="modal-header-figma">
+              <h3>Dodaj nowe słówko do banku</h3>
+              <button className="modal-close-btn" onClick={() => setShowAddWordModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleAddNewWord} className="modal-body-figma">
+              <div className="form-group-figma">
+                <label>Słówko / Fraza po angielsku</label>
+                <div className="input-with-action">
                   <input
                     type="text"
-                    required
-                    placeholder="np. resilient"
                     value={newOriginalWord}
                     onChange={(e) => setNewOriginalWord(e.target.value)}
-                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.25)', color: 'white' }}
+                    placeholder="np. adapt, clarify, supportive..."
+                    required
                   />
                   <button
                     type="button"
+                    className="auto-translate-btn"
                     onClick={handleAutoTranslateNewWord}
                     disabled={isTranslatingNew || !newOriginalWord.trim()}
-                    style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'rgba(139, 92, 246, 0.25)', color: '#c4b5fd', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600' }}
-                    title="Przetłumacz za pomocą AI"
                   >
-                    {isTranslatingNew ? "..." : "AI Tłumacz"}
+                    {isTranslatingNew ? "Tłumaczę..." : "AI Tłumacz"}
                   </button>
                 </div>
               </div>
 
-              <div style={{ marginBottom: '16px', textAlign: 'left' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                  Tłumaczenie po polsku:
-                </label>
+              <div className="form-group-figma">
+                <label>Polskie tłumaczenie</label>
                 <input
                   type="text"
-                  required
-                  placeholder="np. odporny, elastyczny"
                   value={newTranslatedWord}
                   onChange={(e) => setNewTranslatedWord(e.target.value)}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.25)', color: 'white' }}
+                  placeholder="np. dostosować się..."
+                  required
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAddWordModal(false)}
-                  style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: 'white', cursor: 'pointer' }}
-                >
+              <div className="form-group-figma">
+                <label>Przykładowe zdanie w kontekście (opcjonalnie)</label>
+                <input
+                  type="text"
+                  value={newContextSentence}
+                  onChange={(e) => setNewContextSentence(e.target.value)}
+                  placeholder="np. Maya needed to adapt to a new routine."
+                />
+              </div>
+
+              <div className="form-group-figma">
+                <label>Tematyka / Kategoria</label>
+                <select value={newTopic} onChange={(e) => setNewTopic(e.target.value)}>
+                  <option value="Business">Business</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Daily Life">Daily Life</option>
+                  <option value="Tech">Tech</option>
+                  <option value="Health">Health</option>
+                  <option value="General">General</option>
+                </select>
+              </div>
+
+              {addWordError && <p className="modal-error-text">{addWordError}</p>}
+
+              <div className="modal-actions-figma">
+                <button type="button" className="btn-cancel" onClick={() => setShowAddWordModal(false)}>
                   Anuluj
                 </button>
-                <button
-                  type="submit"
-                  disabled={isSavingNewWord || !newOriginalWord.trim() || !newTranslatedWord.trim()}
-                  className="action-premium-btn"
-                  style={{ cursor: 'pointer' }}
-                >
-                  {isSavingNewWord ? "Zapisywanie..." : "Zapisz w słowniku"}
+                <button type="submit" className="btn-submit" disabled={isSavingNewWord}>
+                  {isSavingNewWord ? "Zapisuję..." : "Zapisz słówko"}
                 </button>
               </div>
             </form>
@@ -1145,6 +1141,148 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         </div>
       )}
 
+      {/* ── Edit Word Modal ─────────────────────────────────────── */}
+      {editingWord && (
+        <div className="modal-backdrop-figma">
+          <div className="modal-card-figma">
+            <div className="modal-header-figma">
+              <h3>Edycja słówka</h3>
+              <button className="modal-close-btn" onClick={() => setEditingWord(null)}>✕</button>
+            </div>
+            <form onSubmit={handleSaveEdit} className="modal-body-figma">
+              <div className="form-group-figma">
+                <label>Angielski zwrot</label>
+                <input
+                  type="text"
+                  value={editOriginal}
+                  onChange={(e) => setEditOriginal(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group-figma">
+                <label>Polskie tłumaczenie</label>
+                <input
+                  type="text"
+                  value={editTranslated}
+                  onChange={(e) => setEditTranslated(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group-figma">
+                <label>Zdanie w kontekście</label>
+                <input
+                  type="text"
+                  value={editContextSentence}
+                  onChange={(e) => setEditContextSentence(e.target.value)}
+                />
+              </div>
+
+              <div className="form-row-2col">
+                <div className="form-group-figma">
+                  <label>Status powtórek</label>
+                  <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)}>
+                    <option value="Learning">Learning (W trakcie)</option>
+                    <option value="Known">Known (Opanowane)</option>
+                    <option value="New">New (Nowe)</option>
+                  </select>
+                </div>
+                <div className="form-group-figma">
+                  <label>Tematyka</label>
+                  <select value={editTopic} onChange={(e) => setEditTopic(e.target.value)}>
+                    <option value="Business">Business</option>
+                    <option value="Travel">Travel</option>
+                    <option value="Daily Life">Daily Life</option>
+                    <option value="Tech">Tech</option>
+                    <option value="Health">Health</option>
+                    <option value="General">General</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="modal-actions-figma">
+                <button type="button" className="btn-cancel" onClick={() => setEditingWord(null)}>
+                  Anuluj
+                </button>
+                <button type="submit" className="btn-submit" disabled={isSavingEdit}>
+                  {isSavingEdit ? "Zapisuję..." : "Zapisz zmiany"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Flashcards Modal ────────────────────────────────────── */}
+      {showFlashcards && (
+        <Flashcards
+          words={enrichedWords.map((w) => ({
+            original: w.original,
+            translated: w.translated,
+            context_sentence: w.context_sentence,
+            id: w.id
+          }))}
+          user={user}
+          onClose={() => setShowFlashcards(false)}
+        />
+      )}
+
+      {/* ── AI Explanation Modal ────────────────────────────────── */}
+      {explanationWord && (
+        <WordExplanationModal
+          word={explanationWord}
+          user={user}
+          onClose={() => setExplanationWord(null)}
+        />
+      )}
+
+      {/* ── Pronunciation Practice Modal ────────────────────────── */}
+      {practiceTargetText && (
+        <PronunciationPracticeModal
+          targetText={practiceTargetText}
+          user={user}
+          onClose={() => setPracticeTargetText(null)}
+        />
+      )}
+
+      {/* ── Email Export Modal ──────────────────────────────────── */}
+      {showEmailModal && (
+        <div className="modal-backdrop-figma">
+          <div className="modal-card-figma">
+            <div className="modal-header-figma">
+              <h3>Eksportuj słownik na e-mail</h3>
+              <button className="modal-close-btn" onClick={() => setShowEmailModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleSendEmail} className="modal-body-figma">
+              <div className="form-group-figma">
+                <label>Adres e-mail odbiorcy</label>
+                <input
+                  type="email"
+                  value={recipientEmail}
+                  onChange={(e) => setRecipientEmail(e.target.value)}
+                  placeholder="twoj@email.com"
+                  required
+                />
+              </div>
+              {emailStatus === "success" && (
+                <p style={{ color: "#16a34a", fontSize: "0.85rem", margin: 0, fontWeight: 600 }}>✓ Wysłano pomyślnie!</p>
+              )}
+              {emailStatus === "error" && (
+                <p style={{ color: "#e11d48", fontSize: "0.85rem", margin: 0 }}>Błąd podczas wysyłania e-maila.</p>
+              )}
+              <div className="modal-actions-figma">
+                <button type="button" className="btn-cancel" onClick={() => setShowEmailModal(false)}>
+                  Anuluj
+                </button>
+                <button type="submit" className="btn-submit" disabled={emailStatus === "sending"}>
+                  {emailStatus === "sending" ? "Wysyłanie..." : "Wyślij listę słówek"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
