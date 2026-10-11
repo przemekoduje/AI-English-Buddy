@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-11 18:53:56
+Wygenerowano: 2026-10-11 19:06:20
 
 ## Spis Treści
 1. `backend/app.py`
@@ -1250,24 +1250,26 @@ def admin_stats():
 @app.route("/api/register", methods=['POST'])
 def register():
     if 'db' not in globals() or db is None:
-        return jsonify({"error": "Baza danych nie jest dostępna"}), 500
+        return jsonify({"error": "Database is not available"}), 500
     data = request.get_json() or {}
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
+    full_name = data.get("full_name", "").strip()
 
     if not email or not password:
-        return jsonify({"error": "Email i hasło są wymagane"}), 400
+        return jsonify({"error": "Email and password are required"}), 400
 
     try:
         # Sprawdź czy użytkownik istnieje
         user_ref = db.collection('users').document(email).get()
         if user_ref.exists:
-            return jsonify({"error": "Użytkownik o tym adresie email już istnieje"}), 400
+            return jsonify({"error": "An account with this email already exists."}), 400
 
         # Zapisz użytkownika
         pw_hash = hash_password(password)
         db.collection('users').document(email).set({
             'email': email,
+            'full_name': full_name,
             'password_hash': pw_hash,
             'created_at': firestore.SERVER_TIMESTAMP
         })
@@ -1279,32 +1281,32 @@ def register():
             'created_at': firestore.SERVER_TIMESTAMP
         })
 
-        return jsonify({"token": token, "email": email}), 201
+        return jsonify({"token": token, "email": email, "full_name": full_name}), 201
     except Exception as e:
         print(f"Błąd rejestracji: {e}")
-        return jsonify({"error": f"Błąd serwera podczas rejestracji: {e}"}), 500
+        return jsonify({"error": f"Server error during registration: {e}"}), 500
 
 @app.route("/api/login", methods=['POST'])
 def login():
     if 'db' not in globals() or db is None:
-        return jsonify({"error": "Baza danych nie jest dostępna"}), 500
+        return jsonify({"error": "Database is not available"}), 500
     data = request.get_json() or {}
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
 
     if not email or not password:
-        return jsonify({"error": "Email i hasło są wymagane"}), 400
+        return jsonify({"error": "Email and password are required"}), 400
 
     try:
         user_ref = db.collection('users').document(email).get()
         if not user_ref.exists:
-            return jsonify({"error": "Niepoprawny email lub hasło"}), 401
+            return jsonify({"error": "No account found with this email address."}), 401
 
         user_data = user_ref.to_dict()
         pw_hash = hash_password(password)
 
         if user_data.get("password_hash") != pw_hash:
-            return jsonify({"error": "Niepoprawny email lub hasło"}), 401
+            return jsonify({"error": "That password doesn't match. Please try again."}), 401
 
         # Utwórz sesję
         token = secrets.token_hex(32)
@@ -1313,10 +1315,14 @@ def login():
             'created_at': firestore.SERVER_TIMESTAMP
         })
 
-        return jsonify({"token": token, "email": email}), 200
+        return jsonify({
+            "token": token, 
+            "email": email, 
+            "full_name": user_data.get("full_name", "")
+        }), 200
     except Exception as e:
         print(f"Błąd logowania: {e}")
-        return jsonify({"error": f"Błąd serwera podczas logowania: {e}"}), 500
+        return jsonify({"error": f"Server error during login: {e}"}), 500
 
 @app.route("/api/logout", methods=['POST'])
 def logout():
@@ -20128,206 +20134,699 @@ export default AdminDashboard;
 ```css
 /* src/components/Auth/Auth.css */
 
-.auth-wrapper {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: #f8f9fa; /* Clean Google light grey background */
-  background-image: radial-gradient(circle at center, rgba(251, 188, 4, 0.08) 0%, rgba(241, 243, 244, 0.4) 100%);
+.auth-page {
+  min-height: 100vh;
+  width: 100%;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #0f172a;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* ==========================================================================
+   TOPBAR
+   ========================================================================== */
+.auth-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 48px;
+  background: transparent;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.auth-logo-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-logo-icon {
+  width: 34px;
+  height: 34px;
+  background: #1a73e8;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 5000;
-  overflow: hidden;
-  padding: 1.5rem;
-  font-family: var(--font-main);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.25);
 }
 
-/* Glowing background orbs - soft light theme versions */
-.auth-glow-orb-1 {
-  position: absolute;
-  width: 450px;
-  height: 450px;
-  background: radial-gradient(circle, rgba(251, 188, 4, 0.12) 0%, transparent 70%);
-  top: -100px;
-  left: -100px;
-  filter: blur(60px);
-  pointer-events: none;
-  animation: orbFloat 14s infinite alternate ease-in-out;
+.auth-logo-icon svg {
+  width: 19px;
+  height: 19px;
 }
 
-.auth-glow-orb-2 {
+.auth-logo-text {
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.6px;
+  color: #0f172a;
+}
+
+.auth-topbar-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.auth-topbar-prompt {
+  font-size: 13.5px;
+  color: #64748b;
+  font-weight: 400;
+}
+
+.auth-btn-ghost-pill {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1a73e8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.auth-btn-ghost-pill:hover {
+  background: #f8fafc;
+  border-color: #9ca3af;
+  color: #1557b0;
+}
+
+/* ==========================================================================
+   MAIN TWO-COLUMN STAGE
+   ========================================================================== */
+.auth-main-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  max-width: 1220px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 10px 48px 40px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 72px;
+  flex: 1;
+}
+
+/* --------------------------------------------------------------------------
+   LEFT COLUMN: HERO & 3D VOICE ORB
+   -------------------------------------------------------------------------- */
+.auth-hero-section {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 540px;
+}
+
+.auth-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #f5f3ff;
+  color: #8b5cf6;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 999px;
+  width: fit-content;
+  margin-bottom: 22px;
+}
+
+.auth-hero-headline {
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #0f172a;
+  letter-spacing: -0.9px;
+  margin: 0 0 18px 0;
+}
+
+.auth-hero-subhead {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #64748b;
+  margin: 0 0 32px 0;
+  max-width: 460px;
+}
+
+/* 3D Voice Orb with ripple waves */
+.auth-orb-stage {
+  position: relative;
+  width: 320px;
+  height: 250px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 36px auto;
+}
+
+.auth-orb-ripple {
   position: absolute;
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, rgba(251, 188, 4, 0.08) 0%, transparent 70%);
-  bottom: -150px;
-  right: -100px;
-  filter: blur(80px);
+  border-radius: 50%;
+  border: 1px solid rgba(226, 232, 240, 0.75);
   pointer-events: none;
-  animation: orbFloat 18s infinite alternate-reverse ease-in-out;
+  animation: ripplePulse 6s ease-in-out infinite alternate;
+}
+
+.auth-orb-ripple.ring-1 {
+  width: 200px;
+  height: 200px;
+}
+
+.auth-orb-ripple.ring-2 {
+  width: 250px;
+  height: 250px;
+  border-color: rgba(226, 232, 240, 0.5);
+  animation-delay: 1.5s;
+}
+
+.auth-orb-ripple.ring-3 {
+  width: 300px;
+  height: 300px;
+  border-color: rgba(241, 245, 249, 0.7);
+  animation-delay: 3s;
+}
+
+@keyframes ripplePulse {
+  0% { transform: scale(0.97); opacity: 0.6; }
+  100% { transform: scale(1.03); opacity: 1; }
+}
+
+.auth-voice-orb {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  position: relative;
+  z-index: 2;
+  background: radial-gradient(circle at 35% 30%, #38bdf8 0%, #2563eb 38%, #7c3aed 72%, #9333ea 100%);
+  box-shadow: 
+    0 16px 40px rgba(124, 58, 237, 0.32),
+    0 4px 18px rgba(37, 99, 235, 0.25),
+    inset 0 3px 8px rgba(255, 255, 255, 0.6),
+    inset 0 -6px 12px rgba(15, 23, 42, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: orbFloat 5s ease-in-out infinite alternate;
 }
 
 @keyframes orbFloat {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(30px, 45px) scale(1.05); }
-  100% { transform: translate(-15px, -20px) scale(0.95); }
+  0% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-6px) scale(1.015); }
+  100% { transform: translateY(0) scale(1); }
 }
 
-/* Modern Light Card */
-.auth-card {
-  width: 100%;
-  max-width: 440px;
-  padding: 3rem 2.5rem;
-  background: var(--surface, #ffffff);
-  border: 1px solid var(--gray-300, #e0e0e0);
+.auth-orb-highlight {
+  position: absolute;
+  top: 15px;
+  left: 22px;
+  width: 48px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0) 75%);
+  transform: rotate(-30deg);
+  pointer-events: none;
+}
+
+.auth-orb-equalizer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 3;
+}
+
+.eq-bar {
+  width: 3.5px;
+  background: #ffffff;
+  border-radius: 4px;
+  animation: eqBounce 1.4s ease-in-out infinite alternate;
+}
+
+.eq-bar.bar-1 { height: 14px; animation-delay: 0.1s; }
+.eq-bar.bar-2 { height: 26px; animation-delay: 0.3s; }
+.eq-bar.bar-3 { height: 34px; animation-delay: 0s; }
+.eq-bar.bar-4 { height: 24px; animation-delay: 0.4s; }
+.eq-bar.bar-5 { height: 12px; animation-delay: 0.2s; }
+
+@keyframes eqBounce {
+  0% { transform: scaleY(0.6); opacity: 0.75; }
+  100% { transform: scaleY(1.15); opacity: 1; }
+}
+
+/* Partner Testimonial Card */
+.auth-partner-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(60, 64, 67, 0.08), 
-              0 1px 8px rgba(60, 64, 67, 0.04);
+  padding: 20px 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.partner-card-header {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  animation: cardEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
-  z-index: 10;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
-@keyframes cardEnter {
-  from { opacity: 0; transform: translateY(15px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+.partner-card-icon {
+  width: 18px;
+  height: 18px;
+  color: #8b5cf6;
 }
 
-.auth-brand {
-  text-align: center;
-  margin-bottom: 2rem;
+.partner-card-tag {
+  font-size: 13px;
+  font-weight: 600;
+  color: #8b5cf6;
 }
 
-.auth-brand h2.brand-title {
-  font-family: var(--font-display);
-  font-size: 2.6rem;
+.partner-card-quote {
+  font-size: 16.5px;
   font-weight: 700;
-  color: var(--gray-900, #202124);
-  margin-bottom: 0.15rem;
-  letter-spacing: -0.5px;
+  color: #1e293b;
+  line-height: 1.35;
+  margin: 0 0 10px 0;
 }
 
-.brand-subtitle.italic-subtitle {
-  font-style: italic;
-  font-size: 1.05rem;
-  color: var(--gray-500, #5f6368);
-  opacity: 0.95;
+.partner-card-footer {
+  font-size: 12.5px;
+  color: #64748b;
+  font-weight: 400;
 }
 
-/* Form Styles */
-.auth-form {
+/* --------------------------------------------------------------------------
+   RIGHT COLUMN: CARD & FORM
+   -------------------------------------------------------------------------- */
+.auth-form-section {
   display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  justify-content: flex-end;
+  width: 100%;
 }
 
-.auth-error-banner {
-  background: #fdf2f2;
-  border: 1px solid #f8b4b4;
-  color: #c81e1e;
-  padding: 0.875rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 500;
+.auth-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  padding: 42px 36px;
+  width: 100%;
+  max-width: 480px;
+  box-sizing: border-box;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.05);
+  animation: cardFadeIn 0.35s ease;
+}
+
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-card-header {
+  margin-bottom: 20px;
+}
+
+.auth-card-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.6px;
+  margin: 0 0 6px 0;
+}
+
+.auth-card-subtitle {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Info banner */
+.auth-info-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  color: #1d4ed8;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
   line-height: 1.4;
-  text-align: center;
+  margin-bottom: 18px;
 }
 
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.auth-info-banner svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
-.input-group label {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--gray-700, #3c4043);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.input-group input {
-  padding: 0.875rem 1.25rem;
-  background: var(--surface, #ffffff);
-  border: 1px solid var(--gray-400, #dadce0);
-  border-radius: 8px;
-  color: var(--gray-900, #202124);
-  font-family: var(--font-main);
-  font-size: 0.95rem;
-  transition: all var(--transition-fast, 0.2s);
-}
-
-.input-group input:focus {
-  outline: none;
-  border-color: var(--accent, #fbbc04);
-  background: var(--surface, #ffffff);
-  box-shadow: 0 0 0 3px rgba(251, 188, 4, 0.15);
-}
-
-.auth-submit-btn {
-  margin-top: 0.5rem;
-  padding: 1rem;
-  border-radius: 8px;
-  border: none;
-  background: var(--grad-premium, #fbbc04);
-  color: #202124; /* Dark text for high contrast on yellow */
-  font-weight: 700;
-  font-size: 1rem;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(251, 188, 4, 0.2);
-  transition: all var(--transition-fast, 0.2s);
+/* Google Continue Button */
+.auth-google-btn {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.auth-submit-btn:hover:not(:disabled) {
-  background: var(--accent-hover, #f2a600);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(251, 188, 4, 0.3);
-}
-
-.auth-submit-btn:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.auth-submit-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  background: var(--gray-200, #e8eaed);
-  color: var(--gray-500, #5f6368);
-  box-shadow: none;
-}
-
-/* Toggle Link */
-.auth-toggle {
-  margin-top: 1.5rem;
-  text-align: center;
-  font-size: 0.85rem;
-  color: var(--gray-500, #5f6368);
-}
-
-.auth-toggle button {
-  background: none;
-  border: none;
-  color: var(--accent-hover, #f2a600);
-  font-weight: 700;
-  padding: 0;
-  margin-left: 0.25rem;
+  gap: 10px;
+  padding: 11px 18px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: color var(--transition-fast, 0.2s);
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.auth-google-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.auth-google-icon {
+  flex-shrink: 0;
+}
+
+/* Separator Line */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.auth-divider-line {
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.auth-divider-text {
+  padding: 0 14px;
+  font-size: 12.5px;
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+/* Form Groups */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth-field-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.auth-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.auth-input-wrapper:focus-within {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+}
+
+.auth-input-wrapper.has-error {
+  border-color: #f87171 !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.12);
+}
+
+.auth-input-icon {
+  position: absolute;
+  left: 14px;
+  width: 17px;
+  height: 17px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.auth-input-wrapper input {
+  width: 100%;
+  padding: 12px 14px 12px 42px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  font-size: 14px;
+  color: #0f172a;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.auth-input-wrapper input::placeholder {
+  color: #94a3b8;
+}
+
+.auth-field-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.auth-error-text {
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 2px;
+}
+
+/* Options / Checkbox rows */
+.auth-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: -2px;
+  font-size: 13px;
+}
+
+.auth-terms-row {
+  display: flex;
+  align-items: flex-start;
+  margin-top: -2px;
+  font-size: 13px;
+}
+
+.auth-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.auth-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #1a73e8;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.checkbox-text {
+  font-size: 13px;
+  color: #475569;
+}
+
+.auth-forgot-link {
+  color: #1a73e8;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.auth-forgot-link:hover {
   text-decoration: underline;
 }
 
-.auth-toggle button:hover {
-  color: var(--primary-700, #d49a00);
+/* Submit Primary Button */
+.auth-primary-btn {
+  margin-top: 8px;
+  width: 100%;
+  background: #1a73e8;
+  color: #ffffff;
+  padding: 13px 20px;
+  border-radius: 999px;
+  border: none;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(26, 115, 232, 0.22);
+}
+
+.auth-primary-btn:hover:not(:disabled) {
+  background: #1557b0;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(26, 115, 232, 0.32);
+}
+
+.auth-primary-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.auth-primary-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.auth-btn-arrow {
+  width: 17px;
+  height: 17px;
+}
+
+.auth-card-footer {
+  text-align: center;
+  font-size: 12.5px;
+  color: #64748b;
+  margin-top: 22px;
+}
+
+/* ==========================================================================
+   GLOBAL PAGE FOOTER
+   ========================================================================== */
+.auth-page-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 48px;
+  background: transparent;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.auth-footer-copyright {
+  font-weight: 400;
+}
+
+.auth-footer-links {
+  display: flex;
+  gap: 20px;
+}
+
+.auth-footer-links button {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+
+.auth-footer-links button:hover {
+  color: #1e293b;
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN
+   ========================================================================== */
+@media (max-width: 1024px) {
+  .auth-main-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+    padding: 10px 24px 40px;
+  }
+
+  .auth-hero-section {
+    max-width: 100%;
+    align-items: center;
+    text-align: center;
+  }
+
+  .auth-hero-subhead {
+    max-width: 100%;
+  }
+
+  .auth-partner-card {
+    max-width: 480px;
+  }
+
+  .auth-form-section {
+    justify-content: center;
+  }
+
+  .auth-topbar,
+  .auth-page-footer {
+    padding: 20px 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .auth-topbar {
+    padding: 16px 20px;
+  }
+
+  .auth-topbar-action {
+    gap: 8px;
+  }
+
+  .auth-topbar-prompt {
+    display: none;
+  }
+
+  .auth-main-grid {
+    padding: 10px 16px 30px;
+  }
+
+  .auth-hero-headline {
+    font-size: 32px;
+  }
+
+  .auth-orb-stage {
+    width: 240px;
+    height: 200px;
+  }
+
+  .auth-orb-ripple.ring-3 {
+    display: none;
+  }
+
+  .auth-card {
+    padding: 30px 20px;
+    border-radius: 20px;
+  }
+
+  .auth-page-footer {
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 20px;
+  }
 }
 ```
 
@@ -20336,23 +20835,60 @@ export default AdminDashboard;
 ## 18. Plik: `frontend/src/components/Auth/Auth.js`
 
 ```javascript
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from '../../config';
 import "./Auth.css";
 
 const Auth = ({ onLoginSuccess }) => {
   const [isRegistering, setIsRegistering] = useState(false);
-  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState(() => {
+    return localStorage.getItem("buddy_remembered_email") || "";
+  });
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(() => {
+    return localStorage.getItem("buddy_remember_me") === "true";
+  });
+  const [agreeTerms, setAgreeTerms] = useState(false);
+
   const [error, setError] = useState("");
+  const [infoMessage, setInfoMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Derive greeting name from saved name or email
+  const savedName = localStorage.getItem("buddy_last_name") || "";
+
+  useEffect(() => {
+    setError("");
+    setInfoMessage("");
+  }, [isRegistering]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
+    setInfoMessage("");
 
+    if (isRegistering) {
+      if (password.length < 6) {
+        setError("Password must be at least 6 characters long.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("Passwords do not match. Please verify and try again.");
+        return;
+      }
+      if (!agreeTerms) {
+        setError("Please agree to the Terms of Service and Privacy Policy.");
+        return;
+      }
+    }
+
+    setLoading(true);
     const endpoint = isRegistering ? "register" : "login";
+    const payload = isRegistering 
+      ? { email, password, full_name: fullName }
+      : { email, password };
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/${endpoint}`, {
@@ -20360,93 +20896,380 @@ const Auth = ({ onLoginSuccess }) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        onLoginSuccess(data); // data has { token, email }
+        if (rememberMe) {
+          localStorage.setItem("buddy_remembered_email", email);
+          localStorage.setItem("buddy_remember_me", "true");
+        } else {
+          localStorage.removeItem("buddy_remembered_email");
+          localStorage.removeItem("buddy_remember_me");
+        }
+
+        if (data.full_name) {
+          localStorage.setItem("buddy_last_name", data.full_name);
+        } else if (fullName) {
+          localStorage.setItem("buddy_last_name", fullName);
+        }
+
+        onLoginSuccess(data);
       } else {
-        setError(data.error || "Wystąpił błąd podczas logowania.");
+        setError(data.error || "Authentication failed. Please check your credentials.");
       }
     } catch (err) {
       console.error("Auth error:", err);
-      setError("Nie udało się połączyć z serwerem. Upewnij się, że backend działa.");
+      setError("Cannot connect to server. Please ensure the backend is running.");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleGoogleSignIn = () => {
+    setInfoMessage("Google sign-in is connecting. In the meantime, please use email and password.");
+    setTimeout(() => {
+      setInfoMessage("");
+    }, 5000);
+  };
+
+  const handleForgotPassword = (e) => {
+    e.preventDefault();
+    if (!email) {
+      setError("Please enter your email address to receive password reset instructions.");
+      return;
+    }
+    setInfoMessage(`Password reset link sent to ${email} (if registered).`);
+    setTimeout(() => {
+      setInfoMessage("");
+    }, 6000);
+  };
+
+  // Extract first name for greeting if available
+  const greetingName = savedName 
+    ? savedName.split(" ")[0] 
+    : (email && email.includes("@") ? email.split("@")[0] : "");
+
   return (
-    <div className="auth-wrapper">
-      <div className="auth-glow-orb-1"></div>
-      <div className="auth-glow-orb-2"></div>
-      
-      <div className="auth-card glass-panel">
-        <div className="auth-brand">
-          <h2 className="brand-title">Speakling</h2>
-          <p className="brand-subtitle italic-subtitle">by AI Buddy</p>
+    <div className="auth-page">
+      {/* Top Navbar */}
+      <header className="auth-topbar">
+        <div className="auth-logo-brand">
+          <div className="auth-logo-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8"/>
+            </svg>
+          </div>
+          <span className="auth-logo-text">speakling</span>
         </div>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          {error && <div className="auth-error-banner">{error}</div>}
-
-          <div className="input-group">
-            <label htmlFor="email">Email</label>
-            <input
-              type="email"
-              id="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <div className="input-group">
-            <label htmlFor="password">Password</label>
-            <input
-              type="password"
-              id="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <button type="submit" className="auth-submit-btn" disabled={loading}>
-            {loading ? (
-              <span className="spinner-inner">Loading...</span>
-            ) : isRegistering ? (
-              "Create Account"
-            ) : (
-              "Sign In"
-            )}
-          </button>
-        </form>
-
-        <div className="auth-toggle">
+        <div className="auth-topbar-action">
           {isRegistering ? (
-            <p>
-              Already have an account?{" "}
-              <button type="button" onClick={() => { setIsRegistering(false); setError(""); }} disabled={loading}>
-                Sign In
+            <>
+              <span className="auth-topbar-prompt">Already have an account?</span>
+              <button 
+                type="button" 
+                className="auth-btn-ghost-pill"
+                onClick={() => { setIsRegistering(false); setError(""); }}
+              >
+                Sign in
               </button>
-            </p>
+            </>
           ) : (
-            <p>
-              Don't have an account?{" "}
-              <button type="button" onClick={() => { setIsRegistering(true); setError(""); }} disabled={loading}>
-                Sign Up
+            <>
+              <span className="auth-topbar-prompt">New to Speakling?</span>
+              <button 
+                type="button" 
+                className="auth-btn-ghost-pill"
+                onClick={() => { setIsRegistering(true); setError(""); }}
+              >
+                Create an account
               </button>
-            </p>
+            </>
           )}
         </div>
-      </div>
+      </header>
+
+      {/* Main Two-Column Stage */}
+      <main className="auth-main-grid">
+        {/* Left Column: AI Buddy Hero & 3D Voice Orb */}
+        <section className="auth-hero-section">
+          <div className="auth-hero-badge">
+            YOUR AI ENGLISH BUDDY
+          </div>
+
+          <h1 className="auth-hero-headline">
+            More confidence. One conversation at a time.
+          </h1>
+
+          <p className="auth-hero-subhead">
+            Speak freely, read curious stories, and make new words part of your everyday life.
+            Your English journey starts wherever you are.
+          </p>
+
+          {/* 3D Glowing Orb Visualizer with Ripples and Waves */}
+          <div className="auth-orb-stage">
+            <div className="auth-orb-ripple ring-3"></div>
+            <div className="auth-orb-ripple ring-2"></div>
+            <div className="auth-orb-ripple ring-1"></div>
+            
+            <div className="auth-voice-orb">
+              <div className="auth-orb-highlight"></div>
+              <div className="auth-orb-equalizer">
+                <span className="eq-bar bar-1"></span>
+                <span className="eq-bar bar-2"></span>
+                <span className="eq-bar bar-3"></span>
+                <span className="eq-bar bar-4"></span>
+                <span className="eq-bar bar-5"></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Partner Testimonial Card */}
+          <div className="auth-partner-card">
+            <div className="partner-card-header">
+              <svg className="partner-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z" />
+              </svg>
+              <span className="partner-card-tag">A patient partner for real practice</span>
+            </div>
+            <p className="partner-card-quote">
+              “You don’t need the perfect words. Just tell me what you think.”
+            </p>
+            <div className="partner-card-footer">
+              Speak at your pace · English + Polski · Personal word bank
+            </div>
+          </div>
+        </section>
+
+        {/* Right Column: Authentication Form Card */}
+        <section className="auth-form-section">
+          <div className="auth-card">
+            <header className="auth-card-header">
+              <h2 className="auth-card-title">
+                {isRegistering 
+                  ? "Start your next chapter." 
+                  : (greetingName ? `Welcome back, ${greetingName}.` : "Welcome back.")
+                }
+              </h2>
+              <p className="auth-card-subtitle">
+                {isRegistering 
+                  ? "Create an account and make English a daily habit." 
+                  : "Sign in to pick up where you left off."
+                }
+              </p>
+            </header>
+
+            {/* Informational Message Banner */}
+            {infoMessage && (
+              <div className="auth-info-banner">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <span>{infoMessage}</span>
+              </div>
+            )}
+
+            {/* Google Continue Button */}
+            <button 
+              type="button" 
+              className="auth-google-btn"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+            >
+              <svg className="auth-google-icon" viewBox="0 0 24 24" width="20" height="20">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              <span>Continue with Google</span>
+            </button>
+
+            {/* Separator */}
+            <div className="auth-divider">
+              <span className="auth-divider-line"></span>
+              <span className="auth-divider-text">or with email</span>
+              <span className="auth-divider-line"></span>
+            </div>
+
+            {/* Form */}
+            <form className="auth-form" onSubmit={handleSubmit}>
+              {/* Full Name field (Register only) */}
+              {isRegistering && (
+                <div className="auth-field-group">
+                  <label htmlFor="auth-fullname">Full name</label>
+                  <div className="auth-input-wrapper">
+                    <svg className="auth-input-icon" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                    </svg>
+                    <input
+                      type="text"
+                      id="auth-fullname"
+                      placeholder="Anna Kowalska"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Email Address */}
+              <div className="auth-field-group">
+                <label htmlFor="auth-email">Email address</label>
+                <div className="auth-input-wrapper">
+                  <svg className="auth-input-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                  </svg>
+                  <input
+                    type="email"
+                    id="auth-email"
+                    placeholder="anna.k@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div className="auth-field-group">
+                <label htmlFor="auth-password">Password</label>
+                <div className={`auth-input-wrapper ${error ? 'has-error' : ''}`}>
+                  <svg className="auth-input-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  <input
+                    type="password"
+                    id="auth-password"
+                    placeholder="••••••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={loading}
+                  />
+                </div>
+                {isRegistering && (
+                  <span className="auth-field-hint">
+                    Use 8 or more characters, including a number.
+                  </span>
+                )}
+                {error && (
+                  <span className="auth-error-text">
+                    {error}
+                  </span>
+                )}
+              </div>
+
+              {/* Confirm Password (Register only) */}
+              {isRegistering && (
+                <div className="auth-field-group">
+                  <label htmlFor="auth-confirm-password">Confirm password</label>
+                  <div className="auth-input-wrapper">
+                    <svg className="auth-input-icon" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                    </svg>
+                    <input
+                      type="password"
+                      id="auth-confirm-password"
+                      placeholder="••••••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Row: Remember Me vs Terms */}
+              {!isRegistering ? (
+                <div className="auth-options-row">
+                  <label className="auth-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      disabled={loading}
+                    />
+                    <span className="custom-checkbox"></span>
+                    <span className="checkbox-text">Remember me</span>
+                  </label>
+
+                  <a 
+                    href="#forgot" 
+                    className="auth-forgot-link"
+                    onClick={handleForgotPassword}
+                  >
+                    Forgot password?
+                  </a>
+                </div>
+              ) : (
+                <div className="auth-terms-row">
+                  <label className="auth-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={agreeTerms}
+                      onChange={(e) => setAgreeTerms(e.target.checked)}
+                      required
+                      disabled={loading}
+                    />
+                    <span className="custom-checkbox"></span>
+                    <span className="checkbox-text">
+                      I agree to the Terms of Service and Privacy Policy.
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button 
+                type="submit" 
+                className="auth-primary-btn" 
+                disabled={loading}
+              >
+                {loading ? (
+                  <span>Processing...</span>
+                ) : (
+                  <>
+                    <svg className="auth-btn-arrow" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                    <span>{isRegistering ? "Create account" : "Sign in"}</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Bottom Card Note */}
+            <footer className="auth-card-footer">
+              {isRegistering 
+                ? "Your progress belongs to you. Manage your account anytime."
+                : "Your stories and vocabulary are ready when you are."
+              }
+            </footer>
+          </div>
+        </section>
+      </main>
+
+      {/* Global Page Footer */}
+      <footer className="auth-page-footer">
+        <div className="auth-footer-copyright">
+          © 2026 Speakling
+        </div>
+        <div className="auth-footer-links">
+          <button type="button" onClick={() => setInfoMessage("Privacy policy is available in app documentation.")}>Privacy</button>
+          <button type="button" onClick={() => setInfoMessage("Terms of service are standard for educational software.")}>Terms</button>
+          <button type="button" onClick={() => setInfoMessage("Need help? Reach out to support at contact@przemokoduje.com")}>Help</button>
+        </div>
+      </footer>
     </div>
   );
 };

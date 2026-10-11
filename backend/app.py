@@ -1133,24 +1133,26 @@ def admin_stats():
 @app.route("/api/register", methods=['POST'])
 def register():
     if 'db' not in globals() or db is None:
-        return jsonify({"error": "Baza danych nie jest dostępna"}), 500
+        return jsonify({"error": "Database is not available"}), 500
     data = request.get_json() or {}
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
+    full_name = data.get("full_name", "").strip()
 
     if not email or not password:
-        return jsonify({"error": "Email i hasło są wymagane"}), 400
+        return jsonify({"error": "Email and password are required"}), 400
 
     try:
         # Sprawdź czy użytkownik istnieje
         user_ref = db.collection('users').document(email).get()
         if user_ref.exists:
-            return jsonify({"error": "Użytkownik o tym adresie email już istnieje"}), 400
+            return jsonify({"error": "An account with this email already exists."}), 400
 
         # Zapisz użytkownika
         pw_hash = hash_password(password)
         db.collection('users').document(email).set({
             'email': email,
+            'full_name': full_name,
             'password_hash': pw_hash,
             'created_at': firestore.SERVER_TIMESTAMP
         })
@@ -1162,32 +1164,32 @@ def register():
             'created_at': firestore.SERVER_TIMESTAMP
         })
 
-        return jsonify({"token": token, "email": email}), 201
+        return jsonify({"token": token, "email": email, "full_name": full_name}), 201
     except Exception as e:
         print(f"Błąd rejestracji: {e}")
-        return jsonify({"error": f"Błąd serwera podczas rejestracji: {e}"}), 500
+        return jsonify({"error": f"Server error during registration: {e}"}), 500
 
 @app.route("/api/login", methods=['POST'])
 def login():
     if 'db' not in globals() or db is None:
-        return jsonify({"error": "Baza danych nie jest dostępna"}), 500
+        return jsonify({"error": "Database is not available"}), 500
     data = request.get_json() or {}
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
 
     if not email or not password:
-        return jsonify({"error": "Email i hasło są wymagane"}), 400
+        return jsonify({"error": "Email and password are required"}), 400
 
     try:
         user_ref = db.collection('users').document(email).get()
         if not user_ref.exists:
-            return jsonify({"error": "Niepoprawny email lub hasło"}), 401
+            return jsonify({"error": "No account found with this email address."}), 401
 
         user_data = user_ref.to_dict()
         pw_hash = hash_password(password)
 
         if user_data.get("password_hash") != pw_hash:
-            return jsonify({"error": "Niepoprawny email lub hasło"}), 401
+            return jsonify({"error": "That password doesn't match. Please try again."}), 401
 
         # Utwórz sesję
         token = secrets.token_hex(32)
@@ -1196,10 +1198,14 @@ def login():
             'created_at': firestore.SERVER_TIMESTAMP
         })
 
-        return jsonify({"token": token, "email": email}), 200
+        return jsonify({
+            "token": token, 
+            "email": email, 
+            "full_name": user_data.get("full_name", "")
+        }), 200
     except Exception as e:
         print(f"Błąd logowania: {e}")
-        return jsonify({"error": f"Błąd serwera podczas logowania: {e}"}), 500
+        return jsonify({"error": f"Server error during login: {e}"}), 500
 
 @app.route("/api/logout", methods=['POST'])
 def logout():
