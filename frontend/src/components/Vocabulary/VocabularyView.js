@@ -354,7 +354,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
           "X-Session-Token": user?.token || ""
         },
         body: JSON.stringify({ status: newStatus })
-      }).catch(() => {});
+      }).catch(() => { });
     } catch (e) {
       console.warn("Could not save status change:", e);
     }
@@ -418,7 +418,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
           "X-Session-Token": user?.token || ""
         },
         body: JSON.stringify(payload)
-      }).catch(() => {});
+      }).catch(() => { });
 
       // Update local state
       setWords((prev) =>
@@ -553,9 +553,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   return (
     <div className="vocabulary-figma-container">
       {/* ── View Header ─────────────────────────────────────────── */}
-      <div className="vocab-figma-header">
-        <h1 className="vocab-page-title">My Vocabulary</h1>
-      </div>
+
 
       {error && (
         <div style={{ background: "#fef2f2", color: "#b91c1c", padding: "0.75rem 1rem", borderRadius: "10px", marginBottom: "1rem", border: "1px solid #fecaca", fontSize: "0.85rem" }}>
@@ -841,7 +839,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                           </svg>
                         </button>
 
-                        {/* Dropdown Menu */}
+                        {/* Dropdown Menu (Clean Apple Style) */}
                         {openMenuId === word.id && (
                           <div className="row-dropdown-popup">
                             <button
@@ -851,7 +849,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                                 setOpenMenuId(null);
                               }}
                             >
-                              🔊 Odsłuchaj wymowę
+                              <span>Odsłuchaj wymowę</span>
                             </button>
                             <button
                               className="dropdown-item"
@@ -860,7 +858,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                                 setOpenMenuId(null);
                               }}
                             >
-                              💡 Wyjaśnienie AI
+                              <span>Wyjaśnienie AI</span>
                             </button>
                             <button
                               className="dropdown-item"
@@ -869,35 +867,42 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                                 setOpenMenuId(null);
                               }}
                             >
-                              🎯 Ćwicz wymowę
+                              <span>Ćwicz wymowę</span>
                             </button>
                             <button
                               className="dropdown-item"
                               onClick={() => handleOpenEditModal(word)}
                             >
-                              ✏ Edytuj słówko
+                              <span>Edytuj słówko</span>
                             </button>
+
                             <div className="dropdown-divider"></div>
-                            <div className="dropdown-label">Zmień status:</div>
+                            <div className="dropdown-label">Status</div>
+
                             <button
-                              className="dropdown-item"
+                              className={`dropdown-item ${word.status === "Learning" ? "active-status" : ""}`}
                               onClick={() => handleStatusChange(word, "Learning")}
                             >
-                              ⏳ Learning (W trakcie)
+                              <span>W trakcie nauki</span>
+                              {word.status === "Learning" && <span className="dropdown-check">✓</span>}
                             </button>
                             <button
-                              className="dropdown-item"
+                              className={`dropdown-item ${word.status === "Known" ? "active-status" : ""}`}
                               onClick={() => handleStatusChange(word, "Known")}
                             >
-                              ✅ Known (Opanowane)
+                              <span>Opanowane</span>
+                              {word.status === "Known" && <span className="dropdown-check">✓</span>}
                             </button>
                             <button
-                              className="dropdown-item"
+                              className={`dropdown-item ${word.status === "New" ? "active-status" : ""}`}
                               onClick={() => handleStatusChange(word, "New")}
                             >
-                              🆕 New (Nowe)
+                              <span>Nowe</span>
+                              {word.status === "New" && <span className="dropdown-check">✓</span>}
                             </button>
+
                             <div className="dropdown-divider"></div>
+
                             <button
                               className="dropdown-item danger"
                               onClick={() => {
@@ -905,7 +910,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                                 setOpenMenuId(null);
                               }}
                             >
-                              🗑 Usuń ze słownika
+                              <span>Usuń ze słownika</span>
                             </button>
                           </div>
                         )}
