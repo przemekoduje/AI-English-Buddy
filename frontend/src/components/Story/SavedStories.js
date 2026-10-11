@@ -207,6 +207,22 @@ const THEMATIC_SCENES = [
   }
 ];
 
+// Curated legacy stock photo IDs that were previously hardcoded for categories
+const LEGACY_STOCK_PATTERNS = [
+  "photo-1497366216548",
+  "photo-1519671482749",
+  "photo-1501339847302",
+  "photo-1517694712202",
+  "photo-1488459716781",
+  "photo-1456513080510",
+  "photo-1522071820081"
+];
+
+const isLegacyStockPhoto = (url) => {
+  if (!url || typeof url !== "string") return true;
+  return LEGACY_STOCK_PATTERNS.some((pattern) => url.includes(pattern));
+};
+
 // Dopasowanie najlepszej grupy scenariuszy na podstawie tytułu i tekstu
 const findMatchingScene = (title = "", text = "") => {
   const combined = `${title || ""} ${text || ""}`.toLowerCase();
@@ -217,7 +233,7 @@ const findMatchingScene = (title = "", text = "") => {
     let score = 0;
     const tLower = (title || "").toLowerCase();
     for (const kw of scene.keywords) {
-      if (tLower.includes(kw)) score += 4;
+      if (tLower.includes(kw)) score += 5;
       if (combined.includes(kw)) score += 1;
     }
     if (score > maxScore) {
@@ -233,19 +249,28 @@ const findMatchingScene = (title = "", text = "") => {
 const findBestMatchingSceneImage = (title = "", text = "", seed = 0) => {
   const scene = findMatchingScene(title, text);
   const images = scene.images;
-  const hash = Math.abs(String(title || seed).split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) + Number(seed || 0));
+  const hash = Math.abs(
+    String(title || seed)
+      .split("")
+      .reduce((acc, c) => acc + c.charCodeAt(0), 0) + Number(seed || 0)
+  );
   return images[hash % images.length];
 };
 
 // Pobiera następne zdjęcie w rotacji tego samego motywu (gwarancja nowej, innej ilustracji!)
-const getNextSceneImage = (title = "", text = "", currentUrl = "") => {
+const getNextSceneImage = (title = "", text = "", currentUrl = "", step = 1) => {
   const scene = findMatchingScene(title, text);
   const images = scene.images;
   const currIdx = images.indexOf(currentUrl);
   if (currIdx === -1) {
-    return images[1 % images.length];
+    const hash = Math.abs(
+      String(title || "")
+        .split("")
+        .reduce((acc, c) => acc + c.charCodeAt(0), 0)
+    );
+    return images[(hash + step) % images.length];
   }
-  return images[(currIdx + 1) % images.length];
+  return images[(currIdx + step) % images.length];
 };
 
 // Generowanie angielskiego promptu wizualnego odzwierciedlającego fabułę
@@ -277,7 +302,7 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
     }
   });
 
-  // Regenerate / rotate image tailored to story text (100% reliable)
+  // Regenerate / rotate image tailored to story text (100% reliable with preloader and overlay)
   const handleRegenerateStoryImage = async (e, story) => {
     if (e) {
       e.preventDefault();
@@ -285,7 +310,7 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
     }
     if (!story || !story.id) return;
 
-    // Natychmiast aktywuj stan ładowania na danej karcie
+    // Natychmiast aktywuj nakładkę ładowania na danej karcie
     setRegeneratingImageIds(prev => new Set(prev).add(story.id));
 
     const applyImage = (finalUrl) => {
@@ -311,39 +336,45 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
       });
     };
 
-    // Oblicz natychmiastowe alternatywne zdjęcie z motywu
-    const nextThematicPhoto = getNextSceneImage(story.title, story.text, story.coverImage);
-
-    // Próba pobrania i skonwertowania obrazu AI do lokalnego Data URL
+    // Zwiększ numer rotacji dla tej historii
+    const rotKey = `buddy_story_rot_${story.id}`;
+    let rot = 1;
     try {
-      const prompt = buildEnglishImagePrompt(story.title, story.text);
-      const newSeed = Math.floor(Math.random() * 900000) + 1000;
-      const aiUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=600&height=400&seed=${newSeed}`;
+      rot = (parseInt(localStorage.getItem(rotKey) || "0", 10) + 1);
+      localStorage.setItem(rotKey, String(rot));
+    } catch (e) {}
 
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 4000);
+    const prompt = buildEnglishImagePrompt(story.title, story.text);
+    const newSeed = Math.floor(Math.random() * 900000) + 1000;
+    const aiCandidateUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=600&height=400&seed=${newSeed}`;
+    const nextThematicUrl = getNextSceneImage(story.title, story.text, story.coverImage, rot);
 
-      const resp = await fetch(aiUrl, { signal: controller.signal });
+    let finished = false;
+    const finishWith = (targetUrl) => {
+      if (finished) return;
+      finished = true;
+      applyImage(targetUrl);
+    };
+
+    // Timeout: po maksymalnie 2.2 sekundy pokazujemy w 100% pewne, wysokiej jakości zdjęcie tematyczne
+    const timer = setTimeout(() => {
+      finishWith(nextThematicUrl);
+    }, 2200);
+
+    const preloader = new Image();
+    preloader.onload = () => {
       clearTimeout(timer);
-
-      if (resp.ok) {
-        const blob = await resp.blob();
-        if (blob && blob.size > 2000) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const dataUrl = reader.result;
-            applyImage(dataUrl);
-          };
-          reader.readAsDataURL(blob);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn("AI generation network timeout/blocked, switching to next thematic photo:", err);
-    }
-
-    // Jeśli zapytanie AI napotkało błąd lub limit, aplikujemy nowe zdjęcie z motywu
-    applyImage(nextThematicPhoto);
+      finishWith(aiCandidateUrl);
+    };
+    preloader.onerror = () => {
+      clearTimeout(timer);
+      const fallbackImg = new Image();
+      fallbackImg.onload = fallbackImg.onerror = () => {
+        finishWith(nextThematicUrl);
+      };
+      fallbackImg.src = nextThematicUrl;
+    };
+    preloader.src = aiCandidateUrl;
   };
 
   // Toggle bookmark for a story
@@ -518,13 +549,19 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
         }
 
         // Dopasowane zdjęcie odzwierciedlające treść opowiadania
-        let coverImage = story.image_url || story.cover_image;
+        let coverImage = null;
+        try {
+          const cachedImg = localStorage.getItem(`buddy_story_image_${story.id}`);
+          if (cachedImg) coverImage = cachedImg;
+        } catch (e) {}
+
         if (!coverImage) {
-          try {
-            const cachedImg = localStorage.getItem(`buddy_story_image_${story.id}`);
-            if (cachedImg) coverImage = cachedImg;
-          } catch (e) {}
+          const dbImage = story.image_url || story.cover_image;
+          if (dbImage && !isLegacyStockPhoto(dbImage)) {
+            coverImage = dbImage;
+          }
         }
+
         if (!coverImage) {
           coverImage = findBestMatchingSceneImage(story.title, story.text, index);
         }
@@ -723,12 +760,17 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
                   className="card-cover-img"
                   onError={(e) => {
                     e.currentTarget.onerror = null;
-                    e.currentTarget.src = getNextSceneImage(story.title, story.text, story.coverImage);
+                    e.currentTarget.src = getNextSceneImage(story.title, story.text, story.coverImage, 2);
                   }}
                 />
 
                 {regeneratingImageIds.has(story.id) && (
-                  <div className="card-generating-overlay">
+                  <div
+                    className="card-generating-overlay"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                  >
                     <div className="btn-spinner-micro pulse-spinner" />
                     <span>AI tworzy nowe zdjęcie...</span>
                   </div>
