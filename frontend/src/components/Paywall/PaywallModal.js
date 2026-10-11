@@ -68,6 +68,50 @@ const PaywallModal = ({
     }
   };
 
+  const handleDowngradeToStarter = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (subscription?.has_stripe_subscription) {
+      // Posiadacz subskrypcji Stripe musi anulować subskrypcję w portalu klienta
+      setSuccessMsg('Otwieram Stripe Customer Portal, aby zarządzać subskrypcją...');
+      handleOpenCustomerPortal();
+      return;
+    }
+
+    setLoadingPlan('starter');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/subscription/simulate-activate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Token': user?.token || ''
+        },
+        body: JSON.stringify({
+          tier: 'starter',
+          user_email: user?.email
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Nie udało się przełączyć na plan Starter.');
+      }
+
+      setSuccessMsg(data.message || 'Pomyślnie przełączono na bezpłatny plan Starter.');
+      if (data.subscription) {
+        onSubscriptionUpdated(data.subscription);
+      }
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err) {
+      setErrorMsg(err.message || 'Błąd podczas przełączania na plan Starter.');
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
   const handleOpenCustomerPortal = async () => {
     setErrorMsg(null);
     setLoadingPlan('portal');
@@ -251,9 +295,13 @@ const PaywallModal = ({
                 <button 
                   className="plan-btn btn-secondary"
                   disabled={loadingPlan !== null}
-                  onClick={() => handleSelectPlan('starter')}
+                  onClick={handleDowngradeToStarter}
                 >
-                  Przełącz na Starter
+                  {loadingPlan === 'starter' ? (
+                    <span className="spinner-inline" />
+                  ) : (
+                    'Przełącz na Starter'
+                  )}
                 </button>
               )}
             </div>
@@ -392,20 +440,32 @@ const PaywallModal = ({
                 <span className="addon-price">29 zł jednorazowo</span>
               </div>
               <p className="addon-desc">
-                Zabrakło Ci minut przed końcem miesiąca? Dokup jednorazowy pakiet 60 minut bez zmiany obecnej subskrypcji.
+                {currentTier === 'starter'
+                  ? 'Paczka dodatkowych minut jest dostępna dla subskrybentów planu Pro i Intensive. Uaktualnij pakiet, aby móc dokupować dodatkowy czas.'
+                  : 'Zabrakło Ci minut przed końcem miesiąca? Dokup jednorazowy pakiet 60 minut bez zmiany obecnej subskrypcji.'}
               </p>
             </div>
-            <button 
-              className="addon-buy-btn"
-              disabled={loadingPlan !== null}
-              onClick={() => handleSelectPlan('topup_60')}
-            >
-              {loadingPlan === 'topup_60' ? (
-                <span className="spinner-inline" />
-              ) : (
-                'Dokup +60 min (29 zł)'
-              )}
-            </button>
+            {currentTier === 'starter' ? (
+              <button 
+                className="addon-buy-btn addon-btn-upgrade"
+                disabled={loadingPlan !== null}
+                onClick={() => handleSelectPlan('pro')}
+              >
+                Odblokuj w pakiecie Pro
+              </button>
+            ) : (
+              <button 
+                className="addon-buy-btn"
+                disabled={loadingPlan !== null}
+                onClick={() => handleSelectPlan('topup_60')}
+              >
+                {loadingPlan === 'topup_60' ? (
+                  <span className="spinner-inline" />
+                ) : (
+                  'Dokup +60 min (29 zł)'
+                )}
+              </button>
+            )}
           </div>
 
           {subscription?.has_stripe_subscription && (

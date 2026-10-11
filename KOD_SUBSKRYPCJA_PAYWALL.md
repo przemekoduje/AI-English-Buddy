@@ -1,5 +1,5 @@
 # Speakling — Kompletny Moduł Subskrypcji, Paywalla i Limitów AI
-Wygenerowano: 2026-10-11 22:11:38
+Wygenerowano: 2026-10-11 22:17:22
 > Dedykowany, lekki pakiet kodu dla zewnętrznych modeli AI (ChatGPT, Claude, DeepSeek). Zawiera 100% logiki subskrypcji, Stripe, limitów minut Gemini Live i blokad paywalla bez obcinania.
 
 ## Spis Zawartości Pakietu
@@ -67,7 +67,7 @@ SUBSCRIPTION_PLANS = {
         "can_access_mastery": True,
         "can_access_media": True,
         "can_access_industry_modes": False,
-        "can_buy_topup": False,
+        "can_buy_topup": True,
         "tts_model": "premium",
         "features": [
             "Wszystko z planu Starter",
@@ -182,6 +182,7 @@ def get_user_subscription(email):
         "current_period_end": str(sub_data.get('current_period_end', '')),
         "stripe_customer_id": sub_data.get('stripe_customer_id'),
         "has_stripe_subscription": bool(sub_data.get('stripe_subscription_id')),
+        "processed_sessions": sub_data.get('processed_sessions') or [],
         "is_admin": admin
     }
 
@@ -268,12 +269,39 @@ def create_stripe_checkout_session():
 
     plan = req_data.get("plan", "pro").lower().strip()
     return_url = req_data.get("return_url") or APP_URL
+    sub = get_user_subscription(user_email)
+
+    # 1. Sprawdzenie uprawnień do zakupu Top-up (tylko Pro oraz Intensive)
+    if plan == "topup_60" and not sub.get("can_buy_topup"):
+        return jsonify({
+            "error": "Paczka dodatkowych 60 minut jest dostępna dla subskrybentów planu Pro i Intensive. Uaktualnij pakiet, aby móc dokupować minuty."
+        }), 400
+
+    # 2. Bezpieczna obsługa przejścia na plan Starter (downgrade)
+    if plan == "starter":
+        if sub.get("has_stripe_subscription") and STRIPE_SECRET_KEY:
+            return jsonify({
+                "action_required": "portal",
+                "error": "Posiadasz aktywną subskrypcję Stripe. Aby powrócić do planu Starter, anuluj subskrypcję w Portalu Klienta Stripe."
+            }), 400
+        else:
+            update_user_subscription(user_email, {
+                "tier": "starter",
+                "status": "free",
+                "live_minutes_limit": SUBSCRIPTION_PLANS["starter"]["live_minutes_limit"],
+                "trial_ends_at": None
+            })
+            return jsonify({
+                "demo_mode": True,
+                "success": True,
+                "message": "Pomyślnie przełączono na bezpłatny plan Starter.",
+                "subscription": get_user_subscription(user_email)
+            }), 200
 
     # Tryb symulacyjny (gdy klucz Stripe nie został skonfigurowany w środowisku produkcyjnym)
     if not STRIPE_SECRET_KEY:
         now = datetime.utcnow()
         if plan == "topup_60":
-            sub = get_user_subscription(user_email)
             current_extra = sub.get("extra_live_minutes", 0.0)
             update_user_subscription(user_email, {
                 "extra_live_minutes": current_extra + 60.0
@@ -385,12 +413,28 @@ def verify_stripe_session():
         plan = session.metadata.get("plan", "pro")
 
         if email:
+            sub = get_user_subscription(email)
+            processed = list(sub.get("processed_sessions") or [])
+
+            # Idempotency check: zapobieganie podwójnemu naliczeniu minut (np. verify-session + webhook)
+            if session_id in processed:
+                print(f"Stripe: Sesja {session_id} została już wcześniej przetworzona dla {email}. Pomijam duplikat.", flush=True)
+                return jsonify({
+                    "success": True,
+                    "already_processed": True,
+                    "plan": plan,
+                    "subscription": sub
+                }), 200
+
+            processed.append(session_id)
+            processed = processed[-50:]  # pamiętamy do 50 ostatnich sesji
+
             now = datetime.utcnow()
             if plan == "topup_60":
-                sub = get_user_subscription(email)
                 current_extra = sub.get("extra_live_minutes", 0.0)
                 update_user_subscription(email, {
-                    "extra_live_minutes": current_extra + 60.0
+                    "extra_live_minutes": current_extra + 60.0,
+                    "processed_sessions": processed
                 })
             else:
                 target_plan = plan if plan in ["pro", "intensive"] else "pro"
@@ -403,7 +447,8 @@ def verify_stripe_session():
                     "live_minutes_limit": limit,
                     "stripe_customer_id": session.customer,
                     "stripe_subscription_id": session.subscription,
-                    "billing_cycle_start": now.isoformat()
+                    "billing_cycle_start": now.isoformat(),
+                    "processed_sessions": processed
                 })
 
             return jsonify({
@@ -474,15 +519,28 @@ def stripe_webhook():
         plan = data_object.get("metadata", {}).get("plan", "pro")
         customer_id = data_object.get("customer")
         subscription_id = data_object.get("subscription")
+        session_id = data_object.get("id")
 
         if email:
+            sub = get_user_subscription(email)
+            processed = list(sub.get("processed_sessions") or [])
+
+            # Idempotency check: jeśli sesja została już rozliczona przez verify-session na powrocie
+            if session_id and session_id in processed:
+                print(f"Stripe Webhook: sesja {session_id} została już przetworzona w verify-session. Pomijam powtórne dodanie minut.", flush=True)
+                return jsonify({"received": True, "already_processed": True}), 200
+
+            if session_id:
+                processed.append(session_id)
+                processed = processed[-50:]
+
             now = datetime.utcnow()
             if plan == "topup_60":
-                sub = get_user_subscription(email)
                 current_extra = sub.get("extra_live_minutes", 0.0)
                 update_user_subscription(email, {
                     "extra_live_minutes": current_extra + 60.0,
-                    "stripe_customer_id": customer_id
+                    "stripe_customer_id": customer_id,
+                    "processed_sessions": processed
                 })
             else:
                 target_plan = plan if plan in ["pro", "intensive"] else "pro"
@@ -495,7 +553,8 @@ def stripe_webhook():
                     "live_minutes_limit": limit,
                     "stripe_customer_id": customer_id,
                     "stripe_subscription_id": subscription_id,
-                    "billing_cycle_start": now.isoformat()
+                    "billing_cycle_start": now.isoformat(),
+                    "processed_sessions": processed
                 })
 
     elif event_type in ["customer.subscription.updated", "customer.subscription.deleted"]:
@@ -512,87 +571,28 @@ def stripe_webhook():
                     u_email = u_doc.id
                     updates = {"status": status}
                     if current_period_end:
-                        updates["current_period_end"] = str(datetime.fromtimestamp(current_period_end))
-                    if status in ["canceled", "unpaid"]:
-                        updates["tier"] = "starter"
-                        updates["live_minutes_limit"] = SUBSCRIPTION_PLANS["starter"]["live_minutes_limit"]
-                    update_user_subscription(u_email, updates)
-            except Exception as find_err:
-                print(f"Błąd wyszukiwania użytkownika po Stripe customer ID: {find_err}")
-
-    elif event_type == "invoice.payment_succeeded":
-        # Miesięczne odnowienie — resetujemy wykorzystane minuty
-        customer_id = data_object.get("customer")
-        if 'db' in globals() and db is not None and customer_id:
-            try:
-                users_matching = db.collection('users').where('subscription.stripe_customer_id', '==', customer_id).limit(1).get()
-                for u_doc in users_matching:
-                    u_email = u_doc.id
-                    update_user_subscription(u_email, {
-                        "live_minutes_used": 0.0,
-                        "status": "active",
-                        "billing_cycle_start": datetime.utcnow().isoformat()
-                    })
-            except Exception as renew_err:
-                print(f"Błąd resetu limitu minut przy odnowieniu faktury: {renew_err}")
-
-    return jsonify({"received": True}), 200
-
-
-@app.route("/api/subscription/simulate-activate", methods=['POST'])
-def simulate_activate_subscription():
-    """Umożliwia błyskawiczne testowanie przełączania pakietów oraz symulacji 7-dniowego okresu próbnego."""
-    user_email = get_user_from_request()
-    req_data = request.get_json(silent=True) or {}
-    if not user_email:
-        user_email = req_data.get("user_email")
-    if not user_email:
-        return jsonify({"error": "Wymagane zalogowanie"}), 401
-
-    tier = req_data.get("tier", "starter").lower().strip()
-    if tier not in SUBSCRIPTION_PLANS:
-        return jsonify({"error": "Nieznany pakiet subskrypcyjny"}), 400
-
-    plan_info = SUBSCRIPTION_PLANS[tier]
-    now = datetime.utcnow()
-    trial_end = (now + timedelta(days=7)).isoformat() if plan_info.get("trial_days") else None
-
-    update_user_subscription(user_email, {
-        "tier": tier,
-        "status": "trialing" if trial_end else ("free" if tier == "starter" else "active"),
-        "trial_ends_at": trial_end,
-        "live_minutes_limit": plan_info["live_minutes_limit"],
-        "live_minutes_used": 0.0,
-        "billing_cycle_start": now.isoformat()
-    })
-
-    return jsonify({
-        "success": True,
-        "message": f"Pomyślnie zaktualizowano pakiet do: {plan_info['name']}",
-        "subscription": get_user_subscription(user_email)
-    }), 200
 
 
 # ========================================================
 # 2. BRAMKA PAYWALLA W MODULE MEDIA BUDDY (YouTube)
 # (Z pliku backend/app.py: /api/media/transcript)
 # ========================================================
-@app.route("/api/media/transcript", methods=['GET'])
-def get_youtube_transcript():
-    user_email = get_user_from_request()
-    if not user_email:
-        return jsonify({"error": "Brak autoryzacji"}), 401
+                return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        except Exception:
+            pass
+        return 0
 
-    sub = get_user_subscription(user_email)
-    if not sub.get("can_access_media"):
-        return jsonify({
-            "error": "PAYWALL_REQUIRED",
-            "feature": "media",
-            "message": "Moduł Media Buddy (analiza i nauka z filmami YouTube) jest dostępny w pakiecie Pro i Intensive. Uaktualnij subskrypcję, aby odblokować materiały wideo!"
-        }), 403
-
-    video_id = request.args.get("video_id")
-    if not video_id:
+    i = 0
+    # Dopasowanie ciągów jak "0:03", "00:03", "1:02:03"
+    ts_regex = r'^(\d{1,2}:)?\d{1,2}:\d{2}$'
+    
+    while i < len(lines):
+        line = lines[i]
+        if re.match(ts_regex, line):
+            ts = ts_to_secs(line)
+            text_parts = []
+            i += 1
+            while i < len(lines) and not re.match(ts_regex, lines[i]):
 
 ... (dalsza część pobierania napisów)
 
@@ -600,18 +600,18 @@ def get_youtube_transcript():
 # 3. BRAMKA PAYWALLA W MODULE MASTERY PATH (3 kroki)
 # (Z pliku backend/app.py: /api/mastery-prepare)
 # ========================================================
-@app.route("/api/mastery-prepare", methods=['POST'])
-def prepare_mastery_content():
-    user_email = get_user_from_request()
-    sub = get_user_subscription(user_email)
-    if not sub.get("can_access_mastery"):
-        return jsonify({
-            "error": "PAYWALL_REQUIRED",
-            "feature": "mastery",
-            "message": "Moduł Mastery Path jest dostępny w pakiecie Pro i Intensive. Uaktualnij subskrypcję, aby odblokować pełny 3-etapowy trening historii!"
-        }), 403
+        3. Opisz krótko i jasno, czym jest ta struktura/czas i w jakich sytuacjach się jej używa, jakbyś tłumaczył to uczącej się osobie.
 
-    data = request.get_json()
+        Formatuj odpowiedź jako listę JSON, gdzie każdy element to obiekt z kluczami 'title', 'example_sentence', 'explanation'.
+
+        Tekst do analizy:
+        "{text}"
+
+        Przykład formatu JSON (tylko dla jednego elementu, ma być ich 3):
+        [
+          {{
+            "title": "Przykład Tytułu Gramatycznego",
+            "example_sentence": "Przykład zdania z tekstu.",
 
 ... (dalsza część przygotowania etapów treningu)
 
@@ -619,20 +619,20 @@ def prepare_mastery_content():
 # 4. WYMUSZENIE DARMOWEGO EDGE TTS DLA PLANU STARTER
 # (Z pliku backend/app.py: generate_tts_base64)
 # ========================================================
-def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_email=None):
-    if not user_email:
-        user_email = get_user_from_request()
+        tts.write_to_fp(fp)
+        return fp.getvalue()
+    except Exception as e_gtts:
+        print(f"gTTS fallback error: {e_gtts}", flush=True)
+        return b""
 
-    if user_email:
-        sub = get_user_subscription(user_email)
-        # Pakiet Starter (Free): wymuszenie ekonomicznego modelu (Edge TTS zamiast płatnych)
-        if sub.get("tier") == "starter":
-            ai_mode = "free"
-
-    if "Neural" not in voice:
-        voice = "en-US-BrianNeural"
-        
-    print(f"DEBUG TTS: Input text = '{text}', voice = '{voice}'", flush=True)
+def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
+    if gcp_tts_client:
+        try:
+            from google.cloud import texttospeech
+            is_pl = ('pl-PL' in voice_name or 'Marek' in voice_name or 'Zofia' in voice_name)
+            gcp_voice_name = "pl-PL-Wavenet-B" if is_pl else "en-US-Neural2-D"
+            lang_code = "pl-PL" if is_pl else "en-US"
+            
 
 ...
 
@@ -640,33 +640,33 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
 # 5. TWARDY LIMIT MINUT DLA GEMINI LIVE ORB (KOD 403)
 # (Z pliku backend/app.py: /api/live/token)
 # ========================================================
-@app.route("/api/live/token", methods=['POST', 'GET'])
-def get_live_token():
-    """Generuje token efemeryczny dla połączenia WebSocket z Gemini Live API (Google AI Studio)."""
+        update_user_subscription(user_email, {"live_minutes_used": new_used})
+        updated_sub = get_user_subscription(user_email)
+    else:
+        updated_sub = get_user_subscription(user_email)
+
+    return jsonify({
+        "success": True,
+        "service": service,
+        "model": model,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "duration_seconds": duration_seconds,
+        "minutes_used": updated_sub.get("live_minutes_used", 0),
+        "minutes_remaining": updated_sub.get("minutes_remaining", 0),
+        "quota_exceeded": updated_sub.get("minutes_remaining", 0) <= 0
+    }), 200
+
+
+@app.route("/api/live/save-key", methods=['POST'])
+def save_live_key():
+    """Zapisuje podany przez użytkownika klucz GEMINI_API_KEY do pliku .env i do pamięci procesu."""
+    global GEMINI_API_KEY
     user_email = get_user_from_request()
-    req_data = request.get_json(silent=True) or {}
     if not user_email:
-        user_email = req_data.get("user_email") or "guest@speakling.ai"
+        return jsonify({"error": "Brak autoryzacji"}), 401
 
-    # Sprawdzenie twardego limitu minut sesji Live AI
-    sub = get_user_subscription(user_email)
-    if sub.get("minutes_remaining", 0) <= 0:
-        return jsonify({
-            "error": "QUOTA_EXCEEDED",
-            "message": "Twój limit minut sesji Live AI został wyczerpany. Uaktualnij pakiet do Pro lub Intensive, aby kontynuować rozmowę!",
-            "tier": sub.get("tier"),
-            "minutes_used": sub.get("live_minutes_used"),
-            "total_minutes_allowed": sub.get("total_minutes_allowed"),
-            "minutes_remaining": 0
-        }), 403
-
-    model = req_data.get("model", "gemini-2.5-flash-native-audio-latest")
-    custom_api_key = req_data.get("api_key", "").strip()
-
-    active_key = custom_api_key or get_gemini_api_key()
-    if not active_key:
-        return jsonify({
-            "error": "NO_API_KEY",
+    req_data = request.get_json(silent=True) or {}
 
 
 ```
@@ -741,6 +741,50 @@ const PaywallModal = ({
     } catch (err) {
       console.error('Błąd wyboru pakietu:', err);
       setErrorMsg(err.message || 'Wystąpił błąd podczas połączenia z bramką płatności.');
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  const handleDowngradeToStarter = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (subscription?.has_stripe_subscription) {
+      // Posiadacz subskrypcji Stripe musi anulować subskrypcję w portalu klienta
+      setSuccessMsg('Otwieram Stripe Customer Portal, aby zarządzać subskrypcją...');
+      handleOpenCustomerPortal();
+      return;
+    }
+
+    setLoadingPlan('starter');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/subscription/simulate-activate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Token': user?.token || ''
+        },
+        body: JSON.stringify({
+          tier: 'starter',
+          user_email: user?.email
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Nie udało się przełączyć na plan Starter.');
+      }
+
+      setSuccessMsg(data.message || 'Pomyślnie przełączono na bezpłatny plan Starter.');
+      if (data.subscription) {
+        onSubscriptionUpdated(data.subscription);
+      }
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err) {
+      setErrorMsg(err.message || 'Błąd podczas przełączania na plan Starter.');
     } finally {
       setLoadingPlan(null);
     }
@@ -929,9 +973,13 @@ const PaywallModal = ({
                 <button 
                   className="plan-btn btn-secondary"
                   disabled={loadingPlan !== null}
-                  onClick={() => handleSelectPlan('starter')}
+                  onClick={handleDowngradeToStarter}
                 >
-                  Przełącz na Starter
+                  {loadingPlan === 'starter' ? (
+                    <span className="spinner-inline" />
+                  ) : (
+                    'Przełącz na Starter'
+                  )}
                 </button>
               )}
             </div>
@@ -1070,20 +1118,32 @@ const PaywallModal = ({
                 <span className="addon-price">29 zł jednorazowo</span>
               </div>
               <p className="addon-desc">
-                Zabrakło Ci minut przed końcem miesiąca? Dokup jednorazowy pakiet 60 minut bez zmiany obecnej subskrypcji.
+                {currentTier === 'starter'
+                  ? 'Paczka dodatkowych minut jest dostępna dla subskrybentów planu Pro i Intensive. Uaktualnij pakiet, aby móc dokupować dodatkowy czas.'
+                  : 'Zabrakło Ci minut przed końcem miesiąca? Dokup jednorazowy pakiet 60 minut bez zmiany obecnej subskrypcji.'}
               </p>
             </div>
-            <button 
-              className="addon-buy-btn"
-              disabled={loadingPlan !== null}
-              onClick={() => handleSelectPlan('topup_60')}
-            >
-              {loadingPlan === 'topup_60' ? (
-                <span className="spinner-inline" />
-              ) : (
-                'Dokup +60 min (29 zł)'
-              )}
-            </button>
+            {currentTier === 'starter' ? (
+              <button 
+                className="addon-buy-btn addon-btn-upgrade"
+                disabled={loadingPlan !== null}
+                onClick={() => handleSelectPlan('pro')}
+              >
+                Odblokuj w pakiecie Pro
+              </button>
+            ) : (
+              <button 
+                className="addon-buy-btn"
+                disabled={loadingPlan !== null}
+                onClick={() => handleSelectPlan('topup_60')}
+              >
+                {loadingPlan === 'topup_60' ? (
+                  <span className="spinner-inline" />
+                ) : (
+                  'Dokup +60 min (29 zł)'
+                )}
+              </button>
+            )}
           </div>
 
           {subscription?.has_stripe_subscription && (

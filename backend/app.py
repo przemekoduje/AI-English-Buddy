@@ -1179,7 +1179,7 @@ SUBSCRIPTION_PLANS = {
         "can_access_mastery": True,
         "can_access_media": True,
         "can_access_industry_modes": False,
-        "can_buy_topup": False,
+        "can_buy_topup": True,
         "tts_model": "premium",
         "features": [
             "Wszystko z planu Starter",
@@ -1294,6 +1294,7 @@ def get_user_subscription(email):
         "current_period_end": str(sub_data.get('current_period_end', '')),
         "stripe_customer_id": sub_data.get('stripe_customer_id'),
         "has_stripe_subscription": bool(sub_data.get('stripe_subscription_id')),
+        "processed_sessions": sub_data.get('processed_sessions') or [],
         "is_admin": admin
     }
 
@@ -1380,12 +1381,39 @@ def create_stripe_checkout_session():
 
     plan = req_data.get("plan", "pro").lower().strip()
     return_url = req_data.get("return_url") or APP_URL
+    sub = get_user_subscription(user_email)
+
+    # 1. Sprawdzenie uprawnień do zakupu Top-up (tylko Pro oraz Intensive)
+    if plan == "topup_60" and not sub.get("can_buy_topup"):
+        return jsonify({
+            "error": "Paczka dodatkowych 60 minut jest dostępna dla subskrybentów planu Pro i Intensive. Uaktualnij pakiet, aby móc dokupować minuty."
+        }), 400
+
+    # 2. Bezpieczna obsługa przejścia na plan Starter (downgrade)
+    if plan == "starter":
+        if sub.get("has_stripe_subscription") and STRIPE_SECRET_KEY:
+            return jsonify({
+                "action_required": "portal",
+                "error": "Posiadasz aktywną subskrypcję Stripe. Aby powrócić do planu Starter, anuluj subskrypcję w Portalu Klienta Stripe."
+            }), 400
+        else:
+            update_user_subscription(user_email, {
+                "tier": "starter",
+                "status": "free",
+                "live_minutes_limit": SUBSCRIPTION_PLANS["starter"]["live_minutes_limit"],
+                "trial_ends_at": None
+            })
+            return jsonify({
+                "demo_mode": True,
+                "success": True,
+                "message": "Pomyślnie przełączono na bezpłatny plan Starter.",
+                "subscription": get_user_subscription(user_email)
+            }), 200
 
     # Tryb symulacyjny (gdy klucz Stripe nie został skonfigurowany w środowisku produkcyjnym)
     if not STRIPE_SECRET_KEY:
         now = datetime.utcnow()
         if plan == "topup_60":
-            sub = get_user_subscription(user_email)
             current_extra = sub.get("extra_live_minutes", 0.0)
             update_user_subscription(user_email, {
                 "extra_live_minutes": current_extra + 60.0
@@ -1497,12 +1525,28 @@ def verify_stripe_session():
         plan = session.metadata.get("plan", "pro")
 
         if email:
+            sub = get_user_subscription(email)
+            processed = list(sub.get("processed_sessions") or [])
+
+            # Idempotency check: zapobieganie podwójnemu naliczeniu minut (np. verify-session + webhook)
+            if session_id in processed:
+                print(f"Stripe: Sesja {session_id} została już wcześniej przetworzona dla {email}. Pomijam duplikat.", flush=True)
+                return jsonify({
+                    "success": True,
+                    "already_processed": True,
+                    "plan": plan,
+                    "subscription": sub
+                }), 200
+
+            processed.append(session_id)
+            processed = processed[-50:]  # pamiętamy do 50 ostatnich sesji
+
             now = datetime.utcnow()
             if plan == "topup_60":
-                sub = get_user_subscription(email)
                 current_extra = sub.get("extra_live_minutes", 0.0)
                 update_user_subscription(email, {
-                    "extra_live_minutes": current_extra + 60.0
+                    "extra_live_minutes": current_extra + 60.0,
+                    "processed_sessions": processed
                 })
             else:
                 target_plan = plan if plan in ["pro", "intensive"] else "pro"
@@ -1515,7 +1559,8 @@ def verify_stripe_session():
                     "live_minutes_limit": limit,
                     "stripe_customer_id": session.customer,
                     "stripe_subscription_id": session.subscription,
-                    "billing_cycle_start": now.isoformat()
+                    "billing_cycle_start": now.isoformat(),
+                    "processed_sessions": processed
                 })
 
             return jsonify({
@@ -1586,15 +1631,28 @@ def stripe_webhook():
         plan = data_object.get("metadata", {}).get("plan", "pro")
         customer_id = data_object.get("customer")
         subscription_id = data_object.get("subscription")
+        session_id = data_object.get("id")
 
         if email:
+            sub = get_user_subscription(email)
+            processed = list(sub.get("processed_sessions") or [])
+
+            # Idempotency check: jeśli sesja została już rozliczona przez verify-session na powrocie
+            if session_id and session_id in processed:
+                print(f"Stripe Webhook: sesja {session_id} została już przetworzona w verify-session. Pomijam powtórne dodanie minut.", flush=True)
+                return jsonify({"received": True, "already_processed": True}), 200
+
+            if session_id:
+                processed.append(session_id)
+                processed = processed[-50:]
+
             now = datetime.utcnow()
             if plan == "topup_60":
-                sub = get_user_subscription(email)
                 current_extra = sub.get("extra_live_minutes", 0.0)
                 update_user_subscription(email, {
                     "extra_live_minutes": current_extra + 60.0,
-                    "stripe_customer_id": customer_id
+                    "stripe_customer_id": customer_id,
+                    "processed_sessions": processed
                 })
             else:
                 target_plan = plan if plan in ["pro", "intensive"] else "pro"
@@ -1607,7 +1665,8 @@ def stripe_webhook():
                     "live_minutes_limit": limit,
                     "stripe_customer_id": customer_id,
                     "stripe_subscription_id": subscription_id,
-                    "billing_cycle_start": now.isoformat()
+                    "billing_cycle_start": now.isoformat(),
+                    "processed_sessions": processed
                 })
 
     elif event_type in ["customer.subscription.updated", "customer.subscription.deleted"]:
