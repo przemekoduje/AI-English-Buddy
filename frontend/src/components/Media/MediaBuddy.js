@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { API_BASE_URL } from '../../config';
+import { API_BASE_URL } from "../../config";
 import "./MediaBuddy.css";
 import PronunciationPracticeModal from "../Notebook/PronunciationPracticeModal";
 import WordExplanationModal from "../Notebook/WordExplanationModal";
@@ -11,18 +11,21 @@ const CURATED_VIDEOS = [
     id: "james_veitch_spam",
     title: "James Veitch - Replying to Spam Email",
     youtubeId: "_QdPW8JrYzQ",
+    description: "A hilarious talk about what happens when you reply to a spam email. Learn natural humor, storytelling idioms, and persuasive tone.",
     transcript: ensureCompleteSentences(transcriptsData.james_veitch_spam)
   },
   {
     id: "james_veitch_unsubscribe",
     title: "James Veitch - The Agony of Unsubscribing",
     youtubeId: "Dceyy0cX6J4",
+    description: "Everyday frustration turned into comedy. Great practice for modern conversational phrases, retail emails, and British humor.",
     transcript: ensureCompleteSentences(transcriptsData.james_veitch_unsubscribe)
   },
   {
     id: "jeff_allen_teenagers",
     title: "Jeff Allen - Teenagers (Dry Bar Comedy)",
     youtubeId: "cqjhCC4sP4Q",
+    description: "Classic American stand-up comedy about family life and teenage logic. Clear pronunciation with authentic colloquial vocabulary.",
     transcript: ensureCompleteSentences(transcriptsData.jeff_allen_teenagers)
   }
 ];
@@ -103,12 +106,31 @@ const shuffleAndSlice = (array, count = 3) => {
   return arr.slice(0, count);
 };
 
+const formatTime = (secs) => {
+  if (!secs || isNaN(secs) || secs < 0) return "00:00";
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+};
+
 function MediaBuddy({ user }) {
   const [currentVideo, setCurrentVideo] = useState(CURATED_VIDEOS[0]);
   const [currentTime, setCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
-  
+  const [isMuted, setIsMuted] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+
+  // New Figma Layout States
+  const [isVideoGalleryOpen, setIsVideoGalleryOpen] = useState(false);
+  const [showBilingual, setShowBilingual] = useState(true);
+  const [showAddMediaModal, setShowAddMediaModal] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [showPhrases, setShowPhrases] = useState(false);
+  const [copiedToast, setCopiedToast] = useState(false);
+  const [translationsCache, setTranslationsCache] = useState({});
+
   // Interaction states
   const [selectedWord, setSelectedWord] = useState("");
   const [wordTranslation, setWordTranslation] = useState("");
@@ -131,6 +153,7 @@ function MediaBuddy({ user }) {
       videos: shuffleAndSlice(source.videos, 3)
     }));
   }, []);
+
   const [customVideos, setCustomVideos] = useState(() => {
     try {
       const saved = localStorage.getItem("media_buddy_custom_videos");
@@ -187,7 +210,6 @@ function MediaBuddy({ user }) {
   useEffect(() => {
     try {
       localStorage.setItem("media_buddy_autoscroll_enabled", autoScrollEnabled.toString());
-      console.log("Autoscroll persisted to localStorage:", autoScrollEnabled);
     } catch (e) {
       console.error("Failed to save autoScrollEnabled to localStorage", e);
     }
@@ -195,7 +217,7 @@ function MediaBuddy({ user }) {
 
   const [pastedSrt, setPastedSrt] = useState("");
   const [notebookWords, setNotebookWords] = useState([]);
-  
+
   // Exercise State
   const [exerciseData, setExerciseData] = useState(null);
   const [exerciseLoading, setExerciseLoading] = useState(false);
@@ -204,6 +226,7 @@ function MediaBuddy({ user }) {
   const [exerciseChecking, setExerciseChecking] = useState(false);
   const [showExerciseHint, setShowExerciseHint] = useState(false);
 
+  // Fetch words in vocabulary for this video
   useEffect(() => {
     if (!currentVideo || !user?.token) {
       setNotebookWords([]);
@@ -232,11 +255,11 @@ function MediaBuddy({ user }) {
     try {
       const shuffledWords = [...notebookWords].sort(() => 0.5 - Math.random());
       const selectedWords = shuffledWords.slice(0, 30);
-      
+
       const res = await fetch(`${API_BASE_URL}/api/vocabulary/generate-exercise`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
-        body: JSON.stringify({ words: selectedWords }) // Send up to 30 shuffled words, AI picks a subset
+        body: JSON.stringify({ words: selectedWords })
       });
       if (res.ok) {
         const data = await res.json();
@@ -280,8 +303,6 @@ function MediaBuddy({ user }) {
     }
   };
 
-
-
   // Pause video on vocabulary drawer open
   useEffect(() => {
     const handleDrawerOpen = () => {
@@ -295,7 +316,7 @@ function MediaBuddy({ user }) {
     };
   }, []);
 
-  // Sync recentSortOrder to localStorage
+  // Sync sort orders
   useEffect(() => {
     try {
       localStorage.setItem("media_buddy_recent_sort_order", recentSortOrder);
@@ -304,7 +325,6 @@ function MediaBuddy({ user }) {
     }
   }, [recentSortOrder]);
 
-  // Sync unwatchedSortOrder to localStorage
   useEffect(() => {
     try {
       localStorage.setItem("media_buddy_unwatched_sort_order", unwatchedSortOrder);
@@ -324,7 +344,7 @@ function MediaBuddy({ user }) {
       const timeB = videoProgress[b.id]?.lastWatched || 0;
       return recentSortOrder === "newest" ? timeB - timeA : timeA - timeB;
     });
-    
+
     if (watched.length < 10) {
       const unwatched = allVideos.filter(v => !videoProgress[v.id]);
       const padded = recentSortOrder === "newest" ? unwatched : [...unwatched].reverse();
@@ -343,13 +363,13 @@ function MediaBuddy({ user }) {
       const progB = videoProgress[b.id];
       const timeA = progA?.lastWatched || 0;
       const timeB = progB?.lastWatched || 0;
-      
+
       if (timeA && timeB) {
         return unwatchedSortOrder === "newest" ? timeB - timeA : timeA - timeB;
       }
       if (timeA) return unwatchedSortOrder === "newest" ? -1 : 1;
       if (timeB) return unwatchedSortOrder === "newest" ? 1 : -1;
-      
+
       const idxA = allVideos.indexOf(a);
       const idxB = allVideos.indexOf(b);
       return unwatchedSortOrder === "newest" ? idxB - idxA : idxA - idxB;
@@ -366,52 +386,6 @@ function MediaBuddy({ user }) {
     }
   }, [customVideos]);
 
-  // Automatyczna migracja i normalizacja customVideos z localStorage do pełnych zdań
-  useEffect(() => {
-    if (Array.isArray(customVideos) && customVideos.length > 0) {
-      let changed = false;
-      const updated = customVideos.map((v) => {
-        if (!Array.isArray(v.transcript) || v.transcript.length === 0) return v;
-        const needsSplit = v.transcript.length === 1 ||
-          v.transcript.some(t => !t.text || t.text.split(/\s+/).length > 22 || (t.end - t.start > 25));
-        if (needsSplit) {
-          const resegmented = ensureCompleteSentences(v.transcript);
-          if (resegmented.length !== v.transcript.length) {
-            changed = true;
-            return {
-              ...v,
-              transcript: resegmented
-            };
-          }
-        }
-        return v;
-      });
-
-      if (changed) {
-        setCustomVideos(updated);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Automatyczna weryfikacja currentVideo - jeśli zawiera gigantyczny blok, natychmiast go rozbijamy
-  useEffect(() => {
-    if (currentVideo && Array.isArray(currentVideo.transcript) && currentVideo.transcript.length > 0) {
-      const needsSplit = currentVideo.transcript.length === 1 || 
-        currentVideo.transcript.some(t => !t.text || t.text.split(/\s+/).length > 22 || (t.end - t.start > 25));
-      
-      if (needsSplit) {
-        const resegmented = ensureCompleteSentences(currentVideo.transcript);
-        if (resegmented.length !== currentVideo.transcript.length) {
-          setCurrentVideo(prev => ({
-            ...prev,
-            transcript: resegmented
-          }));
-        }
-      }
-    }
-  }, [currentVideo]);
-
   const handleDeleteCustomVideo = (e, videoId) => {
     e.stopPropagation();
     const updated = customVideos.filter((v) => v.id !== videoId);
@@ -421,17 +395,14 @@ function MediaBuddy({ user }) {
     }
   };
 
-
-
-  // Pronunciation Practice modal states
+  // Modals & Refs
   const [showPracticeModal, setShowPracticeModal] = useState(false);
   const [practiceText, setPracticeText] = useState("");
-
-  // Detailed Word Explanation state (optional reuse)
   const [explanationWord, setExplanationWord] = useState(null);
 
-  // Refs for YouTube Player and interval
   const playerRef = useRef(null);
+  const playerWrapperRef = useRef(null);
+  const transcriptListRef = useRef(null);
   const timerRef = useRef(null);
   const isInitialMount = useRef(true);
   const latestWordRef = useRef("");
@@ -443,7 +414,7 @@ function MediaBuddy({ user }) {
 
   const scrollRow = (ref, direction) => {
     if (ref.current) {
-      const scrollAmount = 480; // Scroll by two video tiles
+      const scrollAmount = 480;
       ref.current.scrollBy({
         left: direction === "left" ? -scrollAmount : scrollAmount,
         behavior: "smooth"
@@ -451,9 +422,67 @@ function MediaBuddy({ user }) {
     }
   };
 
-  // Helper to create or recreate YouTube Player instance with a specific videoId
+  // Level & Category helper
+  const videoMeta = useMemo(() => {
+    if (!currentVideo) return { level: "B2", category: "General" };
+    const title = (currentVideo.title || "").toLowerCase();
+    if (title.includes("spam") || title.includes("unsubscribe") || title.includes("veitch")) {
+      return { level: "B2", category: "Humour & Email" };
+    }
+    if (title.includes("teenager") || title.includes("allen") || title.includes("dry bar")) {
+      return { level: "B1", category: "Stand-up Comedy" };
+    }
+    if (title.includes("procrastinator") || title.includes("ted") || title.includes("urban")) {
+      return { level: "B2", category: "Psychology & Ideas" };
+    }
+    if (title.includes("git") || title.includes("code") || title.includes("web") || title.includes("fireship")) {
+      return { level: "B2", category: "Tech & Coding" };
+    }
+    if (title.includes("body language") || title.includes("leader")) {
+      return { level: "C1", category: "Leadership & Body Language" };
+    }
+    return { level: "B2", category: "Business & Life" };
+  }, [currentVideo]);
+
+  // Words worth keeping pills
+  const keyWordsList = useMemo(() => {
+    const list = [];
+    notebookWords.forEach(w => {
+      if (w.original && !list.includes(w.original.toLowerCase())) {
+        list.push(w.original.toLowerCase());
+      }
+    });
+    if (currentVideo?.transcript) {
+      const stopwords = new Set(["the", "and", "that", "this", "with", "from", "they", "have", "were", "what", "when", "your", "will", "would", "about", "there", "their", "which", "could", "laughter", "cheering", "applause", "hello", "going", "know", "said", "just"]);
+      for (const seg of currentVideo.transcript) {
+        const words = (seg.text || "").replace(/[^a-zA-Z\s]/g, "").split(/\s+/);
+        for (const w of words) {
+          const clean = w.toLowerCase().trim();
+          if (clean.length > 5 && !stopwords.has(clean) && !list.includes(clean)) {
+            list.push(clean);
+            if (list.length >= 8) break;
+          }
+        }
+        if (list.length >= 8) break;
+      }
+    }
+    if (list.length === 0) {
+      return ["adapt", "supportive", "clarify", "encourage", "perspective"];
+    }
+    return list.slice(0, 8);
+  }, [notebookWords, currentVideo]);
+
+  // Total Duration
+  const totalDuration = useMemo(() => {
+    if (videoDuration > 0) return videoDuration;
+    if (currentVideo?.transcript && currentVideo.transcript.length > 0) {
+      return currentVideo.transcript[currentVideo.transcript.length - 1].end || 150;
+    }
+    return 150;
+  }, [videoDuration, currentVideo]);
+
+  // YouTube Player setup
   const createPlayer = (videoId, autoPlay = true) => {
-    // If a player already exists, destroy it to restore original placeholder div
     if (playerRef.current) {
       try {
         playerRef.current.destroy();
@@ -476,7 +505,10 @@ function MediaBuddy({ user }) {
         },
         events: {
           onReady: () => {
-            console.log("YouTube Player is ready for video:", videoId);
+            if (playerRef.current && typeof playerRef.current.getDuration === "function") {
+              const dur = playerRef.current.getDuration();
+              if (dur > 0) setVideoDuration(dur);
+            }
           },
           onStateChange: (event) => {
             handlePlayerStateChange(event.data);
@@ -488,16 +520,13 @@ function MediaBuddy({ user }) {
     }
   };
 
-  // Load YouTube Player API and initialize on mount
   useEffect(() => {
-    // Inject the YouTube IFrame API script if not already present
     if (!window.YT) {
       const tag = document.createElement("script");
       tag.src = "https://www.youtube.com/iframe_api";
       const firstScriptTag = document.getElementsByTagName("script")[0];
       firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
-      // Define callback
       window.onYouTubeIframeAPIReady = () => {
         createPlayer(currentVideo.youtubeId, false);
       };
@@ -519,29 +548,20 @@ function MediaBuddy({ user }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Track playback time and play/pause state
   const handlePlayerStateChange = (state) => {
     if (state === 1) { // PLAYING
       setIsPlaying(true);
-
-      // Auto-scroll on desktop when video starts playing
-      // so the video and dictionary are clearly visible
-      if (window.innerWidth >= 1024) {
-        const videoElement = document.querySelector('.media-workspace-grid');
-        if (videoElement) {
-          const targetY = videoElement.getBoundingClientRect().top + window.scrollY - 80;
-          if (Math.abs(window.scrollY - targetY) > 50) {
-            window.scrollTo({ top: targetY, behavior: 'smooth' });
-          }
-        }
-      }
-
       clearTrackingTimer();
       timerRef.current = setInterval(() => {
         if (playerRef.current && typeof playerRef.current.getCurrentTime === "function") {
           const time = playerRef.current.getCurrentTime();
           setCurrentTime(time);
-          
+
+          if (typeof playerRef.current.getDuration === "function") {
+            const dur = playerRef.current.getDuration();
+            if (dur > 0) setVideoDuration(dur);
+          }
+
           const currentSecond = Math.floor(time);
           if (currentSecond !== lastSavedSecondRef.current && typeof playerRef.current.getDuration === "function") {
             lastSavedSecondRef.current = currentSecond;
@@ -582,14 +602,13 @@ function MediaBuddy({ user }) {
     }
   };
 
-  // Switch video and recreate player when currentVideo changes
+  // Switch video
   useEffect(() => {
     currentVideoRef.current = currentVideo;
     if (window.YT && window.YT.Player) {
       createPlayer(currentVideo.youtubeId, !isInitialMount.current);
     }
     isInitialMount.current = false;
-    // Reset states
     setCurrentTime(0);
     setActiveSegmentIndex(-1);
     setIsPlaying(false);
@@ -597,33 +616,74 @@ function MediaBuddy({ user }) {
     setWordTranslation("");
     setSegmentTranslation("");
     setIsSegmentSaved(false);
-    lastSavedSecondRef.current = -1; // Reset last saved second
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setVideoDuration(0);
+    lastSavedSecondRef.current = -1;
+    setTranslationsCache({});
   }, [currentVideo]);
 
-  // Clear segment translation when active segment changes to avoid stale text
-  useEffect(() => {
-    setSegmentTranslation("");
-    setIsSegmentSaved(false);
-  }, [activeSegmentIndex]);
-
-  // Automatically translate active segment when video is paused
-  useEffect(() => {
-    if (!isPlaying && activeSegmentIndex !== -1) {
-      translateActiveSegment(activeSegmentIndex);
+  // Player controls
+  const togglePlayPause = () => {
+    if (playerRef.current) {
+      if (isPlaying) {
+        playerRef.current.pauseVideo();
+      } else {
+        playerRef.current.playVideo();
+      }
+    } else {
+      setIsPlaying(!isPlaying);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, activeSegmentIndex]);
+  };
 
-  // Synchronize active segment and trigger auto-scrolling
+  const toggleMute = () => {
+    if (playerRef.current) {
+      if (isMuted) {
+        playerRef.current.unMute();
+        setIsMuted(false);
+      } else {
+        playerRef.current.mute();
+        setIsMuted(true);
+      }
+    } else {
+      setIsMuted(!isMuted);
+    }
+  };
+
+  const speeds = [0.75, 1, 1.25, 1.5];
+  const cyclePlaybackRate = () => {
+    const nextIdx = (speeds.indexOf(playbackRate) + 1) % speeds.length;
+    const nextSpeed = speeds[nextIdx];
+    setPlaybackRate(nextSpeed);
+    if (playerRef.current && typeof playerRef.current.setPlaybackRate === "function") {
+      playerRef.current.setPlaybackRate(nextSpeed);
+    }
+  };
+
+  const handleSeek = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+    const targetTime = ratio * totalDuration;
+    if (playerRef.current && typeof playerRef.current.seekTo === "function") {
+      playerRef.current.seekTo(targetTime, true);
+      setCurrentTime(targetTime);
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (playerWrapperRef.current) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(err => console.warn(err));
+      } else {
+        playerWrapperRef.current.requestFullscreen().catch(err => console.warn(err));
+      }
+    }
+  };
+
+  // Auto-scroll and sync active segment
   useEffect(() => {
-    // Add a 0.4s anticipation bias when playing to compensate for rendering/scroll latency.
-    // When paused, use exact currentTime.
     const checkTime = isPlaying ? currentTime + 0.4 : currentTime;
-
-    // Search from the end to prefer newer overlapping segments
     let idx = -1;
-    for (let i = currentVideo.transcript.length - 1; i >= 0; i--) {
+    for (let i = (currentVideo.transcript || []).length - 1; i >= 0; i--) {
       const seg = currentVideo.transcript[i];
       if (checkTime >= seg.start && checkTime <= seg.end) {
         idx = i;
@@ -634,17 +694,15 @@ function MediaBuddy({ user }) {
     if (idx !== -1) {
       if (idx !== activeSegmentIndex) {
         setActiveSegmentIndex(idx);
-        // Auto-scroll transcript container to make active card visible (only when playing and enabled)
         if (isPlaying && autoScrollEnabled) {
-          const activeCard = document.querySelector(`.transcript-segment-card[data-index="${idx}"]`);
+          const activeCard = document.querySelector(`.synced-segment-card[data-index="${idx}"]`);
           if (activeCard) {
             activeCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
           }
         }
       }
     } else {
-      // Clear active segment highlight if we are outside the segment boundary (with a tight tolerance when playing)
-      const lastSeg = currentVideo.transcript[activeSegmentIndex];
+      const lastSeg = currentVideo.transcript?.[activeSegmentIndex];
       const tolerance = isPlaying ? 0.2 : 0.0;
       if (lastSeg && (checkTime < lastSeg.start - tolerance || checkTime > lastSeg.end + tolerance)) {
         setActiveSegmentIndex(-1);
@@ -652,64 +710,44 @@ function MediaBuddy({ user }) {
     }
   }, [currentTime, currentVideo, activeSegmentIndex, isPlaying, autoScrollEnabled]);
 
-  // Click card body: seek to segment start and pause video (for study) / toggle play state if active
-  const handleCardClick = (seg, index) => {
-    if (playerRef.current && typeof playerRef.current.getPlayerState === "function") {
-      const state = playerRef.current.getPlayerState();
-      if (activeSegmentIndex === index) {
-        if (state === 1) { // PLAYING
-          playerRef.current.pauseVideo();
-        } else {
-          playerRef.current.playVideo();
-        }
-      } else {
-        if (typeof playerRef.current.seekTo === "function") {
-          playerRef.current.seekTo(seg.start, true);
-        }
-        playerRef.current.pauseVideo();
-        setCurrentTime(seg.start);
-        setActiveSegmentIndex(index);
-      }
-    } else {
-      // Fallback if player API is not ready
-      if (activeSegmentIndex === index) {
-        setIsPlaying(!isPlaying);
-      } else {
-        setCurrentTime(seg.start);
-        setActiveSegmentIndex(index);
-        setIsPlaying(false);
-      }
+  // Translate active segment on pause
+  useEffect(() => {
+    if (!isPlaying && activeSegmentIndex !== -1) {
+      translateActiveSegment(activeSegmentIndex);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, activeSegmentIndex]);
 
-  // Translate entire active segment phrase when video is paused
   const translateActiveSegment = async (index) => {
-    const segment = currentVideo.transcript[index];
+    const segment = currentVideo.transcript?.[index];
     if (!segment || !segment.text) return;
 
-    // If we are already translating the SAME segment, or already have its translation, skip
-    if (latestSegmentIndexRef.current === index && (isTranslatingSegment || segmentTranslation)) {
+    if (translationsCache[index]) {
+      setSegmentTranslation(translationsCache[index]);
       return;
     }
+
+    if (latestSegmentIndexRef.current === index && isTranslatingSegment) return;
 
     latestSegmentIndexRef.current = index;
     setIsTranslatingSegment(true);
     setIsSegmentSaved(false);
-    setSegmentTranslation(""); // Clear previous translation to show loader
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/translate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Session-Token": user.token
+          "X-Session-Token": user?.token || ""
         },
         body: JSON.stringify({ text: segment.text })
       });
       if (latestSegmentIndexRef.current !== index) return;
       if (response.ok) {
         const data = await response.json();
-        setSegmentTranslation(data.translation || "Brak tłumaczenia");
+        const tr = data.translation || "Brak tłumaczenia";
+        setSegmentTranslation(tr);
+        setTranslationsCache(prev => ({ ...prev, [index]: tr }));
       } else {
         setSegmentTranslation("Błąd tłumaczenia");
       }
@@ -724,18 +762,89 @@ function MediaBuddy({ user }) {
     }
   };
 
-  // Save full phrase to vocabulary notebook
-  const handleSaveSegmentPhrase = async () => {
-    const segment = currentVideo.transcript[activeSegmentIndex];
-    if (!segment || !segmentTranslation) return;
+  // Card click: seek and toggle play/pause
+  const handleCardClick = (seg, index) => {
+    if (playerRef.current && typeof playerRef.current.getPlayerState === "function") {
+      const state = playerRef.current.getPlayerState();
+      if (activeSegmentIndex === index) {
+        if (state === 1) {
+          playerRef.current.pauseVideo();
+        } else {
+          playerRef.current.playVideo();
+        }
+      } else {
+        if (typeof playerRef.current.seekTo === "function") {
+          playerRef.current.seekTo(seg.start, true);
+        }
+        playerRef.current.pauseVideo();
+        setCurrentTime(seg.start);
+        setActiveSegmentIndex(index);
+      }
+    } else {
+      if (activeSegmentIndex === index) {
+        setIsPlaying(!isPlaying);
+      } else {
+        setCurrentTime(seg.start);
+        setActiveSegmentIndex(index);
+        setIsPlaying(false);
+      }
+    }
+  };
 
+  // Bookmark entire segment phrase
+  const handleBookmarkSegment = async (e, seg, idx) => {
+    e.stopPropagation();
+    setActiveSegmentIndex(idx);
+    let translationToSave = translationsCache[idx] || (activeSegmentIndex === idx ? segmentTranslation : "");
+    if (!translationToSave) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/translate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+          body: JSON.stringify({ text: seg.text })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          translationToSave = data.translation;
+          setTranslationsCache(prev => ({ ...prev, [idx]: translationToSave }));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    if (translationToSave) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+          body: JSON.stringify({
+            original: seg.text,
+            translated: translationToSave,
+            story_id: `standup_phrase_${currentVideo.id}`
+          })
+        });
+        if (response.ok) {
+          const added_doc = await response.json();
+          if (!notebookWords.some(w => w.original === added_doc.original)) {
+            setNotebookWords(prev => [added_doc, ...prev]);
+          }
+          window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+          setIsSegmentSaved(true);
+        }
+      } catch (err) {
+        console.error("Błąd podczas zapisywania frazy:", err);
+      }
+    }
+  };
+
+  const handleSaveSegmentPhrase = async () => {
+    const segment = currentVideo.transcript?.[activeSegmentIndex];
+    if (!segment || !segmentTranslation) return;
     try {
       const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-Token": user.token
-        },
+        headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
         body: JSON.stringify({
           original: segment.text,
           translated: segmentTranslation,
@@ -751,11 +860,11 @@ function MediaBuddy({ user }) {
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       }
     } catch (err) {
-      console.error("Błąd podczas zapisywania frazy:", err);
+      console.error(err);
     }
   };
 
-  // Click word: pause video and fetch translation
+  // Word click
   const handleWordClick = async (word, sentenceContext) => {
     if (!word) return;
     if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
@@ -771,10 +880,7 @@ function MediaBuddy({ user }) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/translate`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-Token": user.token
-        },
+        headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
         body: JSON.stringify({ text: word, context: sentenceContext })
       });
       if (latestWordRef.current !== word) return;
@@ -784,7 +890,6 @@ function MediaBuddy({ user }) {
         setWordSentenceTranslation(data.sentence_translation || "");
       } else {
         setWordTranslation("Błąd tłumaczenia");
-        setWordSentenceTranslation("");
       }
     } catch (err) {
       if (latestWordRef.current !== word) return;
@@ -799,14 +904,10 @@ function MediaBuddy({ user }) {
 
   const handleSaveWord = async () => {
     if (!selectedWord || !wordTranslation) return;
-
     try {
       const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-Token": user.token
-        },
+        headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
         body: JSON.stringify({
           original: selectedWord,
           translated: wordTranslation,
@@ -826,8 +927,6 @@ function MediaBuddy({ user }) {
     }
   };
 
-
-  // Click Practice Pronunciation: pause video and open modal
   const handlePracticePronunciation = (text) => {
     if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
       playerRef.current.pauseVideo();
@@ -868,9 +967,9 @@ function MediaBuddy({ user }) {
     return (match && match[2].length === 11) ? match[2] : url.trim();
   };
 
+  // Video Selection with ANIMATED COLLAPSE
   const handleSelectVideo = (vid) => {
     const formattedTranscript = ensureCompleteSentences(vid.transcript);
-    if (currentVideo && currentVideo.id === vid.id && currentVideo.transcript && currentVideo.transcript.length === formattedTranscript.length) return;
     setIsLoadingCustom(true);
     setTimeout(() => {
       setCurrentVideo({
@@ -878,13 +977,14 @@ function MediaBuddy({ user }) {
         transcript: formattedTranscript
       });
       setIsLoadingCustom(false);
+      // PŁYNNE ZSUNIĘCIE GALERII ZGODNIE Z POLECENIEM UŻYTKOWNIKA
+      setIsVideoGalleryOpen(false);
     }, 300);
   };
 
   const fetchAndLoadVideo = async (videoId) => {
     setCustomError("");
-    
-    // Check if we have a static transcript locally in transcripts.json
+
     const getStaticTranscript = (id) => {
       if (transcriptsData[id]) return transcriptsData[id];
       if (id === "_QdPW8JrYzQ") return transcriptsData.james_veitch_spam;
@@ -898,7 +998,6 @@ function MediaBuddy({ user }) {
       setIsLoadingCustom(true);
       setTimeout(() => {
         let title = `Wideo (${videoId})`;
-        // Try to find the title in CURATED_SOURCES
         for (const source of CURATED_SOURCES) {
           const found = source.videos.find(v => v.youtubeId === videoId);
           if (found) {
@@ -906,7 +1005,6 @@ function MediaBuddy({ user }) {
             break;
           }
         }
-        // Or in CURATED_VIDEOS
         const foundCurated = CURATED_VIDEOS.find(v => v.youtubeId === videoId);
         if (foundCurated) {
           title = foundCurated.title;
@@ -926,7 +1024,8 @@ function MediaBuddy({ user }) {
         setCurrentVideo(staticVid);
         setCustomUrl("");
         setIsLoadingCustom(false);
-      }, 500);
+        setIsVideoGalleryOpen(false);
+      }, 400);
       return;
     }
 
@@ -935,11 +1034,8 @@ function MediaBuddy({ user }) {
     let newTitle = `Własne wideo (${videoId})`;
     try {
       const endpoint = `${API_BASE_URL}/api/media/transcript?video_id=${videoId}&use_whisper=false`;
-
       const response = await fetch(endpoint, {
-        headers: {
-          "X-Session-Token": user ? user.token : ""
-        }
+        headers: { "X-Session-Token": user ? user.token : "" }
       });
       if (response.ok) {
         const data = await response.json();
@@ -951,11 +1047,11 @@ function MediaBuddy({ user }) {
         if (data.title) newTitle = data.title;
       } else {
         const errData = await response.json();
-        setCustomError(errData.error || "Błąd podczas pobierania transkrypcji. Możesz dodać własne napisy.");
+        setCustomError(errData.error || "Błąd podczas pobierania transkrypcji.");
       }
     } catch (err) {
       console.error(err);
-      setCustomError("Błąd pobierania transkrypcji z serwisu YouTube. Możesz dodać własne napisy.");
+      setCustomError("Błąd pobierania transkrypcji z serwisu YouTube.");
     } finally {
       const newCustomVid = {
         id: `custom_${videoId}`,
@@ -971,14 +1067,15 @@ function MediaBuddy({ user }) {
       setCurrentVideo(newCustomVid);
       setCustomUrl("");
       setIsLoadingCustom(false);
+      setIsVideoGalleryOpen(false);
     }
   };
 
   const handleLoadCustomVideo = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     const videoId = extractVideoId(customUrl);
     if (!videoId || videoId.length !== 11) {
-      setCustomError("Nieprawidłowy adres URL lub ID wideo. Upewnij się, że ID ma 11 znaków.");
+      setCustomError("Nieprawidłowy adres URL lub ID wideo (musi mieć 11 znaków).");
       return;
     }
     await fetchAndLoadVideo(videoId);
@@ -1008,8 +1105,8 @@ function MediaBuddy({ user }) {
     blocks.forEach(block => {
       const lines = block.split('\n');
       let timeLineIdx = -1;
-      for(let i=0; i<lines.length; i++) {
-        if(lines[i].includes('-->')) {
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes('-->')) {
           timeLineIdx = i;
           break;
         }
@@ -1022,7 +1119,7 @@ function MediaBuddy({ user }) {
           const end = timeToSeconds(times[1]);
           const text = lines.slice(timeLineIdx + 1).join(' ').replace(/<[^>]+>/g, '').trim();
           if (text) {
-             segments.push({ start, end, text });
+            segments.push({ start, end, text });
           }
         }
       }
@@ -1040,16 +1137,17 @@ function MediaBuddy({ user }) {
       if (parsed.length > 0) {
         const formatted = ensureCompleteSentences(parsed);
         setCurrentVideo(prev => ({ ...prev, transcript: formatted }));
-        setCustomVideos(prev => 
+        setCustomVideos(prev =>
           prev.map(v => v.id === currentVideo.id ? { ...v, transcript: formatted } : v)
         );
         setCustomError("");
+        setShowAddMediaModal(false);
       } else {
         setCustomError("Plik SRT jest pusty lub ma nieprawidłowy format.");
       }
     };
     reader.readAsText(file);
-    e.target.value = null; // reset input
+    e.target.value = null;
   };
 
   const handlePastedSrt = () => {
@@ -1059,17 +1157,33 @@ function MediaBuddy({ user }) {
       if (parsed.length > 0) {
         const formatted = ensureCompleteSentences(parsed);
         setCurrentVideo(prev => ({ ...prev, transcript: formatted }));
-        setCustomVideos(prev => 
+        setCustomVideos(prev =>
           prev.map(v => v.id === currentVideo.id ? { ...v, transcript: formatted } : v)
         );
         setPastedSrt("");
         setCustomError("");
+        setShowAddMediaModal(false);
       } else {
-         setCustomError("Nie rozpoznano prawidłowego formatu SRT.");
+        setCustomError("Nie rozpoznano prawidłowego formatu SRT.");
       }
     } else {
-      setCustomError("Tekst musi być w formacie SRT (zawierać czasy np. '00:00:01,000 --> 00:00:04,000').");
+      setCustomError("Tekst musi być w formacie SRT (np. '00:00:01,000 --> 00:00:04,000').");
     }
+  };
+
+  const handleCopyTranscript = () => {
+    if (!currentVideo?.transcript) return;
+    const fullText = currentVideo.transcript.map(s => s.text).join("\n");
+    navigator.clipboard.writeText(fullText);
+    setCopiedToast(true);
+    setTimeout(() => setCopiedToast(false), 2000);
+  };
+
+  const handleVoiceAiClick = () => {
+    const textToPractice = activeSegmentIndex !== -1 && currentVideo?.transcript?.[activeSegmentIndex]?.text
+      ? currentVideo.transcript[activeSegmentIndex].text
+      : (currentVideo?.transcript?.[0]?.text || currentVideo?.title || "Welcome to the lesson");
+    handlePracticePronunciation(textToPractice);
   };
 
   return (
@@ -1082,218 +1196,153 @@ function MediaBuddy({ user }) {
           </div>
         </div>
       )}
-      {/* Custom Video URL Loader */}
-      <div className="custom-video-loader glass-panel">
-        <h3 className="loader-title">Dodaj własne wideo z YouTube</h3>
-        <form onSubmit={handleLoadCustomVideo} className="loader-form">
-          <input
-            type="text"
-            className="loader-input"
-            placeholder="Wklej link do YouTube (np. https://www.youtube.com/watch?v=... lub id wideo)"
-            value={customUrl}
-            onChange={(e) => setCustomUrl(e.target.value)}
-          />
-          <button type="submit" className="loader-btn" disabled={isLoadingCustom}>
-            {isLoadingCustom ? "Pobieranie transkrypcji..." : "Załaduj wideo"}
-          </button>
-        </form>
 
-
-        {customError && <p className="loader-error">{customError}</p>}
-
-
-        {/* Curated Channels & Suggestion Box */}
-        <div className="curated-suggestions-section">
-          <h4 className="suggestions-title">
-            Rekomendowane kanały z gotowymi napisami
-          </h4>
-          <div className="suggestions-controls">
-            <select 
-              className="suggestions-select"
-              value={selectedSourceId}
-              onChange={(e) => setSelectedSourceId(e.target.value)}
-            >
-              <option value="">-- Wybierz kategorię / kanał --</option>
-              {randomizedSources.map(source => (
-                <option key={source.id} value={source.id}>
-                  {source.name}
-                </option>
-              ))}
-            </select>
+      {/* Top Header Section — Figma Design */}
+      <div className="mediabuddy-header-section">
+        <div className="mediabuddy-title-row">
+          <div className="mediabuddy-title-col">
+            <h1 className="mediabuddy-main-title">Listen closely. Learn naturally.</h1>
+            <p className="mediabuddy-main-subtitle">
+              Turn everyday audio and video into a focused English lesson.
+            </p>
           </div>
+          <button
+            type="button"
+            className="btn-add-media"
+            onClick={() => setShowAddMediaModal(true)}
+            title="Dodaj własne wideo lub napisy"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Add media
+          </button>
+        </div>
 
-          {(() => {
-            const selectedSource = randomizedSources.find(s => s.id === selectedSourceId);
-            if (!selectedSource) return null;
-            return (
-              <div className="suggestions-grid animate-fade-in">
-                {selectedSource.videos.map(video => (
-                  <div key={video.youtubeId} className="suggestion-item-card">
-                    <div className="suggestion-thumbnail-wrapper">
-                      <img 
-                        src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`}
-                        alt={video.title}
-                        className="suggestion-thumbnail"
-                      />
-                    </div>
-                    <div className="suggestion-info">
-                      <h5 className="suggestion-video-title">{video.title}</h5>
-                      <p className="suggestion-video-desc">{video.description}</p>
-                      <button 
-                        type="button" 
-                        className="suggestion-load-btn"
-                        onClick={() => fetchAndLoadVideo(video.youtubeId)}
-                        disabled={isLoadingCustom}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                          Załaduj wideo
-                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                            <polygon points="5 3 19 12 5 21 5 3" />
-                          </svg>
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
+        {/* Toolbar Bar */}
+        <div className="mediabuddy-toolbar-row">
+          <button
+            type="button"
+            className={`toolbar-pill-btn ${recentVideos.some(v => v.id === currentVideo.id) ? "active" : ""}`}
+            onClick={() => setIsVideoGalleryOpen(prev => !prev)}
+            title="Pokaż moje lekcje"
+          >
+            My lessons
+          </button>
+
+          {/* Video Button — Toggles animated drawer */}
+          <button
+            type="button"
+            className={`toolbar-pill-btn video-pill-btn ${isVideoGalleryOpen ? "active" : ""}`}
+            onClick={() => setIsVideoGalleryOpen(prev => !prev)}
+            title="Rozwiń galerię klipów"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="23 7 16 12 23 17 23 7" />
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+            Video
+            <svg className={`chevron-indicator ${isVideoGalleryOpen ? "rotate" : ""}`} viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            className="toolbar-pill-btn"
+            onClick={() => alert("Wybierz wideo z listy poniżej, a system przetworzy jego ścieżkę audio z transkrypcją.")}
+            title="Tryb Audio"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+              <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+            </svg>
+            Audio
+          </button>
+
+          <form onSubmit={handleLoadCustomVideo} className="toolbar-input-wrapper">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="input-link-icon">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
+            <input
+              type="text"
+              className="toolbar-input"
+              placeholder="Paste a video or audio link..."
+              value={customUrl}
+              onChange={(e) => setCustomUrl(e.target.value)}
+            />
+          </form>
+
+          <button
+            type="button"
+            className="toolbar-analyse-btn"
+            onClick={handleLoadCustomVideo}
+            disabled={isLoadingCustom}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+            </svg>
+            Analyse media
+          </button>
         </div>
       </div>
 
-      {/* Video Selector Row */}
-      <div className="media-selector-bar glass-panel">
-        <h2 className="media-selector-title">Wybierz klip:</h2>
-        
-        {/* Row 1: Ostatnio oglądane */}
-        <div className="media-selector-row">
-          <div className="media-selector-row-header">
-            <div className="media-selector-row-title">
-              <span>🕒 Ostatnio oglądane</span>
+      {/* ANIMATED HORIZONTAL CLIPS DRAWER */}
+      <div className={`media-clips-drawer ${isVideoGalleryOpen ? "open" : ""}`}>
+        <div className="media-clips-drawer-inner">
+          <div className="drawer-header-row">
+            <div className="drawer-header-left">
+              <h2 className="drawer-title">Wybierz klip:</h2>
+              <span className="drawer-subtitle">Wybierz wideo, aby automatycznie załadować transkrypcję i lekcję</span>
             </div>
-            <div className="media-selector-sort-controls">
-              <span className="sort-label">Sortowanie:</span>
-              <button 
-                type="button" 
-                className={`sort-toggle-btn ${recentSortOrder === "newest" ? "active" : ""}`}
-                onClick={() => setRecentSortOrder("newest")}
-                title="Sortuj od najnowszych"
-              >
-                Od najnowszych
-              </button>
-              <button 
-                type="button" 
-                className={`sort-toggle-btn ${recentSortOrder === "oldest" ? "active" : ""}`}
-                onClick={() => setRecentSortOrder("oldest")}
-                title="Sortuj od najstarszych"
-              >
-                Od najstarszych
-              </button>
-            </div>
-          </div>
-          <div className="media-selector-scroll-wrapper">
-            <button 
-              type="button" 
-              className="scroll-btn left" 
-              onClick={() => scrollRow(recentScrollRef, "left")}
-              title="Przewiń w lewo"
+            <button
+              type="button"
+              className="drawer-close-btn"
+              onClick={() => setIsVideoGalleryOpen(false)}
+              title="Zwiń galerię"
             >
-              ‹
-            </button>
-            <div className="media-selector-scroll" ref={recentScrollRef}>
-              {recentVideos.map((vid) => {
-                const isCustom = vid.id.startsWith("custom_");
-                const isActive = currentVideo.id === vid.id;
-                const prog = videoProgress[vid.id];
-                return (
-                  <div
-                    key={vid.id}
-                    className={`video-tile ${isActive ? "active" : ""}`}
-                    onClick={() => handleSelectVideo(vid)}
-                  >
-                    <div className="video-tile-thumbnail-wrapper">
-                      <img
-                        src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
-                        alt={vid.title}
-                        className="video-tile-thumbnail"
-                      />
-                      {isActive && <div className="video-tile-active-badge">Aktualny</div>}
-                      {isCustom && (
-                        <button
-                          className="video-tile-delete-btn"
-                          onClick={(e) => handleDeleteCustomVideo(e, vid.id)}
-                          title="Usuń z historii"
-                        >
-                          ✕
-                        </button>
-                      )}
-                      {prog && prog.progressPercent > 0 && (
-                        <div className="video-tile-progress-bar-wrapper">
-                          <div 
-                            className="video-tile-progress-bar" 
-                            style={{ width: `${Math.min(100, prog.progressPercent)}%` }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                    <div className="video-tile-info">
-                      <h4 className="video-tile-title">{vid.title}</h4>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <button 
-              type="button" 
-              className="scroll-btn right" 
-              onClick={() => scrollRow(recentScrollRef, "right")}
-              title="Przewiń w prawo"
-            >
-              ›
+              ✕
             </button>
           </div>
-        </div>
 
-        {/* Row 2: Nieoglądane */}
-        <div className="media-selector-row">
-          <div className="media-selector-row-header">
-            <div className="media-selector-row-title">
-              <span>📺 Nieoglądane</span>
+          {/* Row 1: Ostatnio oglądane */}
+          <div className="media-selector-row">
+            <div className="media-selector-row-header">
+              <div className="media-selector-row-title">
+                <span>🕒 Ostatnio oglądane</span>
+              </div>
+              <div className="media-selector-sort-controls">
+                <span className="sort-label">Sortowanie:</span>
+                <button
+                  type="button"
+                  className={`sort-toggle-btn ${recentSortOrder === "newest" ? "active" : ""}`}
+                  onClick={() => setRecentSortOrder("newest")}
+                >
+                  Od najnowszych
+                </button>
+                <button
+                  type="button"
+                  className={`sort-toggle-btn ${recentSortOrder === "oldest" ? "active" : ""}`}
+                  onClick={() => setRecentSortOrder("oldest")}
+                >
+                  Od najstarszych
+                </button>
+              </div>
             </div>
-            <div className="media-selector-sort-controls">
-              <span className="sort-label">Sortowanie:</span>
-              <button 
-                type="button" 
-                className={`sort-toggle-btn ${unwatchedSortOrder === "newest" ? "active" : ""}`}
-                onClick={() => setUnwatchedSortOrder("newest")}
-                title="Sortuj od najnowszych"
-              >
-                Od najnowszych
-              </button>
-              <button 
-                type="button" 
-                className={`sort-toggle-btn ${unwatchedSortOrder === "oldest" ? "active" : ""}`}
-                onClick={() => setUnwatchedSortOrder("oldest")}
-                title="Sortuj od najstarszych"
-              >
-                Od najstarszych
-              </button>
-            </div>
-          </div>
-          {unwatchedVideos.length === 0 ? (
-            <div className="media-selector-empty-text">Wszystkie wideo zostały obejrzane! 🎉</div>
-          ) : (
             <div className="media-selector-scroll-wrapper">
-              <button 
-                type="button" 
-                className="scroll-btn left" 
-                onClick={() => scrollRow(unwatchedScrollRef, "left")}
+              <button
+                type="button"
+                className="scroll-btn left"
+                onClick={() => scrollRow(recentScrollRef, "left")}
                 title="Przewiń w lewo"
               >
                 ‹
               </button>
-              <div className="media-selector-scroll" ref={unwatchedScrollRef}>
-                {unwatchedVideos.map((vid) => {
+              <div className="media-selector-scroll" ref={recentScrollRef}>
+                {recentVideos.map((vid) => {
                   const isCustom = vid.id.startsWith("custom_");
                   const isActive = currentVideo.id === vid.id;
                   const prog = videoProgress[vid.id];
@@ -1321,8 +1370,8 @@ function MediaBuddy({ user }) {
                         )}
                         {prog && prog.progressPercent > 0 && (
                           <div className="video-tile-progress-bar-wrapper">
-                            <div 
-                              className="video-tile-progress-bar" 
+                            <div
+                              className="video-tile-progress-bar"
                               style={{ width: `${Math.min(100, prog.progressPercent)}%` }}
                             />
                           </div>
@@ -1335,48 +1384,415 @@ function MediaBuddy({ user }) {
                   );
                 })}
               </div>
-              <button 
-                type="button" 
-                className="scroll-btn right" 
-                onClick={() => scrollRow(unwatchedScrollRef, "right")}
+              <button
+                type="button"
+                className="scroll-btn right"
+                onClick={() => scrollRow(recentScrollRef, "right")}
                 title="Przewiń w prawo"
               >
                 ›
               </button>
             </div>
-          )}
+          </div>
+
+          {/* Row 2: Nieoglądane */}
+          <div className="media-selector-row">
+            <div className="media-selector-row-header">
+              <div className="media-selector-row-title">
+                <span>📺 Nieoglądane</span>
+              </div>
+              <div className="media-selector-sort-controls">
+                <span className="sort-label">Sortowanie:</span>
+                <button
+                  type="button"
+                  className={`sort-toggle-btn ${unwatchedSortOrder === "newest" ? "active" : ""}`}
+                  onClick={() => setUnwatchedSortOrder("newest")}
+                >
+                  Od najnowszych
+                </button>
+                <button
+                  type="button"
+                  className={`sort-toggle-btn ${unwatchedSortOrder === "oldest" ? "active" : ""}`}
+                  onClick={() => setUnwatchedSortOrder("oldest")}
+                >
+                  Od najstarszych
+                </button>
+              </div>
+            </div>
+            {unwatchedVideos.length === 0 ? (
+              <div className="media-selector-empty-text">Wszystkie wideo zostały obejrzane! 🎉</div>
+            ) : (
+              <div className="media-selector-scroll-wrapper">
+                <button
+                  type="button"
+                  className="scroll-btn left"
+                  onClick={() => scrollRow(unwatchedScrollRef, "left")}
+                  title="Przewiń w lewo"
+                >
+                  ‹
+                </button>
+                <div className="media-selector-scroll" ref={unwatchedScrollRef}>
+                  {unwatchedVideos.map((vid) => {
+                    const isCustom = vid.id.startsWith("custom_");
+                    const isActive = currentVideo.id === vid.id;
+                    const prog = videoProgress[vid.id];
+                    return (
+                      <div
+                        key={vid.id}
+                        className={`video-tile ${isActive ? "active" : ""}`}
+                        onClick={() => handleSelectVideo(vid)}
+                      >
+                        <div className="video-tile-thumbnail-wrapper">
+                          <img
+                            src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
+                            alt={vid.title}
+                            className="video-tile-thumbnail"
+                          />
+                          {isActive && <div className="video-tile-active-badge">Aktualny</div>}
+                          {isCustom && (
+                            <button
+                              className="video-tile-delete-btn"
+                              onClick={(e) => handleDeleteCustomVideo(e, vid.id)}
+                              title="Usuń z historii"
+                            >
+                              ✕
+                            </button>
+                          )}
+                          {prog && prog.progressPercent > 0 && (
+                            <div className="video-tile-progress-bar-wrapper">
+                              <div
+                                className="video-tile-progress-bar"
+                                style={{ width: `${Math.min(100, prog.progressPercent)}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div className="video-tile-info">
+                          <h4 className="video-tile-title">{vid.title}</h4>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  className="scroll-btn right"
+                  onClick={() => scrollRow(unwatchedScrollRef, "right")}
+                  title="Przewiń w prawo"
+                >
+                  ›
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Curated Channels & Suggestion Box */}
+          <div className="curated-suggestions-section">
+            <div className="suggestions-header-row">
+              <h4 className="suggestions-title">
+                Rekomendowane kanały z gotowymi napisami
+              </h4>
+              <select
+                className="suggestions-select"
+                value={selectedSourceId}
+                onChange={(e) => setSelectedSourceId(e.target.value)}
+              >
+                <option value="">-- Wybierz kategorię / kanał --</option>
+                {randomizedSources.map(source => (
+                  <option key={source.id} value={source.id}>
+                    {source.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {(() => {
+              const selectedSource = randomizedSources.find(s => s.id === selectedSourceId);
+              if (!selectedSource) return null;
+              return (
+                <div className="suggestions-grid animate-fade-in">
+                  {selectedSource.videos.map(video => (
+                    <div key={video.youtubeId} className="suggestion-item-card">
+                      <div className="suggestion-thumbnail-wrapper">
+                        <img
+                          src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`}
+                          alt={video.title}
+                          className="suggestion-thumbnail"
+                        />
+                      </div>
+                      <div className="suggestion-info">
+                        <h5 className="suggestion-video-title">{video.title}</h5>
+                        <p className="suggestion-video-desc">{video.description}</p>
+                        <button
+                          type="button"
+                          className="suggestion-load-btn"
+                          onClick={() => {
+                            fetchAndLoadVideo(video.youtubeId);
+                            setIsVideoGalleryOpen(false);
+                          }}
+                          disabled={isLoadingCustom}
+                        >
+                          Załaduj wideo ▶
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
         </div>
       </div>
 
-      {/* Main Grid: Video + Subtitles & Explanations */}
+      {customError && <p className="loader-error animate-fade-in">{customError}</p>}
+
+      {/* Main 2-column workspace */}
       <div className="media-workspace-grid">
-        
-        {/* Left Side: Video + Dictionary Info */}
+        {/* Left Column: Player + Lesson Details + Words Worth Keeping */}
         <div className="media-left-column">
-          <div className="video-player-wrapper glass-panel">
-            <div id="youtube-player" className="youtube-iframe"></div>
+          {/* Video Player Card */}
+          <div className="video-player-card">
+            <div className="video-player-frame-wrapper" ref={playerWrapperRef}>
+              <div className="video-level-badge">
+                {videoMeta.level} · {videoMeta.category}
+              </div>
+              <div id="youtube-player" className="youtube-iframe"></div>
+            </div>
+
+            {/* Custom Control Bar */}
+            <div className="video-custom-controls-bar">
+              <button
+                type="button"
+                className="control-icon-btn play-pause-btn"
+                onClick={togglePlayPause}
+                title={isPlaying ? "Wstrzymaj" : "Odtwórz"}
+              >
+                {isPlaying ? (
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <rect x="6" y="4" width="4" height="16" rx="1" />
+                    <rect x="14" y="4" width="4" height="16" rx="1" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                  </svg>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="control-icon-btn mute-btn"
+                onClick={toggleMute}
+                title={isMuted ? "Włącz dźwięk" : "Wycisz"}
+              >
+                {isMuted ? (
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <line x1="23" y1="9" x2="17" y2="15" />
+                    <line x1="17" y1="9" x2="23" y2="15" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                  </svg>
+                )}
+              </button>
+
+              <span className="video-time-display">
+                {formatTime(currentTime)} / {formatTime(totalDuration)}
+              </span>
+
+              {/* Progress Slider */}
+              <div className="video-progress-slider-wrap" onClick={handleSeek} title="Przewiń">
+                <div
+                  className="video-progress-slider-filled"
+                  style={{ width: `${Math.min(100, (currentTime / (totalDuration || 1)) * 100)}%` }}
+                />
+              </div>
+
+              <button
+                type="button"
+                className="speed-pill-btn"
+                onClick={cyclePlaybackRate}
+                title="Zmień prędkość odtwarzania"
+              >
+                {playbackRate}x
+              </button>
+
+              <button
+                type="button"
+                className={`control-icon-btn ${showBilingual ? "active" : ""}`}
+                onClick={() => setShowBilingual(prev => !prev)}
+                title="Przełącz napisy dwujęzyczne"
+              >
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M7 15h3M14 15h3M7 11h10" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                className="control-icon-btn fullscreen-btn"
+                onClick={toggleFullscreen}
+                title="Pełny ekran"
+              >
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              </button>
+            </div>
           </div>
 
-          {/* Quick Dictionary Panel */}
-          <div className="quick-dictionary-panel glass-panel">
-            <h3 className="panel-header">📓 Słownik i Tłumaczenie</h3>
-            
-            {/* Word translation (if a word is clicked) */}
+          {/* Lesson Details Card — Figma Design */}
+          <div className="lesson-details-card">
+            <div className="lesson-title-row">
+              <h2 className="lesson-video-title">{currentVideo.title}</h2>
+              <span className="lesson-badge">Video lesson</span>
+            </div>
+            <p className="lesson-description">
+              {currentVideo.description || "Everyday English for natural comprehension. Listen for advice, useful phrases and the language of encouragement."}
+            </p>
+            <div className="lesson-meta-pills">
+              <span className="lesson-meta-pill duration-pill">
+                ⏱ {formatTime(totalDuration).replace(":", " min ")} sec
+              </span>
+              <span className="lesson-meta-pill words-pill">
+                {keyWordsList.length} useful words
+              </span>
+              <span className="lesson-meta-pill ai-pill">
+                AI analysis ready
+              </span>
+            </div>
+
+            <div className="lesson-divider" />
+
+            <div className="active-lesson-section">
+              <h4 className="active-lesson-heading">Make it an active lesson</h4>
+              <div className="active-lesson-buttons">
+                <button
+                  type="button"
+                  className={`lesson-act-btn ${showSummary ? "active" : ""}`}
+                  onClick={() => setShowSummary(prev => !prev)}
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                  </svg>
+                  Summarise
+                </button>
+
+                <button
+                  type="button"
+                  className={`lesson-act-btn ${showPhrases ? "active" : ""}`}
+                  onClick={() => {
+                    setShowPhrases(prev => !prev);
+                    if (activeSegmentIndex !== -1) {
+                      translateActiveSegment(activeSegmentIndex);
+                    }
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />
+                  </svg>
+                  Explain phrases
+                </button>
+
+                <button
+                  type="button"
+                  className="lesson-act-btn voice-ai-btn"
+                  onClick={handleVoiceAiClick}
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="22" />
+                    <line x1="8" y1="22" x2="16" y2="22" />
+                  </svg>
+                  Practice with Voice AI
+                </button>
+              </div>
+
+              {/* Collapsible Lesson Summary */}
+              {showSummary && (
+                <div className="summary-expand-box animate-fade-in">
+                  <h5 className="summary-box-title">💡 Główne punkty lekcji:</h5>
+                  <p className="summary-box-text">
+                    {currentVideo.description || "Ten materiał prezentuje autentyczny, żywy język angielski. Skup się na intonacji, naturalnym akcentowaniu oraz sposobie budowania żartów i puent w mowie potocznej."}
+                  </p>
+                  <ul className="summary-bullets">
+                    <li>Zwróć uwagę na zwroty wprowadzające kontekst sytuacji.</li>
+                    <li>Kliknij dowolne słowo w transkrypcji po prawej, aby poznać jego definicję i dodać do powtórek.</li>
+                    <li>Skorzystaj z Voice AI, aby wyćwiczyć akcent i płynność wymowy.</li>
+                  </ul>
+                </div>
+              )}
+
+              {/* Collapsible Phrase Explanation */}
+              {showPhrases && (
+                <div className="phrases-expand-box animate-fade-in">
+                  <h5 className="summary-box-title">💬 Tłumaczenie i objaśnienie aktywnej frazy:</h5>
+                  {activeSegmentIndex !== -1 ? (
+                    <div>
+                      <p className="active-phrase-en">"{currentVideo.transcript[activeSegmentIndex]?.text}"</p>
+                      <p className="active-phrase-pl">{segmentTranslation || "Tłumaczenie w toku..."}</p>
+                      <button
+                        type="button"
+                        className="btn-save-inline"
+                        onClick={handleSaveSegmentPhrase}
+                        disabled={isSegmentSaved}
+                      >
+                        {isSegmentSaved ? "Zapisano frazę! ✓" : "Zapisz frazę do słownika (+)"}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="empty-hint-text">Zatrzymaj wideo lub kliknij zdanie w transkrypcji, aby zobaczyć jego pełne tłumaczenie.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Words Worth Keeping Card — Figma Design */}
+          <div className="words-keeping-card">
+            <h3 className="words-keeping-title">Words worth keeping</h3>
+
+            <div className="words-keeping-pills">
+              {keyWordsList.map((word, idx) => {
+                const isWordActive = selectedWord.toLowerCase() === word.toLowerCase();
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={`word-keeping-pill ${isWordActive ? "active" : ""}`}
+                    onClick={() => handleWordClick(word, currentVideo?.transcript?.[activeSegmentIndex]?.text || "")}
+                  >
+                    {word}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="words-keeping-hint">
+              Select a word in the transcript to hear it or save it to your vocabulary.
+            </p>
+
+            {/* Word translation details */}
             {selectedWord && (
-              <div className="word-translate-result animate-fade-in" style={{ marginBottom: "1.5rem", borderBottom: "1px solid var(--border)", paddingBottom: "1.25rem" }}>
+              <div className="word-translate-result animate-fade-in">
                 <div className="word-header-row">
                   <span className="original-word">{selectedWord}</span>
-                  <button 
-                    className="word-details-btn" 
+                  <button
+                    type="button"
+                    className="word-details-btn"
                     title="Szczegółowe objaśnienie słownikowe"
                     onClick={() => setExplanationWord(selectedWord)}
                   >
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      Więcej szczegółów
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                        <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
-                      </svg>
-                    </span>
+                    Więcej szczegółów 💡
                   </button>
                 </div>
                 {isTranslating ? (
@@ -1385,11 +1801,12 @@ function MediaBuddy({ user }) {
                   <>
                     <p className="translated-text">{wordTranslation}</p>
                     {wordSentenceTranslation && (
-                      <p className="translated-sentence-text" style={{ fontSize: "0.85rem", fontStyle: "italic", color: "var(--slate-500)", marginTop: "4px", marginBottom: "8px", lineHeight: "1.35" }}>
+                      <p className="translated-sentence-text">
                         {wordSentenceTranslation}
                       </p>
                     )}
                     <button
+                      type="button"
                       className={`btn-save-vocabulary ${isSaved ? "saved" : ""}`}
                       onClick={handleSaveWord}
                       disabled={isSaved}
@@ -1401,70 +1818,28 @@ function MediaBuddy({ user }) {
               </div>
             )}
 
-            {/* Segment phrase translation (if active segment is present) */}
-            {activeSegmentIndex !== -1 ? (
-              <div className="phrase-translate-result animate-fade-in">
-                <div className="phrase-header-row">
-                  <span className="phrase-label">Tłumaczenie całej frazy:</span>
-                  {!isPlaying && (
-                    <span className="phrase-status-badge">Wideo wstrzymane ⏸</span>
-                  )}
-                </div>
-                <p className="phrase-english-text">
-                  "{currentVideo.transcript[activeSegmentIndex].text}"
-                </p>
-                {isTranslatingSegment ? (
-                  <div className="mini-loader">Tłumaczenie całej frazy...</div>
-                ) : segmentTranslation ? (
-                  <>
-                    <p className="translated-text phrase-translated">{segmentTranslation}</p>
-                    <button
-                      className={`btn-save-vocabulary ${isSegmentSaved ? "saved" : ""}`}
-                      onClick={handleSaveSegmentPhrase}
-                      disabled={isSegmentSaved}
-                      style={{ background: "linear-gradient(135deg, var(--secondary-500), var(--secondary-600))", borderColor: "transparent" }}
-                    >
-                      {isSegmentSaved ? "Zapisano frazę! ✓" : "Zapisz całą frazę (+)"}
-                    </button>
-                  </>
-                ) : (
-                  <p className="phrase-placeholder-text" style={{ fontSize: "0.9rem", color: "var(--slate-500)", fontStyle: "italic" }}>
-                    Zatrzymaj wideo lub kliknij linię tekstu, aby automatycznie wyświetlić tłumaczenie całej frazy.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="dictionary-placeholder">
-                Kliknij słowo w transkrypcji po prawej, aby je przetłumaczyć, lub zatrzymaj wideo, aby zobaczyć tłumaczenie całej wypowiedzi.
-              </p>
-            )}
-
-            {/* Notebook Words & Exercise */}
-            <div className="media-notebook-section" style={{ marginTop: "2rem", borderTop: "1px solid var(--border)", paddingTop: "1.5rem" }}>
-              <h4 style={{ fontSize: "1rem", marginBottom: "1rem", color: "var(--slate-800)" }}>
-                Słówka z tego tekstu ({notebookWords.length})
+            {/* Interactive Notebook Exercise Section */}
+            <div className="media-notebook-section">
+              <h4 className="notebook-section-title">
+                Słówka z tego materiału w Twoim notesie ({notebookWords.length})
               </h4>
-              
+
               {notebookWords.length > 0 ? (
                 <>
-                  <div className="media-notebook-list" style={{ maxHeight: "150px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.5rem" }}>
+                  <div className="media-notebook-list">
                     {notebookWords.map((word, idx) => (
-                      <div key={idx} style={{ padding: "0.5rem", background: "var(--slate-50)", borderRadius: "8px", fontSize: "0.9rem" }}>
+                      <div key={idx} className="notebook-word-item">
                         <strong>{word.original}</strong> — {word.translated}
                       </div>
                     ))}
                   </div>
 
                   {!exerciseData && !exerciseLoading && (
-                    <button 
+                    <button
+                      type="button"
                       onClick={handleStartExercise}
-                      className="btn-primary" 
-                      style={{ width: "100%", justifyContent: "center", padding: "0.75rem" }}
+                      className="btn-exercise-launch"
                     >
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: "8px" }}>
-                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-                        <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/>
-                      </svg>
                       Przećwicz te słówka (Tłumaczenie zdania)
                     </button>
                   )}
@@ -1474,20 +1849,20 @@ function MediaBuddy({ user }) {
                   )}
 
                   {exerciseData && (
-                    <div className="exercise-container glass-panel" style={{ marginTop: "1rem", padding: "1rem", background: "var(--primary-50)", border: "1px solid var(--primary-200)" }}>
-                      <h5 style={{ color: "var(--primary-700)", marginBottom: "0.5rem" }}>Przetłumacz na angielski:</h5>
-                      <p style={{ fontSize: "1.05rem", marginBottom: "1rem", fontWeight: "500" }}>{exerciseData.sentence_pl}</p>
-                      
-                      <div style={{ marginBottom: "1rem" }}>
+                    <div className="exercise-container">
+                      <h5 className="exercise-heading">Przetłumacz na angielski:</h5>
+                      <p className="exercise-prompt">{exerciseData.sentence_pl}</p>
+
+                      <div style={{ marginBottom: "0.75rem" }}>
                         {showExerciseHint ? (
-                          <p style={{ fontSize: "0.85rem", color: "var(--slate-600)" }}>
+                          <p className="exercise-hint-text">
                             Użyj słów: <strong>{exerciseData.target_words.join(", ")}</strong>
                           </p>
                         ) : (
-                          <button 
+                          <button
+                            type="button"
                             onClick={() => setShowExerciseHint(true)}
-                            className="btn-secondary"
-                            style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
+                            className="btn-hint"
                           >
                             Pokaż podpowiedź ze słówkami
                           </button>
@@ -1498,32 +1873,31 @@ function MediaBuddy({ user }) {
                         value={exerciseTranslation}
                         onChange={e => setExerciseTranslation(e.target.value)}
                         placeholder="Wpisz swoje tłumaczenie tutaj..."
-                        className="premium-input"
-                        style={{ minHeight: "80px", marginBottom: "1rem", resize: "vertical" }}
+                        className="exercise-textarea"
                         disabled={exerciseChecking || exerciseResult}
                       />
 
                       {!exerciseResult ? (
-                        <button 
-                          onClick={handleCheckExercise} 
-                          className="btn-primary" 
+                        <button
+                          type="button"
+                          onClick={handleCheckExercise}
+                          className="btn-exercise-check"
                           disabled={!exerciseTranslation.trim() || exerciseChecking}
-                          style={{ width: "100%", justifyContent: "center" }}
                         >
                           {exerciseChecking ? "Sprawdzanie..." : "Sprawdź tłumaczenie"}
                         </button>
                       ) : (
-                        <div className={`exercise-result ${exerciseResult.status}`} style={{ marginTop: "1rem", padding: "1rem", borderRadius: "8px", background: exerciseResult.status === 'correct' ? '#ecfdf5' : exerciseResult.status === 'acceptable' ? '#fffbeb' : '#fef2f2', border: `1px solid ${exerciseResult.status === 'correct' ? '#10b981' : exerciseResult.status === 'acceptable' ? '#f59e0b' : '#ef4444'}` }}>
-                          <h5 style={{ color: exerciseResult.status === 'correct' ? '#047857' : exerciseResult.status === 'acceptable' ? '#b45309' : '#b91c1c', marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <div className={`exercise-result ${exerciseResult.status}`}>
+                          <h5>
                             {exerciseResult.status === 'correct' && "✅ Rewelacja!"}
                             {exerciseResult.status === 'acceptable' && "⚠️ Dobrze, ale można lepiej!"}
                             {exerciseResult.status === 'incorrect' && "❌ Spróbuj jeszcze raz!"}
                           </h5>
-                          <p style={{ fontSize: "0.95rem", whiteSpace: "pre-wrap", color: "var(--slate-800)" }}>{exerciseResult.feedback}</p>
-                          <button 
+                          <p>{exerciseResult.feedback}</p>
+                          <button
+                            type="button"
                             onClick={handleStartExercise}
-                            className="btn-secondary" 
-                            style={{ width: "100%", justifyContent: "center", marginTop: "1rem" }}
+                            className="btn-exercise-next"
                           >
                             Następne ćwiczenie
                           </button>
@@ -1533,7 +1907,7 @@ function MediaBuddy({ user }) {
                   )}
                 </>
               ) : (
-                <p style={{ fontSize: "0.9rem", color: "var(--slate-500)", fontStyle: "italic" }}>
+                <p className="notebook-empty-hint">
                   Zapisuj nowe słówka podczas oglądania, aby generować z nich ćwiczenia tłumaczeniowe.
                 </p>
               )}
@@ -1541,109 +1915,191 @@ function MediaBuddy({ user }) {
           </div>
         </div>
 
-        {/* Right Side: Transcript & Joke Explanation */}
+        {/* Right Column: Synced transcript — Figma Design */}
         <div className="media-right-column">
-          
-          {/* Transcript Panel */}
-          <div className="transcript-panel glass-panel">
-            <div className="panel-header">
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                  <path d="M12 2a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                </svg>
-                Transkrypcja stand-upu
-              </span>
+          <div className="synced-transcript-card">
+            <div className="synced-transcript-header">
+              <h3 className="synced-transcript-title">Synced transcript</h3>
               <button
                 type="button"
-                className={`autoscroll-toggle-btn ${autoScrollEnabled ? "active" : ""}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  console.log("Autoscroll toggle button clicked! Current state:", autoScrollEnabled, " -> Toggling to:", !autoScrollEnabled);
-                  setAutoScrollEnabled(!autoScrollEnabled);
-                }}
-                title={autoScrollEnabled ? "Wyłącz automatyczne przewijanie napisów" : "Włącz automatyczne przewijanie napisów"}
+                className="copy-transcript-btn"
+                onClick={handleCopyTranscript}
+                title="Kopiuj transkrypcję do schowka"
               >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    {autoScrollEnabled ? (
-                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                    ) : (
-                      <>
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                      </>
-                    )}
-                  </svg>
-                  Autoscroll: {autoScrollEnabled ? "WŁ" : "WYŁ"}
-                </span>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                {copiedToast && <span className="copy-toast-badge animate-fade-in">Skopiowano!</span>}
               </button>
             </div>
-            <div className="transcript-list">
+
+            <div className="synced-transcript-controls">
+              <button
+                type="button"
+                className={`transcript-toggle-pill ${showBilingual ? "active" : ""}`}
+                onClick={() => setShowBilingual(prev => !prev)}
+              >
+                {showBilingual ? "English + Polski" : "Tylko angielski"}
+              </button>
+
+              <button
+                type="button"
+                className={`transcript-toggle-pill ${autoScrollEnabled ? "active" : ""}`}
+                onClick={() => setAutoScrollEnabled(prev => !prev)}
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  {autoScrollEnabled ? (
+                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                  ) : (
+                    <>
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                    </>
+                  )}
+                </svg>
+                Auto-scroll {autoScrollEnabled ? "on" : "off"}
+              </button>
+            </div>
+
+            <div className="synced-transcript-list" ref={transcriptListRef}>
               {(currentVideo.transcript || []).length > 0 ? (
-                (currentVideo.transcript || []).map((seg, idx) => (
-                  <div
-                    key={idx}
-                    data-index={idx}
-                    className={`transcript-segment-card ${activeSegmentIndex === idx ? "active" : ""}`}
-                    onClick={() => handleCardClick(seg, idx)}
-                  >
-                    <div className="segment-left-col">
-                      <span className="segment-time-badge">
-                        {Math.floor(seg.start / 60)}:{(Math.floor(seg.start) % 60).toString().padStart(2, "0")}
-                      </span>
-                    </div>
-                    <div className="segment-content">
-                      <p className="segment-text-line">{renderInteractiveText(seg.text, idx)}</p>
-                      <div className="segment-actions">
-                        <button
-                          className="segment-action-btn practice"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePracticePronunciation(seg.text);
-                          }}
-                          title="Przećwicz wymowę i intonację z mikrofonem"
-                        >
-                          Ćwicz wymowę 🎤
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-transcript-container" style={{ padding: '2rem', textAlign: 'center' }}>
-                  <h4 style={{ marginBottom: '1rem', color: 'var(--slate-800)' }}>Brak transkrypcji</h4>
-                  <p style={{ marginBottom: '1.5rem', color: 'var(--slate-600)' }}>Ten film nie posiada angielskich napisów. Możesz wgrać własny plik .srt lub wkleić jego zawartość.</p>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
-                    <label className="btn-save-vocabulary" style={{ cursor: 'pointer', background: 'var(--primary-600)', color: 'white', padding: '0.5rem 1rem', borderRadius: '4px' }}>
-                      Załaduj plik .srt
-                      <input type="file" accept=".srt" onChange={handleSrtUpload} style={{ display: 'none' }} />
-                    </label>
-                    
-                    <span style={{ color: 'var(--slate-400)' }}>lub wklej tekst SRT</span>
-                    
-                    <textarea 
-                      value={pastedSrt} 
-                      onChange={(e) => setPastedSrt(e.target.value)}
-                      placeholder="1&#10;00:00:01,000 --> 00:00:04,000&#10;Przykładowy tekst..."
-                      style={{ width: '100%', minHeight: '120px', padding: '0.75rem', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'monospace' }}
-                    />
-                    <button 
-                      className="btn-save-vocabulary" 
-                      onClick={handlePastedSrt}
-                      style={{ width: '100%', background: 'linear-gradient(135deg, var(--secondary-500), var(--secondary-600))', color: 'white' }}
+                (currentVideo.transcript || []).map((seg, idx) => {
+                  const isActive = activeSegmentIndex === idx;
+                  const segTime = formatTime(seg.start);
+                  const translation = translationsCache[idx] || (isActive ? segmentTranslation : "");
+                  return (
+                    <div
+                      key={idx}
+                      data-index={idx}
+                      className={`synced-segment-card ${isActive ? "active" : ""}`}
+                      onClick={() => handleCardClick(seg, idx)}
                     >
-                      Wgraj wklejone napisy
-                    </button>
-                  </div>
+                      <div className="synced-segment-top-row">
+                        <span className={`synced-time-badge ${isActive ? "active-time" : ""}`}>
+                          {isActive ? `${segTime} · Playing now` : segTime}
+                        </span>
+                        <div className="synced-segment-actions">
+                          <button
+                            type="button"
+                            className="synced-action-icon-btn"
+                            onClick={(e) => handleBookmarkSegment(e, seg, idx)}
+                            title="Zapisz to zdanie do słownika"
+                          >
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill={isSegmentSaved && isActive ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className="synced-action-icon-btn mic"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePracticePronunciation(seg.text);
+                            }}
+                            title="Ćwicz wymowę tego zdania"
+                          >
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                              <line x1="12" y1="19" x2="12" y2="22" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="synced-english-text">
+                        {renderInteractiveText(seg.text, idx)}
+                      </p>
+
+                      {showBilingual && (
+                        <p className="synced-polish-text">
+                          {translation || <span className="translation-empty">Kliknij zdanie, aby zobaczyć tłumaczenie</span>}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="empty-transcript-container">
+                  <h4>Brak transkrypcji</h4>
+                  <p>Ten film nie posiada napisów. Dodaj plik .srt przez przycisk „Add media”.</p>
                 </div>
               )}
             </div>
+
+            {/* Bottom Sticky Action Button — Figma Design */}
+            <div className="synced-transcript-footer">
+              <button
+                type="button"
+                className={`btn-save-sticky-word ${isSaved ? "saved" : ""}`}
+                disabled={!selectedWord || isSaved}
+                onClick={handleSaveWord}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                </svg>
+                {selectedWord
+                  ? (isSaved ? `Zapisano "${selectedWord}" ✓` : `Save "${selectedWord}"`)
+                  : "Wybierz słowo w transkrypcji"}
+              </button>
+            </div>
           </div>
         </div>
-
       </div>
+
+      {/* Add Media Modal */}
+      {showAddMediaModal && (
+        <div className="media-modal-backdrop animate-fade-in" onClick={() => setShowAddMediaModal(false)}>
+          <div className="media-modal-card glass-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="media-modal-header">
+              <h3>Dodaj własne media</h3>
+              <button type="button" className="drawer-close-btn" onClick={() => setShowAddMediaModal(false)}>✕</button>
+            </div>
+
+            <div className="media-modal-body">
+              <div className="modal-input-group">
+                <label>Link do YouTube:</label>
+                <form onSubmit={handleLoadCustomVideo} className="modal-form-row">
+                  <input
+                    type="text"
+                    className="modal-input"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    value={customUrl}
+                    onChange={(e) => setCustomUrl(e.target.value)}
+                  />
+                  <button type="submit" className="modal-action-btn" disabled={isLoadingCustom}>
+                    Załaduj
+                  </button>
+                </form>
+              </div>
+
+              <div className="modal-divider"><span>lub napisy</span></div>
+
+              <div className="modal-input-group">
+                <label>Wgraj plik z napisami (.srt):</label>
+                <label className="modal-file-upload-label">
+                  Wybierz plik .srt z dysku
+                  <input type="file" accept=".srt" onChange={handleSrtUpload} style={{ display: 'none' }} />
+                </label>
+              </div>
+
+              <div className="modal-input-group">
+                <label>Wklej tekst SRT:</label>
+                <textarea
+                  value={pastedSrt}
+                  onChange={(e) => setPastedSrt(e.target.value)}
+                  placeholder="1&#10;00:00:01,000 --> 00:00:04,000&#10;Hello world..."
+                  className="modal-textarea"
+                />
+                <button type="button" className="modal-action-btn full" onClick={handlePastedSrt}>
+                  Zastosuj wklejone napisy
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reused Modals */}
       {showPracticeModal && (
