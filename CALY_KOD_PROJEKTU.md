@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-11 20:41:17
+Wygenerowano: 2026-10-11 21:58:17
 
 ## Spis Treści
 1. `backend/app.py`
@@ -43,72 +43,74 @@ Wygenerowano: 2026-10-11 20:41:17
 39. `frontend/src/components/Notebook/VoiceSessionSummaryModal.js`
 40. `frontend/src/components/Notebook/WordExplanationModal.css`
 41. `frontend/src/components/Notebook/WordExplanationModal.js`
-42. `frontend/src/components/Practice/PracticeMode.css`
-43. `frontend/src/components/Practice/PracticeMode.js`
-44. `frontend/src/components/Reader/Reader.css`
-45. `frontend/src/components/Reader/Reader.js`
-46. `frontend/src/components/Sidebar.css`
-47. `frontend/src/components/Sidebar.js`
-48. `frontend/src/components/Story/SavedStories.css`
-49. `frontend/src/components/Story/SavedStories.js`
-50. `frontend/src/components/Story/StoryGenerator.css`
-51. `frontend/src/components/Story/StoryGenerator.js`
-52. `frontend/src/components/Story/StoryGenerator.test.js`
-53. `frontend/src/components/TopBar.css`
-54. `frontend/src/components/TopBar.js`
-55. `frontend/src/components/Translator/TranslatorDrawer.css`
-56. `frontend/src/components/Translator/TranslatorDrawer.js`
-57. `frontend/src/components/Vocabulary/VocabularyDrawer.css`
-58. `frontend/src/components/Vocabulary/VocabularyDrawer.js`
-59. `frontend/src/components/Vocabulary/VocabularyExerciseModal.js`
-60. `frontend/src/components/Vocabulary/VocabularyView.css`
-61. `frontend/src/components/Vocabulary/VocabularyView.js`
-62. `frontend/src/components/Workspace.css`
-63. `frontend/src/components/Workspace.js`
-64. `frontend/src/config.js`
-65. `frontend/src/globalAudioManager.js`
-66. `frontend/src/index.css`
-67. `frontend/src/index.js`
-68. `frontend/src/services/GeminiLiveClient.js`
-69. `mobile/app.json`
-70. `mobile/assets/expo.icon/icon.json`
-71. `mobile/expo-env.d.ts`
-72. `mobile/package.json`
-73. `mobile/scripts/patch-viewport.py`
-74. `mobile/scripts/reset-project.js`
-75. `mobile/src/app/_layout.tsx`
-76. `mobile/src/app/explore.tsx`
-77. `mobile/src/app/index.tsx`
-78. `mobile/src/components/animated-icon.module.css`
-79. `mobile/src/components/animated-icon.tsx`
-80. `mobile/src/components/animated-icon.web.tsx`
-81. `mobile/src/components/app-tabs.tsx`
-82. `mobile/src/components/app-tabs.web.tsx`
-83. `mobile/src/components/external-link.tsx`
-84. `mobile/src/components/hint-row.tsx`
-85. `mobile/src/components/themed-text.tsx`
-86. `mobile/src/components/themed-view.tsx`
-87. `mobile/src/components/ui/collapsible.tsx`
-88. `mobile/src/components/web-badge.tsx`
-89. `mobile/src/constants/theme.ts`
-90. `mobile/src/constants/transcripts.json`
-91. `mobile/src/global.css`
-92. `mobile/src/hooks/use-color-scheme.ts`
-93. `mobile/src/hooks/use-color-scheme.web.ts`
-94. `mobile/src/hooks/use-theme.ts`
-95. `mobile/src/services/GeminiLiveClient.ts`
-96. `mobile/tsconfig.json`
-97. `firebase.json`
-98. `firebase.temp.json`
-99. `mock_db.json`
-100. `portal/index.html`
-101. `scratch.js`
-102. `test_api.py`
-103. `test_api2.py`
-104. `test_api3.py`
-105. `test_api4.py`
-106. `test_api5.py`
-107. `test_translate.py`
+42. `frontend/src/components/Paywall/PaywallModal.css`
+43. `frontend/src/components/Paywall/PaywallModal.js`
+44. `frontend/src/components/Practice/PracticeMode.css`
+45. `frontend/src/components/Practice/PracticeMode.js`
+46. `frontend/src/components/Reader/Reader.css`
+47. `frontend/src/components/Reader/Reader.js`
+48. `frontend/src/components/Sidebar.css`
+49. `frontend/src/components/Sidebar.js`
+50. `frontend/src/components/Story/SavedStories.css`
+51. `frontend/src/components/Story/SavedStories.js`
+52. `frontend/src/components/Story/StoryGenerator.css`
+53. `frontend/src/components/Story/StoryGenerator.js`
+54. `frontend/src/components/Story/StoryGenerator.test.js`
+55. `frontend/src/components/TopBar.css`
+56. `frontend/src/components/TopBar.js`
+57. `frontend/src/components/Translator/TranslatorDrawer.css`
+58. `frontend/src/components/Translator/TranslatorDrawer.js`
+59. `frontend/src/components/Vocabulary/VocabularyDrawer.css`
+60. `frontend/src/components/Vocabulary/VocabularyDrawer.js`
+61. `frontend/src/components/Vocabulary/VocabularyExerciseModal.js`
+62. `frontend/src/components/Vocabulary/VocabularyView.css`
+63. `frontend/src/components/Vocabulary/VocabularyView.js`
+64. `frontend/src/components/Workspace.css`
+65. `frontend/src/components/Workspace.js`
+66. `frontend/src/config.js`
+67. `frontend/src/globalAudioManager.js`
+68. `frontend/src/index.css`
+69. `frontend/src/index.js`
+70. `frontend/src/services/GeminiLiveClient.js`
+71. `mobile/app.json`
+72. `mobile/assets/expo.icon/icon.json`
+73. `mobile/expo-env.d.ts`
+74. `mobile/package.json`
+75. `mobile/scripts/patch-viewport.py`
+76. `mobile/scripts/reset-project.js`
+77. `mobile/src/app/_layout.tsx`
+78. `mobile/src/app/explore.tsx`
+79. `mobile/src/app/index.tsx`
+80. `mobile/src/components/animated-icon.module.css`
+81. `mobile/src/components/animated-icon.tsx`
+82. `mobile/src/components/animated-icon.web.tsx`
+83. `mobile/src/components/app-tabs.tsx`
+84. `mobile/src/components/app-tabs.web.tsx`
+85. `mobile/src/components/external-link.tsx`
+86. `mobile/src/components/hint-row.tsx`
+87. `mobile/src/components/themed-text.tsx`
+88. `mobile/src/components/themed-view.tsx`
+89. `mobile/src/components/ui/collapsible.tsx`
+90. `mobile/src/components/web-badge.tsx`
+91. `mobile/src/constants/theme.ts`
+92. `mobile/src/constants/transcripts.json`
+93. `mobile/src/global.css`
+94. `mobile/src/hooks/use-color-scheme.ts`
+95. `mobile/src/hooks/use-color-scheme.web.ts`
+96. `mobile/src/hooks/use-theme.ts`
+97. `mobile/src/services/GeminiLiveClient.ts`
+98. `mobile/tsconfig.json`
+99. `firebase.json`
+100. `firebase.temp.json`
+101. `mock_db.json`
+102. `portal/index.html`
+103. `scratch.js`
+104. `test_api.py`
+105. `test_api2.py`
+106. `test_api3.py`
+107. `test_api4.py`
+108. `test_api5.py`
+109. `test_translate.py`
 
 ---
 
@@ -136,6 +138,8 @@ import random
 import json
 import re
 import urllib.parse
+from datetime import datetime, timedelta
+import stripe
 
 import requests
 from openai import OpenAI
@@ -1247,6 +1251,559 @@ def admin_stats():
         return jsonify({"error": f"Błąd pobierania statystyk: {str(e)}"}), 500
 
 
+# ==========================================
+# HYBRID TIERED SUBSCRIPTION & FAIR USAGE SYSTEM
+# ==========================================
+
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "").strip()
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
+APP_URL = os.getenv("APP_URL", "https://przemokoduje.com/speakling").strip()
+
+if STRIPE_SECRET_KEY:
+    try:
+        stripe.api_key = STRIPE_SECRET_KEY
+    except Exception as stripe_init_err:
+        print(f"Błąd inicjalizacji klucza Stripe: {stripe_init_err}")
+
+# Definicje pakietów subskrypcyjnych (Fair Usage Tiered SaaS)
+SUBSCRIPTION_PLANS = {
+    "starter": {
+        "id": "starter",
+        "name": "Starter (Free)",
+        "price_pln": 0,
+        "billing_period": "darmowy na zawsze",
+        "live_minutes_limit": 5.0,  # 5 minut demo na start
+        "trial_days": 0,
+        "can_access_mastery": False,
+        "can_access_media": False,
+        "can_access_industry_modes": False,
+        "can_buy_topup": False,
+        "tts_model": "edge_tts",
+        "features": [
+            "Nieograniczone czytanie historii",
+            "Interaktywny słownik (Word Bank)",
+            "Fiszki i podstawowe quizy powtórkowe",
+            "1 krótka sesja demo Live Chat (5 min na start)",
+            "Synteza mowy modelami ekonomicznymi (Edge TTS)"
+        ]
+    },
+    "pro": {
+        "id": "pro",
+        "name": "Pro",
+        "price_pln": 49,
+        "billing_period": "49 zł / miesięcznie",
+        "live_minutes_limit": 150.0,  # 150 minut Live Orb miesięcznie
+        "trial_days": 7,
+        "can_access_mastery": True,
+        "can_access_media": True,
+        "can_access_industry_modes": False,
+        "can_buy_topup": False,
+        "tts_model": "premium",
+        "features": [
+            "Wszystko z planu Starter",
+            "150 minut rozmów głosowych Live Orb miesięcznie",
+            "Pełny dostęp do modułu Mastery Path (3-etapowy trening)",
+            "Media Buddy (analiza i nauka z filmami YouTube)",
+            "Inteligentne raporty postępów i nielimitowany eksport słownictwa",
+            "Wysokiej jakości synteza głosu lektora",
+            "7-dniowy darmowy okres próbny (Trial)"
+        ]
+    },
+    "intensive": {
+        "id": "intensive",
+        "name": "Intensive / Fluency",
+        "price_pln": 99,
+        "billing_period": "99 zł / miesięcznie",
+        "live_minutes_limit": 400.0,  # 400 minut Live Orb miesięcznie
+        "trial_days": 7,
+        "can_access_mastery": True,
+        "can_access_media": True,
+        "can_access_industry_modes": True,
+        "can_buy_topup": True,
+        "tts_model": "premium",
+        "features": [
+            "Wszystko z planu Pro (Mastery Path + Media Buddy + Eksport)",
+            "400 minut rozmów głosowych Live Orb miesięcznie",
+            "Dedykowane symulacje branżowe (Business English, Tech Interview)",
+            "Opcja dokupienia paczki dodatkowych 60 minut (+29 zł)",
+            "Najwyższy priorytet połączeń i najnowsze modele audio",
+            "7-dniowy darmowy okres próbny (Trial)"
+        ]
+    }
+}
+
+
+def get_user_subscription(email):
+    """Pobiera lub inicjalizuje stan subskrypcji użytkownika z bazy danych."""
+    if not email:
+        return {
+            "tier": "starter",
+            "status": "free",
+            "name": SUBSCRIPTION_PLANS["starter"]["name"],
+            "live_minutes_used": 0.0,
+            "live_minutes_limit": SUBSCRIPTION_PLANS["starter"]["live_minutes_limit"],
+            "extra_live_minutes": 0.0,
+            "minutes_remaining": SUBSCRIPTION_PLANS["starter"]["live_minutes_limit"],
+            "total_minutes_allowed": SUBSCRIPTION_PLANS["starter"]["live_minutes_limit"],
+            "can_access_mastery": False,
+            "can_access_media": False,
+            "can_access_industry_modes": False,
+            "can_buy_topup": False,
+            "trial_ends_at": None,
+            "current_period_end": None,
+            "is_admin": False
+        }
+
+    admin = is_admin(email)
+    user_data = {}
+    try:
+        user_ref = db.collection('users').document(email).get()
+        if user_ref.exists:
+            user_data = user_ref.to_dict() or {}
+    except Exception as e:
+        print(f"Błąd odczytu subskrypcji dla {email}: {e}")
+
+    sub_data = user_data.get('subscription') or {}
+    tier = sub_data.get('tier') or ('intensive' if admin else 'starter')
+    if tier not in SUBSCRIPTION_PLANS:
+        tier = 'starter'
+
+    plan = SUBSCRIPTION_PLANS[tier]
+    status = sub_data.get('status') or ('active' if admin else 'free')
+
+    # Sprawdzenie czy 7-dniowy okres próbny nie wygasł
+    trial_ends_at = sub_data.get('trial_ends_at')
+    if status == 'trialing' and trial_ends_at:
+        try:
+            t_end = datetime.fromisoformat(trial_ends_at) if isinstance(trial_ends_at, str) else trial_ends_at
+            if datetime.utcnow() > t_end and not sub_data.get('stripe_subscription_id'):
+                status = 'expired'
+                tier = 'starter'
+                plan = SUBSCRIPTION_PLANS['starter']
+        except Exception as date_err:
+            print(f"Błąd parsowania daty końca triala: {date_err}")
+
+    live_minutes_used = float(sub_data.get('live_minutes_used', 0.0))
+    extra_live_minutes = float(sub_data.get('extra_live_minutes', 0.0))
+
+    if admin and tier == 'intensive':
+        live_minutes_limit = 99999.0
+    else:
+        live_minutes_limit = float(sub_data.get('live_minutes_limit', plan['live_minutes_limit']))
+
+    total_allowed = live_minutes_limit + extra_live_minutes
+    minutes_remaining = max(0.0, round(total_allowed - live_minutes_used, 2))
+
+    return {
+        "tier": tier,
+        "status": status,
+        "name": plan["name"],
+        "price_pln": plan["price_pln"],
+        "live_minutes_used": round(live_minutes_used, 2),
+        "live_minutes_limit": live_minutes_limit,
+        "extra_live_minutes": round(extra_live_minutes, 2),
+        "minutes_remaining": minutes_remaining,
+        "total_minutes_allowed": round(total_allowed, 2),
+        "can_access_mastery": plan["can_access_mastery"] or admin,
+        "can_access_media": plan["can_access_media"] or admin,
+        "can_access_industry_modes": plan["can_access_industry_modes"] or admin,
+        "can_buy_topup": plan["can_buy_topup"] or admin,
+        "trial_ends_at": str(trial_ends_at) if trial_ends_at else None,
+        "current_period_end": str(sub_data.get('current_period_end', '')),
+        "stripe_customer_id": sub_data.get('stripe_customer_id'),
+        "has_stripe_subscription": bool(sub_data.get('stripe_subscription_id')),
+        "is_admin": admin
+    }
+
+
+def update_user_subscription(email, updates):
+    """Aktualizuje dane subskrypcyjne użytkownika w bazie."""
+    if not email or 'db' not in globals() or db is None:
+        return
+    try:
+        user_ref = db.collection('users').document(email).get()
+        user_data = user_ref.to_dict() if user_ref.exists else {}
+        sub = user_data.get('subscription') or {}
+        sub.update(updates)
+        db.collection('users').document(email).set({'subscription': sub}, merge=True)
+    except Exception as e:
+        print(f"Błąd aktualizacji subskrypcji użytkownika {email}: {e}")
+
+
+@app.route("/api/subscription/status", methods=['GET'])
+def get_subscription_status():
+    """Zwraca bieżący stan subskrypcji zalogowanego użytkownika oraz konfigurację planów."""
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({
+            "subscription": get_user_subscription(None),
+            "plans": SUBSCRIPTION_PLANS,
+            "stripe_configured": bool(STRIPE_SECRET_KEY)
+        }), 200
+
+    sub = get_user_subscription(user_email)
+    return jsonify({
+        "subscription": sub,
+        "plans": SUBSCRIPTION_PLANS,
+        "stripe_configured": bool(STRIPE_SECRET_KEY),
+        "stripe_publishable_key": STRIPE_PUBLISHABLE_KEY
+    }), 200
+
+
+@app.route("/api/subscription/track-live-time", methods=['POST'])
+def track_subscription_live_time():
+    """Śledzi czas trwania sesji Live i odlicza minuty z twardego limitu w czasie rzeczywistym."""
+    user_email = get_user_from_request()
+    req_data = request.get_json(silent=True) or {}
+    if not user_email:
+        user_email = req_data.get("user_email") or "guest@speakling.ai"
+
+    seconds = float(req_data.get("duration_seconds", 0) or 0)
+    minutes = float(req_data.get("minutes", 0) or 0)
+    if seconds > 0:
+        minutes += seconds / 60.0
+
+    if minutes <= 0:
+        sub = get_user_subscription(user_email)
+        return jsonify({
+            "success": True,
+            "minutes_used": sub["live_minutes_used"],
+            "minutes_remaining": sub["minutes_remaining"],
+            "quota_exceeded": sub["minutes_remaining"] <= 0
+        }), 200
+
+    sub = get_user_subscription(user_email)
+    new_used = round(sub.get("live_minutes_used", 0.0) + minutes, 2)
+    update_user_subscription(user_email, {"live_minutes_used": new_used})
+    
+    updated_sub = get_user_subscription(user_email)
+    return jsonify({
+        "success": True,
+        "minutes_used": updated_sub["live_minutes_used"],
+        "minutes_remaining": updated_sub["minutes_remaining"],
+        "total_minutes_allowed": updated_sub["total_minutes_allowed"],
+        "quota_exceeded": updated_sub["minutes_remaining"] <= 0
+    }), 200
+
+
+@app.route("/api/stripe/create-checkout-session", methods=['POST'])
+def create_stripe_checkout_session():
+    """Tworzy sesję Stripe Checkout dla planu Pro, Intensive (z 7-dniowym trialem) lub doładowania Top-up."""
+    user_email = get_user_from_request()
+    req_data = request.get_json(silent=True) or {}
+    if not user_email:
+        user_email = req_data.get("user_email")
+    if not user_email:
+        return jsonify({"error": "Wymagane zalogowanie, aby rozpocząć subskrypcję."}), 401
+
+    plan = req_data.get("plan", "pro").lower().strip()
+    return_url = req_data.get("return_url") or APP_URL
+
+    # Tryb symulacyjny (gdy klucz Stripe nie został skonfigurowany w środowisku produkcyjnym)
+    if not STRIPE_SECRET_KEY:
+        now = datetime.utcnow()
+        if plan == "topup_60":
+            sub = get_user_subscription(user_email)
+            current_extra = sub.get("extra_live_minutes", 0.0)
+            update_user_subscription(user_email, {
+                "extra_live_minutes": current_extra + 60.0
+            })
+            return jsonify({
+                "demo_mode": True,
+                "success": True,
+                "message": "Pomyślnie dodano 60 minut rozmów Live Orb do Twojego konta!",
+                "subscription": get_user_subscription(user_email)
+            }), 200
+        else:
+            target_plan = plan if plan in SUBSCRIPTION_PLANS and plan != "starter" else "pro"
+            trial_end = (now + timedelta(days=7)).isoformat()
+            limit = SUBSCRIPTION_PLANS[target_plan]["live_minutes_limit"]
+            update_user_subscription(user_email, {
+                "tier": target_plan,
+                "status": "trialing",
+                "trial_ends_at": trial_end,
+                "live_minutes_limit": limit,
+                "billing_cycle_start": now.isoformat()
+            })
+            return jsonify({
+                "demo_mode": True,
+                "success": True,
+                "message": f"Aktywowano 7-dniowy darmowy okres próbny pakietu {SUBSCRIPTION_PLANS[target_plan]['name']}!",
+                "subscription": get_user_subscription(user_email)
+            }), 200
+
+    try:
+        if plan == "topup_60":
+            # Jednorazowa paczka 60 minut (29 zł)
+            session = stripe.checkout.Session.create(
+                mode="payment",
+                customer_email=user_email,
+                line_items=[{
+                    "price_data": {
+                        "currency": "pln",
+                        "product_data": {
+                            "name": "Paczka dodatkowych 60 minut Live Orb",
+                            "description": "Jednorazowe doładowanie 60 minut rozmów z lektorem AI w Speakling"
+                        },
+                        "unit_amount": 2900  # 29.00 PLN
+                    },
+                    "quantity": 1
+                }],
+                metadata={
+                    "user_email": user_email,
+                    "plan": "topup_60",
+                    "extra_minutes": "60"
+                },
+                success_url=f"{return_url}?payment=success&topup=60&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{return_url}?payment=cancelled"
+            )
+        else:
+            # Subskrypcja z 7-dniowym darmowym okresem próbnym
+            target_plan = plan if plan in ["pro", "intensive"] else "pro"
+            plan_info = SUBSCRIPTION_PLANS[target_plan]
+            unit_amount = plan_info["price_pln"] * 100
+
+            session = stripe.checkout.Session.create(
+                mode="subscription",
+                customer_email=user_email,
+                subscription_data={
+                    "trial_period_days": 7
+                },
+                line_items=[{
+                    "price_data": {
+                        "currency": "pln",
+                        "product_data": {
+                            "name": f"Speakling {plan_info['name']}",
+                            "description": f"{plan_info['name']} — {plan_info['features'][1]} (7-dniowy darmowy okres próbny)"
+                        },
+                        "unit_amount": unit_amount,
+                        "recurring": {"interval": "month"}
+                    },
+                    "quantity": 1
+                }],
+                metadata={
+                    "user_email": user_email,
+                    "plan": target_plan
+                },
+                success_url=f"{return_url}?payment=success&plan={target_plan}&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{return_url}?payment=cancelled"
+            )
+
+        return jsonify({
+            "checkout_url": session.url,
+            "session_id": session.id
+        }), 200
+
+    except Exception as e:
+        print(f"Stripe Checkout Error: {e}")
+        return jsonify({"error": f"Błąd tworzenia płatności Stripe: {str(e)}"}), 500
+
+
+@app.route("/api/stripe/verify-session", methods=['POST'])
+def verify_stripe_session():
+    """Weryfikuje sesję Checkout po powrocie z bramki Stripe i natychmiast aktywuje pakiet użytkownika."""
+    user_email = get_user_from_request()
+    req_data = request.get_json(silent=True) or {}
+    session_id = req_data.get("session_id", "").strip()
+
+    if not session_id or not STRIPE_SECRET_KEY:
+        return jsonify({"success": False, "message": "Brak sesji do weryfikacji"}), 400
+
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+        email = session.metadata.get("user_email") or user_email or (session.customer_details.email if session.customer_details else None)
+        plan = session.metadata.get("plan", "pro")
+
+        if email:
+            now = datetime.utcnow()
+            if plan == "topup_60":
+                sub = get_user_subscription(email)
+                current_extra = sub.get("extra_live_minutes", 0.0)
+                update_user_subscription(email, {
+                    "extra_live_minutes": current_extra + 60.0
+                })
+            else:
+                target_plan = plan if plan in ["pro", "intensive"] else "pro"
+                trial_end = (now + timedelta(days=7)).isoformat()
+                limit = SUBSCRIPTION_PLANS[target_plan]["live_minutes_limit"]
+                update_user_subscription(email, {
+                    "tier": target_plan,
+                    "status": "trialing" if session.subscription else "active",
+                    "trial_ends_at": trial_end,
+                    "live_minutes_limit": limit,
+                    "stripe_customer_id": session.customer,
+                    "stripe_subscription_id": session.subscription,
+                    "billing_cycle_start": now.isoformat()
+                })
+
+            return jsonify({
+                "success": True,
+                "plan": plan,
+                "subscription": get_user_subscription(email)
+            }), 200
+
+        return jsonify({"success": False, "error": "Nie odnaleziono adresu email sesji"}), 400
+
+    except Exception as e:
+        print(f"Błąd weryfikacji sesji Stripe: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/stripe/create-portal-session", methods=['POST'])
+def create_stripe_portal_session():
+    """Otwiera Stripe Customer Portal do zarządzania płatnościami, kartą i fakturami."""
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Wymagane zalogowanie"}), 401
+
+    sub = get_user_subscription(user_email)
+    customer_id = sub.get("stripe_customer_id")
+
+    if not STRIPE_SECRET_KEY or not customer_id:
+        return jsonify({
+            "error": "Brak podpiętego klienta Stripe dla tego konta.",
+            "message": "Nie odnaleziono aktywnego identyfikatora klienta Stripe. Możesz zarządzać planem bezpośrednio w aplikacji."
+        }), 400
+
+    try:
+        portal_session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=APP_URL
+        )
+        return jsonify({"portal_url": portal_session.url}), 200
+    except Exception as e:
+        print(f"Stripe Portal Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/stripe/webhook", methods=['POST'])
+def stripe_webhook():
+    """Obsługuje zdarzenia Stripe Webhook (potwierdzenie płatności, odnowienia, anulowanie subskrypcji)."""
+    payload = request.data
+    sig_header = request.headers.get("Stripe-Signature", "")
+
+    if STRIPE_WEBHOOK_SECRET:
+        try:
+            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        except Exception as e:
+            print(f"Błąd weryfikacji podpisu Stripe Webhook: {e}")
+            return jsonify({"error": "Nieprawidłowy podpis"}), 400
+    else:
+        try:
+            event = json.loads(payload.decode('utf-8'))
+        except Exception:
+            return jsonify({"error": "Nieprawidłowy payload"}), 400
+
+    event_type = event.get("type", "")
+    data_object = event.get("data", {}).get("object", {})
+
+    print(f"Stripe Webhook odebrany: {event_type}")
+
+    if event_type == "checkout.session.completed":
+        email = data_object.get("metadata", {}).get("user_email") or (data_object.get("customer_details", {}) or {}).get("email")
+        plan = data_object.get("metadata", {}).get("plan", "pro")
+        customer_id = data_object.get("customer")
+        subscription_id = data_object.get("subscription")
+
+        if email:
+            now = datetime.utcnow()
+            if plan == "topup_60":
+                sub = get_user_subscription(email)
+                current_extra = sub.get("extra_live_minutes", 0.0)
+                update_user_subscription(email, {
+                    "extra_live_minutes": current_extra + 60.0,
+                    "stripe_customer_id": customer_id
+                })
+            else:
+                target_plan = plan if plan in ["pro", "intensive"] else "pro"
+                trial_end = (now + timedelta(days=7)).isoformat()
+                limit = SUBSCRIPTION_PLANS[target_plan]["live_minutes_limit"]
+                update_user_subscription(email, {
+                    "tier": target_plan,
+                    "status": "trialing" if subscription_id else "active",
+                    "trial_ends_at": trial_end,
+                    "live_minutes_limit": limit,
+                    "stripe_customer_id": customer_id,
+                    "stripe_subscription_id": subscription_id,
+                    "billing_cycle_start": now.isoformat()
+                })
+
+    elif event_type in ["customer.subscription.updated", "customer.subscription.deleted"]:
+        subscription_id = data_object.get("id")
+        customer_id = data_object.get("customer")
+        status = data_object.get("status")  # active, trialing, past_due, canceled
+        current_period_end = data_object.get("current_period_end")
+
+        # Szukamy użytkownika po stripe_customer_id
+        if 'db' in globals() and db is not None and customer_id:
+            try:
+                users_matching = db.collection('users').where('subscription.stripe_customer_id', '==', customer_id).limit(1).get()
+                for u_doc in users_matching:
+                    u_email = u_doc.id
+                    updates = {"status": status}
+                    if current_period_end:
+                        updates["current_period_end"] = str(datetime.fromtimestamp(current_period_end))
+                    if status in ["canceled", "unpaid"]:
+                        updates["tier"] = "starter"
+                        updates["live_minutes_limit"] = SUBSCRIPTION_PLANS["starter"]["live_minutes_limit"]
+                    update_user_subscription(u_email, updates)
+            except Exception as find_err:
+                print(f"Błąd wyszukiwania użytkownika po Stripe customer ID: {find_err}")
+
+    elif event_type == "invoice.payment_succeeded":
+        # Miesięczne odnowienie — resetujemy wykorzystane minuty
+        customer_id = data_object.get("customer")
+        if 'db' in globals() and db is not None and customer_id:
+            try:
+                users_matching = db.collection('users').where('subscription.stripe_customer_id', '==', customer_id).limit(1).get()
+                for u_doc in users_matching:
+                    u_email = u_doc.id
+                    update_user_subscription(u_email, {
+                        "live_minutes_used": 0.0,
+                        "status": "active",
+                        "billing_cycle_start": datetime.utcnow().isoformat()
+                    })
+            except Exception as renew_err:
+                print(f"Błąd resetu limitu minut przy odnowieniu faktury: {renew_err}")
+
+    return jsonify({"received": True}), 200
+
+
+@app.route("/api/subscription/simulate-activate", methods=['POST'])
+def simulate_activate_subscription():
+    """Umożliwia błyskawiczne testowanie przełączania pakietów oraz symulacji 7-dniowego okresu próbnego."""
+    user_email = get_user_from_request()
+    req_data = request.get_json(silent=True) or {}
+    if not user_email:
+        user_email = req_data.get("user_email")
+    if not user_email:
+        return jsonify({"error": "Wymagane zalogowanie"}), 401
+
+    tier = req_data.get("tier", "starter").lower().strip()
+    if tier not in SUBSCRIPTION_PLANS:
+        return jsonify({"error": "Nieznany pakiet subskrypcyjny"}), 400
+
+    plan_info = SUBSCRIPTION_PLANS[tier]
+    now = datetime.utcnow()
+    trial_end = (now + timedelta(days=7)).isoformat() if plan_info.get("trial_days") else None
+
+    update_user_subscription(user_email, {
+        "tier": tier,
+        "status": "trialing" if trial_end else ("free" if tier == "starter" else "active"),
+        "trial_ends_at": trial_end,
+        "live_minutes_limit": plan_info["live_minutes_limit"],
+        "live_minutes_used": 0.0,
+        "billing_cycle_start": now.isoformat()
+    })
+
+    return jsonify({
+        "success": True,
+        "message": f"Pomyślnie zaktualizowano pakiet do: {plan_info['name']}",
+        "subscription": get_user_subscription(user_email)
+    }), 200
+
+
 @app.route("/api/register", methods=['POST'])
 def register():
     if 'db' not in globals() or db is None:
@@ -1267,11 +1824,21 @@ def register():
 
         # Zapisz użytkownika
         pw_hash = hash_password(password)
+        now_iso = datetime.utcnow().isoformat()
+        init_sub = {
+            'tier': 'starter',
+            'status': 'free',
+            'live_minutes_used': 0.0,
+            'live_minutes_limit': SUBSCRIPTION_PLANS['starter']['live_minutes_limit'],
+            'extra_live_minutes': 0.0,
+            'billing_cycle_start': now_iso
+        }
         db.collection('users').document(email).set({
             'email': email,
             'full_name': full_name,
             'password_hash': pw_hash,
-            'created_at': firestore.SERVER_TIMESTAMP
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'subscription': init_sub
         })
 
         # Utwórz sesję
@@ -1281,7 +1848,12 @@ def register():
             'created_at': firestore.SERVER_TIMESTAMP
         })
 
-        return jsonify({"token": token, "email": email, "full_name": full_name}), 201
+        return jsonify({
+            "token": token, 
+            "email": email, 
+            "full_name": full_name,
+            "subscription": get_user_subscription(email)
+        }), 201
     except Exception as e:
         print(f"Błąd rejestracji: {e}")
         return jsonify({"error": f"Server error during registration: {e}"}), 500
@@ -1318,7 +1890,8 @@ def login():
         return jsonify({
             "token": token, 
             "email": email, 
-            "full_name": user_data.get("full_name", "")
+            "full_name": user_data.get("full_name", ""),
+            "subscription": get_user_subscription(email)
         }), 200
     except Exception as e:
         print(f"Błąd logowania: {e}")
@@ -2208,6 +2781,14 @@ def get_youtube_transcript():
     user_email = get_user_from_request()
     if not user_email:
         return jsonify({"error": "Brak autoryzacji"}), 401
+
+    sub = get_user_subscription(user_email)
+    if not sub.get("can_access_media"):
+        return jsonify({
+            "error": "PAYWALL_REQUIRED",
+            "feature": "media",
+            "message": "Moduł Media Buddy (analiza i nauka z filmami YouTube) jest dostępny w pakiecie Pro i Intensive. Uaktualnij subskrypcję, aby odblokować materiały wideo!"
+        }), 403
 
     video_id = request.args.get("video_id")
     if not video_id:
@@ -4272,6 +4853,15 @@ def analyze_grammar():
         return jsonify({"error": f"Wystąpił nieoczekiwany błąd: {e}"}), 500
 @app.route("/api/mastery-prepare", methods=['POST'])
 def prepare_mastery_content():
+    user_email = get_user_from_request()
+    sub = get_user_subscription(user_email)
+    if not sub.get("can_access_mastery"):
+        return jsonify({
+            "error": "PAYWALL_REQUIRED",
+            "feature": "mastery",
+            "message": "Moduł Mastery Path jest dostępny w pakiecie Pro i Intensive. Uaktualnij subskrypcję, aby odblokować pełny 3-etapowy trening historii!"
+        }), 403
+
     data = request.get_json()
     text = data.get('text')
 
@@ -4400,6 +4990,15 @@ def prepare_mastery_content():
 
 @app.route('/api/mastery-evaluate', methods=['POST'])
 def evaluate_mastery():
+    user_email = get_user_from_request()
+    sub = get_user_subscription(user_email)
+    if not sub.get("can_access_mastery"):
+        return jsonify({
+            "error": "PAYWALL_REQUIRED",
+            "feature": "mastery",
+            "message": "Moduł Mastery Path jest dostępny w pakiecie Pro i Intensive. Uaktualnij subskrypcję, aby korzystać z oceny wymowy!"
+        }), 403
+
     transcription = request.form.get('transcription', '').strip()
     original_text = request.form.get('target_text', '')
     
@@ -4735,6 +5334,15 @@ async def get_edge_audio_with_retry(text_to_speak, primary_voice="en-US-BrianNeu
     return b""
 
 def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_email=None):
+    if not user_email:
+        user_email = get_user_from_request()
+
+    if user_email:
+        sub = get_user_subscription(user_email)
+        # Pakiet Starter (Free): wymuszenie ekonomicznego modelu (Edge TTS zamiast płatnych)
+        if sub.get("tier") == "starter":
+            ai_mode = "free"
+
     if "Neural" not in voice:
         voice = "en-US-BrianNeural"
         
@@ -5742,13 +6350,27 @@ def log_live_usage():
         completion_tokens=completion_tokens,
         quantity=duration_seconds
     )
+
+    # Aktualizacja zużytych minut w subskrypcji użytkownika
+    if duration_seconds > 0 and user_email:
+        added_minutes = duration_seconds / 60.0
+        sub = get_user_subscription(user_email)
+        new_used = round(sub.get("live_minutes_used", 0.0) + added_minutes, 2)
+        update_user_subscription(user_email, {"live_minutes_used": new_used})
+        updated_sub = get_user_subscription(user_email)
+    else:
+        updated_sub = get_user_subscription(user_email)
+
     return jsonify({
         "success": True,
         "service": service,
         "model": model,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
-        "duration_seconds": duration_seconds
+        "duration_seconds": duration_seconds,
+        "minutes_used": updated_sub.get("live_minutes_used", 0),
+        "minutes_remaining": updated_sub.get("minutes_remaining", 0),
+        "quota_exceeded": updated_sub.get("minutes_remaining", 0) <= 0
     }), 200
 
 
@@ -5801,6 +6423,18 @@ def get_live_token():
     if not user_email:
         user_email = req_data.get("user_email") or "guest@speakling.ai"
 
+    # Sprawdzenie twardego limitu minut sesji Live AI
+    sub = get_user_subscription(user_email)
+    if sub.get("minutes_remaining", 0) <= 0:
+        return jsonify({
+            "error": "QUOTA_EXCEEDED",
+            "message": "Twój limit minut sesji Live AI został wyczerpany. Uaktualnij pakiet do Pro lub Intensive, aby kontynuować rozmowę!",
+            "tier": sub.get("tier"),
+            "minutes_used": sub.get("live_minutes_used"),
+            "total_minutes_allowed": sub.get("total_minutes_allowed"),
+            "minutes_remaining": 0
+        }), 403
+
     model = req_data.get("model", "gemini-2.5-flash-native-audio-latest")
     custom_api_key = req_data.get("api_key", "").strip()
 
@@ -5814,11 +6448,15 @@ def get_live_token():
     try:
         token = create_gemini_ephemeral_token(active_key, model=model)
         log_api_usage(user_email, "google_gemini", "live_session_token", model, 0, 0, 1)
+        remaining_secs = int(sub.get("minutes_remaining", 0) * 60)
         return jsonify({
             "token": token,
             "model": model,
             "ws_url": f"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token={token}",
-            "provider": "google_ai_studio"
+            "provider": "google_ai_studio",
+            "remaining_seconds": remaining_secs,
+            "minutes_remaining": sub.get("minutes_remaining", 0),
+            "tier": sub.get("tier")
         })
     except Exception as e:
         print(f"Error creating ephemeral token: {e}")
@@ -5832,6 +6470,18 @@ def get_vertex_live_token():
     if not user_email:
         user_email = req_data.get("user_email") or "guest@speakling.ai"
 
+    # Sprawdzenie twardego limitu minut sesji Live AI
+    sub = get_user_subscription(user_email)
+    if sub.get("minutes_remaining", 0) <= 0:
+        return jsonify({
+            "error": "QUOTA_EXCEEDED",
+            "message": "Twój limit minut sesji Live AI został wyczerpany. Uaktualnij pakiet do Pro lub Intensive, aby kontynuować rozmowę!",
+            "tier": sub.get("tier"),
+            "minutes_used": sub.get("live_minutes_used"),
+            "total_minutes_allowed": sub.get("total_minutes_allowed"),
+            "minutes_remaining": 0
+        }), 403
+
     try:
         import google.auth
         from google.auth.transport.requests import Request
@@ -5843,12 +6493,16 @@ def get_vertex_live_token():
         ws_url = f"wss://{region}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent?access_token={creds.token}"
 
         log_api_usage(user_email, "vertex_ai", "live_session_token", "gemini-2.5-flash-native-audio-latest", 0, 0, 1)
+        remaining_secs = int(sub.get("minutes_remaining", 0) * 60)
         return jsonify({
             "access_token": creds.token,
             "project_id": project_id,
             "region": region,
             "ws_url": ws_url,
-            "provider": "vertex_ai"
+            "provider": "vertex_ai",
+            "remaining_seconds": remaining_secs,
+            "minutes_remaining": sub.get("minutes_remaining", 0),
+            "tier": sub.get("tier")
         })
     except Exception as e:
         print(f"Error generating Vertex AI token: {e}")
@@ -18628,6 +19282,7 @@ import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import GoodToKnow from './components/GoodToKnow';
+import PaywallModal from './components/Paywall/PaywallModal';
 
 function App() {
   const [currentView, setCurrentView] = useState(() => {
@@ -18642,8 +19297,35 @@ function App() {
 
   const [isAdmin, setIsAdmin] = useState(false);
 
+  const [subscription, setSubscription] = useState(() => {
+    return user?.subscription || null;
+  });
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [paywallReason, setPaywallReason] = useState(null);
+
+  const openPaywall = (reason = null) => {
+    setPaywallReason(reason);
+    setPaywallOpen(true);
+  };
+
+  const fetchSubscription = async () => {
+    if (!user || !user.token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/subscription/status`, {
+        headers: { "X-Session-Token": user.token }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubscription(data.subscription);
+      }
+    } catch (e) {
+      console.warn("Błąd pobierania subskrypcji:", e);
+    }
+  };
+
   useEffect(() => {
     if (user && user.token) {
+      fetchSubscription();
       fetch(`${API_BASE_URL}/api/admin/verify`, {
         headers: { "X-Session-Token": user.token }
       })
@@ -18657,6 +19339,7 @@ function App() {
       .catch(() => setIsAdmin(false));
     } else {
       setIsAdmin(false);
+      setSubscription(null);
     }
   }, [user]);
 
@@ -18747,9 +19430,58 @@ function App() {
     }
   }, []);
 
+  // Obsługa powrotu z bramki Stripe (Stripe Checkout)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get('payment');
+    const sessionId = params.get('session_id');
+
+    if (payment === 'success') {
+      if (sessionId && user?.token) {
+        fetch(`${API_BASE_URL}/api/stripe/verify-session`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Session-Token': user.token
+          },
+          body: JSON.stringify({ session_id: sessionId })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.subscription) {
+            setSubscription(data.subscription);
+          }
+          setCustomAlert("Dziękujemy! Twój pakiet został pomyślnie zaktualizowany. Ciesz się pełnymi możliwościami Speakling!");
+        })
+        .catch(err => {
+          console.error("Błąd weryfikacji sesji Stripe:", err);
+          fetchSubscription();
+        });
+      } else {
+        setCustomAlert("Dziękujemy! Płatność przebiegła pomyślnie.");
+        fetchSubscription();
+      }
+
+      const url = new URL(window.location);
+      url.searchParams.delete('payment');
+      url.searchParams.delete('session_id');
+      url.searchParams.delete('plan');
+      url.searchParams.delete('topup');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+    } else if (payment === 'cancelled') {
+      setCustomAlert("Płatność została anulowana. Możesz powrócić do wyboru planu w dowolnym momencie.");
+      const url = new URL(window.location);
+      url.searchParams.delete('payment');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+    }
+  }, [user]);
+
   const handleLoginSuccess = (userData) => {
     localStorage.setItem("buddy_user", JSON.stringify(userData));
     setUser(userData);
+    if (userData.subscription) {
+      setSubscription(userData.subscription);
+    }
   };
 
   const handleLogout = async () => {
@@ -18769,12 +19501,18 @@ function App() {
     localStorage.removeItem("buddy_current_story_title");
     localStorage.removeItem("buddy_current_story_id");
     setUser(null);
+    setSubscription(null);
     setGeneratedText("");
     setCurrentStoryTitle("");
     setCurrentStoryId(null);
   };
 
   const handleNavigate = (view) => {
+    // Blokada wejścia w Media Buddy dla pakietu Starter
+    if (view === 'media' && subscription && !subscription.can_access_media && !isAdmin) {
+      openPaywall({ feature: 'media' });
+      return;
+    }
     setCurrentView(view);
     localStorage.setItem("buddy_current_view", view);
   };
@@ -18798,13 +19536,34 @@ function App() {
 
   return (
     <div className="App mission-layout">
-      <Sidebar currentView={currentView} onNavigate={handleNavigate} user={user} onLogout={handleLogout} isAdmin={isAdmin} />
+      <Sidebar 
+        currentView={currentView} 
+        onNavigate={handleNavigate} 
+        user={user} 
+        onLogout={handleLogout} 
+        isAdmin={isAdmin}
+        subscription={subscription}
+        onOpenPaywall={openPaywall}
+      />
       
       <main className="main-content">
-        {currentView !== 'workspace' && <TopBar title={getPageTitle()} user={user} />}
+        {currentView !== 'workspace' && (
+          <TopBar 
+            title={getPageTitle()} 
+            user={user} 
+            subscription={subscription}
+            onOpenPaywall={openPaywall}
+          />
+        )}
         <div className="view-container">
           {currentView === 'dashboard' ? (
-            <Dashboard onNavigateToWorkspace={() => handleNavigate('workspace')} user={user} />
+            <Dashboard 
+              onNavigateToWorkspace={() => handleNavigate('workspace')} 
+              user={user} 
+              subscription={subscription}
+              onOpenPaywall={openPaywall}
+              onSubscriptionUpdated={setSubscription}
+            />
           ) : currentView === 'stories' ? (
             <SavedStories 
               user={user} 
@@ -18824,10 +19583,14 @@ function App() {
             <VocabularyView 
               user={user}
               onNavigateToWorkspace={() => handleNavigate('workspace')}
+              subscription={subscription}
+              onOpenPaywall={openPaywall}
             />
           ) : currentView === 'media' ? (
             <MediaBuddy 
               user={user}
+              subscription={subscription}
+              onOpenPaywall={openPaywall}
             />
           ) : currentView === 'admin' ? (
             <AdminDashboard 
@@ -18846,6 +19609,8 @@ function App() {
               setCurrentStoryTitle={setCurrentStoryTitle}
               currentStoryId={currentStoryId}
               setCurrentStoryId={setCurrentStoryId}
+              subscription={subscription}
+              onOpenPaywall={openPaywall}
             />
           )}
         </div>
@@ -18868,6 +19633,16 @@ function App() {
           <TranslatorDrawer user={user} />
         </>
       )}
+
+      {/* Modal Paywalla */}
+      <PaywallModal 
+        isOpen={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        user={user}
+        subscription={subscription}
+        initialReason={paywallReason}
+        onSubscriptionUpdated={(newSub) => setSubscription(newSub)}
+      />
 
       {customAlert && (
         <div className="modal-overlay" style={{ zIndex: 10000 }}>
@@ -23800,6 +24575,22 @@ export const EXERCISE_TYPES = [
     name: "Grammar & Phrases in Context",
     badge: "Grammar",
     description: "Practice interesting sentence structures, tenses, and key expressions used in this story."
+  },
+  {
+    id: "business_english",
+    icon: "💼",
+    name: "Business English & Negotiations",
+    badge: "Business",
+    tierRequired: "intensive",
+    description: "Simulate corporate meetings, contract negotiations, executive presentations and professional business diplomacy."
+  },
+  {
+    id: "tech_interview",
+    icon: "⚡",
+    name: "Technical & Job Interview Prep",
+    badge: "Interview",
+    tierRequired: "intensive",
+    description: "Practice answering behavioral and technical interview questions, salary negotiations and engineering discussions."
   }
 ];
 
@@ -23962,6 +24753,24 @@ CRITICAL RULES FOR VOCABULARY EXERCISES (MUST FOLLOW AT ALL COSTS):
       greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention that we're going to practice grammar structures and sentence patterns based on the story "${title}". Ask me a quick opening question in 1-2 friendly sentences.`;
       break;
 
+    case "business_english":
+      exerciseInstructions = `EXERCISE FOCUS: BUSINESS ENGLISH & CORPORATE NEGOTIATIONS
+- Conduct a high-level professional business simulation with the student.
+- You are a senior business executive / partner.
+- Guide the conversation around corporate decision-making, negotiations, project delivery, and formal English idioms.
+- Keep responses concise (1-2 sentences) and maintain professional business etiquette.`;
+      greetingPrompt = `Hello! Welcome to our Business English simulation. Today we will focus on professional communication, corporate strategy, and confident negotiation. How would you like to introduce our meeting agenda today?`;
+      break;
+
+    case "tech_interview":
+      exerciseInstructions = `EXERCISE FOCUS: TECHNICAL & JOB INTERVIEW PREPARATION
+- Conduct a realistic job interview simulation for tech, management, or professional roles.
+- You are the hiring manager or tech lead.
+- Ask behavioral and technical problem-solving questions one at a time.
+- Offer constructive, encouraging feedback on clarity and technical English vocabulary.`;
+      greetingPrompt = `Hello! Welcome to your Job and Technical Interview session. I will be your interviewer today. To get started, please tell me briefly about a challenging technical or workplace problem you solved recently!`;
+      break;
+
     default:
       exerciseInstructions = `EXERCISE FOCUS: GENERAL STORY DISCUSSION
 - Discuss the story "${title}" with the student. Stick strictly to the content and vocabulary of this story. Keep turns concise (1-2 sentences) and interactive.`;
@@ -24001,7 +24810,7 @@ ${targetWordsFormatted ? `Pre-approved Target English Vocabulary:\n${targetWords
   return { systemInstruction, greetingPrompt: finalGreetingPrompt };
 }
 
-function Dashboard({ user }) {
+function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, onSubscriptionUpdated }) {
   // Tryb rozmowy: 'live' (Gemini Multimodal Live) lub 'classic' (Whisper + OpenAI/DeepSeek + TTS)
   const [chatMode, setChatMode] = useState(() => {
     return localStorage.getItem("buddy_live_chat_mode") || "live";
@@ -24107,6 +24916,13 @@ function Dashboard({ user }) {
 
   const handleExerciseTypeChange = (e) => {
     const newType = e.target.value;
+    const selectedEx = EXERCISE_TYPES.find(ex => ex.id === newType);
+    if (selectedEx?.tierRequired === 'intensive' && subscription?.tier !== 'intensive' && !user?.is_admin) {
+      if (onOpenPaywall) {
+        onOpenPaywall({ feature: 'industry' });
+        return;
+      }
+    }
     setExerciseType(newType);
     localStorage.setItem("buddy_exercise_type", newType);
   };
@@ -24345,6 +25161,15 @@ function Dashboard({ user }) {
   // ==========================================
 
   const startLiveSession = async (overrideOptions = {}) => {
+    if (subscription && subscription.minutes_remaining <= 0 && !user?.is_admin) {
+      if (onOpenPaywall) {
+        onOpenPaywall({ feature: 'quota', reason: 'quota_exceeded' });
+      }
+      setIsChatActive(false);
+      setLiveStatus("inactive");
+      return;
+    }
+
     setErrorMessage(null);
     setLiveStatus("connecting");
     setIsChatActive(true);
@@ -24502,6 +25327,14 @@ function Dashboard({ user }) {
         }
 
         if (!tokenRes.ok || tokenData.error) {
+          if (tokenData.error === "QUOTA_EXCEEDED") {
+            setIsChatActive(false);
+            setLiveStatus("inactive");
+            if (onOpenPaywall) {
+              onOpenPaywall({ feature: 'quota', reason: 'quota_exceeded' });
+            }
+            return;
+          }
           if (tokenData.error === "NO_API_KEY") {
             setShowSettings(true);
             setErrorMessage(
@@ -24516,6 +25349,13 @@ function Dashboard({ user }) {
 
         clientConfig.token = tokenData.token;
         clientConfig.wsUrl = tokenData.ws_url;
+        clientConfig.maxDurationSeconds = tokenData.remaining_seconds || (subscription?.minutes_remaining ? Math.round(subscription.minutes_remaining * 60) : 300);
+        clientConfig.onQuotaExceeded = ({ elapsedSeconds, reason }) => {
+          stopLiveSession();
+          if (onOpenPaywall) {
+            onOpenPaywall({ feature: 'quota', reason: 'quota_exceeded' });
+          }
+        };
       } else if (activeProvider === "vertex_ai") {
         // Pobieramy token OAuth2 dla Vertex AI z backendu
         const vertexRes = await fetch(`${API_BASE_URL}/api/live/vertex-token`, {
@@ -24564,6 +25404,18 @@ function Dashboard({ user }) {
     }
     setIsCameraActive(false);
     setLiveStatus("inactive");
+
+    // Odświeżenie stanu subskrypcji po zakończeniu sesji
+    if (onSubscriptionUpdated && user?.token) {
+      fetch(`${API_BASE_URL}/api/subscription/status`, {
+        headers: { "X-Session-Token": user.token }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.subscription) onSubscriptionUpdated(data.subscription);
+      })
+      .catch(() => {});
+    }
   };
 
   const handleToggleCamera = async () => {
@@ -25124,8 +25976,20 @@ function Dashboard({ user }) {
       {!isChatActive ? (
         /* READY STATE CARD (Image 1) */
         <div className="chat-live-ready-card">
-          <div className="card-top-bar">
+          <div className="card-top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="badge-purple-pill">Gemini Live · Voice practice</span>
+            {subscription && (
+              <span 
+                className="topbar-plan-pill plan-pill-premium"
+                onClick={() => onOpenPaywall && onOpenPaywall()}
+                title="Pula minut w Twoim planie (kliknij aby uaktualnić)"
+                style={{ cursor: 'pointer', margin: 0 }}
+              >
+                <span className="plan-pill-badge">{subscription?.tier?.toUpperCase()}</span>
+                <span className="plan-pill-mins">{(subscription?.minutes_remaining ?? 5).toFixed(1)} min</span>
+                <span className="plan-pill-action">{subscription?.tier === 'starter' ? '⚡ Uaktualnij' : 'Doładuj'}</span>
+              </span>
+            )}
           </div>
 
           <div className="card-center-stage">
@@ -25166,11 +26030,21 @@ function Dashboard({ user }) {
         /* ACTIVE / LISTENING STATE VIEW WITH SIDE TRANSCRIPT (Image 2) */
         <div className="chat-live-active-container">
           <div className="active-call-main-card">
-            <div className="active-card-top">
+            <div className="active-card-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span className="status-pill-green">
                 <span className="green-pulse-dot"></span>
                 Connected · Gemini Live
               </span>
+              {subscription && (
+                <span 
+                  className="topbar-plan-pill plan-pill-premium"
+                  onClick={() => onOpenPaywall && onOpenPaywall()}
+                  style={{ cursor: 'pointer', margin: 0 }}
+                  title="Pozostałe minuty w bieżącym okresie"
+                >
+                  <span className="plan-pill-mins">{(subscription?.minutes_remaining ?? 5).toFixed(1)}m pozostało</span>
+                </span>
+              )}
             </div>
 
             <div className="active-orb-center">
@@ -29131,7 +30005,15 @@ const formatTime = (secs) => {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 };
 
-function MediaBuddy({ user }) {
+function MediaBuddy({ user, subscription, onOpenPaywall }) {
+  const isLocked = subscription && !subscription.can_access_media && !user?.is_admin;
+
+  useEffect(() => {
+    if (isLocked && onOpenPaywall) {
+      onOpenPaywall({ feature: 'media' });
+    }
+  }, [isLocked]);
+
   const [currentVideo, setCurrentVideo] = useState(CURATED_VIDEOS[0]);
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
@@ -42413,7 +43295,997 @@ export default WordExplanationModal;
 
 ---
 
-## 42. Plik: `frontend/src/components/Practice/PracticeMode.css`
+## 42. Plik: `frontend/src/components/Paywall/PaywallModal.css`
+
+```css
+/* ========================================================
+   Speakling Paywall Modal Styles
+   Design: Apple-clean, glassmorphism, accent #7c3aed
+   ======================================================== */
+
+.paywall-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+.paywall-modal {
+  position: relative;
+  width: 100%;
+  max-width: 1040px;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  padding: 2.25rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Przycisk zamknięcia */
+.paywall-close-btn {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #f8fafc;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.paywall-close-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  transform: scale(1.05);
+}
+
+/* Nagłówek */
+.paywall-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.paywall-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  background: rgba(124, 58, 237, 0.08);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  color: #7c3aed;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.paywall-title {
+  margin: 0;
+  font-family: 'Outfit', 'Google Sans', -apple-system, sans-serif;
+  font-size: 1.85rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.paywall-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #64748b;
+  max-width: 680px;
+  line-height: 1.5;
+}
+
+/* Wskaźnik zużycia minut */
+.paywall-usage-meter {
+  width: 100%;
+  max-width: 580px;
+  margin-top: 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.85rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.usage-meter-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.usage-meter-track {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.usage-meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7c3aed, #9333ea);
+  transition: width 0.4s ease;
+}
+
+.usage-meter-fill.meter-warning {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.usage-meter-fill.meter-exhausted {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.usage-meter-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.extra-mins-tag {
+  color: #059669;
+  font-weight: 600;
+}
+
+/* Alerty */
+.paywall-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.paywall-alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.paywall-alert-success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+}
+
+/* Siatka kart planów */
+.paywall-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-top: 0.25rem;
+}
+
+.paywall-card {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 1.5rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.paywall-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 28px -8px rgba(0, 0, 0, 0.08);
+}
+
+.paywall-card.is-current {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+/* Wyróżniony plan PRO */
+.paywall-card.highlighted-card {
+  border: 2px solid #7c3aed;
+  box-shadow: 0 16px 36px -10px rgba(124, 58, 237, 0.22);
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.02) 0%, #ffffff 100%);
+}
+
+.card-ribbon {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #7c3aed, #9333ea);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0.85rem;
+  border-radius: 9999px;
+  white-space: nowrap;
+  box-shadow: 0 4px 10px rgba(124, 58, 237, 0.3);
+}
+
+.card-top {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.card-tier-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.highlighted-card .card-tier-label {
+  color: #7c3aed;
+}
+
+.card-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.card-price {
+  font-family: 'Outfit', -apple-system, sans-serif;
+  font-size: 2.1rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.03em;
+}
+
+.card-period {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.card-desc {
+  font-size: 0.82rem;
+  color: #64748b;
+  margin: 0 0 0.75rem 0;
+  min-height: 38px;
+  line-height: 1.4;
+}
+
+/* Lista cech */
+.card-features-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 1.25rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 0.9rem;
+}
+
+.card-features-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.82rem;
+  color: #334155;
+  line-height: 1.35;
+}
+
+.card-features-list li strong {
+  color: #0f172a;
+}
+
+.check-icon {
+  font-weight: 800;
+  color: #10b981;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.check-purple {
+  color: #7c3aed;
+}
+
+.check-blue {
+  color: #2563eb;
+}
+
+.cross-icon {
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.feature-disabled {
+  color: #94a3b8 !important;
+  text-decoration: line-through;
+}
+
+/* Przyciski w kartach */
+.card-action {
+  margin-top: auto;
+}
+
+.plan-btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: none;
+}
+
+.btn-current {
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: default;
+}
+
+.btn-secondary {
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+.btn-secondary:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.btn-primary-pro {
+  background: linear-gradient(135deg, #7c3aed, #9333ea);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+}
+
+.btn-primary-pro:hover {
+  background: linear-gradient(135deg, #6d28d9, #7e22ce);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-primary-intensive {
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
+}
+
+.btn-primary-intensive:hover {
+  background: linear-gradient(135deg, #0f172a, #020617);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.35);
+  transform: translateY(-1px);
+}
+
+/* Dolne doładowania */
+.paywall-bottom-addons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.addon-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 0.95rem 1.25rem;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+}
+
+.addon-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.addon-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.addon-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+
+.addon-price {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.addon-desc {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.addon-buy-btn {
+  white-space: nowrap;
+  padding: 0.6rem 1.1rem;
+  border-radius: 10px;
+  border: 1px solid #7c3aed;
+  background: rgba(124, 58, 237, 0.05);
+  color: #7c3aed;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.addon-buy-btn:hover {
+  background: #7c3aed;
+  color: #ffffff;
+}
+
+.portal-management-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: #64748b;
+  padding: 0.25rem 0.5rem;
+}
+
+.portal-link-btn {
+  background: none;
+  border: none;
+  color: #7c3aed;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.portal-link-btn:hover {
+  color: #5b21b6;
+}
+
+/* Stopka modalna */
+.paywall-footer-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* Spinner */
+.spinner-inline {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsywność */
+@media (max-width: 900px) {
+  .paywall-cards-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .paywall-modal {
+    padding: 1.5rem 1.25rem;
+    max-height: 95vh;
+  }
+
+  .addon-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .addon-buy-btn {
+    width: 100%;
+  }
+
+  .portal-management-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+}
+```
+
+---
+
+## 43. Plik: `frontend/src/components/Paywall/PaywallModal.js`
+
+```javascript
+import React, { useState } from 'react';
+import { API_BASE_URL } from '../../config';
+import './PaywallModal.css';
+
+const PaywallModal = ({
+  isOpen,
+  onClose,
+  user,
+  subscription,
+  initialReason = null,
+  onSubscriptionUpdated = () => {}
+}) => {
+  const [loadingPlan, setLoadingPlan] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [successMsg, setSuccessMsg] = useState(null);
+
+  if (!isOpen) return null;
+
+  const currentTier = subscription?.tier || 'starter';
+  const minutesUsed = subscription?.live_minutes_used || 0;
+  const minutesLimit = subscription?.total_minutes_allowed || subscription?.live_minutes_limit || 5;
+  const minutesRemaining = subscription?.minutes_remaining ?? Math.max(0, minutesLimit - minutesUsed);
+  const usagePercentage = Math.min(100, Math.round((minutesUsed / Math.max(1, minutesLimit)) * 100));
+
+  const handleSelectPlan = async (planKey) => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setLoadingPlan(planKey);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/stripe/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Token': user?.token || ''
+        },
+        body: JSON.stringify({
+          plan: planKey,
+          user_email: user?.email,
+          return_url: window.location.origin + window.location.pathname
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Nie udało się zainicjalizować sesji płatności.');
+      }
+
+      if (data.checkout_url) {
+        // Prawdziwe przekierowanie do Stripe Checkout (w tym obsługa 7-dniowego triala)
+        window.location.href = data.checkout_url;
+      } else if (data.demo_mode) {
+        // Tryb symulacyjny (gdy brak klucza Stripe API w środowisku)
+        setSuccessMsg(data.message || 'Pomyślnie zaktualizowano subskrypcję!');
+        if (data.subscription) {
+          onSubscriptionUpdated(data.subscription);
+        }
+        setTimeout(() => {
+          onClose();
+        }, 1800);
+      }
+    } catch (err) {
+      console.error('Błąd wyboru pakietu:', err);
+      setErrorMsg(err.message || 'Wystąpił błąd podczas połączenia z bramką płatności.');
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  const handleOpenCustomerPortal = async () => {
+    setErrorMsg(null);
+    setLoadingPlan('portal');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/stripe/create-portal-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Token': user?.token || ''
+        }
+      });
+
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        throw new Error(data.message || data.error || 'Nie udało się otworzyć portalu klienta.');
+      }
+
+      if (data.portal_url) {
+        window.location.href = data.portal_url;
+      }
+    } catch (err) {
+      setErrorMsg(err.message || 'Brak aktywnego profilu klienta Stripe.');
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  // Kontekstowy nagłówek w zależności od przyczyny wywołania paywalla
+  const getContextualHeadline = () => {
+    if (initialReason?.feature === 'mastery') {
+      return {
+        badge: 'ODBLOKUJ MASTERY PATH',
+        title: 'Mastery Path wymaga pakietu Pro',
+        subtitle: 'Uwolnij pełny potencjał 3-etapowego treningu historii (rozumienie, wymowa, parafraza) z nieograniczonym dostępem.'
+      };
+    }
+    if (initialReason?.feature === 'media') {
+      return {
+        badge: 'ODBLOKUJ MEDIA BUDDY',
+        title: 'Analiza wideo YouTube w pakiecie Pro',
+        subtitle: 'Ucz się ze swoich ulubionych filmów, podcastów i wywiadów z natychmiastową transkrypcją i lektorem AI.'
+      };
+    }
+    if (initialReason?.feature === 'quota' || initialReason?.reason === 'quota_exceeded') {
+      return {
+        badge: 'LIMIT MINUT OSIĄGNIĘTY',
+        title: 'Wyczerpano minuty Live Chat Orb',
+        subtitle: `Twój limit minut (${minutesLimit} min) w bieżącym okresie został osiągnięty. Wybierz pakiet Pro lub Intensive, aby kontynuować rozmowę!`
+      };
+    }
+    if (initialReason?.feature === 'industry') {
+      return {
+        badge: 'PAKIET INTENSIVE / FLUENCY',
+        title: 'Dedykowane symulacje branżowe',
+        subtitle: 'Trenuj Business English, rozmowy kwalifikacyjne i techniczny angielski z 400 minutami lektora Live AI miesięcznie.'
+      };
+    }
+    return {
+      badge: 'PLANY & SUBSKRYPCJA',
+      title: 'Inwestuj w swoją swobodę mówienia',
+      subtitle: 'Przewidywalna subskrypcja z gwarancją bezpieczeństwa budżetowego. Rozpocznij 7-dniowy bezpłatny okres próbny.'
+    };
+  };
+
+  const headline = getContextualHeadline();
+
+  return (
+    <div className="paywall-overlay animate-fade-in" onClick={onClose}>
+      <div className="paywall-modal glass-panel" onClick={(e) => e.stopPropagation()}>
+        {/* Przycisk zamknięcia */}
+        <button className="paywall-close-btn" onClick={onClose} title="Zamknij">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+
+        {/* Nagłówek modalny */}
+        <div className="paywall-header">
+          <div className="paywall-badge-pill">
+            <span className="badge-sparkle">✨</span>
+            <span className="badge-text">{headline.badge}</span>
+          </div>
+          <h2 className="paywall-title">{headline.title}</h2>
+          <p className="paywall-subtitle">{headline.subtitle}</p>
+
+          {/* Wizualny pasek wykorzystania minut Live AI */}
+          <div className="paywall-usage-meter">
+            <div className="usage-meter-header">
+              <span className="usage-meter-label">
+                Pula minut Live Chat Orb ({currentTier.toUpperCase()}):
+              </span>
+              <span className="usage-meter-values">
+                <strong>{minutesUsed.toFixed(1)}</strong> z <strong>{minutesLimit} min</strong> ({usagePercentage}%)
+              </span>
+            </div>
+            <div className="usage-meter-track">
+              <div 
+                className={`usage-meter-fill ${usagePercentage >= 100 ? 'meter-exhausted' : usagePercentage >= 80 ? 'meter-warning' : ''}`}
+                style={{ width: `${usagePercentage}%` }}
+              />
+            </div>
+            <div className="usage-meter-footer">
+              <span>Pozostało: <strong>{minutesRemaining.toFixed(1)} min</strong></span>
+              {subscription?.extra_live_minutes > 0 && (
+                <span className="extra-mins-tag">W tym doładowania: +{subscription.extra_live_minutes} min</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Komunikaty błędów i sukcesu */}
+        {errorMsg && (
+          <div className="paywall-alert paywall-alert-error animate-fade-in">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="paywall-alert paywall-alert-success animate-fade-in">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* Siatka pakietów (Tiered SaaS) */}
+        <div className="paywall-cards-grid">
+          {/* KARTA 1: Starter (Free) */}
+          <div className={`paywall-card card-starter ${currentTier === 'starter' ? 'is-current' : ''}`}>
+            <div className="card-top">
+              <div className="card-tier-label">Starter</div>
+              <div className="card-price-row">
+                <span className="card-price">0 zł</span>
+                <span className="card-period">/ darmowy na zawsze</span>
+              </div>
+              <p className="card-desc">Dla osób zaczynających naukę z czytaniem i podstawowymi fiszkami.</p>
+            </div>
+
+            <ul className="card-features-list">
+              <li>
+                <span className="check-icon">✓</span>
+                <span>Nieograniczone czytanie historii</span>
+              </li>
+              <li>
+                <span className="check-icon">✓</span>
+                <span>Interaktywny słownik (Word Bank)</span>
+              </li>
+              <li>
+                <span className="check-icon">✓</span>
+                <span>Fiszki i quizy powtórkowe</span>
+              </li>
+              <li>
+                <span className="check-icon">✓</span>
+                <span><strong>5 minut</strong> demo Live Chat (Orb)</span>
+              </li>
+              <li>
+                <span className="check-icon">✓</span>
+                <span>Ekonomiczna synteza mowy (Edge TTS)</span>
+              </li>
+              <li className="feature-disabled">
+                <span className="cross-icon">✕</span>
+                <span>Mastery Path & Media Buddy</span>
+              </li>
+            </ul>
+
+            <div className="card-action">
+              {currentTier === 'starter' ? (
+                <button className="plan-btn btn-current" disabled>
+                  Twój obecny plan
+                </button>
+              ) : (
+                <button 
+                  className="plan-btn btn-secondary"
+                  disabled={loadingPlan !== null}
+                  onClick={() => handleSelectPlan('starter')}
+                >
+                  Przełącz na Starter
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* KARTA 2: Pro (Rekomendowany) */}
+          <div className={`paywall-card card-pro highlighted-card ${currentTier === 'pro' ? 'is-current' : ''}`}>
+            <div className="card-ribbon">
+              <span>NAJPOPULARNIEJSZY · 7 DNI FREE</span>
+            </div>
+
+            <div className="card-top">
+              <div className="card-tier-label">Pro</div>
+              <div className="card-price-row">
+                <span className="card-price">49 zł</span>
+                <span className="card-period">/ miesięcznie</span>
+              </div>
+              <p className="card-desc">Pełny zestaw narzędzi edukacyjnych i codzienna swoboda mówienia.</p>
+            </div>
+
+            <ul className="card-features-list">
+              <li>
+                <span className="check-icon check-purple">✓</span>
+                <span><strong>150 minut</strong> Live Chat Orb miesięcznie</span>
+              </li>
+              <li>
+                <span className="check-icon check-purple">✓</span>
+                <span>Pełny dostęp do <strong>Mastery Path</strong></span>
+              </li>
+              <li>
+                <span className="check-icon check-purple">✓</span>
+                <span><strong>Media Buddy</strong> (filmy i YouTube)</span>
+              </li>
+              <li>
+                <span className="check-icon check-purple">✓</span>
+                <span>Inteligentne raporty & eksport słownictwa</span>
+              </li>
+              <li>
+                <span className="check-icon check-purple">✓</span>
+                <span>Wysokiej jakości synteza głosu lektora</span>
+              </li>
+              <li>
+                <span className="check-icon check-purple">✓</span>
+                <span><strong>7 dni darmowego okresu próbnego</strong></span>
+              </li>
+            </ul>
+
+            <div className="card-action">
+              {currentTier === 'pro' ? (
+                <button className="plan-btn btn-current" disabled>
+                  Twój obecny plan (Pro)
+                </button>
+              ) : (
+                <button 
+                  className="plan-btn btn-primary-pro"
+                  disabled={loadingPlan !== null}
+                  onClick={() => handleSelectPlan('pro')}
+                >
+                  {loadingPlan === 'pro' ? (
+                    <span className="spinner-inline" />
+                  ) : (
+                    'Wypróbuj 7 dni bezpłatnie'
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* KARTA 3: Intensive / Fluency */}
+          <div className={`paywall-card card-intensive ${currentTier === 'intensive' ? 'is-current' : ''}`}>
+            <div className="card-top">
+              <div className="card-tier-label">Intensive / Fluency</div>
+              <div className="card-price-row">
+                <span className="card-price">99 zł</span>
+                <span className="card-period">/ miesięcznie</span>
+              </div>
+              <p className="card-desc">Dla profesjonalistów dążących do natychmiastowej płynności językowej.</p>
+            </div>
+
+            <ul className="card-features-list">
+              <li>
+                <span className="check-icon check-blue">✓</span>
+                <span><strong>400 minut</strong> Live Chat Orb miesięcznie</span>
+              </li>
+              <li>
+                <span className="check-icon check-blue">✓</span>
+                <span>Wszystko z planu Pro (Mastery + Media)</span>
+              </li>
+              <li>
+                <span className="check-icon check-blue">✓</span>
+                <span><strong>Symulacje branżowe</strong> (Business English, Tech)</span>
+              </li>
+              <li>
+                <span className="check-icon check-blue">✓</span>
+                <span>Opcja dokupienia paczki <strong>+60 min</strong> (+29 zł)</span>
+              </li>
+              <li>
+                <span className="check-icon check-blue">✓</span>
+                <span>Priorytetowe połączenia i najnowsze modele audio</span>
+              </li>
+              <li>
+                <span className="check-icon check-blue">✓</span>
+                <span><strong>7 dni darmowego okresu próbnego</strong></span>
+              </li>
+            </ul>
+
+            <div className="card-action">
+              {currentTier === 'intensive' ? (
+                <button className="plan-btn btn-current" disabled>
+                  Twój obecny plan (Intensive)
+                </button>
+              ) : (
+                <button 
+                  className="plan-btn btn-primary-intensive"
+                  disabled={loadingPlan !== null}
+                  onClick={() => handleSelectPlan('intensive')}
+                >
+                  {loadingPlan === 'intensive' ? (
+                    <span className="spinner-inline" />
+                  ) : (
+                    'Wybierz Intensive (7 dni free)'
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Dolna sekcja: Doładowanie dodatkowych minut (Top-up) oraz Customer Portal */}
+        <div className="paywall-bottom-addons">
+          <div className="addon-card glass-subpanel">
+            <div className="addon-info">
+              <div className="addon-title-row">
+                <span className="addon-icon">⚡</span>
+                <span className="addon-title">Paczka dodatkowych 60 minut Live Orb</span>
+                <span className="addon-price">29 zł jednorazowo</span>
+              </div>
+              <p className="addon-desc">
+                Zabrakło Ci minut przed końcem miesiąca? Dokup jednorazowy pakiet 60 minut bez zmiany obecnej subskrypcji.
+              </p>
+            </div>
+            <button 
+              className="addon-buy-btn"
+              disabled={loadingPlan !== null}
+              onClick={() => handleSelectPlan('topup_60')}
+            >
+              {loadingPlan === 'topup_60' ? (
+                <span className="spinner-inline" />
+              ) : (
+                'Dokup +60 min (29 zł)'
+              )}
+            </button>
+          </div>
+
+          {subscription?.has_stripe_subscription && (
+            <div className="portal-management-row">
+              <span>Chcesz zmienić kartę płatniczą lub pobrać faktury VAT?</span>
+              <button 
+                className="portal-link-btn" 
+                onClick={handleOpenCustomerPortal}
+                disabled={loadingPlan === 'portal'}
+              >
+                {loadingPlan === 'portal' ? 'Ładowanie portalu...' : 'Otwórz Stripe Customer Portal →'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Informacja prawna i gwarancja */}
+        <div className="paywall-footer-note">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <span>
+            Bezpieczna autoryzacja Stripe. 7-dniowy okres próbny — karta nie zostanie obciążona przed upływem 7 dni. Możesz anulować w dowolnym momencie bez opłat.
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PaywallModal;
+```
+
+---
+
+## 44. Plik: `frontend/src/components/Practice/PracticeMode.css`
 
 ```css
 /* src/components/Practice/PracticeMode.css */
@@ -43264,7 +45136,7 @@ export default WordExplanationModal;
 
 ---
 
-## 43. Plik: `frontend/src/components/Practice/PracticeMode.js`
+## 45. Plik: `frontend/src/components/Practice/PracticeMode.js`
 
 ```javascript
 import React, { useState, useEffect, useRef } from "react";
@@ -44343,7 +46215,7 @@ export default PracticeMode;
 
 ---
 
-## 44. Plik: `frontend/src/components/Reader/Reader.css`
+## 46. Plik: `frontend/src/components/Reader/Reader.css`
 
 ```css
 .reader-container {
@@ -45047,7 +46919,7 @@ input[type="range"] {
 
 ---
 
-## 45. Plik: `frontend/src/components/Reader/Reader.js`
+## 47. Plik: `frontend/src/components/Reader/Reader.js`
 
 ```javascript
 import React, { useState, useRef, useEffect } from "react";
@@ -45893,7 +47765,7 @@ export default Reader;
 
 ---
 
-## 46. Plik: `frontend/src/components/Sidebar.css`
+## 48. Plik: `frontend/src/components/Sidebar.css`
 
 ```css
 /* ============================================================
@@ -46348,18 +48220,127 @@ export default Reader;
   }
 }
 
+/* ── Subscription Card & PRO Badge in Sidebar ─────────────── */
+.nav-badge-pill {
+  margin-left: auto;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+}
+
+.sidebar-subscription-box {
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+}
+
+.sidebar-sub-card {
+  padding: 0.75rem 0.85rem;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sub-card-upgrade {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.06), rgba(147, 51, 234, 0.03));
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.06);
+}
+
+.sub-card-upgrade:hover {
+  transform: translateY(-2px);
+  border-color: #7c3aed;
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.14);
+}
+
+.sub-card-active {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.sub-card-active:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+.sub-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sub-card-tag {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.12);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.sub-card-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 0.15rem;
+}
+
+.sub-card-desc {
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+.sub-card-btn {
+  margin-top: 0.35rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  background: #7c3aed;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.sub-card-btn:hover {
+  background: #6d28d9;
+}
+
+.sub-card-btn-secondary {
+  margin-top: 0.35rem;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 ```
 
 ---
 
-## 47. Plik: `frontend/src/components/Sidebar.js`
+## 49. Plik: `frontend/src/components/Sidebar.js`
 
 ```javascript
 import React, { useState } from 'react';
 import logoImg from '../assets/logo.png';
 import './Sidebar.css';
 
-const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
+const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscription, onOpenPaywall }) => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const stored = localStorage.getItem('buddy_sidebar_collapsed');
     return stored ? JSON.parse(stored) : false;
@@ -46372,6 +48353,9 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
       return next;
     });
   };
+
+  const isStarter = !subscription || subscription.tier === 'starter';
+
   const menuItems = [
     {
       id: 'dashboard',
@@ -46416,6 +48400,7 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
     {
       id: 'media',
       label: 'Media Buddy',
+      badge: isStarter && !isAdmin ? 'PRO' : null,
       icon: (
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10" />
@@ -46449,6 +48434,17 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
     });
   }
 
+  const handleItemClick = (item) => {
+    if (item.disabled) return;
+    if (item.id === 'media' && isStarter && !isAdmin) {
+      if (onOpenPaywall) {
+        onOpenPaywall({ feature: 'media' });
+        return;
+      }
+    }
+    onNavigate(item.id);
+  };
+
   return (
     <aside className={`mission-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-brand">
@@ -46463,12 +48459,15 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
           <button
             key={item.id}
             className={`nav-item nav-item-${item.id} ${currentView === item.id ? 'active' : ''} ${item.disabled ? 'disabled' : ''}`}
-            onClick={() => !item.disabled && onNavigate(item.id)}
+            onClick={() => handleItemClick(item)}
             disabled={item.disabled}
             title={item.disabled ? `${item.label} (Wkrótce / Coming Soon)` : (isCollapsed ? item.label : undefined)}
           >
             <span className="nav-icon">{item.icon}</span>
             <span className="nav-label">{item.label}</span>
+            {item.badge && !isCollapsed && (
+              <span className="nav-badge-pill">{item.badge}</span>
+            )}
           </button>
         ))}
       </nav>
@@ -46489,6 +48488,33 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
       </button>
 
       <div className="sidebar-footer">
+        {!isCollapsed && (
+          <div className="sidebar-subscription-box" onClick={() => onOpenPaywall && onOpenPaywall()}>
+            {isStarter ? (
+              <div className="sidebar-sub-card sub-card-upgrade">
+                <div className="sub-card-header">
+                  <span className="sub-card-tag">7 DNI FREE</span>
+                  <span className="sub-card-sparkle">✨</span>
+                </div>
+                <div className="sub-card-title">Przejdź na Pro</div>
+                <div className="sub-card-desc">150 min Live Orb + Mastery Path</div>
+                <button className="sub-card-btn">Uaktualnij plan →</button>
+              </div>
+            ) : (
+              <div className="sidebar-sub-card sub-card-active">
+                <div className="sub-card-header">
+                  <span className="sub-card-tag">{subscription?.tier?.toUpperCase()}</span>
+                </div>
+                <div className="sub-card-title">Plan {subscription?.name || 'Pro'}</div>
+                <div className="sub-card-desc">
+                  Pozostało: <strong>{(subscription?.minutes_remaining || 0).toFixed(1)} min</strong>
+                </div>
+                <button className="sub-card-btn-secondary">Zarządzaj planem</button>
+              </div>
+            )}
+          </div>
+        )}
+
         {!isCollapsed && (
           <div className="daily-practice-card">
             <div className="practice-card-header">
@@ -46528,7 +48554,7 @@ export default Sidebar;
 
 ---
 
-## 48. Plik: `frontend/src/components/Story/SavedStories.css`
+## 50. Plik: `frontend/src/components/Story/SavedStories.css`
 
 ```css
 /* src/components/Story/SavedStories.css */
@@ -47582,7 +49608,7 @@ export default Sidebar;
 
 ---
 
-## 49. Plik: `frontend/src/components/Story/SavedStories.js`
+## 51. Plik: `frontend/src/components/Story/SavedStories.js`
 
 ```javascript
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -48790,7 +50816,7 @@ export default SavedStories;
 
 ---
 
-## 50. Plik: `frontend/src/components/Story/StoryGenerator.css`
+## 52. Plik: `frontend/src/components/Story/StoryGenerator.css`
 
 ```css
 .story-generator {
@@ -49556,7 +51582,7 @@ export default SavedStories;
 
 ---
 
-## 51. Plik: `frontend/src/components/Story/StoryGenerator.js`
+## 53. Plik: `frontend/src/components/Story/StoryGenerator.js`
 
 ```javascript
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -50137,7 +52163,7 @@ export default StoryGenerator;
 
 ---
 
-## 52. Plik: `frontend/src/components/Story/StoryGenerator.test.js`
+## 54. Plik: `frontend/src/components/Story/StoryGenerator.test.js`
 
 ```javascript
 import React from 'react';
@@ -50226,7 +52252,7 @@ describe('StoryGenerator Popular Science Settings', () => {
 
 ---
 
-## 53. Plik: `frontend/src/components/TopBar.css`
+## 55. Plik: `frontend/src/components/TopBar.css`
 
 ```css
 /* ============================================================
@@ -50303,6 +52329,76 @@ describe('StoryGenerator Popular Science Settings', () => {
   display: flex;
   align-items: center;
   gap: 0.875rem;
+}
+
+/* Subscription Plan Pill */
+.topbar-plan-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+}
+
+.topbar-plan-pill.plan-pill-free {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.topbar-plan-pill.plan-pill-free:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.topbar-plan-pill.plan-pill-premium {
+  background: rgba(124, 58, 237, 0.08);
+  border-color: rgba(124, 58, 237, 0.25);
+  color: #7c3aed;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.12);
+}
+
+.topbar-plan-pill.plan-pill-premium:hover {
+  background: rgba(124, 58, 237, 0.14);
+  border-color: rgba(124, 58, 237, 0.4);
+  transform: translateY(-1px);
+}
+
+.plan-pill-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.plan-pill-premium .plan-pill-badge {
+  background: #7c3aed;
+  color: #ffffff;
+}
+
+.plan-pill-mins {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.plan-pill-premium .plan-pill-mins {
+  color: #7c3aed;
+}
+
+.plan-pill-action {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #7c3aed;
+  margin-left: 0.15rem;
 }
 
 .topbar-lang-pill {
@@ -50399,14 +52495,17 @@ describe('StoryGenerator Popular Science Settings', () => {
 
 ---
 
-## 54. Plik: `frontend/src/components/TopBar.js`
+## 56. Plik: `frontend/src/components/TopBar.js`
 
 ```javascript
 import React from 'react';
 import './TopBar.css';
 
-const TopBar = ({ title, user }) => {
+const TopBar = ({ title, user, subscription, onOpenPaywall }) => {
   const userName = user?.name || (user?.email ? user.email.split('@')[0] : 'Anna Kowalska');
+  const tier = subscription?.tier || 'starter';
+  const remaining = subscription?.minutes_remaining !== undefined ? subscription.minutes_remaining : 5;
+  const isProOrIntensive = tier === 'pro' || tier === 'intensive';
   
   return (
     <header className="mission-topbar">
@@ -50415,6 +52514,17 @@ const TopBar = ({ title, user }) => {
       </div>
 
       <div className="topbar-right">
+        {/* Pigułka subskrypcji i minut Live AI */}
+        <button 
+          className={`topbar-plan-pill ${isProOrIntensive ? 'plan-pill-premium' : 'plan-pill-free'}`}
+          onClick={() => onOpenPaywall && onOpenPaywall()}
+          title="Zarządzaj pakietem i limitami minut Live AI"
+        >
+          <span className="plan-pill-badge">{tier.toUpperCase()}</span>
+          <span className="plan-pill-mins">{remaining.toFixed(1)}m</span>
+          <span className="plan-pill-action">{tier === 'starter' ? '⚡ Uaktualnij' : 'Plan'}</span>
+        </button>
+
         <button className="topbar-lang-pill" title="Zmień język docelowy (EN → PL)">
           <span className="lang-icon">🌐</span>
           <span className="lang-text">EN → PL</span>
@@ -50427,7 +52537,7 @@ const TopBar = ({ title, user }) => {
           </svg>
         </button>
 
-        <div className="topbar-user-pill">
+        <div className="topbar-user-pill" onClick={() => onOpenPaywall && onOpenPaywall()} style={{ cursor: 'pointer' }} title="Profil i subskrypcja">
           <span className="topbar-avatar">{userName.charAt(0).toUpperCase()}</span>
           <span className="topbar-username">{userName}</span>
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -50444,7 +52554,7 @@ export default TopBar;
 
 ---
 
-## 55. Plik: `frontend/src/components/Translator/TranslatorDrawer.css`
+## 57. Plik: `frontend/src/components/Translator/TranslatorDrawer.css`
 
 ```css
 /* ============================================================
@@ -51081,7 +53191,7 @@ export default TopBar;
 
 ---
 
-## 56. Plik: `frontend/src/components/Translator/TranslatorDrawer.js`
+## 58. Plik: `frontend/src/components/Translator/TranslatorDrawer.js`
 
 ```javascript
 import React, { useState, useEffect, useRef } from "react";
@@ -51748,7 +53858,7 @@ export default TranslatorDrawer;
 
 ---
 
-## 57. Plik: `frontend/src/components/Vocabulary/VocabularyDrawer.css`
+## 59. Plik: `frontend/src/components/Vocabulary/VocabularyDrawer.css`
 
 ```css
 /* ============================================================
@@ -52512,7 +54622,7 @@ export default TranslatorDrawer;
 
 ---
 
-## 58. Plik: `frontend/src/components/Vocabulary/VocabularyDrawer.js`
+## 60. Plik: `frontend/src/components/Vocabulary/VocabularyDrawer.js`
 
 ```javascript
 import React, { useState, useEffect, useCallback } from "react";
@@ -53380,7 +55490,7 @@ export default VocabularyDrawer;
 
 ---
 
-## 59. Plik: `frontend/src/components/Vocabulary/VocabularyExerciseModal.js`
+## 61. Plik: `frontend/src/components/Vocabulary/VocabularyExerciseModal.js`
 
 ```javascript
 import React, { useState } from "react";
@@ -53560,7 +55670,7 @@ export default VocabularyExerciseModal;
 
 ---
 
-## 60. Plik: `frontend/src/components/Vocabulary/VocabularyView.css`
+## 62. Plik: `frontend/src/components/Vocabulary/VocabularyView.css`
 
 ```css
 /* ============================================================
@@ -54643,7 +56753,7 @@ export default VocabularyExerciseModal;
 
 ---
 
-## 61. Plik: `frontend/src/components/Vocabulary/VocabularyView.js`
+## 63. Plik: `frontend/src/components/Vocabulary/VocabularyView.js`
 
 ```javascript
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -55990,7 +58100,7 @@ export default VocabularyView;
 
 ---
 
-## 62. Plik: `frontend/src/components/Workspace.css`
+## 64. Plik: `frontend/src/components/Workspace.css`
 
 ```css
 .workspace-layout {
@@ -57599,7 +59709,7 @@ export default VocabularyView;
 
 ---
 
-## 63. Plik: `frontend/src/components/Workspace.js`
+## 65. Plik: `frontend/src/components/Workspace.js`
 
 ```javascript
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -57864,6 +59974,8 @@ function Workspace({
   setCurrentStoryTitle,
   currentStoryId,
   setCurrentStoryId,
+  subscription,
+  onOpenPaywall,
 }) {
   const [dismissedStoryWords, setDismissedStoryWords] = useState(new Set());
   const [showPracticeMode, setShowPracticeMode] = useState(false);
@@ -60574,8 +62686,14 @@ function Workspace({
                 </p>
 
                 <button
-                  className="buddy-voice-ai-btn"
+                  className={`buddy-voice-ai-btn ${subscription && !subscription.can_access_mastery && !user?.is_admin ? 'btn-pro-locked' : ''}`}
                   onClick={() => {
+                    if (subscription && !subscription.can_access_mastery && !user?.is_admin) {
+                      if (onOpenPaywall) {
+                        onOpenPaywall({ feature: 'mastery' });
+                        return;
+                      }
+                    }
                     handleStop();
                     setShowPracticeMode(true);
                   }}
@@ -60586,6 +62704,17 @@ function Workspace({
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
                   </svg>
                   <span>Mastery Path · 3 steps</span>
+                  {subscription && !subscription.can_access_mastery && !user?.is_admin && (
+                    <span style={{
+                      marginLeft: '6px',
+                      background: 'rgba(255,255,255,0.25)',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      letterSpacing: '0.05em'
+                    }}>PRO</span>
+                  )}
                 </button>
 
                 <div className="buddy-practice-section">
@@ -60788,7 +62917,7 @@ export default Workspace;
 
 ---
 
-## 64. Plik: `frontend/src/config.js`
+## 66. Plik: `frontend/src/config.js`
 
 ```javascript
 export const getApiBaseUrl = () => {
@@ -60812,7 +62941,7 @@ export const API_BASE_URL = getApiBaseUrl();
 
 ---
 
-## 65. Plik: `frontend/src/globalAudioManager.js`
+## 67. Plik: `frontend/src/globalAudioManager.js`
 
 ```javascript
 /**
@@ -60900,7 +63029,7 @@ export default globalAudioManager;
 
 ---
 
-## 66. Plik: `frontend/src/index.css`
+## 68. Plik: `frontend/src/index.css`
 
 ```css
 /* Outfit and Roboto — Google Keep Style Fonts */
@@ -61102,7 +63231,7 @@ button, input, select, textarea {
 
 ---
 
-## 67. Plik: `frontend/src/index.js`
+## 69. Plik: `frontend/src/index.js`
 
 ```javascript
 import React from 'react';
@@ -61120,7 +63249,7 @@ root.render(
 
 ---
 
-## 68. Plik: `frontend/src/services/GeminiLiveClient.js`
+## 70. Plik: `frontend/src/services/GeminiLiveClient.js`
 
 ```javascript
 /**
@@ -61157,8 +63286,12 @@ export class GeminiLiveClient {
     this.onUserVolume = options.onUserVolume || (() => {});
     this.onBotVolume = options.onBotVolume || (() => {});
     this.onTranscript = options.onTranscript || (() => {});
-    this.onError = options.onError || (() => {});
     this.onClose = options.onClose || (() => {});
+    this.onQuotaExceeded = options.onQuotaExceeded || (() => {});
+    this.onRemainingTimeWarning = options.onRemainingTimeWarning || (() => {});
+    this.maxDurationSeconds = typeof options.maxDurationSeconds === 'number' ? options.maxDurationSeconds : null;
+    this.quotaTicker = null;
+    this.warningGiven = false;
 
     // WebSocket
     this.ws = null;
@@ -61240,6 +63373,64 @@ export class GeminiLiveClient {
         await this.initInputAudio();
 
         this.onStatusChange('listening');
+
+        // Rozpoczęcie trackera twardego limitu czasu sesji
+        if (this.quotaTicker) clearInterval(this.quotaTicker);
+        this.quotaTicker = setInterval(async () => {
+          if (!this.isConnected || !this.sessionStartTime || this.isDestroyed) return;
+          const elapsedSec = Math.round((Date.now() - this.sessionStartTime) / 1000);
+
+          if (this.maxDurationSeconds !== null) {
+            const remaining = this.maxDurationSeconds - elapsedSec;
+            if (remaining <= 60 && remaining > 0 && !this.warningGiven) {
+              this.warningGiven = true;
+              this.onRemainingTimeWarning(remaining);
+            }
+            if (remaining <= 0) {
+              console.warn("[GeminiLive] Osiągnięto limit minut sesji Live AI.");
+              clearInterval(this.quotaTicker);
+              this.quotaTicker = null;
+              this.onQuotaExceeded({
+                elapsedSeconds: elapsedSec,
+                reason: "Twój limit minut sesji Live AI został wyczerpany."
+              });
+              this.cleanup();
+              return;
+            }
+          }
+
+          // Co 30 sekund synchronizuj z backendem
+          if (elapsedSec > 0 && elapsedSec % 30 === 0) {
+            try {
+              const res = await fetch(`${this.apiBaseUrl}/api/subscription/track-live-time`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Session-Token': this.sessionToken || ''
+                },
+                body: JSON.stringify({
+                  duration_seconds: 30,
+                  user_email: this.userEmail
+                })
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.quota_exceeded) {
+                  console.warn("[GeminiLive] Backend zgłosił wyczerpanie limitu minut!");
+                  clearInterval(this.quotaTicker);
+                  this.quotaTicker = null;
+                  this.onQuotaExceeded({
+                    elapsedSeconds: elapsedSec,
+                    reason: "Twój limit minut sesji Live AI został wyczerpany."
+                  });
+                  this.cleanup();
+                }
+              }
+            } catch (err) {
+              // Błąd sieci przy pingu - nie przerywamy natychmiast
+            }
+          }
+        }, 1000);
       };
 
       this.ws.onmessage = async (event) => {
@@ -62196,6 +64387,10 @@ export class GeminiLiveClient {
    */
   cleanup() {
     this.isDestroyed = true;
+    if (this.quotaTicker) {
+      clearInterval(this.quotaTicker);
+      this.quotaTicker = null;
+    }
     this.reportSessionUsage();
     this.isConnected = false;
 
@@ -62280,7 +64475,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 69. Plik: `mobile/app.json`
+## 71. Plik: `mobile/app.json`
 
 ```json
 {
@@ -62332,7 +64527,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 70. Plik: `mobile/assets/expo.icon/icon.json`
+## 72. Plik: `mobile/assets/expo.icon/icon.json`
 
 ```json
 {
@@ -62379,7 +64574,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 71. Plik: `mobile/expo-env.d.ts`
+## 73. Plik: `mobile/expo-env.d.ts`
 
 ```typescript
 /// <reference types="expo/types" />
@@ -62389,7 +64584,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 72. Plik: `mobile/package.json`
+## 74. Plik: `mobile/package.json`
 
 ```json
 {
@@ -62440,7 +64635,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 73. Plik: `mobile/scripts/patch-viewport.py`
+## 75. Plik: `mobile/scripts/patch-viewport.py`
 
 ```python
 #!/usr/bin/env python3
@@ -62517,7 +64712,7 @@ print(f'\nDone. Patched {patched}/{len(html_files)} files.')
 
 ---
 
-## 74. Plik: `mobile/scripts/reset-project.js`
+## 76. Plik: `mobile/scripts/reset-project.js`
 
 ```javascript
 #!/usr/bin/env node
@@ -62638,7 +64833,7 @@ rl.question(
 
 ---
 
-## 75. Plik: `mobile/src/app/_layout.tsx`
+## 77. Plik: `mobile/src/app/_layout.tsx`
 
 ```typescript
 import { Slot } from 'expo-router';
@@ -62664,7 +64859,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 76. Plik: `mobile/src/app/explore.tsx`
+## 78. Plik: `mobile/src/app/explore.tsx`
 
 ```typescript
 import React from 'react';
@@ -62681,7 +64876,7 @@ export default function ExploreScreen() {
 
 ---
 
-## 77. Plik: `mobile/src/app/index.tsx`
+## 79. Plik: `mobile/src/app/index.tsx`
 
 ```typescript
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -69801,7 +71996,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 78. Plik: `mobile/src/components/animated-icon.module.css`
+## 80. Plik: `mobile/src/components/animated-icon.module.css`
 
 ```css
 .expoLogoBackground {
@@ -69814,7 +72009,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 79. Plik: `mobile/src/components/animated-icon.tsx`
+## 81. Plik: `mobile/src/components/animated-icon.tsx`
 
 ```typescript
 import { Image } from 'expo-image';
@@ -69953,7 +72148,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 80. Plik: `mobile/src/components/animated-icon.web.tsx`
+## 82. Plik: `mobile/src/components/animated-icon.web.tsx`
 
 ```typescript
 import { Image } from 'expo-image';
@@ -70068,7 +72263,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 81. Plik: `mobile/src/components/app-tabs.tsx`
+## 83. Plik: `mobile/src/components/app-tabs.tsx`
 
 ```typescript
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
@@ -70107,7 +72302,7 @@ export default function AppTabs() {
 
 ---
 
-## 82. Plik: `mobile/src/components/app-tabs.web.tsx`
+## 84. Plik: `mobile/src/components/app-tabs.web.tsx`
 
 ```typescript
 import {
@@ -70229,7 +72424,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 83. Plik: `mobile/src/components/external-link.tsx`
+## 85. Plik: `mobile/src/components/external-link.tsx`
 
 ```typescript
 import { Href, Link } from 'expo-router';
@@ -70261,7 +72456,7 @@ export function ExternalLink({ href, ...rest }: Props) {
 
 ---
 
-## 84. Plik: `mobile/src/components/hint-row.tsx`
+## 86. Plik: `mobile/src/components/hint-row.tsx`
 
 ```typescript
 import type { ReactNode } from 'react';
@@ -70303,7 +72498,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 85. Plik: `mobile/src/components/themed-text.tsx`
+## 87. Plik: `mobile/src/components/themed-text.tsx`
 
 ```typescript
 import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
@@ -70383,7 +72578,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 86. Plik: `mobile/src/components/themed-view.tsx`
+## 88. Plik: `mobile/src/components/themed-view.tsx`
 
 ```typescript
 import { View, type ViewProps } from 'react-native';
@@ -70406,7 +72601,7 @@ export function ThemedView({ style, lightColor, darkColor, type, ...otherProps }
 
 ---
 
-## 87. Plik: `mobile/src/components/ui/collapsible.tsx`
+## 89. Plik: `mobile/src/components/ui/collapsible.tsx`
 
 ```typescript
 import { SymbolView } from 'expo-symbols';
@@ -70478,7 +72673,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 88. Plik: `mobile/src/components/web-badge.tsx`
+## 90. Plik: `mobile/src/components/web-badge.tsx`
 
 ```typescript
 import { version } from 'expo/package.json';
@@ -70528,7 +72723,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 89. Plik: `mobile/src/constants/theme.ts`
+## 91. Plik: `mobile/src/constants/theme.ts`
 
 ```typescript
 /**
@@ -70600,7 +72795,7 @@ export const MaxContentWidth = 800;
 
 ---
 
-## 90. Plik: `mobile/src/constants/transcripts.json`
+## 92. Plik: `mobile/src/constants/transcripts.json`
 
 ```json
 {
@@ -72645,7 +74840,7 @@ export const MaxContentWidth = 800;
 
 ---
 
-## 91. Plik: `mobile/src/global.css`
+## 93. Plik: `mobile/src/global.css`
 
 ```css
 :root {
@@ -72661,7 +74856,7 @@ export const MaxContentWidth = 800;
 
 ---
 
-## 92. Plik: `mobile/src/hooks/use-color-scheme.ts`
+## 94. Plik: `mobile/src/hooks/use-color-scheme.ts`
 
 ```typescript
 export { useColorScheme } from 'react-native';
@@ -72669,7 +74864,7 @@ export { useColorScheme } from 'react-native';
 
 ---
 
-## 93. Plik: `mobile/src/hooks/use-color-scheme.web.ts`
+## 95. Plik: `mobile/src/hooks/use-color-scheme.web.ts`
 
 ```typescript
 import { useEffect, useState } from 'react';
@@ -72697,7 +74892,7 @@ export function useColorScheme() {
 
 ---
 
-## 94. Plik: `mobile/src/hooks/use-theme.ts`
+## 96. Plik: `mobile/src/hooks/use-theme.ts`
 
 ```typescript
 /**
@@ -72718,7 +74913,7 @@ export function useTheme() {
 
 ---
 
-## 95. Plik: `mobile/src/services/GeminiLiveClient.ts`
+## 97. Plik: `mobile/src/services/GeminiLiveClient.ts`
 
 ```typescript
 /**
@@ -73620,7 +75815,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 96. Plik: `mobile/tsconfig.json`
+## 98. Plik: `mobile/tsconfig.json`
 
 ```json
 {
@@ -73647,7 +75842,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 97. Plik: `firebase.json`
+## 99. Plik: `firebase.json`
 
 ```json
 {
@@ -73740,7 +75935,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 98. Plik: `firebase.temp.json`
+## 100. Plik: `firebase.temp.json`
 
 ```json
 {
@@ -73833,7 +76028,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 99. Plik: `mock_db.json`
+## 101. Plik: `mock_db.json`
 
 ```json
 {
@@ -73851,7 +76046,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 100. Plik: `portal/index.html`
+## 102. Plik: `portal/index.html`
 
 ```html
 <!DOCTYPE html>
@@ -74538,7 +76733,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 101. Plik: `scratch.js`
+## 103. Plik: `scratch.js`
 
 ```javascript
 
@@ -74546,7 +76741,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 102. Plik: `test_api.py`
+## 104. Plik: `test_api.py`
 
 ```python
 import os
@@ -74573,7 +76768,7 @@ print(repr(res.choices[0].message.content))
 
 ---
 
-## 103. Plik: `test_api2.py`
+## 105. Plik: `test_api2.py`
 
 ```python
 import os
@@ -74587,7 +76782,7 @@ print(repr(res.choices[0].message.content))
 
 ---
 
-## 104. Plik: `test_api3.py`
+## 106. Plik: `test_api3.py`
 
 ```python
 import os
@@ -74601,7 +76796,7 @@ print(repr(res.choices[0].message.content))
 
 ---
 
-## 105. Plik: `test_api4.py`
+## 107. Plik: `test_api4.py`
 
 ```python
 import urllib.request, json; data = json.dumps({'text': 'apple', 'context': 'I ate an apple'}).encode('utf-8'); req = urllib.request.Request('http://127.0.0.1:5001/api/translate', data=data, headers={'Content-Type': 'application/json'}); print(urllib.request.urlopen(req).read().decode('utf-8', 'ignore'))
@@ -74609,7 +76804,7 @@ import urllib.request, json; data = json.dumps({'text': 'apple', 'context': 'I a
 
 ---
 
-## 106. Plik: `test_api5.py`
+## 108. Plik: `test_api5.py`
 
 ```python
 import os
@@ -74637,7 +76832,7 @@ print(repr(res.choices[0].message.content))
 
 ---
 
-## 107. Plik: `test_translate.py`
+## 109. Plik: `test_translate.py`
 
 ```python
 import urllib.request, json; data = json.dumps({'text': 'apple', 'context': 'I ate an apple'}).encode('utf-8'); req = urllib.request.Request('http://127.0.0.1:5001/api/translate', data=data, headers={'Content-Type': 'application/json'}); print(urllib.request.urlopen(req).read())
