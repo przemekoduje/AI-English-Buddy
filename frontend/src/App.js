@@ -224,6 +224,7 @@ function App() {
           ) : (
             <Workspace 
               onNavigateToDashboard={() => handleNavigate('dashboard')} 
+              onNavigateToVocabulary={() => handleNavigate('notebook')}
               user={user}
               generatedText={generatedText}
               setGeneratedText={setGeneratedText}
