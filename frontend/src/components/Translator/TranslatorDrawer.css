@@ -6,7 +6,7 @@
 .translator-drawer-trigger {
   position: fixed;
   right: 0;
-  top: 50%;
+  top: calc(50% + 85px);
   transform: translateY(-50%);
   z-index: 990;
   background: #ffffff;

@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-11 19:33:50
+Wygenerowano: 2026-10-11 20:41:17
 
 ## Spis Treści
 1. `backend/app.py`
@@ -50455,7 +50455,7 @@ export default TopBar;
 .translator-drawer-trigger {
   position: fixed;
   right: 0;
-  top: 50%;
+  top: calc(50% + 85px);
   transform: translateY(-50%);
   z-index: 990;
   background: #ffffff;
@@ -51759,9 +51759,9 @@ export default TranslatorDrawer;
 .vocabulary-drawer-trigger {
   position: fixed;
   right: 0;
-  top: 50%;
+  top: calc(50% - 85px);
   transform: translateY(-50%);
-  z-index: 990;
+  z-index: 991;
   background: var(--accent);
   color: var(--gray-900);
   border: 1px solid var(--border);
