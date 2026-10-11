@@ -18,6 +18,7 @@ from email.mime.text import MIMEText
 import random
 import json
 import re
+import urllib.parse
 
 import requests
 from openai import OpenAI
@@ -2719,6 +2720,45 @@ def get_all_stories_firestore():
         return jsonify({"error": f"Błąd podczas pobierania historii z Firestore: {e}"}), 500
 
 
+def generate_story_image_url(title, text, random_seed=False):
+    """Generuje adres URL obrazu AI dopasowanego do treści i klimatu opowieści."""
+    visual_prompt = ""
+    try:
+        if client:
+            system_msg = (
+                "You are an expert art director. Given a story title and text, "
+                "write a single, vivid English image prompt (12 to 20 words) describing a cinematic, photorealistic scene "
+                "that best captures the atmosphere, setting, and mood of this story. "
+                "Output ONLY the prompt text, without any introductory words or quotes."
+            )
+            user_msg = f"Title: {title}\nStory excerpt: {text[:600] if text else ''}"
+            resp = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg}
+                ],
+                max_tokens=60,
+                temperature=0.7
+            )
+            visual_prompt = resp.choices[0].message.content.strip().strip('"').strip("'")
+    except Exception as e:
+        print(f"Błąd generowania promptu przez AI: {e}", flush=True)
+
+    if not visual_prompt:
+        first_sentence = text.split('.')[0] if text else ""
+        visual_prompt = f"{title}. {first_sentence[:120]}, cinematic photography, realistic, high detail"
+
+    clean_prompt = visual_prompt.strip().replace("\n", " ")
+    if random_seed:
+        seed = random.randint(1000, 999999)
+    else:
+        seed = abs(hash(title + (text[:100] if text else ""))) % 1000000
+
+    encoded = urllib.parse.quote(clean_prompt)
+    return f"https://image.pollinations.ai/prompt/{encoded}?width=600&height=400&seed={seed}"
+
+
 @app.route("/api/stories", methods=['POST'])
 def add_story_firestore():
     user_email = get_user_from_request()
@@ -2740,6 +2780,9 @@ def add_story_firestore():
         for doc in existing_stories:
             return jsonify({"message": "Historia o tej treści już istnieje", "id": doc.id}), 200
 
+        # Wygeneruj dedykowane zdjęcie dla historii jeśli nie podano
+        image_url = data.get('image_url') or generate_story_image_url(title, text)
+
         # Dodaj nową historię dla konkretnego użytkownika
         new_story_data = {
             'user_email': user_email,
@@ -2747,6 +2790,7 @@ def add_story_firestore():
             'text': text,
             'text_hash': text_hash,
             'read_progress': 0,
+            'image_url': image_url,
             'timestamp': firestore.SERVER_TIMESTAMP
         }
         doc_ref = stories_ref.add(new_story_data)
@@ -2801,6 +2845,9 @@ def update_story_firestore(story_id):
             return jsonify({"error": "Tytuł nie może być pusty"}), 400
         updates['title'] = new_title.strip()
 
+    if 'image_url' in data:
+        updates['image_url'] = data['image_url']
+
     if 'read_progress' in data or 'progress' in data:
         raw_val = data.get('read_progress') if 'read_progress' in data else data.get('progress')
         try:
@@ -2825,6 +2872,32 @@ def update_story_firestore(story_id):
         return jsonify({"message": "Historia zaktualizowana pomyślnie", "updates": updates}), 200
     except Exception as e:
         return jsonify({"error": f"Błąd podczas aktualizowania historii w Firestore: {e}"}), 500
+
+
+@app.route("/api/stories/<string:story_id>/generate-image", methods=['POST'])
+def generate_story_image_endpoint(story_id):
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    try:
+        doc_ref = db.collection('stories').document(story_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            return jsonify({"error": "Historia nie istnieje"}), 404
+        
+        story_data = doc.to_dict()
+        if story_data.get('user_email') != user_email:
+            return jsonify({"error": "Brak uprawnień"}), 403
+
+        title = story_data.get('title', '')
+        text = story_data.get('text', '')
+        image_url = generate_story_image_url(title, text, random_seed=True)
+
+        doc_ref.update({'image_url': image_url})
+        return jsonify({"message": "Zdjęcie wygenerowane pomyślnie", "image_url": image_url}), 200
+    except Exception as e:
+        return jsonify({"error": f"Błąd generowania zdjęcia: {e}"}), 500
 
 
 

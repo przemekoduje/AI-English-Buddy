@@ -33,6 +33,7 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
   const [editingStoryId, setEditingStoryId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
   const [selectedPromptStory, setSelectedPromptStory] = useState(null);
+  const [regeneratingImageIds, setRegeneratingImageIds] = useState(new Set());
   const [bookmarkedIds, setBookmarkedIds] = useState(() => {
     try {
       const saved = localStorage.getItem("buddy_bookmarked_stories");
@@ -41,6 +42,76 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
       return [];
     }
   });
+
+  // Regenerate image tailored to story text
+  const handleRegenerateStoryImage = async (e, story) => {
+    if (e) e.stopPropagation();
+    if (!story || !story.id) return;
+
+    setRegeneratingImageIds(prev => new Set(prev).add(story.id));
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/stories/${story.id}/generate-image`, {
+        method: "POST",
+        headers: {
+          "X-Session-Token": user?.token || ""
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.image_url) {
+          setStories(prev =>
+            prev.map(s => (s.id === story.id ? { ...s, image_url: data.image_url, cover_image: data.image_url } : s))
+          );
+          try {
+            localStorage.setItem(`buddy_story_image_${story.id}`, data.image_url);
+          } catch (err) {}
+          setRegeneratingImageIds(prev => {
+            const next = new Set(prev);
+            next.delete(story.id);
+            return next;
+          });
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Backend generate-image failed, using direct AI fallback:", err);
+    }
+
+    // Direct AI fallback: construct prompt from title and text with a new seed
+    const cleanTitle = (story.title || "").replace(/[^a-zA-Z0-9\s]/g, " ").trim();
+    let scene = "";
+    if (story.text) {
+      const clean = story.text.replace(/\n+/g, " ");
+      const sentences = clean.split(/[.?!]/).filter(s => s.trim().length > 10);
+      scene = sentences.slice(0, 2).join(". ").replace(/[^a-zA-Z0-9\s]/g, " ").trim().slice(0, 140);
+    }
+    const prompt = `${cleanTitle}. ${scene || story.category || "story scene"}, cinematic atmospheric photography, detailed 4k`.trim();
+    const newSeed = Math.floor(Math.random() * 1000000);
+    const newUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=600&height=400&seed=${newSeed}`;
+
+    setStories(prev =>
+      prev.map(s => (s.id === story.id ? { ...s, image_url: newUrl, cover_image: newUrl } : s))
+    );
+    try {
+      localStorage.setItem(`buddy_story_image_${story.id}`, newUrl);
+      fetch(`${API_BASE_URL}/api/stories/${story.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || ""
+        },
+        body: JSON.stringify({ image_url: newUrl })
+      }).catch(() => {});
+    } catch (err) {}
+
+    setRegeneratingImageIds(prev => {
+      const next = new Set(prev);
+      next.delete(story.id);
+      return next;
+    });
+  };
 
   // Toggle bookmark for a story
   const toggleBookmark = (e, storyId) => {
@@ -213,9 +284,26 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
           else if (t.includes("market") || t.includes("food") || t.includes("recipe")) category = "Food & Market";
         }
 
-        // Cover image
-        const catKey = category.toLowerCase();
-        const coverImage = CATEGORY_IMAGES[catKey] || DEFAULT_COVER_IMAGES[index % DEFAULT_COVER_IMAGES.length];
+        // Tailored cover image reflecting text & story title
+        let coverImage = story.image_url || story.cover_image;
+        if (!coverImage) {
+          try {
+            const cachedImg = localStorage.getItem(`buddy_story_image_${story.id}`);
+            if (cachedImg) coverImage = cachedImg;
+          } catch (e) {}
+        }
+        if (!coverImage) {
+          const cleanTitle = (story.title || "").replace(/[^a-zA-Z0-9\s]/g, " ").trim();
+          let scene = "";
+          if (story.text) {
+            const clean = story.text.replace(/\n+/g, " ");
+            const sentences = clean.split(/[.?!]/).filter(s => s.trim().length > 10);
+            scene = sentences.slice(0, 2).join(". ").replace(/[^a-zA-Z0-9\s]/g, " ").trim().slice(0, 140);
+          }
+          const prompt = `${cleanTitle}. ${scene || category || "story scene"}, cinematic atmospheric photography, detailed 4k`.trim();
+          const seed = Math.abs(String(story.id || story.title).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 100000;
+          coverImage = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=600&height=400&seed=${seed}`;
+        }
         const isBookmarked = bookmarkedIds.includes(story.id);
 
         return {
@@ -405,7 +493,33 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
             >
               {/* Cover Image */}
               <div className="card-cover-wrapper">
-                <img src={story.coverImage} alt={story.title} className="card-cover-img" />
+                <img
+                  src={story.coverImage}
+                  alt={story.title}
+                  className="card-cover-img"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    const catKey = (story.category || "general").toLowerCase();
+                    e.currentTarget.src = CATEGORY_IMAGES[catKey] || DEFAULT_COVER_IMAGES[0];
+                  }}
+                />
+                <button
+                  type="button"
+                  className="card-refresh-image-btn"
+                  onClick={(e) => handleRegenerateStoryImage(e, story)}
+                  title="Wygeneruj nowe zdjęcie dopasowane do opowiadania"
+                  disabled={regeneratingImageIds.has(story.id)}
+                >
+                  {regeneratingImageIds.has(story.id) ? (
+                    <div className="btn-spinner-micro" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M23 4v6h-6" />
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                    </svg>
+                  )}
+                  <span>{regeneratingImageIds.has(story.id) ? "Tworzę..." : "Nowe zdjęcie AI"}</span>
+                </button>
               </div>
 
               {/* Card Body */}
@@ -426,6 +540,20 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
                     >
                       <svg viewBox="0 0 24 24" width="16" height="16" fill={story.isBookmarked ? "#0284c7" : "none"} stroke={story.isBookmarked ? "#0284c7" : "currentColor"} strokeWidth="2">
                         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                      </svg>
+                    </button>
+
+                    {/* Regenerate AI Image */}
+                    <button
+                      className="icon-action-btn"
+                      onClick={(e) => handleRegenerateStoryImage(e, story)}
+                      title="Wygeneruj nowe zdjęcie AI dla tego opowiadania"
+                      disabled={regeneratingImageIds.has(story.id)}
+                    >
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
                       </svg>
                     </button>
 
