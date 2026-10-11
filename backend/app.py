@@ -1362,11 +1362,13 @@ def translate_text():
     data = request.get_json() or {}
     text_to_translate = data.get("text")
     context_sentence = data.get("context")
+    source_lang = data.get("source_lang", "English").strip() or "English"
+    target_lang = data.get("target_lang", "Polish").strip() or "Polish"
     if not text_to_translate:
         return jsonify({"error": "Brak tekstu do tłumaczenia"}), 400
 
     # 1. Sprawdź pamięć podręczną (0 tokenów, 0 kosztu, odpowiedź natychmiastowa)
-    cache_key = f"{text_to_translate.strip().lower()}__#__{context_sentence.strip().lower() if context_sentence else ''}"
+    cache_key = f"{text_to_translate.strip().lower()}__#__{source_lang.lower()}__#__{target_lang.lower()}__#__{context_sentence.strip().lower() if context_sentence else ''}"
     if cache_key in TRANSLATION_CACHE:
         cached = TRANSLATION_CACHE[cache_key]
         if isinstance(cached, dict):
@@ -1379,39 +1381,39 @@ def translate_text():
     if has_context:
         if is_phrase:
             translation_prompt = (
-                f"You are an English-to-Polish translator.\n"
+                f"You are a professional {source_lang}-to-{target_lang} translator.\n"
                 f"Translate the phrase '{text_to_translate}' based on its context sentence.\n"
                 f"Sentence: \"{context_sentence}\"\n\n"
                 f"Rules:\n"
-                f"1. Line 1: Provide the BASE dictionary form (infinitive, nominative, etc.) of the Polish translation of the phrase '{text_to_translate}', and optionally 1-2 synonyms separated by commas.\n"
-                f"2. Line 2: Natural Polish translation of the entire sentence.\n"
+                f"1. Line 1: Provide the natural base {target_lang} translation of the phrase '{text_to_translate}', and optionally 1-2 synonyms separated by commas.\n"
+                f"2. Line 2: Natural {target_lang} translation of the entire sentence.\n"
                 f"Respond ONLY with these 2 lines, without prefixes or labels."
             )
         else:
             translation_prompt = (
-                f"You are an English-to-Polish translator.\n"
+                f"You are a professional {source_lang}-to-{target_lang} translator.\n"
                 f"Translate the word '{text_to_translate}' based on its context sentence.\n"
                 f"Sentence: \"{context_sentence}\"\n\n"
                 f"Rules:\n"
-                f"1. Line 1: Provide the BASE dictionary form (infinitive, nominative, etc.) of the Polish translation of the word '{text_to_translate}' in this context, followed by 2-3 other common Polish synonyms separated by commas.\n"
-                f"2. Line 2: Natural Polish translation of the entire sentence.\n"
+                f"1. Line 1: Provide the base {target_lang} translation of the word '{text_to_translate}' in this context, followed by 2-3 other common {target_lang} synonyms separated by commas.\n"
+                f"2. Line 2: Natural {target_lang} translation of the entire sentence.\n"
                 f"Respond ONLY with these 2 lines, without prefixes or labels."
             )
     else:
         if is_phrase:
             translation_prompt = (
-                f"Translate the English phrase or sentence to Polish:\n"
+                f"Translate the {source_lang} phrase or sentence to {target_lang}:\n"
                 f"\"{text_to_translate}\"\n\n"
                 f"Rules:\n"
-                f"1. Provide ONLY a single, natural Polish translation on ONE line.\n"
+                f"1. Provide ONLY a single, natural {target_lang} translation on ONE line.\n"
                 f"2. Do NOT provide synonyms, alternate versions, explanations, or multiple lines.\n"
                 f"Respond ONLY with the translation text."
             )
         else:
             translation_prompt = (
-                f"Translate the English word '{text_to_translate}' to Polish.\n"
+                f"Translate the {source_lang} word '{text_to_translate}' to {target_lang}.\n"
                 f"Rules:\n"
-                f"1. Provide the most common BASE dictionary form of the Polish translation, followed by 2-3 other distinct Polish meanings separated by commas. No prefix.\n"
+                f"1. Provide the most common {target_lang} translation, followed by 2-3 other distinct {target_lang} meanings separated by commas. No prefix.\n"
                 f"Respond ONLY with the translation line, without markdown formatting or extra text."
             )
     
@@ -1425,7 +1427,7 @@ def translate_text():
         cleaned_lines = []
         import re
         for line in lines:
-            for prefix in ['line 1:', 'line 2:', 'translation:', 'polish:', '1.', '2.', '1:', '2:', '-']:
+            for prefix in ['line 1:', 'line 2:', 'translation:', 'polish:', 'english:', '1.', '2.', '1:', '2:', '-']:
                 if line.lower().startswith(prefix):
                     line = line[len(prefix):].strip()
             # Usuń dodatkowe numerowanie np. "1. " przez regex
@@ -1463,6 +1465,43 @@ def translate_text():
         return jsonify({"error": f"Błąd połączenia z API: {str(e)}"}), 500
     except Exception as e:
         return jsonify({"error": f"Błąd podczas tłumaczenia: {str(e)}"}), 500
+
+@app.route("/api/translate/ai-assistant", methods=['POST'])
+def translate_ai_assistant():
+    data = request.get_json() or {}
+    text = data.get("text", "").strip()
+    translation = data.get("translation", "").strip()
+    source_lang = data.get("source_lang", "English").strip() or "English"
+    target_lang = data.get("target_lang", "Polish").strip() or "Polish"
+    question = data.get("question", "").strip()
+
+    if not text:
+        return jsonify({"error": "Brak tekstu źródłowego"}), 400
+
+    if question:
+        prompt = (
+            f"You are an expert AI Language Assistant in Speakling.\n"
+            f"Source text ({source_lang}): \"{text}\"\n"
+            f"Translation ({target_lang}): \"{translation}\"\n"
+            f"User Question: \"{question}\"\n\n"
+            f"Answer the user's question directly, concisely (max 3 sentences) in English with clear examples and linguistic context."
+        )
+    else:
+        prompt = (
+            f"You are an expert AI Language Assistant in Speakling.\n"
+            f"Source text ({source_lang}): \"{text}\"\n"
+            f"Translation ({target_lang}): \"{translation}\"\n\n"
+            f"Provide an insightful, concise context breakdown (max 2 sentences) explaining the nuance, idiomatic meaning, or grammar point of this translation in context."
+        )
+
+    try:
+        output_data = query_deepseek(prompt, max_tokens=200)
+        content = output_data['choices'][0]['message']['content'].strip()
+        return jsonify({"explanation": content})
+    except Exception as e:
+        print(f"Error in translate_ai_assistant: {e}", flush=True)
+        return jsonify({"explanation": f"Translations depend on context. Here, '{text}' naturally corresponds to '{translation}' in {target_lang}."})
+
 
 @app.route("/api/explain-word", methods=['POST'])
 def explain_word():

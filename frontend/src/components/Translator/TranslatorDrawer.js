@@ -2,8 +2,23 @@ import React, { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from "../../config";
 import "./TranslatorDrawer.css";
 
+const AVAILABLE_LANGUAGES = [
+  { code: "en", name: "English" },
+  { code: "pl", name: "Polski" },
+  { code: "es", name: "Español" },
+  { code: "de", name: "Deutsch" },
+  { code: "fr", name: "Français" },
+  { code: "it", name: "Italiano" },
+  { code: "uk", name: "Українська" },
+  { code: "pt", name: "Português" },
+  { code: "ja", name: "日本語" },
+  { code: "zh", name: "中文" },
+];
+
 const TranslatorDrawer = ({ user }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [sourceLang, setSourceLang] = useState("English");
+  const [targetLang, setTargetLang] = useState("Polski");
   const [sentence, setSentence] = useState("Maya knew she would need to adapt to a new routine.");
   const [polishTranslation, setPolishTranslation] = useState("Maya wiedziała, że będzie musiała dostosować się do nowej rutyny.");
   const [phrase, setPhrase] = useState("adapt to a new routine");
@@ -16,6 +31,12 @@ const TranslatorDrawer = ({ user }) => {
   const [copiedSource, setCopiedSource] = useState(false);
   const [copiedTrans, setCopiedTrans] = useState(false);
   const [isInputMode, setIsInputMode] = useState(false);
+
+  // AI Assistant State
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiAssistantExpanded, setAiAssistantExpanded] = useState(true);
+  const [aiCustomQuestion, setAiCustomQuestion] = useState("");
+  const [aiChatMessages, setAiChatMessages] = useState([]);
 
   const debounceTimerRef = useRef(null);
 
@@ -46,13 +67,9 @@ const TranslatorDrawer = ({ user }) => {
           wordTranslation: incomingWordTranslation
         } = e.detail;
 
+        const activeSentence = incomingSentence || sentence;
         if (incomingSentence) {
           setSentence(incomingSentence);
-          if (incomingSentenceTranslation) {
-            setPolishTranslation(incomingSentenceTranslation);
-          } else {
-            fetchTranslation(incomingSentence, incomingWord);
-          }
         }
 
         if (incomingPhrase) {
@@ -61,21 +78,24 @@ const TranslatorDrawer = ({ user }) => {
           setPhrase(incomingWord);
         }
 
+        if (incomingSentenceTranslation) {
+          setPolishTranslation(incomingSentenceTranslation);
+          fetchAiAssistant(activeSentence, incomingSentenceTranslation, sourceLang, targetLang);
+        } else if (incomingSentence) {
+          fetchTranslation(incomingSentence, incomingWord, sourceLang, targetLang);
+        }
+
         if (incomingWord && incomingWordTranslation) {
           setContextExplanation(`Translations depend on context. Here, "${incomingWord}" means "${incomingWordTranslation}".`);
-        } else if (incomingWord) {
-          setContextExplanation(`Translations depend on context. Key expression: "${incomingWord}".`);
-        } else {
-          setContextExplanation('Translations depend on context and story tone.');
         }
       }
     };
 
     window.addEventListener("open-instant-translator", handleOpenCustom);
     return () => window.removeEventListener("open-instant-translator", handleOpenCustom);
-  }, []);
+  }, [sentence, sourceLang, targetLang]);
 
-  const fetchTranslation = async (textToTranslate, wordContext) => {
+  const fetchTranslation = async (textToTranslate, wordContext, sLang = sourceLang, tLang = targetLang) => {
     if (!textToTranslate || !textToTranslate.trim()) return;
     setIsTranslating(true);
     try {
@@ -87,13 +107,17 @@ const TranslatorDrawer = ({ user }) => {
         },
         body: JSON.stringify({
           text: textToTranslate.trim(),
-          context: wordContext || textToTranslate.trim()
+          context: wordContext || textToTranslate.trim(),
+          source_lang: sLang,
+          target_lang: tLang
         }),
       });
       if (response.ok) {
         const data = await response.json();
         const resText = data.sentence_translation || data.translation || "Brak tłumaczenia.";
         setPolishTranslation(resText);
+        // Automatically fetch AI Assistant insights
+        fetchAiAssistant(textToTranslate.trim(), resText, sLang, tLang);
       } else {
         setPolishTranslation("Translation error.");
       }
@@ -105,69 +129,148 @@ const TranslatorDrawer = ({ user }) => {
     }
   };
 
-  const handleSentenceInputChange = (e) => {
-    const val = e.target.value;
-    setSentence(val);
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(() => {
-      if (val.trim()) {
-        fetchTranslation(val);
-        setPhrase(val.trim().split(" ").slice(0, 4).join(" "));
-      }
-    }, 900);
-  };
-
-  const handlePlayEnglish = async (textToPlay) => {
-    if (!textToPlay || isPlayingEnglish) return;
-    setIsPlayingEnglish(true);
+  const fetchAiAssistant = async (srcText, transText, sLang = sourceLang, tLang = targetLang, customQ = "") => {
+    if (!srcText) return;
+    setIsAiLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+      const response = await fetch(`${API_BASE_URL}/api/translate/ai-assistant`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Session-Token": user?.token || "",
         },
         body: JSON.stringify({
-          text: textToPlay,
-          voice: "en-US-BrianNeural",
+          text: srcText,
+          translation: transText,
+          source_lang: sLang,
+          target_lang: tLang,
+          question: customQ
         }),
       });
       if (response.ok) {
         const data = await response.json();
-        if (data.audio_base64) {
-          const audio = new Audio("data:audio/mp3;base64," + data.audio_base64);
-          audio.play().catch(() => {});
-          audio.onended = () => setIsPlayingEnglish(false);
-          audio.onerror = () => setIsPlayingEnglish(false);
-          return;
+        if (customQ) {
+          setAiChatMessages(prev => [
+            ...prev,
+            { type: "user", text: customQ },
+            { type: "assistant", text: data.explanation }
+          ]);
+        } else {
+          setContextExplanation(data.explanation);
         }
       }
-    } catch (e) {
-      console.warn("TTS API failed, falling back to Web Speech:", e);
-    }
-
-    if ("speechSynthesis" in window) {
-      const utter = new SpeechSynthesisUtterance(textToPlay);
-      utter.lang = "en-US";
-      utter.onend = () => setIsPlayingEnglish(false);
-      utter.onerror = () => setIsPlayingEnglish(false);
-      window.speechSynthesis.speak(utter);
-    } else {
-      setIsPlayingEnglish(false);
+    } catch (err) {
+      console.warn("AI Assistant fetch error:", err);
+    } finally {
+      setIsAiLoading(false);
     }
   };
 
-  const handlePlayPolish = (textToPlay) => {
-    if (!textToPlay || isPlayingPolish) return;
-    setIsPlayingPolish(true);
+  const handleSwapLanguages = () => {
+    const newSource = targetLang;
+    const newTarget = sourceLang;
+    setSourceLang(newSource);
+    setTargetLang(newTarget);
+
+    const prevSentence = sentence;
+    const prevTrans = polishTranslation;
+
+    setSentence(prevTrans);
+    setPolishTranslation(prevSentence);
+
+    if (prevTrans) {
+      fetchTranslation(prevTrans, phrase, newSource, newTarget);
+    }
+  };
+
+  const handleSourceLangChange = (e) => {
+    const newLang = e.target.value;
+    setSourceLang(newLang);
+    if (sentence) {
+      fetchTranslation(sentence, phrase, newLang, targetLang);
+    }
+  };
+
+  const handleTargetLangChange = (e) => {
+    const newLang = e.target.value;
+    setTargetLang(newLang);
+    if (sentence) {
+      fetchTranslation(sentence, phrase, sourceLang, newLang);
+    }
+  };
+
+  const handleSentenceInputChange = (e) => {
+    const val = e.target.value;
+    setSentence(val);
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      if (val.trim()) {
+        fetchTranslation(val, "", sourceLang, targetLang);
+        setPhrase(val.trim().split(" ").slice(0, 4).join(" "));
+      }
+    }, 900);
+  };
+
+  const handleAskAiQuestion = (qText) => {
+    const query = qText || aiCustomQuestion;
+    if (!query.trim()) return;
+    fetchAiAssistant(sentence, polishTranslation, sourceLang, targetLang, query);
+    setAiCustomQuestion("");
+  };
+
+  const handlePlayAudio = async (textToPlay, langName, setIsPlaying) => {
+    if (!textToPlay) return;
+    setIsPlaying(true);
+
+    if (langName === "English") {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/tts`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || "",
+          },
+          body: JSON.stringify({
+            text: textToPlay,
+            voice: "en-US-BrianNeural",
+          }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.audio_base64) {
+            const audio = new Audio("data:audio/mp3;base64," + data.audio_base64);
+            audio.play().catch(() => {});
+            audio.onended = () => setIsPlaying(false);
+            audio.onerror = () => setIsPlaying(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("TTS API fallback:", e);
+      }
+    }
+
+    // Web Speech fallback for Polish and other languages
     if ("speechSynthesis" in window) {
       const utter = new SpeechSynthesisUtterance(textToPlay);
-      utter.lang = "pl-PL";
-      utter.onend = () => setIsPlayingPolish(false);
-      utter.onerror = () => setIsPlayingPolish(false);
+      const langCodeMap = {
+        English: "en-US",
+        Polski: "pl-PL",
+        Español: "es-ES",
+        Deutsch: "de-DE",
+        Français: "fr-FR",
+        Italiano: "it-IT",
+        Українська: "uk-UA",
+        Português: "pt-PT",
+        日本語: "ja-JP",
+        中文: "zh-CN"
+      };
+      utter.lang = langCodeMap[langName] || "en-US";
+      utter.onend = () => setIsPlaying(false);
+      utter.onerror = () => setIsPlaying(false);
       window.speechSynthesis.speak(utter);
     } else {
-      setIsPlayingPolish(false);
+      setIsPlaying(false);
     }
   };
 
@@ -260,24 +363,54 @@ const TranslatorDrawer = ({ user }) => {
             </button>
           </div>
 
-          {/* Language Switcher */}
+          {/* Interactive Language Selector & Swap Bar */}
           <div className="instant-translator-lang-bar">
-            <button className="lang-pill active">
-              English
-            </button>
-            <div className="lang-swap-icon" title="Swap languages">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="lang-select-wrapper">
+              <select 
+                className="lang-pill-select active"
+                value={sourceLang}
+                onChange={handleSourceLangChange}
+                title="Select source language"
+              >
+                {AVAILABLE_LANGUAGES.map((lang) => (
+                  <option key={`src-${lang.code}`} value={lang.name}>
+                    {lang.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button 
+              className="lang-swap-btn"
+              onClick={handleSwapLanguages}
+              title="Swap languages (zamień kierunek tłumaczenia)"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
-            </div>
-            <button className="lang-pill">
-              Polski
             </button>
+
+            <div className="lang-select-wrapper">
+              <select 
+                className="lang-pill-select"
+                value={targetLang}
+                onChange={handleTargetLangChange}
+                title="Select target language"
+              >
+                {AVAILABLE_LANGUAGES.map((lang) => (
+                  <option key={`tgt-${lang.code}`} value={lang.name}>
+                    {lang.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Card 1: SELECTED SENTENCE */}
           <div className="translator-card-section">
-            <span className="translator-card-label">SELECTED SENTENCE</span>
+            <span className="translator-card-label">
+              SELECTED SENTENCE ({sourceLang.toUpperCase()})
+            </span>
             <div className="translator-white-card">
               {isInputMode ? (
                 <div className="custom-sentence-input-wrapper">
@@ -293,7 +426,7 @@ const TranslatorDrawer = ({ user }) => {
                     <button 
                       className="custom-sentence-submit-btn"
                       onClick={() => {
-                        fetchTranslation(sentence);
+                        fetchTranslation(sentence, "", sourceLang, targetLang);
                         setIsInputMode(false);
                       }}
                       disabled={isTranslating || !sentence.trim()}
@@ -311,8 +444,8 @@ const TranslatorDrawer = ({ user }) => {
               <div className="card-actions-row">
                 <button 
                   className={`card-action-icon-btn ${isPlayingEnglish ? 'playing' : ''}`}
-                  onClick={() => handlePlayEnglish(sentence)}
-                  title="Listen to English sentence"
+                  onClick={() => handlePlayAudio(sentence, sourceLang, setIsPlayingEnglish)}
+                  title={`Listen to ${sourceLang} pronunciation`}
                   disabled={isPlayingEnglish}
                 >
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -340,9 +473,11 @@ const TranslatorDrawer = ({ user }) => {
             </div>
           </div>
 
-          {/* Card 2: POLISH TRANSLATION */}
+          {/* Card 2: TARGET LANGUAGE TRANSLATION */}
           <div className="translator-card-section">
-            <span className="translator-card-label translation-label">POLISH TRANSLATION</span>
+            <span className="translator-card-label translation-label">
+              {targetLang.toUpperCase()} TRANSLATION
+            </span>
             <div className="translator-white-card">
               {isTranslating ? (
                 <div className="translation-loading-placeholder">
@@ -358,8 +493,8 @@ const TranslatorDrawer = ({ user }) => {
               <div className="card-actions-row">
                 <button 
                   className={`card-action-icon-btn ${isPlayingPolish ? 'playing' : ''}`}
-                  onClick={() => handlePlayPolish(polishTranslation)}
-                  title="Posłuchaj wymowy po polsku"
+                  onClick={() => handlePlayAudio(polishTranslation, targetLang, setIsPlayingPolish)}
+                  title={`Posłuchaj wymowy (${targetLang})`}
                   disabled={isPlayingPolish}
                 >
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -387,12 +522,96 @@ const TranslatorDrawer = ({ user }) => {
             </div>
           </div>
 
-          {/* AI-assisted translation Badge & Context Note */}
+          {/* AI Assistant Section (Active AI Linguistic Intelligence) */}
           <div className="translator-context-section">
-            <span className="ai-assisted-badge">AI-assisted translation</span>
-            <p className="context-note-text">
-              {contextExplanation}
-            </p>
+            <div className="ai-assistant-header-row">
+              <span className="ai-assisted-badge">
+                <span className="ai-badge-dot">●</span> AI-assisted translation
+              </span>
+              <button 
+                className="ai-toggle-btn"
+                onClick={() => setAiAssistantExpanded(prev => !prev)}
+                title="Toggle AI Assistant"
+              >
+                {aiAssistantExpanded ? "Hide" : "Ask AI"}
+              </button>
+            </div>
+
+            {isAiLoading && (
+              <div className="ai-loading-indicator">
+                <span className="ai-mini-pulse" />
+                <span>AI Assistant analyzing nuances...</span>
+              </div>
+            )}
+
+            {contextExplanation && (
+              <p className="context-note-text">
+                {contextExplanation}
+              </p>
+            )}
+
+            {aiAssistantExpanded && (
+              <div className="ai-interactive-panel">
+                {/* Chat responses if user asked follow-up */}
+                {aiChatMessages.length > 0 && (
+                  <div className="ai-chat-thread">
+                    {aiChatMessages.map((msg, idx) => (
+                      <div key={idx} className={`ai-chat-bubble ${msg.type}`}>
+                        {msg.type === "assistant" && <span className="ai-chat-label">AI:</span>}
+                        <span>{msg.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Quick AI Prompt Chips */}
+                <div className="ai-prompt-chips">
+                  <button 
+                    className="ai-prompt-chip"
+                    onClick={() => handleAskAiQuestion("Why this translation fits best?")}
+                  >
+                    Why this translation?
+                  </button>
+                  <button 
+                    className="ai-prompt-chip"
+                    onClick={() => handleAskAiQuestion("Give 2 alternative natural phrases")}
+                  >
+                    Alternatives
+                  </button>
+                  <button 
+                    className="ai-prompt-chip"
+                    onClick={() => handleAskAiQuestion("Is this formal or casual?")}
+                  >
+                    Formality
+                  </button>
+                </div>
+
+                {/* Ask AI Input Field */}
+                <form 
+                  className="ai-ask-input-box"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAskAiQuestion();
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Ask AI Assistant about this translation..."
+                    value={aiCustomQuestion}
+                    onChange={(e) => setAiCustomQuestion(e.target.value)}
+                    disabled={isAiLoading}
+                  />
+                  <button 
+                    type="submit" 
+                    className="ai-ask-submit-btn" 
+                    disabled={isAiLoading || !aiCustomQuestion.trim()}
+                    title="Send question to AI"
+                  >
+                    ↑
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
 
           {/* Section: Keep this phrase */}
