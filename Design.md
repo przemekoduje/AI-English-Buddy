@@ -110,20 +110,21 @@ Układ podzielony jest na dwie główne kolumny desktopowe:
        - **Ikonka kosza (`trash-2`)**: Usunięcie słowa ze słownika i natychmiastowe ukrycie go z widoku karty.
    - Stopka karty: Przycisk `Open vocabulary` z ikoną książki, przekierowujący bezpośrednio do pełnego widoku **Vocabulary View** (`'notebook'`).
 
-2. **Karta 2 (Środek): `learning-buddy-card` (Story Mastery & Ćwiczenia)**
-   - Nagłówek: `✨ Story Mastery & Ćwiczenia`.
-   - Opis: *„Opanuj tę historię w 3 krokach z Mastery Path oraz utrwalaj słownictwo za pomocą interaktywnych fiszek i quizów.”*
-   - **Główny Przycisk Banerowy (Mastery Hero Button)**:
-     - Fioletowo-indygo gradient (`linear-gradient(135deg, #7c3aed, #6366f1)`).
-     - Tytuł: `Mastery Path` + pigułka `3 kroki`.
-     - Podtytuł: `Poznaj tekst w 3 krokach`.
-     - Strzałka nawigacji `→`.
-     - Uruchamia `PracticeMode` (3 fazy: Shadowing, Słownictwo, Konwersacja).
-   - **Siatka Narzędzi Treningowych (2x2 Grid)**:
-     - **Fiszki (`Flashcards`)**: Fioletowa ikonka kart; uruchamia interaktywne odwracane fiszki ze słówek historii.
-     - **Quiz słówek (`Vocabulary Quiz`)**: Niebieska ikonka z ptaszkiem; uruchamia generowany przez AI test tłumaczeniowy.
-     - **Podsumowanie AI (`AI Summary`)**: Bursztynowa ikonka wykresu; generuje raport sesji i rekomendacje.
-     - **E-mail (`Export`)**: Błękitna ikonka koperty; wysyła listę słówek na e-mail użytkownika.
+2. **Karta 2 (Środek): `learning-buddy-card` (Your learning buddy)**
+   - Styl: Spójny z makietą Figma, czysty minimalizm bez krzykliwych kolorowych boksów. Wszystkie teksty i opisy wyłącznie w języku angielskim.
+   - Nagłówek: Delikatna fioletowa gwiazdka + `Your learning buddy`.
+   - Opis: *„Make this story your own. Practice with Mastery Path or train your vocabulary.”*
+   - **Przycisk Główny (Pill Button)**:
+     - Fioletowy przycisk-pigułka (`border-radius: 999px; height: 46px; background: linear-gradient(135deg, #8b5cf6, #7c3aed)`).
+     - Etykieta: `Mastery Path · 3 steps` z ikoną mikrofonu.
+     - Uruchamia `PracticeMode` (3 etapy poznania historii).
+   - **Sekcja Narzędzi Treningowych (`PRACTICE TOOLS`)**:
+     - Czysty nagłówek sekcji: `PRACTICE TOOLS` (wersaliki, subtelny slate).
+     - Siatka minimalistycznych pigułek (`border-radius: 999px; border: 1px solid #e2e8f0; background: #ffffff; color: #334155;`):
+       - `Flashcards` — interaktywne odwracane fiszki.
+       - `Vocabulary quiz` — quiz tłumaczeniowy AI ze słówek.
+       - `Session summary` — podsumowanie sesji nauki AI.
+       - `Export to email` — eksport zebranych słówek na skrzynkę e-mail.
 
 3. **Karta 3 (Dół): `small-steps-card` (Small steps count)**
    - Delikatna karta motywacyjna z ikoną żarówki `💡`.
