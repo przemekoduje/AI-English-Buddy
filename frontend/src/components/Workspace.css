@@ -1075,6 +1075,12 @@
   color: #64748b;
 }
 
+.inline-word-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .inline-word-speaker-btn {
   width: 34px;
   height: 34px;
@@ -1093,6 +1099,26 @@
 .inline-word-speaker-btn:hover {
   background: #eff6ff;
   border-color: #dbeafe;
+}
+
+.inline-word-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.inline-word-close-btn:hover {
+  background: #f1f5f9;
+  color: #334155;
 }
 
 .inline-word-def {

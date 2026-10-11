@@ -786,9 +786,11 @@ function Workspace({
 
   const pauseAudioForTooltip = useCallback(() => {
     const audio = currentAudioRef.current;
-    if ((audio && !audio.paused) || (isSpeakingRef.current && !isPausedRef.current)) {
+    if ((audio && !audio.paused) || (isSpeakingRef.current && !isPausedRef.current) || (isSpeakingRef.current && currentChunkIndexRef.current >= 0)) {
       wasPlayingBeforeTooltipRef.current = true;
-      pausedChunkIndexRef.current = currentChunkIndexRef.current >= 0 ? currentChunkIndexRef.current : 0;
+      if (pausedChunkIndexRef.current < 0) {
+        pausedChunkIndexRef.current = currentChunkIndexRef.current >= 0 ? currentChunkIndexRef.current : 0;
+      }
       if (audio) {
         audio.pause();
       }
@@ -799,7 +801,7 @@ function Workspace({
 
   const resumeAudioAfterTooltip = useCallback(() => {
     if (wasPlayingBeforeTooltipRef.current) {
-      const chunkToReplay = pausedChunkIndexRef.current;
+      const chunkToReplay = pausedChunkIndexRef.current >= 0 ? pausedChunkIndexRef.current : currentChunkIndexRef.current;
       wasPlayingBeforeTooltipRef.current = false;
       pausedChunkIndexRef.current = -1;
       isPausedRef.current = false;
@@ -813,7 +815,7 @@ function Workspace({
           if (speakChunkRef.current) {
             speakChunkRef.current(chunkToReplay, false);
           }
-        }, 60);
+        }, 50);
       }
     } else {
       wasPlayingBeforeTooltipRef.current = false;
@@ -1306,6 +1308,8 @@ function Workspace({
     setCurrentChunkIndex(-1);
     currentChunkIndexRef.current = -1;
     setPlaySingle(false);
+    wasPlayingBeforeTooltipRef.current = false;
+    pausedChunkIndexRef.current = -1;
   };
 
   const handlePlaySentence = (index, single = false) => {
@@ -1802,15 +1806,17 @@ function Workspace({
   }, [isWordInNotebook, notebookWords, currentStoryId, user, handleDeleteWord]);
 
   const handleFigmaWordClick = async (rawWord, pIdx, paragraphText) => {
-    pauseAudioForTooltip();
     const cleanWord = rawWord.replace(/[^a-zA-Z'-]/g, "");
     if (!cleanWord) return;
 
     if (inlineWordData && inlineWordData.word.toLowerCase() === cleanWord.toLowerCase() && inlineWordData.paragraphIndex === pIdx) {
       setInlineWordData(null);
       setShowInlineSentenceTrans(false);
+      resumeAudioAfterTooltip();
       return;
     }
+
+    pauseAudioForTooltip();
 
     const meta = getWordMeta(cleanWord);
     const sentences = paragraphText.split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
@@ -2224,7 +2230,7 @@ function Workspace({
   const renderParagraphTokens = (pText, pIdx) => {
     const sents = (paragraphSentences && paragraphSentences[pIdx]) ? paragraphSentences[pIdx] : [{ chunkIndex: -1, text: pText }];
     return sents.map((sentence, sIdx) => {
-      const isCurrentReading = isSpeaking && !isPaused && currentChunkIndex >= 0 && sentence.chunkIndex === currentChunkIndex;
+      const isCurrentReading = (isSpeaking || isPaused || wasPlayingBeforeTooltipRef.current) && currentChunkIndex >= 0 && sentence.chunkIndex === currentChunkIndex;
       const tokens = sentence.text.split(/([\w\u00C0-\u017F'-]+)/g);
 
       return (
@@ -2273,16 +2279,32 @@ function Workspace({
             <span className="inline-word-phonetic">{inlineWordData.phonetic}</span>
             <span className="inline-word-pos">· {inlineWordData.pos}</span>
           </div>
-          <button 
-            className="inline-word-speaker-btn"
-            onClick={() => handleSpeakWord(inlineWordData.word)}
-            title="Odsłuchaj wymowę słowa"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-            </svg>
-          </button>
+          <div className="inline-word-header-actions">
+            <button 
+              className="inline-word-speaker-btn"
+              onClick={() => handleSpeakWord(inlineWordData.word)}
+              title="Odsłuchaj wymowę słowa"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+            </button>
+            <button
+              className="inline-word-close-btn"
+              onClick={() => {
+                setInlineWordData(null);
+                setShowInlineSentenceTrans(false);
+                resumeAudioAfterTooltip();
+              }}
+              title="Zamknij podgląd i kontynuuj czytanie"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="6" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="inline-word-def">
