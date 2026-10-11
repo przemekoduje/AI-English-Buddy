@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { API_BASE_URL } from '../config';
 import "../App.css";
 import "./Workspace.css";
@@ -6,12 +6,141 @@ import globalAudioManager from '../globalAudioManager';
 import Flashcards from "./Flashcards";
 import VocabularyExerciseModal from "./Vocabulary/VocabularyExerciseModal";
 import StoryGenerator from "./Story/StoryGenerator";
-import Reader from "./Reader/Reader";
-import NotebookSidebar from "./Notebook/NotebookSidebar";
 import PracticeMode from "./Practice/PracticeMode";
 import WordExplanationModal from "./Notebook/WordExplanationModal";
 import SessionSummaryModal from "./Notebook/SessionSummaryModal";
 import PronunciationPracticeModal from "./Notebook/PronunciationPracticeModal";
+import { calculateCEFRLevel } from "./Story/SavedStories";
+
+// Curated vocabulary metadata for rich inline word card details & key story words
+const VOCABULARY_INFO = {
+  adapt: {
+    phonetic: "/əˈdæpt/",
+    pos: "verb",
+    level: "B2",
+    pl: "dostosować się",
+    enDef: "to change to suit a new situation"
+  },
+  supportive: {
+    phonetic: "/səˈpɔːtɪv/",
+    pos: "adjective",
+    level: "B2",
+    pl: "wspierający",
+    enDef: "providing encouragement or emotional help"
+  },
+  clarify: {
+    phonetic: "/ˈklærɪfaɪ/",
+    pos: "verb",
+    level: "B2",
+    pl: "wyjaśnić",
+    enDef: "to make something clear or easier to understand"
+  },
+  routine: {
+    phonetic: "/ruːˈtiːn/",
+    pos: "noun",
+    level: "B1",
+    pl: "rutyna",
+    enDef: "a sequence of actions regularly followed"
+  },
+  confidence: {
+    phonetic: "/ˈkɒnfɪdəns/",
+    pos: "noun",
+    level: "B2",
+    pl: "pewność siebie",
+    enDef: "the feeling of being sure of your ability"
+  },
+  curious: {
+    phonetic: "/ˈkjʊəriəs/",
+    pos: "adjective",
+    level: "B1",
+    pl: "ciekawy",
+    enDef: "eager to know or learn something"
+  },
+  unfamiliar: {
+    phonetic: "/ˌʌnfəˈmɪliə/",
+    pos: "adjective",
+    level: "B2",
+    pl: "nieznany",
+    enDef: "not known or recognized"
+  },
+  beginning: {
+    phonetic: "/bɪˈɡɪnɪŋ/",
+    pos: "noun",
+    level: "A2",
+    pl: "początek",
+    enDef: "the start of something"
+  },
+  mistakes: {
+    phonetic: "/mɪˈsteɪks/",
+    pos: "noun",
+    level: "A2",
+    pl: "błędy",
+    enDef: "actions or judgments that are misguided"
+  },
+  progress: {
+    phonetic: "/ˈprəʊɡres/",
+    pos: "noun",
+    level: "B1",
+    pl: "postęp",
+    enDef: "movement forward toward a goal"
+  },
+  apologising: {
+    phonetic: "/əˈpɒlədʒaɪzɪŋ/",
+    pos: "verb",
+    level: "B2",
+    pl: "przepraszać",
+    enDef: "expressing regret for something done"
+  },
+  studio: {
+    phonetic: "/ˈstjuːdiəʊ/",
+    pos: "noun",
+    level: "B1",
+    pl: "studio",
+    enDef: "a room where a designer or artist works"
+  },
+  colleague: {
+    phonetic: "/ˈkɒliːɡ/",
+    pos: "noun",
+    level: "B1",
+    pl: "współpracownik",
+    enDef: "a person with whom one works"
+  }
+};
+
+const getWordMeta = (rawWord) => {
+  const clean = (rawWord || "").toLowerCase().replace(/[^a-z]/g, "");
+  if (VOCABULARY_INFO[clean]) {
+    return VOCABULARY_INFO[clean];
+  }
+  let pos = "noun";
+  if (clean.endsWith("ing") || clean.endsWith("ed") || clean.endsWith("ize") || clean.endsWith("ise") || clean.endsWith("ate")) {
+    pos = "verb";
+  } else if (clean.endsWith("ly")) {
+    pos = "adverb";
+  } else if (clean.endsWith("ive") || clean.endsWith("ous") || clean.endsWith("al") || clean.endsWith("able") || clean.endsWith("ful") || clean.endsWith("ish") || clean.endsWith("less")) {
+    pos = "adjective";
+  }
+  return {
+    phonetic: `/${clean}/`,
+    pos: pos,
+    level: clean.length > 8 ? "B2" : clean.length > 5 ? "B1" : "A2",
+    pl: "",
+    enDef: ""
+  };
+};
+
+const FIGMA_SAMPLE_TITLE = "A new beginning";
+const FIGMA_SAMPLE_TEXT = `On her first Monday at a small design studio, Maya arrived ten minutes early. She had a notebook, a fresh cup of coffee, and more questions than answers. Everything felt unfamiliar: the office, the people, and even the way they planned their day.
+
+Maya knew she would need to adapt to a new routine. At her previous job, she worked alone most of the time. Here, everyone shared ideas around a large table each morning. At first, she worried that her English would slow the conversation down.
+
+Her colleague Leo noticed that she was quiet. “You don't need the perfect words,” he said. “Tell us what you think. We can figure out the details together.” His supportive attitude helped Maya relax. She opened her notebook and explained a simple idea for the next project.
+
+The team listened carefully. Someone asked a question, and Maya took a moment before answering. Instead of apologising for her English, she asked them to clarify one unfamiliar phrase. The conversation continued naturally, and her confidence began to grow.
+
+By Friday, the office no longer felt like a place full of strangers. Maya knew where to find the best coffee and who to ask for help. She had also learned that progress did not mean speaking without mistakes. It meant being willing to try again.
+
+That evening, she wrote one sentence in her notebook: “A new beginning is not about knowing everything. It is about being curious enough to learn.” Next week, she decided, she would speak up a little sooner.`;
 
 const getTopicIcon = (topicName) => {
   const size = 16;
@@ -185,6 +314,18 @@ function Workspace({
   const [wordTooltipSentenceTranslation, setWordTooltipSentenceTranslation] = useState("");
   const [wordTooltipLoading, setWordTooltipLoading] = useState(false);
   const [showWordTooltip, setShowWordTooltip] = useState(false);
+
+  // Figma Workspace redesign state
+  const [fontSizeMode, setFontSizeMode] = useState("normal"); // "normal" | "large" | "xlarge"
+  const [isStoryBookmarked, setIsStoryBookmarked] = useState(false);
+  const [showFullTranslation, setShowFullTranslation] = useState(false);
+  const [paragraphTranslations, setParagraphTranslations] = useState({});
+  const [storyCopiedToast, setStoryCopiedToast] = useState(false);
+  const [buddyQuestion, setBuddyQuestion] = useState("");
+  const [buddyAnswer, setBuddyAnswer] = useState("");
+  const [isBuddyLoading, setIsBuddyLoading] = useState(false);
+  const [inlineWordData, setInlineWordData] = useState(null);
+  const [showInlineSentenceTrans, setShowInlineSentenceTrans] = useState(false);
   
   const currentAudioRef = useRef(null);
   const contextMenuRef = useRef(null);
@@ -930,20 +1071,14 @@ function Workspace({
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "X-Session-Token": user.token
+          "X-Session-Token": user?.token || ""
         },
       });
       const data = await response.json();
-      if (!response.ok || (data && data.error)) {
-        const errorMsg = data?.error || data?.details || "Wystąpił błąd podczas generowania domyślnej lekcji.";
-        alert(errorMsg);
-        return;
-      }
       if (data && data[0] && data[0].generated_text) {
         setGeneratedText(data[0].generated_text);
         const title = data[0].title || "Default Lesson";
         setCurrentStoryTitle(title);
-        // Automatycznie zapisz historię w bazie danych
         const savedStory = await saveStoryToDb(title, data[0].generated_text);
         if (savedStory && savedStory.id) {
           const newPart = {
@@ -957,10 +1092,14 @@ function Workspace({
           setLoadedRootId(savedStory.id);
           setCurrentStoryId(savedStory.id);
         }
+      } else {
+        setGeneratedText(FIGMA_SAMPLE_TEXT);
+        setCurrentStoryTitle(FIGMA_SAMPLE_TITLE);
       }
     } catch (error) {
-      console.error("Błąd generowania lekcji domyślnej:", error);
-      alert("Nie udało się wygenerować domyślnej lekcji. Spróbuj ponownie za chwilę.");
+      console.warn("Błąd generowania domyślnej lekcji, fallback do czytanki wzorcowej:", error);
+      setGeneratedText(FIGMA_SAMPLE_TEXT);
+      setCurrentStoryTitle(FIGMA_SAMPLE_TITLE);
     } finally {
       setIsLoading(false);
     }
@@ -1619,6 +1758,293 @@ function Workspace({
 
   // Usunięto handleDeleteStory, ponieważ historia jest teraz zarządzana w dedykowanej zakładce.
 
+  // ─── Figma Workspace Redesign Helpers & State Selectors ───
+  const isWordInNotebook = useCallback((word) => {
+    if (!word) return false;
+    const clean = word.toLowerCase().trim();
+    return notebookWords.some(w => {
+      const orig = (w.original || w.word || "").toLowerCase().trim();
+      return orig === clean;
+    });
+  }, [notebookWords]);
+
+  const handleToggleWordSaved = useCallback(async (wordItem) => {
+    const rawWord = typeof wordItem === 'string' ? wordItem : (wordItem.word || wordItem.original);
+    const rawTranslation = typeof wordItem === 'string' ? "" : (wordItem.translation || wordItem.translated || "");
+    const clean = (rawWord || "").trim();
+    if (!clean) return;
+
+    if (isWordInNotebook(clean)) {
+      handleDeleteWord(clean);
+    } else {
+      const meta = getWordMeta(clean);
+      const newEntry = {
+        original: clean,
+        translated: rawTranslation || meta.pl || "zapisane słówko",
+        created_at: new Date().toISOString(),
+        story_id: currentStoryId || undefined
+      };
+      setNotebookWords(prev => [newEntry, ...prev.filter(w => (w.original || w.word) !== clean)]);
+      try {
+        await fetch(`${API_BASE_URL}/api/vocabulary`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || ""
+          },
+          body: JSON.stringify(newEntry)
+        });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+      } catch (err) {
+        console.error("Error saving word:", err);
+      }
+    }
+  }, [isWordInNotebook, notebookWords, currentStoryId, user, handleDeleteWord]);
+
+  const handleFigmaWordClick = async (rawWord, pIdx, paragraphText) => {
+    pauseAudioForTooltip();
+    const cleanWord = rawWord.replace(/[^a-zA-Z'-]/g, "");
+    if (!cleanWord) return;
+
+    if (inlineWordData && inlineWordData.word.toLowerCase() === cleanWord.toLowerCase() && inlineWordData.paragraphIndex === pIdx) {
+      setInlineWordData(null);
+      setShowInlineSentenceTrans(false);
+      return;
+    }
+
+    const meta = getWordMeta(cleanWord);
+    const sentences = paragraphText.split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
+    const sentenceContext = sentences.find(s => s.toLowerCase().includes(cleanWord.toLowerCase())) || paragraphText;
+
+    const initialData = {
+      word: cleanWord,
+      phonetic: meta.phonetic || `/${cleanWord.toLowerCase()}/`,
+      pos: meta.pos || "word",
+      level: meta.level || "B2",
+      pl: meta.pl || "Wczytuję...",
+      enDef: meta.enDef || "",
+      sentenceTranslation: "",
+      paragraphIndex: pIdx
+    };
+    setInlineWordData(initialData);
+    setShowInlineSentenceTrans(false);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/translate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || ""
+        },
+        body: JSON.stringify({ text: cleanWord, context: sentenceContext })
+      });
+      const data = await response.json();
+      setInlineWordData(prev => {
+        if (!prev || prev.word.toLowerCase() !== cleanWord.toLowerCase()) return prev;
+        return {
+          ...prev,
+          pl: data.translation || meta.pl || "Brak tłumaczenia",
+          sentenceTranslation: data.sentence_translation || ""
+        };
+      });
+    } catch (err) {
+      console.error("Error translating word:", err);
+      setInlineWordData(prev => {
+        if (!prev || prev.word.toLowerCase() !== cleanWord.toLowerCase()) return prev;
+        return {
+          ...prev,
+          pl: meta.pl || "Błąd połączenia"
+        };
+      });
+    }
+  };
+
+  const handleAskBuddy = async (queryText) => {
+    const q = (queryText || buddyQuestion || "").trim();
+    if (!q) return;
+    setIsBuddyLoading(true);
+    setBuddyAnswer("");
+    try {
+      const formData = new FormData();
+      formData.append("story_text", generatedText || "");
+      formData.append("transcription", q);
+      formData.append("history", JSON.stringify([]));
+
+      const response = await fetch(`${API_BASE_URL}/api/stories/chat-next`, {
+        method: "POST",
+        headers: {
+          "X-Session-Token": user?.token || ""
+        },
+        body: formData
+      });
+      const data = await response.json();
+      if (data.bot_response) {
+        setBuddyAnswer(data.bot_response);
+      } else {
+        setBuddyAnswer("Nie udało się uzyskać odpowiedzi od asystenta AI.");
+      }
+    } catch (err) {
+      console.error("Error asking buddy:", err);
+      setBuddyAnswer("Błąd połączenia z asystentem AI.");
+    } finally {
+      setIsBuddyLoading(false);
+    }
+  };
+
+  const handleToggleFullTranslation = async () => {
+    const next = !showFullTranslation;
+    setShowFullTranslation(next);
+    if (next && Object.keys(paragraphTranslations).length === 0 && generatedText) {
+      const paras = generatedText.split(/\n+/).map(p => p.trim()).filter(Boolean);
+      const newMap = {};
+      for (let i = 0; i < paras.length; i++) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/translate`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Session-Token": user?.token || ""
+            },
+            body: JSON.stringify({ text: paras[i] })
+          });
+          const d = await res.json();
+          if (d.translation) {
+            newMap[i] = d.translation;
+          }
+        } catch (e) {
+          console.error("Error translating paragraph:", e);
+        }
+      }
+      setParagraphTranslations(newMap);
+    }
+  };
+
+  const cycleFontSize = () => {
+    setFontSizeMode(prev => prev === "normal" ? "large" : prev === "large" ? "xlarge" : "normal");
+  };
+
+  const handleCopyStoryText = () => {
+    if (!generatedText) return;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(generatedText).then(() => {
+        setStoryCopiedToast(true);
+        setTimeout(() => setStoryCopiedToast(false), 2200);
+      }).catch(() => {});
+    }
+  };
+
+  // Auto-init inline card on 'adapt' when Maya's story is loaded
+  useEffect(() => {
+    if (generatedText && generatedText.includes("Maya knew she would need to adapt")) {
+      const meta = VOCABULARY_INFO.adapt;
+      setInlineWordData({
+        word: "adapt",
+        phonetic: meta.phonetic,
+        pos: meta.pos,
+        level: meta.level,
+        pl: meta.pl,
+        enDef: meta.enDef,
+        sentenceTranslation: "Maya wiedziała, że będzie musiała dostosować się do nowej rutyny.",
+        paragraphIndex: 1
+      });
+    }
+  }, [generatedText]);
+
+  const paragraphs = useMemo(() => {
+    if (!generatedText) return [];
+    const raw = generatedText.split(/\n+/).map(p => p.trim()).filter(Boolean);
+    if (raw.length <= 1 && raw[0] && raw[0].length > 400) {
+      const sents = raw[0].split(/(?<=[.!?])\s+/);
+      const grouped = [];
+      for (let i = 0; i < sents.length; i += 3) {
+        grouped.push(sents.slice(i, i + 3).join(" "));
+      }
+      return grouped;
+    }
+    return raw;
+  }, [generatedText]);
+
+  const storyLevel = useMemo(() => {
+    if (!generatedText) return "B2";
+    return calculateCEFRLevel(generatedText, currentStoryTitle) || "B2";
+  }, [generatedText, currentStoryTitle]);
+
+  const storyCategory = useMemo(() => {
+    const combined = `${currentStoryTitle || ""} ${generatedText || ""}`.toLowerCase();
+    if (combined.includes("office") || combined.includes("business") || combined.includes("job") || combined.includes("routine") || combined.includes("colleague")) {
+      return "Business";
+    }
+    if (combined.includes("travel") || combined.includes("trip") || combined.includes("journey") || combined.includes("city")) {
+      return "Travel";
+    }
+    if (combined.includes("tech") || combined.includes("ai") || combined.includes("software") || combined.includes("code")) {
+      return "Technology";
+    }
+    if (combined.includes("health") || combined.includes("doctor") || combined.includes("fitness")) {
+      return "Health";
+    }
+    return "General";
+  }, [currentStoryTitle, generatedText]);
+
+  const wordCount = useMemo(() => {
+    if (!generatedText) return 0;
+    return generatedText.trim().split(/\s+/).filter(Boolean).length;
+  }, [generatedText]);
+
+  const readingTime = useMemo(() => {
+    return Math.max(1, Math.ceil(wordCount / 130));
+  }, [wordCount]);
+
+  const computedReadingProgress = useMemo(() => {
+    if (textChunks.length === 0) return readingProgress || 65;
+    if (currentChunkIndex >= 0) {
+      return Math.min(100, Math.round(((currentChunkIndex + 1) / textChunks.length) * 100));
+    }
+    return readingProgress || 65;
+  }, [currentChunkIndex, textChunks, readingProgress]);
+
+  const keyStoryWords = useMemo(() => {
+    if (!generatedText) return [];
+    const textLower = generatedText.toLowerCase();
+    const matched = [];
+    const targetWords = ["adapt", "supportive", "clarify", "routine", "confidence", "curious", "unfamiliar", "progress", "beginning"];
+
+    for (const w of targetWords) {
+      const regex = new RegExp(`\\b${w}\\b`, "i");
+      if (regex.test(textLower)) {
+        const info = VOCABULARY_INFO[w] || getWordMeta(w);
+        matched.push({
+          word: w,
+          translation: info.pl || "",
+          pos: info.pos || "word",
+          level: info.level || "B2"
+        });
+      }
+    }
+
+    for (const nw of notebookWords) {
+      const w = (nw.original || nw.word || "").toLowerCase();
+      if (w && textLower.includes(w) && !matched.some(m => m.word.toLowerCase() === w)) {
+        const info = getWordMeta(w);
+        matched.push({
+          word: nw.original || nw.word,
+          translation: nw.translated || nw.translation || info.pl || "",
+          pos: info.pos || "word",
+          level: info.level || "B2"
+        });
+      }
+    }
+
+    if (matched.length === 0) {
+      matched.push(
+        { word: "adapt", translation: "dostosować się", pos: "verb", level: "B2" },
+        { word: "supportive", translation: "wspierający", pos: "adjective", level: "B2" },
+        { word: "clarify", translation: "wyjaśnić", pos: "verb", level: "B2" }
+      );
+    }
+    return matched.slice(0, 5);
+  }, [generatedText, notebookWords]);
+
   const handleSendEmail = async () => {
     setIsSendingEmail(true);
     try {
@@ -1740,6 +2166,112 @@ function Workspace({
     } catch (err) {
       console.error("Błąd podczas zapisywania słówka z podsumowania:", err);
     }
+  };
+
+  const renderParagraphTokens = (pText, pIdx) => {
+    const tokens = pText.split(/([\w\u00C0-\u017F'-]+)/g);
+    return tokens.map((token, tIdx) => {
+      const isWord = /[\w\u00C0-\u017F'-]+/.test(token);
+      if (!isWord) {
+        return <span key={tIdx}>{token}</span>;
+      }
+      const cleanWord = token.toLowerCase();
+      const isSelected = inlineWordData && inlineWordData.word.toLowerCase() === cleanWord && inlineWordData.paragraphIndex === pIdx;
+      
+      const isSentenceReading = isSpeaking && !isPaused && currentChunkIndex >= 0 && textChunks[currentChunkIndex] && textChunks[currentChunkIndex].includes(token);
+
+      return (
+        <span
+          key={tIdx}
+          className={`reader-word ${isSelected ? "selected-pill" : ""} ${isSentenceReading ? "reading-now" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleFigmaWordClick(token, pIdx, pText);
+          }}
+        >
+          {token}
+        </span>
+      );
+    });
+  };
+
+  const renderInlineCard = () => {
+    if (!inlineWordData) return null;
+    const isSaved = isWordInNotebook(inlineWordData.word);
+
+    return (
+      <div className="workspace-inline-word-card">
+        <div className="inline-word-header">
+          <div className="inline-word-title-group">
+            <span className="inline-word-title">{inlineWordData.word}</span>
+            <span className="inline-word-phonetic">{inlineWordData.phonetic}</span>
+            <span className="inline-word-pos">· {inlineWordData.pos}</span>
+          </div>
+          <button 
+            className="inline-word-speaker-btn"
+            onClick={() => handleSpeakWord(inlineWordData.word)}
+            title="Odsłuchaj wymowę słowa"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="inline-word-def">
+          <span className="inline-word-pl">{inlineWordData.pl}</span>
+          {inlineWordData.enDef && (
+            <span className="inline-word-en"> — {inlineWordData.enDef}</span>
+          )}
+        </div>
+
+        <div className="inline-word-actions">
+          <button 
+            className={`inline-save-btn ${isSaved ? "saved" : ""}`}
+            onClick={() => handleToggleWordSaved({
+              word: inlineWordData.word,
+              translation: inlineWordData.pl,
+              pos: inlineWordData.pos,
+              level: inlineWordData.level
+            })}
+          >
+            {isSaved ? (
+              <>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>Saved</span>
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>Save word</span>
+              </>
+            )}
+          </button>
+
+          <button 
+            className={`inline-trans-sentence-btn ${showInlineSentenceTrans ? "active" : ""}`}
+            onClick={() => setShowInlineSentenceTrans(!showInlineSentenceTrans)}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />
+            </svg>
+            <span>Translate sentence</span>
+          </button>
+        </div>
+
+        {showInlineSentenceTrans && (
+          <div className="inline-sentence-translation-box">
+            {inlineWordData.sentenceTranslation || "Tłumaczenie zdania: wczytywanie..."}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -1893,93 +2425,42 @@ function Workspace({
         </div>
       )}
 
-      <main className="workspace-main">
-        {generatedText && (
-          <header className="workspace-header">
-            <div className="header-left-group">
-              <button onClick={handleBackButtonClick} className="back-btn-inline" title="Wróć do filtrów">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="19" y1="12" x2="5" y2="12"></line>
-                  <polyline points="12 19 5 12 12 5"></polyline>
-                </svg>
-              </button>
-              <h1>{currentStoryTitle || "English Buddy Workspace"}</h1>
-              
-              <div className="header-actions-group">
-                <button 
-                  onClick={handleBackButtonClick} 
-                  className="header-action-text-btn new-story-btn" 
-                  title="Utwórz nową historię AI lub wklej własny tekst"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+      {!generatedText ? (
+        <main className="workspace-main">
+          <StoryGenerator 
+            onGenerate={generateStory} 
+            onGenerateDefault={generateDefaultText}
+            onPasteText={pasteStory}
+            isLoading={isLoading} 
+            suggestedTopics={suggestedTopics} 
+            user={user}
+          />
+        </main>
+      ) : isContinuing ? (
+        <main className="workspace-main">
+          {storyParts.length > 0 && (
+            <div className="chapter-tabs">
+              {storyParts.map((part, index) => (
+                <button
+                  key={part.id}
+                  className={`chapter-tab ${!isContinuing && activePartIndex === index ? "active" : ""}`}
+                  onClick={() => handleSelectPart(index)}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                  <span>Nowa opowieść</span>
+                  Part {part.part_number || index + 1}
                 </button>
-
-                <button 
-                  onClick={() => {
-                    handleStop();
-                    setShowPracticeMode(true);
-                  }} 
-                  className="header-action-text-btn mastery-btn" 
-                  title="Mastery Path Training — ćwicz słownictwo z tej historii"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-                    <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 19v4M8 23h8"/>
-                  </svg>
-                  <span>Mastery Path</span>
-                </button>
-                
-                <button 
-                  onClick={() => setShowVoiceControls(!showVoiceControls)} 
-                  className={`header-action-btn voice-btn ${showVoiceControls ? 'active' : ''}`} 
-                  title={showVoiceControls ? "Ukryj panel głosu" : "Pokaż panel głosu"}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="4" y1="21" x2="4" y2="14" />
-                    <line x1="4" y1="10" x2="4" y2="3" />
-                    <line x1="12" y1="21" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12" y2="3" />
-                    <line x1="20" y1="21" x2="20" y2="16" />
-                    <line x1="20" y1="12" x2="20" y2="3" />
-                    <line x1="1" y1="14" x2="7" y2="14" />
-                    <line x1="9" y1="8" x2="15" y2="8" />
-                    <line x1="17" y1="16" x2="23" y2="16" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </header>
-        )}
-
-        {storyParts.length > 0 && (
-          <div className="chapter-tabs">
-            {storyParts.map((part, index) => (
+              ))}
               <button
-                key={part.id}
-                className={`chapter-tab ${!isContinuing && activePartIndex === index ? "active" : ""}`}
-                onClick={() => handleSelectPart(index)}
+                className={`chapter-tab continue-tab ${isContinuing ? "active" : ""}`}
+                onClick={() => {
+                  handleStop();
+                  setIsContinuing(true);
+                }}
               >
-                Part {part.part_number || index + 1}
+                + Continue Story
               </button>
-            ))}
-            <button
-              className={`chapter-tab continue-tab ${isContinuing ? "active" : ""}`}
-              onClick={() => {
-                handleStop();
-                setIsContinuing(true);
-              }}
-            >
-              + Continue Story
-            </button>
-          </div>
-        )}
+            </div>
+          )}
 
-        {isContinuing ? (
           <div className="story-generator continuation-panel">
             {isLoading ? (
               <div className="generation-progress-overlay">
@@ -2066,92 +2547,349 @@ function Workspace({
               </>
             )}
           </div>
-        ) : !generatedText ? (
-          <StoryGenerator 
-            onGenerate={generateStory} 
-            onGenerateDefault={generateDefaultText}
-            onPasteText={pasteStory}
-            isLoading={isLoading} 
-            suggestedTopics={suggestedTopics} 
-            user={user}
-          />
-        ) : (
-          <Reader 
-            generatedText={generatedText}
-            textChunks={textChunks}
-            currentChunkIndex={currentChunkIndex}
-            isSpeaking={isSpeaking}
-            isPaused={isPaused}
-            onPlayback={handlePlayback}
-            onStop={handleStop}
-            onPlaySentence={handlePlaySentence}
-            playSingle={playSingle}
-            voices={voices}
-            selectedVoiceURI={selectedVoiceURI}
-            setSelectedVoiceURI={setSelectedVoiceURI}
-            speechRate={speechRate}
-            setSpeechRate={setSpeechRate}
-            speechPitch={speechPitch}
-            setSpeechPitch={setSpeechPitch}
-            onTextSelection={handleTextSelection}
-            showVoiceControls={showVoiceControls}
-            onWordClick={handleWordClick}
-            activeWordId={activeWordId}
-            storyProgress={currentStoryId ? readingProgress : 0}
-            readSentenceCount={currentStoryId ? readSentenceIndices.size : 0}
-            totalSentences={textChunks.length}
-          />
-        )}
-      </main>
+        </main>
+      ) : (
+        <div className="workspace-figma-container">
+          <div className="workspace-figma-top-bar">
+            <button 
+              onClick={handleBackButtonClick} 
+              className="workspace-back-pill-btn"
+              title="Wróć do wyboru tematów / utwórz nową historię"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+              <span>Nowa opowieść</span>
+            </button>
 
-      <NotebookSidebar 
-        notebookWords={notebookWords}
-        onSpeakWord={async (text) => {
-          setActivityLog(prev => [
-            ...prev,
-            {
-              type: "listen_word_pronunciation",
-              word: text,
-              timestamp: Date.now()
-            }
-          ]);
-          const requestId = globalAudioManager.acquire();
-          isChunkFetchingRef.current = false;
-          currentAudioRef.current = null;
-          try {
-            const response = await fetch(`${API_BASE_URL}/api/tts`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                text: text,
-                voice: selectedVoiceURI || "en-US-BrianNeural"
-              })
-            });
-            if (!globalAudioManager.isValid(requestId)) return;
-            const data = await response.json();
-            if (data.audio_base64 && globalAudioManager.isValid(requestId)) {
-              const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
-              const audio = new Audio(audioUrl);
-              audio.onended = () => globalAudioManager.release(requestId);
-              if (!globalAudioManager.setAudio(requestId, audio)) return;
-              currentAudioRef.current = audio;
-              audio.play().catch(() => {});
-            }
-          } catch (err) {
-            console.error("Error speaking word:", err);
-          }
-        }}
-        onDeleteWord={handleDeleteWord}
-        onOpenEmailModal={() => setShowSendEmailModal(true)}
-        onOpenFlashcards={() => setShowFlashcards(true)}
-        onOpenExercise={() => setShowExerciseModal(true)}
-        onExplainWord={(word) => {
-          pauseAudioForTooltip();
-          setExplanationWord(word);
-        }}
-        activityLog={activityLog}
-        onOpenSummary={handleOpenSummary}
-      />
+            {storyParts.length > 0 && (
+              <div className="chapter-tabs" style={{ margin: 0 }}>
+                {storyParts.map((part, index) => (
+                  <button
+                    key={part.id}
+                    className={`chapter-tab ${!isContinuing && activePartIndex === index ? "active" : ""}`}
+                    onClick={() => handleSelectPart(index)}
+                  >
+                    Part {part.part_number || index + 1}
+                  </button>
+                ))}
+                <button
+                  className={`chapter-tab continue-tab ${isContinuing ? "active" : ""}`}
+                  onClick={() => {
+                    handleStop();
+                    setIsContinuing(true);
+                  }}
+                >
+                  + Continue Story
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="workspace-figma-grid">
+            {/* LEFT COLUMN: Story Reading Card */}
+            <article className="story-reading-card">
+              <div className="story-card-top-row">
+                <div className="story-card-badges">
+                  <span className="story-badge-level">
+                    {storyLevel}
+                  </span>
+                  <span className="story-badge-category">
+                    {storyCategory}
+                  </span>
+                </div>
+                <div className="story-top-actions">
+                  <button
+                    className={`story-bookmark-btn ${isStoryBookmarked ? "active" : ""}`}
+                    onClick={() => setIsStoryBookmarked(!isStoryBookmarked)}
+                    title={isStoryBookmarked ? "Zapisana w ulubionych" : "Zapisz w ulubionych"}
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill={isStoryBookmarked ? "#2563eb" : "none"} stroke={isStoryBookmarked ? "#2563eb" : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <h1 className="story-reading-title">
+                {currentStoryTitle || "A new beginning"}
+              </h1>
+
+              <p className="story-reading-meta">
+                {wordCount} words · {readingTime} min read · Created today
+              </p>
+
+              {/* Reading toolbar */}
+              <div className="story-reading-toolbar">
+                <button 
+                  className={`toolbar-pill-btn ${isSpeaking && !isPaused ? "active" : ""}`}
+                  onClick={handlePlayback}
+                >
+                  {isSpeaking && !isPaused ? (
+                    <>
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <rect x="6" y="4" width="4" height="16" rx="1" />
+                        <rect x="14" y="4" width="4" height="16" rx="1" />
+                      </svg>
+                      <span>Pause</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      </svg>
+                      <span>Listen</span>
+                    </>
+                  )}
+                </button>
+
+                <button 
+                  className={`toolbar-pill-btn ${showFullTranslation ? "active" : ""}`}
+                  onClick={handleToggleFullTranslation}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />
+                  </svg>
+                  <span>Translate</span>
+                </button>
+
+                <button 
+                  className="toolbar-icon-btn"
+                  onClick={cycleFontSize}
+                  title={`Zmień rozmiar czcionki (obecnie: ${fontSizeMode})`}
+                >
+                  <span style={{ fontWeight: 700, fontSize: "14px" }}>T</span>
+                </button>
+
+                <button 
+                  className="toolbar-icon-btn"
+                  onClick={handleCopyStoryText}
+                  title="Skopiuj treść opowiadania"
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </button>
+
+                <span className="toolbar-hint-text">
+                  Click any word to explore it.
+                </span>
+              </div>
+
+              <div className="story-divider" />
+
+              {/* Paragraphs */}
+              <div className={`story-body-content font-size-${fontSizeMode}`}>
+                {paragraphs.map((pText, pIdx) => {
+                  const isInlineInThisParagraph = inlineWordData && inlineWordData.paragraphIndex === pIdx;
+                  return (
+                    <React.Fragment key={pIdx}>
+                      <p className="story-paragraph">
+                        {renderParagraphTokens(pText, pIdx)}
+                      </p>
+                      {showFullTranslation && paragraphTranslations[pIdx] && (
+                        <div className="story-paragraph-translation">
+                          {paragraphTranslations[pIdx]}
+                        </div>
+                      )}
+                      {isInlineInThisParagraph && renderInlineCard()}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              <div className="story-divider" />
+
+              {/* Reading Progress */}
+              <div className="story-reading-progress-section">
+                <div className="progress-labels-row">
+                  <span className="progress-label-main">
+                    Reading progress · {computedReadingProgress}%
+                  </span>
+                  <span className="progress-label-sub">
+                    Continue where you left off
+                  </span>
+                </div>
+                <div className="progress-bar-track">
+                  <div 
+                    className="progress-bar-fill" 
+                    style={{ width: `${Math.min(100, Math.max(0, computedReadingProgress))}%` }}
+                  />
+                </div>
+              </div>
+            </article>
+
+            {/* RIGHT COLUMN: 3 Figma Cards */}
+            <aside className="workspace-figma-sidebar">
+              {/* Card 1: Your learning buddy */}
+              <div className="learning-buddy-card">
+                <div className="buddy-card-header">
+                  <span className="buddy-sparkle-icon">✨</span>
+                  <h3>Your learning buddy</h3>
+                </div>
+                <p className="buddy-card-desc">
+                  Make this story your own. Ask a question or practise it out loud.
+                </p>
+
+                <button 
+                  className="buddy-voice-ai-btn"
+                  onClick={() => {
+                    handleStop();
+                    setShowPracticeMode(true);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+                  </svg>
+                  <span>Practice with Voice AI</span>
+                </button>
+
+                <div className="buddy-try-asking-section">
+                  <span className="try-asking-label">TRY ASKING</span>
+                  <div className="try-asking-chips">
+                    <button 
+                      className="try-asking-chip"
+                      onClick={() => handleAskBuddy(inlineWordData ? `Explain "${inlineWordData.word}"` : 'Explain "speak up"')}
+                    >
+                      Explain "{inlineWordData ? inlineWordData.word : 'speak up'}"
+                    </button>
+                    <button 
+                      className="try-asking-chip"
+                      onClick={() => handleOpenSummary()}
+                    >
+                      Summarise this story
+                    </button>
+                  </div>
+                </div>
+
+                <form 
+                  className="buddy-ask-input-box"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAskBuddy(buddyQuestion);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" className="buddy-input-icon">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                  <input 
+                    type="text" 
+                    placeholder="Ask about the story..."
+                    value={buddyQuestion}
+                    onChange={(e) => setBuddyQuestion(e.target.value)}
+                  />
+                  {buddyQuestion.trim() && (
+                    <button type="submit" className="buddy-input-submit-btn" disabled={isBuddyLoading}>
+                      {isBuddyLoading ? "..." : "↑"}
+                    </button>
+                  )}
+                </form>
+
+                {buddyAnswer && (
+                  <div className="buddy-answer-box">
+                    {buddyAnswer}
+                  </div>
+                )}
+              </div>
+
+              {/* Card 2: Words in this story */}
+              <div className="story-words-card">
+                <div className="story-words-header">
+                  <h3>Words in this story</h3>
+                  <span className="story-words-count-badge">
+                    {keyStoryWords.length}
+                  </span>
+                </div>
+
+                <div className="story-words-list">
+                  {keyStoryWords.map((item, idx) => {
+                    const isSaved = isWordInNotebook(item.word);
+                    return (
+                      <div key={item.word || idx} className="story-word-item">
+                        <div className="story-word-item-top">
+                          <span 
+                            className="story-word-name"
+                            onClick={() => handleSpeakWord(item.word)}
+                            title="Kliknij, aby posłuchać wymowy"
+                          >
+                            {item.word}
+                          </span>
+                          <button 
+                            className={`story-word-bookmark-btn ${isSaved ? "active" : ""}`}
+                            onClick={() => handleToggleWordSaved(item)}
+                            title={isSaved ? "Usuń ze słownika" : "Zapisz w słowniku"}
+                          >
+                            <svg viewBox="0 0 24 24" width="17" height="17" fill={isSaved ? "#2563eb" : "none"} stroke={isSaved ? "#2563eb" : "currentColor"} strokeWidth="2">
+                              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div className="story-word-item-sub">
+                          <span>{item.translation}</span>
+                          <span className="dot-sep">·</span>
+                          <span>{item.pos || "word"}</span>
+                          <span className="dot-sep">·</span>
+                          <span className="word-level-tag">{item.level || "B2"}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button 
+                  className="open-vocabulary-btn"
+                  onClick={() => {
+                    if (onNavigateToDashboard) {
+                      onNavigateToDashboard();
+                    }
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                  </svg>
+                  <span>Open vocabulary</span>
+                </button>
+              </div>
+
+              {/* Card 3: Small steps count */}
+              <div className="small-steps-card">
+                <div className="small-steps-header">
+                  <span className="small-steps-bulb">💡</span>
+                  <h3>Small steps count</h3>
+                </div>
+                <p className="small-steps-text">
+                  Read a sentence aloud, then say it in your own words. Retrieval makes learning stick.
+                </p>
+              </div>
+            </aside>
+          </div>
+
+          {/* Floating Chat Live Button */}
+          <button 
+            className="chat-live-floating-btn"
+            onClick={() => {
+              handleStop();
+              setShowPracticeMode(true);
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v18M8 8v8M4 11v2M16 6v12M20 10v4" />
+            </svg>
+            <span>Chat Live</span>
+          </button>
+
+          {storyCopiedToast && (
+            <div className="story-copied-toast">
+              Skopiowano treść opowiadania do schowka!
+            </div>
+          )}
+        </div>
+      )}
 
       {showPracticeMode && (
         <PracticeMode 
