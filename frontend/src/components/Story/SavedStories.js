@@ -281,6 +281,107 @@ const buildEnglishImagePrompt = (title = "", text = "") => {
   return `${themePart}, cinematic photography, photorealistic, 4k detailed, storytelling art, natural soft lighting`;
 };
 
+// Obliczanie realnego stopnia zaawansowania językowego (CEFR A1, A2, B1, B2, C1, C2)
+// na podstawie analizy lingwistycznej tekstu (długość zdań, złożoność słownictwa, wskaźnik Coleman-Liau, słownictwo akademickie)
+export const calculateCEFRLevel = (text = "", title = "") => {
+  const combined = `${title || ""} ${text || ""}`.trim();
+  if (!combined) return "B1";
+
+  // Podział na zdania
+  const rawSentences = (text || "").split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
+  const sentences = rawSentences.length > 0 ? rawSentences : [text || ""];
+
+  // Podział na słowa i oczyszczenie
+  const rawWords = (text || "").split(/\s+/).map(w => w.replace(/[^a-zA-Z]/g, "").toLowerCase()).filter(Boolean);
+  if (rawWords.length === 0) return "B1";
+
+  const totalWords = rawWords.length;
+  const totalChars = rawWords.reduce((sum, w) => sum + w.length, 0);
+  const avgSentenceLen = totalWords / Math.max(1, sentences.length);
+  const avgWordLen = totalChars / totalWords;
+
+  const longWords = rawWords.filter(w => w.length >= 8);
+  const longWordsRatio = longWords.length / totalWords;
+
+  // Wskaźnik czytelności Colemana-Liau: CLI = 0.0588 * L - 0.296 * S - 15.8
+  const L = (totalChars / totalWords) * 100;
+  const S = (sentences.length / totalWords) * 100;
+  const cli = 0.0588 * L - 0.296 * S - 15.8;
+
+  // Znaczniki zaawansowanego słownictwa (CEFR C1/C2)
+  const c1C2Markers = new Set([
+    "consequently", "nevertheless", "furthermore", "nonetheless", "notwithstanding",
+    "ubiquitous", "meticulous", "subtle", "subtlety", "phenomenon", "phenomena",
+    "paradigm", "discrepancy", "comprehensive", "inherent", "inherently", "profound",
+    "intricate", "intricacy", "contemplate", "juxtaposition", "unprecedented",
+    "cognitive", "comprehend", "fluctuation", "elucidate", "resilience", "manifest",
+    "ambiguity", "philosophical", "psychological", "nuance", "nuanced", "scrutiny",
+    "pervasive", "underpin", "divergence", "empowerment", "implication", "subsequent",
+    "predominant", "aesthetic", "articulate", "rigorous", "equilibrium", "tenacious"
+  ]);
+
+  const b2Markers = new Set([
+    "moreover", "significant", "significantly", "despite", "eventually", "apparently",
+    "convenient", "efficient", "frequently", "immediately", "opportunity", "challenge",
+    "influence", "describe", "structure", "experience", "confidence", "environment",
+    "potential", "essential", "crucial", "accurate", "perspective", "approach",
+    "establish", "maintain", "adequate", "illustrate", "emphasize", "primary"
+  ]);
+
+  let advancedFound = 0;
+  let b2Found = 0;
+  for (const w of rawWords) {
+    if (c1C2Markers.has(w)) advancedFound++;
+    else if (b2Markers.has(w)) b2Found++;
+  }
+  const advancedDensity = (advancedFound * 2 + b2Found) / totalWords;
+
+  // Punkty za długość zdań (ASL)
+  let aslPt = 1;
+  if (avgSentenceLen < 9) aslPt = 1;
+  else if (avgSentenceLen < 13) aslPt = 2;
+  else if (avgSentenceLen < 17) aslPt = 3;
+  else if (avgSentenceLen < 22) aslPt = 4;
+  else if (avgSentenceLen < 27) aslPt = 5;
+  else aslPt = 6;
+
+  // Punkty za długość słów (AWL)
+  let awlPt = 1;
+  if (avgWordLen < 4.25) awlPt = 1;
+  else if (avgWordLen < 4.55) awlPt = 2;
+  else if (avgWordLen < 4.90) awlPt = 3;
+  else if (avgWordLen < 5.30) awlPt = 4;
+  else if (avgWordLen < 5.75) awlPt = 5;
+  else awlPt = 6;
+
+  // Punkty za odsetek długich słów (>=8 liter)
+  let lwPt = 1;
+  if (longWordsRatio < 0.08) lwPt = 1;
+  else if (longWordsRatio < 0.14) lwPt = 2;
+  else if (longWordsRatio < 0.20) lwPt = 3;
+  else if (longWordsRatio < 0.26) lwPt = 4;
+  else if (longWordsRatio < 0.32) lwPt = 5;
+  else lwPt = 6;
+
+  // Bonus na podstawie indeksu CLI i zagęszczenia słownictwa
+  let bonus = 0.0;
+  if (advancedDensity > 0.02) bonus += 0.8;
+  else if (advancedDensity > 0.01) bonus += 0.4;
+
+  if (cli >= 11) bonus += 0.6;
+  else if (cli >= 9) bonus += 0.3;
+  else if (cli < 4) bonus -= 0.5;
+
+  const score = (aslPt * 0.30) + (awlPt * 0.35) + (lwPt * 0.35) + bonus;
+
+  if (score < 1.7) return "A1";
+  if (score < 2.6) return "A2";
+  if (score < 3.6) return "B1";
+  if (score < 4.6) return "B2";
+  if (score < 5.6) return "C1";
+  return "C2";
+};
+
 const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) => {
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -540,8 +641,8 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
         }
         const progress = Math.max(0, Math.min(100, typeof rawProgress === 'number' && !isNaN(rawProgress) ? Math.round(rawProgress) : 0));
 
-        // Determine level
-        const level = story.level || story.cefr_level || (index % 4 === 0 ? "B2" : index % 4 === 1 ? "B1" : index % 4 === 2 ? "A2" : "C1");
+        // Real linguistic CEFR level determination
+        const level = (story.level && String(story.level).trim()) || (story.cefr_level && String(story.cefr_level).trim()) || calculateCEFRLevel(story.text, story.title);
 
         // Determine category
         let category = "General";
@@ -830,7 +931,10 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
               <div className="card-content-body">
                 {/* Meta Header Row */}
                 <div className="card-meta-row">
-                  <span className={`level-badge level-${story.level.toLowerCase()}`}>
+                  <span
+                    className={`level-badge level-${(story.level || 'B1').toLowerCase()}`}
+                    title={`Poziom językowy CEFR: ${story.level}`}
+                  >
                     {story.level}
                   </span>
                   <span className="category-label">{story.category}</span>

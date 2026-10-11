@@ -438,32 +438,64 @@
 }
 
 .level-badge {
-  background: #e0f2fe;
-  color: #0284c7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 700;
   font-size: 0.72rem;
-  padding: 0.2rem 0.65rem;
+  padding: 0.22rem 0.65rem;
   border-radius: 999px;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
   flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.level-badge.level-a1,
+.level-badge:hover {
+  transform: translateY(-1px);
+}
+
+/* CEFR A1 - Beginner (Soft Emerald) */
+.level-badge.level-a1 {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+/* CEFR A2 - Elementary (Teal Green) */
 .level-badge.level-a2 {
-  background: #e0f2fe;
-  color: #0284c7;
+  background: #ccfbf1;
+  color: #0f766e;
+  border: 1px solid rgba(20, 184, 166, 0.25);
 }
 
-.level-badge.level-b1,
+/* CEFR B1 - Intermediate (Azure Sky) */
+.level-badge.level-b1 {
+  background: #e0f2fe;
+  color: #0284c7;
+  border: 1px solid rgba(14, 165, 233, 0.25);
+}
+
+/* CEFR B2 - Upper Intermediate (Indigo Blue) */
 .level-badge.level-b2 {
-  background: #e0f2fe;
-  color: #0284c7;
+  background: #e0e7ff;
+  color: #4338ca;
+  border: 1px solid rgba(99, 102, 241, 0.25);
 }
 
-.level-badge.level-c1,
-.level-badge.level-c2 {
+/* CEFR C1 - Advanced (Purple Violet) */
+.level-badge.level-c1 {
   background: #f3e8ff;
   color: #7e22ce;
+  border: 1px solid rgba(168, 85, 247, 0.25);
+}
+
+/* CEFR C2 - Proficiency / Mastery (Rose Crimson) */
+.level-badge.level-c2 {
+  background: #ffe4e6;
+  color: #be123c;
+  border: 1px solid rgba(244, 63, 94, 0.25);
 }
 
 .category-label {

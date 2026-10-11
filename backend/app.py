@@ -2531,11 +2531,14 @@ def generate_text():
             story_id = doc.id
             
         if not story_id:
+            story_lvl = analyze_cefr_level(story_text, title)
             new_story_data = {
                 'user_email': user_email,
                 'title': title,
                 'text': story_text,
                 'text_hash': text_hash,
+                'level': story_lvl,
+                'cefr_level': story_lvl,
                 'timestamp': firestore.SERVER_TIMESTAMP
             }
             if parent_id:
@@ -2618,11 +2621,14 @@ def generate_default_text():
             story_id = doc.id
             
         if not story_id:
+            story_lvl = analyze_cefr_level(story_text, title)
             new_story_data = {
                 'user_email': user_email,
                 'title': title,
                 'text': story_text,
                 'text_hash': text_hash,
+                'level': story_lvl,
+                'cefr_level': story_lvl,
                 'timestamp': firestore.SERVER_TIMESTAMP,
                 'part_number': 1
             }
@@ -2698,6 +2704,100 @@ def save_user_settings():
 
 # ### NOWE/ZMODYFIKOWANE ENDPOINTY DLA ZARZĄDZANIA HISTORIAMI PRZEZ FIRESTORE ###
 
+def analyze_cefr_level(text, title=""):
+    """
+    Wyznacza realny poziom trudności językowej (CEFR: A1, A2, B1, B2, C1, C2)
+    na podstawie analizy lingwistycznej tekstu (średnia długość zdań, średnia długość słów,
+    odsetek słów wielosylabowych, wskaźnik czytelności Colemana-Liau oraz zaawansowane markery leksykalne).
+    """
+    combined = (str(title or '') + ' ' + str(text or '')).strip()
+    if not combined:
+        return "B1"
+    
+    sentences = [s.strip() for s in re.split(r"[.!?]+", str(text or '')) if s.strip()]
+    if not sentences:
+        sentences = [str(text or '')]
+    
+    words = [re.sub(r"[^a-zA-Z]", "", w).lower() for w in str(text or '').split()]
+    words = [w for w in words if len(w) > 0]
+    if not words:
+        return "B1"
+    
+    total_words = len(words)
+    total_chars = sum(len(w) for w in words)
+    avg_sentence_len = total_words / max(1, len(sentences))
+    avg_word_len = total_chars / total_words
+    
+    long_words = [w for w in words if len(w) >= 8]
+    long_words_ratio = len(long_words) / total_words
+    
+    # Coleman-Liau Index: CLI = 0.0588 * L - 0.296 * S - 15.8
+    L = (total_chars / total_words) * 100
+    S = (len(sentences) / total_words) * 100
+    cli = 0.0588 * L - 0.296 * S - 15.8
+    
+    c1_c2_markers = {
+        "consequently", "nevertheless", "furthermore", "nonetheless", "notwithstanding",
+        "ubiquitous", "meticulous", "subtle", "subtlety", "phenomenon", "phenomena",
+        "paradigm", "discrepancy", "comprehensive", "inherent", "inherently", "profound",
+        "intricate", "intricacy", "contemplate", "juxtaposition", "unprecedented",
+        "cognitive", "comprehend", "fluctuation", "elucidate", "resilience", "manifest",
+        "ambiguity", "philosophical", "psychological", "nuance", "nuanced", "scrutiny",
+        "pervasive", "underpin", "divergence", "empowerment", "implication", "subsequent",
+        "predominant", "aesthetic", "articulate", "rigorous", "equilibrium", "tenacious"
+    }
+    
+    b2_markers = {
+        "moreover", "significant", "significantly", "despite", "eventually", "apparently",
+        "convenient", "efficient", "frequently", "immediately", "opportunity", "challenge",
+        "influence", "describe", "structure", "experience", "confidence", "environment",
+        "potential", "essential", "crucial", "accurate", "perspective", "approach",
+        "establish", "maintain", "adequate", "illustrate", "emphasize", "primary"
+    }
+    
+    advanced_found = sum(1 for w in words if w in c1_c2_markers)
+    b2_found = sum(1 for w in words if w in b2_markers)
+    advanced_density = (advanced_found * 2 + b2_found) / total_words
+    
+    if avg_sentence_len < 9: asl_pt = 1
+    elif avg_sentence_len < 13: asl_pt = 2
+    elif avg_sentence_len < 17: asl_pt = 3
+    elif avg_sentence_len < 22: asl_pt = 4
+    elif avg_sentence_len < 27: asl_pt = 5
+    else: asl_pt = 6
+    
+    if avg_word_len < 4.25: awl_pt = 1
+    elif avg_word_len < 4.55: awl_pt = 2
+    elif avg_word_len < 4.90: awl_pt = 3
+    elif avg_word_len < 5.30: awl_pt = 4
+    elif avg_word_len < 5.75: awl_pt = 5
+    else: awl_pt = 6
+    
+    if long_words_ratio < 0.08: lw_pt = 1
+    elif long_words_ratio < 0.14: lw_pt = 2
+    elif long_words_ratio < 0.20: lw_pt = 3
+    elif long_words_ratio < 0.26: lw_pt = 4
+    elif long_words_ratio < 0.32: lw_pt = 5
+    else: lw_pt = 6
+    
+    bonus = 0.0
+    if advanced_density > 0.02: bonus += 0.8
+    elif advanced_density > 0.01: bonus += 0.4
+    
+    if cli >= 11: bonus += 0.6
+    elif cli >= 9: bonus += 0.3
+    elif cli < 4: bonus -= 0.5
+    
+    score = (asl_pt * 0.30) + (awl_pt * 0.35) + (lw_pt * 0.35) + bonus
+    
+    if score < 1.7: return "A1"
+    elif score < 2.6: return "A2"
+    elif score < 3.6: return "B1"
+    elif score < 4.6: return "B2"
+    elif score < 5.6: return "C1"
+    else: return "C2"
+
+
 @app.route("/api/stories", methods=['GET'])
 def get_all_stories_firestore():
     user_email = get_user_from_request()
@@ -2717,6 +2817,13 @@ def get_all_stories_firestore():
                     story_data['timestamp'] = story_data['timestamp'].isoformat()
                 else:
                     story_data['timestamp'] = str(story_data['timestamp'])
+            
+            # Zapewnij realny poziom CEFR
+            if not story_data.get('level'):
+                computed_lvl = analyze_cefr_level(story_data.get('text', ''), story_data.get('title', ''))
+                story_data['level'] = computed_lvl
+                story_data['cefr_level'] = computed_lvl
+                
             stories_list.append(story_data)
         
         # Sortowanie w Pythonie, aby uniknąć konieczności tworzenia indeksów złożonych w Firebase
@@ -2790,7 +2897,8 @@ def add_story_firestore():
         # Wygeneruj dedykowane zdjęcie dla historii jeśli nie podano
         image_url = data.get('image_url') or generate_story_image_url(title, text)
 
-        # Dodaj nową historię dla konkretnego użytkownika
+        # Dodaj nową historię dla konkretnego użytkownika z analizą CEFR
+        story_lvl = analyze_cefr_level(text, title)
         new_story_data = {
             'user_email': user_email,
             'title': title,
@@ -2798,6 +2906,8 @@ def add_story_firestore():
             'text_hash': text_hash,
             'read_progress': 0,
             'image_url': image_url,
+            'level': story_lvl,
+            'cefr_level': story_lvl,
             'timestamp': firestore.SERVER_TIMESTAMP
         }
         doc_ref = stories_ref.add(new_story_data)
