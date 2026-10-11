@@ -113,7 +113,15 @@ const formatTime = (secs) => {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 };
 
-function MediaBuddy({ user }) {
+function MediaBuddy({ user, subscription, onOpenPaywall }) {
+  const isLocked = subscription && !subscription.can_access_media && !user?.is_admin;
+
+  useEffect(() => {
+    if (isLocked && onOpenPaywall) {
+      onOpenPaywall({ feature: 'media' });
+    }
+  }, [isLocked]);
+
   const [currentVideo, setCurrentVideo] = useState(CURATED_VIDEOS[0]);
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);

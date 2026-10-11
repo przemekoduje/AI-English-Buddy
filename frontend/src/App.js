@@ -14,6 +14,7 @@ import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import GoodToKnow from './components/GoodToKnow';
+import PaywallModal from './components/Paywall/PaywallModal';
 
 function App() {
   const [currentView, setCurrentView] = useState(() => {
@@ -28,8 +29,35 @@ function App() {
 
   const [isAdmin, setIsAdmin] = useState(false);
 
+  const [subscription, setSubscription] = useState(() => {
+    return user?.subscription || null;
+  });
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [paywallReason, setPaywallReason] = useState(null);
+
+  const openPaywall = (reason = null) => {
+    setPaywallReason(reason);
+    setPaywallOpen(true);
+  };
+
+  const fetchSubscription = async () => {
+    if (!user || !user.token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/subscription/status`, {
+        headers: { "X-Session-Token": user.token }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubscription(data.subscription);
+      }
+    } catch (e) {
+      console.warn("Błąd pobierania subskrypcji:", e);
+    }
+  };
+
   useEffect(() => {
     if (user && user.token) {
+      fetchSubscription();
       fetch(`${API_BASE_URL}/api/admin/verify`, {
         headers: { "X-Session-Token": user.token }
       })
@@ -43,6 +71,7 @@ function App() {
       .catch(() => setIsAdmin(false));
     } else {
       setIsAdmin(false);
+      setSubscription(null);
     }
   }, [user]);
 
@@ -133,9 +162,58 @@ function App() {
     }
   }, []);
 
+  // Obsługa powrotu z bramki Stripe (Stripe Checkout)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get('payment');
+    const sessionId = params.get('session_id');
+
+    if (payment === 'success') {
+      if (sessionId && user?.token) {
+        fetch(`${API_BASE_URL}/api/stripe/verify-session`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Session-Token': user.token
+          },
+          body: JSON.stringify({ session_id: sessionId })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.subscription) {
+            setSubscription(data.subscription);
+          }
+          setCustomAlert("Dziękujemy! Twój pakiet został pomyślnie zaktualizowany. Ciesz się pełnymi możliwościami Speakling!");
+        })
+        .catch(err => {
+          console.error("Błąd weryfikacji sesji Stripe:", err);
+          fetchSubscription();
+        });
+      } else {
+        setCustomAlert("Dziękujemy! Płatność przebiegła pomyślnie.");
+        fetchSubscription();
+      }
+
+      const url = new URL(window.location);
+      url.searchParams.delete('payment');
+      url.searchParams.delete('session_id');
+      url.searchParams.delete('plan');
+      url.searchParams.delete('topup');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+    } else if (payment === 'cancelled') {
+      setCustomAlert("Płatność została anulowana. Możesz powrócić do wyboru planu w dowolnym momencie.");
+      const url = new URL(window.location);
+      url.searchParams.delete('payment');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+    }
+  }, [user]);
+
   const handleLoginSuccess = (userData) => {
     localStorage.setItem("buddy_user", JSON.stringify(userData));
     setUser(userData);
+    if (userData.subscription) {
+      setSubscription(userData.subscription);
+    }
   };
 
   const handleLogout = async () => {
@@ -155,12 +233,18 @@ function App() {
     localStorage.removeItem("buddy_current_story_title");
     localStorage.removeItem("buddy_current_story_id");
     setUser(null);
+    setSubscription(null);
     setGeneratedText("");
     setCurrentStoryTitle("");
     setCurrentStoryId(null);
   };
 
   const handleNavigate = (view) => {
+    // Blokada wejścia w Media Buddy dla pakietu Starter
+    if (view === 'media' && subscription && !subscription.can_access_media && !isAdmin) {
+      openPaywall({ feature: 'media' });
+      return;
+    }
     setCurrentView(view);
     localStorage.setItem("buddy_current_view", view);
   };
@@ -184,13 +268,34 @@ function App() {
 
   return (
     <div className="App mission-layout">
-      <Sidebar currentView={currentView} onNavigate={handleNavigate} user={user} onLogout={handleLogout} isAdmin={isAdmin} />
+      <Sidebar 
+        currentView={currentView} 
+        onNavigate={handleNavigate} 
+        user={user} 
+        onLogout={handleLogout} 
+        isAdmin={isAdmin}
+        subscription={subscription}
+        onOpenPaywall={openPaywall}
+      />
       
       <main className="main-content">
-        {currentView !== 'workspace' && <TopBar title={getPageTitle()} user={user} />}
+        {currentView !== 'workspace' && (
+          <TopBar 
+            title={getPageTitle()} 
+            user={user} 
+            subscription={subscription}
+            onOpenPaywall={openPaywall}
+          />
+        )}
         <div className="view-container">
           {currentView === 'dashboard' ? (
-            <Dashboard onNavigateToWorkspace={() => handleNavigate('workspace')} user={user} />
+            <Dashboard 
+              onNavigateToWorkspace={() => handleNavigate('workspace')} 
+              user={user} 
+              subscription={subscription}
+              onOpenPaywall={openPaywall}
+              onSubscriptionUpdated={setSubscription}
+            />
           ) : currentView === 'stories' ? (
             <SavedStories 
               user={user} 
@@ -210,10 +315,14 @@ function App() {
             <VocabularyView 
               user={user}
               onNavigateToWorkspace={() => handleNavigate('workspace')}
+              subscription={subscription}
+              onOpenPaywall={openPaywall}
             />
           ) : currentView === 'media' ? (
             <MediaBuddy 
               user={user}
+              subscription={subscription}
+              onOpenPaywall={openPaywall}
             />
           ) : currentView === 'admin' ? (
             <AdminDashboard 
@@ -232,6 +341,8 @@ function App() {
               setCurrentStoryTitle={setCurrentStoryTitle}
               currentStoryId={currentStoryId}
               setCurrentStoryId={setCurrentStoryId}
+              subscription={subscription}
+              onOpenPaywall={openPaywall}
             />
           )}
         </div>
@@ -254,6 +365,16 @@ function App() {
           <TranslatorDrawer user={user} />
         </>
       )}
+
+      {/* Modal Paywalla */}
+      <PaywallModal 
+        isOpen={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        user={user}
+        subscription={subscription}
+        initialReason={paywallReason}
+        onSubscriptionUpdated={(newSub) => setSubscription(newSub)}
+      />
 
       {customAlert && (
         <div className="modal-overlay" style={{ zIndex: 10000 }}>

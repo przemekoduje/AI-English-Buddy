@@ -260,6 +260,8 @@ function Workspace({
   setCurrentStoryTitle,
   currentStoryId,
   setCurrentStoryId,
+  subscription,
+  onOpenPaywall,
 }) {
   const [dismissedStoryWords, setDismissedStoryWords] = useState(new Set());
   const [showPracticeMode, setShowPracticeMode] = useState(false);
@@ -2970,8 +2972,14 @@ function Workspace({
                 </p>
 
                 <button
-                  className="buddy-voice-ai-btn"
+                  className={`buddy-voice-ai-btn ${subscription && !subscription.can_access_mastery && !user?.is_admin ? 'btn-pro-locked' : ''}`}
                   onClick={() => {
+                    if (subscription && !subscription.can_access_mastery && !user?.is_admin) {
+                      if (onOpenPaywall) {
+                        onOpenPaywall({ feature: 'mastery' });
+                        return;
+                      }
+                    }
                     handleStop();
                     setShowPracticeMode(true);
                   }}
@@ -2982,6 +2990,17 @@ function Workspace({
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
                   </svg>
                   <span>Mastery Path · 3 steps</span>
+                  {subscription && !subscription.can_access_mastery && !user?.is_admin && (
+                    <span style={{
+                      marginLeft: '6px',
+                      background: 'rgba(255,255,255,0.25)',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      letterSpacing: '0.05em'
+                    }}>PRO</span>
+                  )}
                 </button>
 
                 <div className="buddy-practice-section">

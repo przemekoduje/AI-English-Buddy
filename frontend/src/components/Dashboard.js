@@ -104,6 +104,22 @@ export const EXERCISE_TYPES = [
     name: "Grammar & Phrases in Context",
     badge: "Grammar",
     description: "Practice interesting sentence structures, tenses, and key expressions used in this story."
+  },
+  {
+    id: "business_english",
+    icon: "💼",
+    name: "Business English & Negotiations",
+    badge: "Business",
+    tierRequired: "intensive",
+    description: "Simulate corporate meetings, contract negotiations, executive presentations and professional business diplomacy."
+  },
+  {
+    id: "tech_interview",
+    icon: "⚡",
+    name: "Technical & Job Interview Prep",
+    badge: "Interview",
+    tierRequired: "intensive",
+    description: "Practice answering behavioral and technical interview questions, salary negotiations and engineering discussions."
   }
 ];
 
@@ -266,6 +282,24 @@ CRITICAL RULES FOR VOCABULARY EXERCISES (MUST FOLLOW AT ALL COSTS):
       greetingPrompt = `Hello! Greet me warmly as my English tutor. Mention that we're going to practice grammar structures and sentence patterns based on the story "${title}". Ask me a quick opening question in 1-2 friendly sentences.`;
       break;
 
+    case "business_english":
+      exerciseInstructions = `EXERCISE FOCUS: BUSINESS ENGLISH & CORPORATE NEGOTIATIONS
+- Conduct a high-level professional business simulation with the student.
+- You are a senior business executive / partner.
+- Guide the conversation around corporate decision-making, negotiations, project delivery, and formal English idioms.
+- Keep responses concise (1-2 sentences) and maintain professional business etiquette.`;
+      greetingPrompt = `Hello! Welcome to our Business English simulation. Today we will focus on professional communication, corporate strategy, and confident negotiation. How would you like to introduce our meeting agenda today?`;
+      break;
+
+    case "tech_interview":
+      exerciseInstructions = `EXERCISE FOCUS: TECHNICAL & JOB INTERVIEW PREPARATION
+- Conduct a realistic job interview simulation for tech, management, or professional roles.
+- You are the hiring manager or tech lead.
+- Ask behavioral and technical problem-solving questions one at a time.
+- Offer constructive, encouraging feedback on clarity and technical English vocabulary.`;
+      greetingPrompt = `Hello! Welcome to your Job and Technical Interview session. I will be your interviewer today. To get started, please tell me briefly about a challenging technical or workplace problem you solved recently!`;
+      break;
+
     default:
       exerciseInstructions = `EXERCISE FOCUS: GENERAL STORY DISCUSSION
 - Discuss the story "${title}" with the student. Stick strictly to the content and vocabulary of this story. Keep turns concise (1-2 sentences) and interactive.`;
@@ -305,7 +339,7 @@ ${targetWordsFormatted ? `Pre-approved Target English Vocabulary:\n${targetWords
   return { systemInstruction, greetingPrompt: finalGreetingPrompt };
 }
 
-function Dashboard({ user }) {
+function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, onSubscriptionUpdated }) {
   // Tryb rozmowy: 'live' (Gemini Multimodal Live) lub 'classic' (Whisper + OpenAI/DeepSeek + TTS)
   const [chatMode, setChatMode] = useState(() => {
     return localStorage.getItem("buddy_live_chat_mode") || "live";
@@ -411,6 +445,13 @@ function Dashboard({ user }) {
 
   const handleExerciseTypeChange = (e) => {
     const newType = e.target.value;
+    const selectedEx = EXERCISE_TYPES.find(ex => ex.id === newType);
+    if (selectedEx?.tierRequired === 'intensive' && subscription?.tier !== 'intensive' && !user?.is_admin) {
+      if (onOpenPaywall) {
+        onOpenPaywall({ feature: 'industry' });
+        return;
+      }
+    }
     setExerciseType(newType);
     localStorage.setItem("buddy_exercise_type", newType);
   };
@@ -649,6 +690,15 @@ function Dashboard({ user }) {
   // ==========================================
 
   const startLiveSession = async (overrideOptions = {}) => {
+    if (subscription && subscription.minutes_remaining <= 0 && !user?.is_admin) {
+      if (onOpenPaywall) {
+        onOpenPaywall({ feature: 'quota', reason: 'quota_exceeded' });
+      }
+      setIsChatActive(false);
+      setLiveStatus("inactive");
+      return;
+    }
+
     setErrorMessage(null);
     setLiveStatus("connecting");
     setIsChatActive(true);
@@ -806,6 +856,14 @@ function Dashboard({ user }) {
         }
 
         if (!tokenRes.ok || tokenData.error) {
+          if (tokenData.error === "QUOTA_EXCEEDED") {
+            setIsChatActive(false);
+            setLiveStatus("inactive");
+            if (onOpenPaywall) {
+              onOpenPaywall({ feature: 'quota', reason: 'quota_exceeded' });
+            }
+            return;
+          }
           if (tokenData.error === "NO_API_KEY") {
             setShowSettings(true);
             setErrorMessage(
@@ -820,6 +878,13 @@ function Dashboard({ user }) {
 
         clientConfig.token = tokenData.token;
         clientConfig.wsUrl = tokenData.ws_url;
+        clientConfig.maxDurationSeconds = tokenData.remaining_seconds || (subscription?.minutes_remaining ? Math.round(subscription.minutes_remaining * 60) : 300);
+        clientConfig.onQuotaExceeded = ({ elapsedSeconds, reason }) => {
+          stopLiveSession();
+          if (onOpenPaywall) {
+            onOpenPaywall({ feature: 'quota', reason: 'quota_exceeded' });
+          }
+        };
       } else if (activeProvider === "vertex_ai") {
         // Pobieramy token OAuth2 dla Vertex AI z backendu
         const vertexRes = await fetch(`${API_BASE_URL}/api/live/vertex-token`, {
@@ -868,6 +933,18 @@ function Dashboard({ user }) {
     }
     setIsCameraActive(false);
     setLiveStatus("inactive");
+
+    // Odświeżenie stanu subskrypcji po zakończeniu sesji
+    if (onSubscriptionUpdated && user?.token) {
+      fetch(`${API_BASE_URL}/api/subscription/status`, {
+        headers: { "X-Session-Token": user.token }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.subscription) onSubscriptionUpdated(data.subscription);
+      })
+      .catch(() => {});
+    }
   };
 
   const handleToggleCamera = async () => {
@@ -1428,8 +1505,20 @@ function Dashboard({ user }) {
       {!isChatActive ? (
         /* READY STATE CARD (Image 1) */
         <div className="chat-live-ready-card">
-          <div className="card-top-bar">
+          <div className="card-top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="badge-purple-pill">Gemini Live · Voice practice</span>
+            {subscription && (
+              <span 
+                className="topbar-plan-pill plan-pill-premium"
+                onClick={() => onOpenPaywall && onOpenPaywall()}
+                title="Pula minut w Twoim planie (kliknij aby uaktualnić)"
+                style={{ cursor: 'pointer', margin: 0 }}
+              >
+                <span className="plan-pill-badge">{subscription?.tier?.toUpperCase()}</span>
+                <span className="plan-pill-mins">{(subscription?.minutes_remaining ?? 5).toFixed(1)} min</span>
+                <span className="plan-pill-action">{subscription?.tier === 'starter' ? '⚡ Uaktualnij' : 'Doładuj'}</span>
+              </span>
+            )}
           </div>
 
           <div className="card-center-stage">
@@ -1470,11 +1559,21 @@ function Dashboard({ user }) {
         /* ACTIVE / LISTENING STATE VIEW WITH SIDE TRANSCRIPT (Image 2) */
         <div className="chat-live-active-container">
           <div className="active-call-main-card">
-            <div className="active-card-top">
+            <div className="active-card-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span className="status-pill-green">
                 <span className="green-pulse-dot"></span>
                 Connected · Gemini Live
               </span>
+              {subscription && (
+                <span 
+                  className="topbar-plan-pill plan-pill-premium"
+                  onClick={() => onOpenPaywall && onOpenPaywall()}
+                  style={{ cursor: 'pointer', margin: 0 }}
+                  title="Pozostałe minuty w bieżącym okresie"
+                >
+                  <span className="plan-pill-mins">{(subscription?.minutes_remaining ?? 5).toFixed(1)}m pozostało</span>
+                </span>
+              )}
             </div>
 
             <div className="active-orb-center">

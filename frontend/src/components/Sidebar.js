@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import logoImg from '../assets/logo.png';
 import './Sidebar.css';
 
-const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
+const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscription, onOpenPaywall }) => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const stored = localStorage.getItem('buddy_sidebar_collapsed');
     return stored ? JSON.parse(stored) : false;
@@ -15,6 +15,9 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
       return next;
     });
   };
+
+  const isStarter = !subscription || subscription.tier === 'starter';
+
   const menuItems = [
     {
       id: 'dashboard',
@@ -59,6 +62,7 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
     {
       id: 'media',
       label: 'Media Buddy',
+      badge: isStarter && !isAdmin ? 'PRO' : null,
       icon: (
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10" />
@@ -92,6 +96,17 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
     });
   }
 
+  const handleItemClick = (item) => {
+    if (item.disabled) return;
+    if (item.id === 'media' && isStarter && !isAdmin) {
+      if (onOpenPaywall) {
+        onOpenPaywall({ feature: 'media' });
+        return;
+      }
+    }
+    onNavigate(item.id);
+  };
+
   return (
     <aside className={`mission-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-brand">
@@ -106,12 +121,15 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
           <button
             key={item.id}
             className={`nav-item nav-item-${item.id} ${currentView === item.id ? 'active' : ''} ${item.disabled ? 'disabled' : ''}`}
-            onClick={() => !item.disabled && onNavigate(item.id)}
+            onClick={() => handleItemClick(item)}
             disabled={item.disabled}
             title={item.disabled ? `${item.label} (Wkrótce / Coming Soon)` : (isCollapsed ? item.label : undefined)}
           >
             <span className="nav-icon">{item.icon}</span>
             <span className="nav-label">{item.label}</span>
+            {item.badge && !isCollapsed && (
+              <span className="nav-badge-pill">{item.badge}</span>
+            )}
           </button>
         ))}
       </nav>
@@ -132,6 +150,33 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin }) => {
       </button>
 
       <div className="sidebar-footer">
+        {!isCollapsed && (
+          <div className="sidebar-subscription-box" onClick={() => onOpenPaywall && onOpenPaywall()}>
+            {isStarter ? (
+              <div className="sidebar-sub-card sub-card-upgrade">
+                <div className="sub-card-header">
+                  <span className="sub-card-tag">7 DNI FREE</span>
+                  <span className="sub-card-sparkle">✨</span>
+                </div>
+                <div className="sub-card-title">Przejdź na Pro</div>
+                <div className="sub-card-desc">150 min Live Orb + Mastery Path</div>
+                <button className="sub-card-btn">Uaktualnij plan →</button>
+              </div>
+            ) : (
+              <div className="sidebar-sub-card sub-card-active">
+                <div className="sub-card-header">
+                  <span className="sub-card-tag">{subscription?.tier?.toUpperCase()}</span>
+                </div>
+                <div className="sub-card-title">Plan {subscription?.name || 'Pro'}</div>
+                <div className="sub-card-desc">
+                  Pozostało: <strong>{(subscription?.minutes_remaining || 0).toFixed(1)} min</strong>
+                </div>
+                <button className="sub-card-btn-secondary">Zarządzaj planem</button>
+              </div>
+            )}
+          </div>
+        )}
+
         {!isCollapsed && (
           <div className="daily-practice-card">
             <div className="practice-card-header">
