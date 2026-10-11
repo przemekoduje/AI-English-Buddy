@@ -1,5 +1,5 @@
 # Kod Projektu AI-English-Buddy (Speakling)
-Wygenerowano: 2026-10-11 22:07:25
+Wygenerowano: 2026-10-11 22:11:38
 > Skondensowany eksport aktywnych plików produkcyjnych (bez plików testowych, mocków i kopii archiwalnych).
 
 ## Spis Treści

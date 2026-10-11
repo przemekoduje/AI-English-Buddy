@@ -1,6 +1,107 @@
 import os
 import datetime
 
+def export_paywall_bundle():
+    """Tworzy zwięzły, wyspecjalizowany plik KOD_SUBSKRYPCJA_PAYWALL.md mieszczący się w całości w każdym oknie czatu AI."""
+    root_dir = os.path.abspath(".")
+    output_file = os.path.join(root_dir, "KOD_SUBSKRYPCJA_PAYWALL.md")
+    
+    app_py_path = os.path.join(root_dir, "backend", "app.py")
+    sub_backend_code = ""
+    if os.path.exists(app_py_path):
+        with open(app_py_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+        # Wyodrębniamy kluczowe sekcje z backend/app.py:
+        # 1. Definicje planów, Stripe, webhooki, helpery subskrypcji (linie ~1135 - 1685)
+        # 2. Blokady paywalla w endpointach (Media Buddy, Mastery Path, Live Token)
+        sub_section = "".join(lines[1134:1685])
+        
+        # Paywall w Media Buddy
+        media_guard = "".join(lines[2659:2675])
+        
+        # Paywall w Mastery Path
+        mastery_guard = "".join(lines[4734:4746])
+        
+        # TTS mode check dla planu Starter
+        tts_guard = "".join(lines[5216:5230])
+        
+        # Live token quota check
+        live_token_guard = "".join(lines[6298:6325])
+        
+        sub_backend_code = f"""# ========================================================
+# 1. GŁÓWNY MODUŁ SUBSKRYPCJI, STRIPE, WEBHOOKÓW I LIMITÓW
+# (Z pliku backend/app.py: linie 1135-1685)
+# ========================================================
+{sub_section}
+
+# ========================================================
+# 2. BRAMKA PAYWALLA W MODULE MEDIA BUDDY (YouTube)
+# (Z pliku backend/app.py: /api/media/transcript)
+# ========================================================
+{media_guard}
+... (dalsza część pobierania napisów)
+
+# ========================================================
+# 3. BRAMKA PAYWALLA W MODULE MASTERY PATH (3 kroki)
+# (Z pliku backend/app.py: /api/mastery-prepare)
+# ========================================================
+{mastery_guard}
+... (dalsza część przygotowania etapów treningu)
+
+# ========================================================
+# 4. WYMUSZENIE DARMOWEGO EDGE TTS DLA PLANU STARTER
+# (Z pliku backend/app.py: generate_tts_base64)
+# ========================================================
+{tts_guard}
+...
+
+# ========================================================
+# 5. TWARDY LIMIT MINUT DLA GEMINI LIVE ORB (KOD 403)
+# (Z pliku backend/app.py: /api/live/token)
+# ========================================================
+{live_token_guard}
+"""
+
+    frontend_files = [
+        "frontend/src/components/Paywall/PaywallModal.js",
+        "frontend/src/components/Paywall/PaywallModal.css",
+        "frontend/src/services/GeminiLiveClient.js",
+        "frontend/src/components/TopBar.js",
+        "frontend/src/components/Sidebar.js",
+        "frontend/src/App.js"
+    ]
+    
+    with open(output_file, "w", encoding="utf-8") as out:
+        out.write("# Speakling — Kompletny Moduł Subskrypcji, Paywalla i Limitów AI\n")
+        out.write(f"Wygenerowano: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        out.write("> Dedykowany, lekki pakiet kodu dla zewnętrznych modeli AI (ChatGPT, Claude, DeepSeek). Zawiera 100% logiki subskrypcji, Stripe, limitów minut Gemini Live i blokad paywalla bez obcinania.\n\n")
+        out.write("## Spis Zawartości Pakietu\n")
+        out.write("1. `backend/app.py` — Silnik subskrypcji, plany, Stripe Checkout, Webhooks, Portal, liczniki minut, blokady 403\n")
+        for i, fpath in enumerate(frontend_files, 2):
+            out.write(f"{i}. `{fpath}`\n")
+        out.write("\n---\n\n")
+        
+        # 1. Backend
+        out.write("## 1. Plik: `backend/app.py` (Kluczowe sekcje subskrypcji, Stripe i bramek limitów)\n\n```python\n")
+        out.write(sub_backend_code)
+        out.write("\n```\n\n---\n\n")
+        
+        # 2. Frontend files
+        for idx, fpath in enumerate(frontend_files, 2):
+            full_path = os.path.join(root_dir, fpath)
+            lang = "javascript" if fpath.endswith(".js") else ("css" if fpath.endswith(".css") else "text")
+            out.write(f"## {idx}. Plik: `{fpath}`\n\n```{lang}\n")
+            if os.path.exists(full_path):
+                with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                    out.write(f.read())
+            else:
+                out.write(f"// Plik {fpath} nie został odnaleziony.\n")
+            out.write("\n```\n\n---\n\n")
+            
+    print(f"Pomyślnie wygenerowano wyspecjalizowany plik: {output_file}")
+
+
 def export_clean_code():
     root_dir = os.path.abspath(".")
     output_file = os.path.join(root_dir, "KOD_PROJEKTU.md")
@@ -164,6 +265,7 @@ def export_all_code():
     print(f"Pomyślnie wyeksportowano CALY_KOD_PROJEKTU.md ({len(files_to_export)} plików, {total_lines} linii): {output_file}")
 
 if __name__ == "__main__":
+    export_paywall_bundle()
     export_clean_code()
     export_all_code()
 
