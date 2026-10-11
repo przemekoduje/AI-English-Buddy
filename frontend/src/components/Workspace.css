@@ -750,6 +750,16 @@
   .workspace-figma-grid {
     grid-template-columns: 1fr;
   }
+
+  .workspace-figma-sidebar {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .story-words-card {
+    position: static;
+  }
 }
 
 /* ── LEFT COLUMN: STORY READING CARD ── */
@@ -1234,6 +1244,27 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  position: sticky;
+  top: 1.5rem;
+  align-self: start;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  padding-right: 2px;
+}
+
+.workspace-figma-sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.workspace-figma-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workspace-figma-sidebar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
 }
 
 /* CARD 1: LEARNING BUDDY */
@@ -1401,15 +1432,19 @@
   animation: slide-down 0.2s ease-out;
 }
 
-/* CARD 2: WORDS IN THIS STORY */
+/* CARD 1: WORDS IN THIS STORY (TOP & ALWAYS VISIBLE) */
 .story-words-card {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 20px;
   padding: 1.5rem;
-  box-shadow: 0 2px 12px -2px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.02);
   display: flex;
   flex-direction: column;
+  transition: box-shadow 0.2s ease;
 }
 
 .story-words-header {

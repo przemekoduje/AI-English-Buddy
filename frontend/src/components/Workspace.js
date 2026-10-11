@@ -146,7 +146,7 @@ const getTopicIcon = (topicName) => {
   const size = 16;
   const strokeWidth = 2.5;
   const style = { display: 'inline-block', verticalAlign: 'middle' };
-  
+
   if (!topicName) {
     return (
       <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
@@ -154,9 +154,9 @@ const getTopicIcon = (topicName) => {
       </svg>
     );
   }
-  
+
   const t = topicName.toLowerCase();
-  
+
   if (t.includes("business")) {
     return (
       <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}>
@@ -234,12 +234,12 @@ const getTopicIcon = (topicName) => {
 };
 
 const GENERATION_PHASES = [
-  { label: "Analizuję temat...",        targetPct: 12, durationMs: 1800  },
-  { label: "Tworzę strukturę lekcji...", targetPct: 28, durationMs: 2800  },
-  { label: "Generuję treść...",          targetPct: 55, durationMs: 6000  },
-  { label: "Opracowuję tłumaczenia...",  targetPct: 72, durationMs: 5000  },
-  { label: "Finalizuję sekcje...",       targetPct: 88, durationMs: 5000  },
-  { label: "Prawie gotowe...",           targetPct: 95, durationMs: 4000  },
+  { label: "Analizuję temat...", targetPct: 12, durationMs: 1800 },
+  { label: "Tworzę strukturę lekcji...", targetPct: 28, durationMs: 2800 },
+  { label: "Generuję treść...", targetPct: 55, durationMs: 6000 },
+  { label: "Opracowuję tłumaczenia...", targetPct: 72, durationMs: 5000 },
+  { label: "Finalizuję sekcje...", targetPct: 88, durationMs: 5000 },
+  { label: "Prawie gotowe...", targetPct: 95, durationMs: 4000 },
 ];
 
 const PREMIUM_VOICES = [
@@ -289,7 +289,7 @@ function Workspace({
   const [explanationWord, setExplanationWord] = useState(null);
   const [showPracticeModal, setShowPracticeModal] = useState(false);
   const [practiceTargetText, setPracticeTargetText] = useState("");
-  
+
   // States for story parts / continuation
   const [storyParts, setStoryParts] = useState([]);
   const [activePartIndex, setActivePartIndex] = useState(-1);
@@ -297,7 +297,7 @@ function Workspace({
   const [continuationDetails, setContinuationDetails] = useState("");
   const [selectedContinuationTopics, setSelectedContinuationTopics] = useState([]);
   const [loadedRootId, setLoadedRootId] = useState(null);
-  
+
   const [genProgress, setGenProgress] = useState(0);
   const [genPhaseLabel, setGenPhaseLabel] = useState("");
   const progressTimersRef = useRef([]);
@@ -306,7 +306,7 @@ function Workspace({
   const [readingProgress, setReadingProgress] = useState(0);
   const [readSentenceIndices, setReadSentenceIndices] = useState(new Set());
   const progressDebounceTimerRef = useRef(null);
-  
+
   // States for word translation tooltip
   const [activeWordId, setActiveWordId] = useState(null);
   const [activeWordHighlight, setActiveWordHighlight] = useState(null);
@@ -326,7 +326,7 @@ function Workspace({
   const [isBuddyLoading, setIsBuddyLoading] = useState(false);
   const [inlineWordData, setInlineWordData] = useState(null);
   const [showInlineSentenceTrans, setShowInlineSentenceTrans] = useState(false);
-  
+
   const currentAudioRef = useRef(null);
   const contextMenuRef = useRef(null);
   const activeSelectionRangeRef = useRef(null);
@@ -342,7 +342,7 @@ function Workspace({
   const currentChunkIndexRef = useRef(-1);
   // Mutex blokujący równoległe wywołania speakChunk
   const isChunkFetchingRef = useRef(false);
-  
+
   // Telemetry & summary states
   const [activityLog, setActivityLog] = useState([]);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
@@ -365,20 +365,20 @@ function Workspace({
       x: e.clientX - playerPosition.x,
       y: e.clientY - playerPosition.y
     };
-    
+
     const handleMouseMove = (moveEvent) => {
       setPlayerPosition({
         x: moveEvent.clientX - playerDragStartRef.current.x,
         y: moveEvent.clientY - playerDragStartRef.current.y
       });
     };
-    
+
     const handleMouseUp = () => {
       setIsDraggingPlayer(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-    
+
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
@@ -391,7 +391,7 @@ function Workspace({
       x: touch.clientX - playerPosition.x,
       y: touch.clientY - playerPosition.y
     };
-    
+
     const handleTouchMove = (moveEvent) => {
       const moveTouch = moveEvent.touches[0];
       setPlayerPosition({
@@ -399,13 +399,13 @@ function Workspace({
         y: moveTouch.clientY - playerDragStartRef.current.y
       });
     };
-    
+
     const handleTouchEnd = () => {
       setIsDraggingPlayer(false);
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleTouchEnd);
     };
-    
+
     document.addEventListener('touchmove', handleTouchMove);
     document.addEventListener('touchend', handleTouchEnd);
   };
@@ -461,7 +461,7 @@ function Workspace({
       if (loadedRootId !== null) setLoadedRootId(null);
       return;
     }
-    
+
     if (loadedRootId) {
       const existingIndex = storyParts.findIndex(p => p.id === currentStoryId);
       if (existingIndex !== -1) {
@@ -469,7 +469,7 @@ function Workspace({
         return;
       }
     }
-    
+
     const loadStoryParts = async () => {
       setIsLoading(true);
       try {
@@ -481,11 +481,11 @@ function Workspace({
           setStoryParts(data);
           const rootId = data[0]?.id || currentStoryId;
           setLoadedRootId(rootId);
-          
+
           const index = data.findIndex(p => p.id === currentStoryId);
           const activeIdx = index !== -1 ? index : 0;
           setActivePartIndex(activeIdx);
-          
+
           const activePart = data[activeIdx] || data[0];
           if (activePart) {
             setGeneratedText(activePart.text);
@@ -510,7 +510,7 @@ function Workspace({
     const clamped = Math.max(0, Math.min(100, Math.round(progressVal)));
     try {
       localStorage.setItem(`buddy_story_progress_${storyId}`, clamped);
-    } catch (e) {}
+    } catch (e) { }
 
     if (progressDebounceTimerRef.current) {
       clearTimeout(progressDebounceTimerRef.current);
@@ -548,7 +548,7 @@ function Workspace({
           initialSet = new Set(arr);
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     let initialProgress = 0;
     try {
@@ -556,7 +556,7 @@ function Workspace({
       if (cached !== null) {
         initialProgress = parseInt(cached, 10) || 0;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     if (initialSet.size === 0 && initialProgress > 0 && textChunks && textChunks.length > 0) {
       const count = Math.min(textChunks.length, Math.round((initialProgress / 100) * textChunks.length));
@@ -577,17 +577,17 @@ function Workspace({
     setReadSentenceIndices(prev => {
       const next = new Set(prev);
       next.add(index);
-      
+
       const total = textChunks.length;
       const count = next.size;
       const calculated = Math.min(100, Math.round((count / total) * 100));
-      
+
       setReadingProgress(calculated);
       try {
         localStorage.setItem(`buddy_story_read_sentences_${currentStoryId}`, JSON.stringify(Array.from(next)));
         localStorage.setItem(`buddy_story_progress_${currentStoryId}`, calculated);
-      } catch (e) {}
-      
+      } catch (e) { }
+
       syncProgressDebounced(currentStoryId, calculated);
       return next;
     });
@@ -608,9 +608,9 @@ function Workspace({
   const handleGenerateContinuation = async () => {
     handleStop();
     setIsLoading(true);
-    
+
     const rootStoryId = loadedRootId || currentStoryId;
-    
+
     try {
       let settings = {
         language_level: "medium",
@@ -620,7 +620,7 @@ function Workspace({
         genre: "adventure",
         focus_area: "none"
       };
-      
+
       try {
         const res = await fetch(`${API_BASE_URL}/api/user-settings`, {
           headers: { "X-Session-Token": user.token }
@@ -634,13 +634,13 @@ function Workspace({
 
       const response = await fetch(`${API_BASE_URL}/api/generate`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-Session-Token": user.token
         },
-        body: JSON.stringify({ 
-          topics: selectedContinuationTopics, 
-          customDetails: continuationDetails, 
+        body: JSON.stringify({
+          topics: selectedContinuationTopics,
+          customDetails: continuationDetails,
           settings,
           parent_id: rootStoryId
         }),
@@ -658,15 +658,15 @@ function Workspace({
           text: data[0].generated_text,
           part_number: storyParts.length + 1
         };
-        
+
         const updatedParts = [...storyParts, newPart];
         setStoryParts(updatedParts);
         setActivePartIndex(updatedParts.length - 1);
-        
+
         setGeneratedText(newPart.text);
         setCurrentStoryTitle(newPart.title);
         setCurrentStoryId(newPart.id);
-        
+
         setContinuationDetails("");
         setSelectedContinuationTopics([]);
         setIsContinuing(false);
@@ -761,7 +761,7 @@ function Workspace({
         try {
           const response = await fetch(`${API_BASE_URL}/api/translate`, {
             method: "POST",
-            headers: { 
+            headers: {
               "Content-Type": "application/json",
               "X-Session-Token": user.token
             },
@@ -858,7 +858,7 @@ function Workspace({
 
       const response = await fetch(`${API_BASE_URL}/api/translate`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-Session-Token": user.token
         },
@@ -909,7 +909,7 @@ function Workspace({
       if (activeSelectionRangeRef.current && !showWordTooltip) {
         const rect = activeSelectionRangeRef.current.getBoundingClientRect();
         const { clientX, clientY } = e;
-        
+
         const pad = 5;
         const isInside = (
           clientX >= rect.left - pad &&
@@ -917,19 +917,19 @@ function Workspace({
           clientY >= rect.top - pad &&
           clientY <= rect.bottom + pad
         );
-        
+
         if (isInside) {
           const text = activeSelectionTextRef.current;
           const range = activeSelectionRangeRef.current;
-          
+
           activeSelectionRangeRef.current = null;
           activeSelectionTextRef.current = null;
-          
+
           triggerSelectionTranslation(text, range);
         }
       }
     };
-    
+
     document.addEventListener("mousemove", handleGlobalMouseMove, true);
     return () => {
       document.removeEventListener("mousemove", handleGlobalMouseMove, true);
@@ -1012,11 +1012,11 @@ function Workspace({
     setIsContinuing(false);
     setContinuationDetails("");
     setSelectedContinuationTopics([]);
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/generate`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-Session-Token": user.token
         },
@@ -1067,11 +1067,11 @@ function Workspace({
     setIsContinuing(false);
     setContinuationDetails("");
     setSelectedContinuationTopics([]);
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/generate-default`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-Session-Token": user?.token || ""
         },
@@ -1232,7 +1232,7 @@ function Workspace({
           syncProgressDebounced(currentStoryId, 100);
           try {
             localStorage.setItem(`buddy_story_progress_${currentStoryId}`, 100);
-          } catch (e) {}
+          } catch (e) { }
         }
 
         if (single) {
@@ -1275,7 +1275,7 @@ function Workspace({
     if (!generatedText || textChunks.length === 0) return;
     if (currentAudioRef.current) {
       if (isPausedRef.current || currentAudioRef.current.paused) {
-        currentAudioRef.current.play().catch(() => {});
+        currentAudioRef.current.play().catch(() => { });
         setIsPaused(false);
         isPausedRef.current = false;
       } else {
@@ -1377,7 +1377,7 @@ function Workspace({
     try {
       const response = await fetch(`${API_BASE_URL}/api/translate`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-Session-Token": user.token
         },
@@ -1454,7 +1454,7 @@ function Workspace({
     try {
       const response = await fetch(`${API_BASE_URL}/api/translate`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-Session-Token": user.token
         },
@@ -1501,7 +1501,7 @@ function Workspace({
         wordAudio.onended = () => globalAudioManager.release(requestId);
         if (!globalAudioManager.setAudio(requestId, wordAudio)) return;
         currentAudioRef.current = wordAudio;
-        wordAudio.play().catch(() => {});
+        wordAudio.play().catch(() => { });
       }
     } catch (err) {
       console.error("Błąd TTS dla wyrazu:", err);
@@ -1511,7 +1511,7 @@ function Workspace({
   useEffect(() => {
     const handleGlobalClick = (e) => {
       if (
-        !e.target.closest('.reader-word') && 
+        !e.target.closest('.reader-word') &&
         !e.target.closest('.word-translation-tooltip')
       ) {
         handleCloseWordTooltip();
@@ -1629,7 +1629,7 @@ function Workspace({
     try {
       const response = await fetch(`${API_BASE_URL}/api/translate`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-Session-Token": user.token
         },
@@ -1718,7 +1718,7 @@ function Workspace({
         audio.onended = () => globalAudioManager.release(requestId);
         if (!globalAudioManager.setAudio(requestId, audio)) return;
         currentAudioRef.current = audio;
-        audio.play().catch(() => {});
+        audio.play().catch(() => { });
       }
     } catch (err) {
       console.error("Error speaking selected text:", err);
@@ -1748,7 +1748,7 @@ function Workspace({
   const handleDeleteWord = async (wordToDelete) => {
     setNotebookWords(prev => prev.filter(w => w.original !== wordToDelete));
     try {
-      const url = `${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordToDelete)}` + 
+      const url = `${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordToDelete)}` +
         (currentStoryId ? `?story_id=${currentStoryId}` : "");
       await fetch(url, {
         method: "DELETE",
@@ -1935,7 +1935,7 @@ function Workspace({
       navigator.clipboard.writeText(generatedText).then(() => {
         setStoryCopiedToast(true);
         setTimeout(() => setStoryCopiedToast(false), 2200);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   };
 
@@ -2109,7 +2109,7 @@ function Workspace({
     try {
       const response = await fetch(`${API_BASE_URL}/api/send-notebook-email`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-Session-Token": user?.token || ""
         },
@@ -2280,7 +2280,7 @@ function Workspace({
             <span className="inline-word-pos">· {inlineWordData.pos}</span>
           </div>
           <div className="inline-word-header-actions">
-            <button 
+            <button
               className="inline-word-speaker-btn"
               onClick={() => handleSpeakWord(inlineWordData.word)}
               title="Odsłuchaj wymowę słowa"
@@ -2315,7 +2315,7 @@ function Workspace({
         </div>
 
         <div className="inline-word-actions">
-          <button 
+          <button
             className={`inline-save-btn ${isSaved ? "saved" : ""}`}
             onClick={() => handleToggleWordSaved({
               word: inlineWordData.word,
@@ -2342,7 +2342,7 @@ function Workspace({
             )}
           </button>
 
-          <button 
+          <button
             className={`inline-trans-sentence-btn ${showInlineSentenceTrans ? "active" : ""}`}
             onClick={() => setShowInlineSentenceTrans(!showInlineSentenceTrans)}
           >
@@ -2365,7 +2365,7 @@ function Workspace({
   return (
     <div className="workspace-layout">
       {generatedText && (
-        <div 
+        <div
           ref={floatingPlayerRef}
           className={`apple-player-controls-floating ${isDraggingPlayer ? 'dragging' : ''}`}
           style={{
@@ -2385,42 +2385,42 @@ function Workspace({
               <circle cx="15" cy="19" r="1" />
             </svg>
           </div>
-          <button 
+          <button
             className={`player-btn play-pause-btn ${isSpeaking && !isPaused ? 'playing' : ''}`}
             onClick={handlePlayback}
             title={isSpeaking && !isPaused ? "Pauza (Skrót: P)" : "Odtwarzaj (Skrót: P)"}
           >
             {isSpeaking && !isPaused ? (
               <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
               </svg>
             ) : (
               <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8 5v14l11-7z"/>
+                <path d="M8 5v14l11-7z" />
               </svg>
             )}
           </button>
-          <button 
+          <button
             className="player-btn player-stop-btn"
             onClick={handleStop}
             disabled={!isSpeaking}
             title="Zatrzymaj"
           >
             <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M6 6h12v12H6z"/>
+              <path d="M6 6h12v12H6z" />
             </svg>
           </button>
         </div>
       )}
 
       {menuVisible && (
-        <div 
-          ref={contextMenuRef} 
-          className="context-menu" 
-          style={{ 
-            top: menuPosition.top, 
-            left: menuPosition.left, 
-            transform: 'translate(-50%, -100%)' 
+        <div
+          ref={contextMenuRef}
+          className="context-menu"
+          style={{
+            top: menuPosition.top,
+            left: menuPosition.left,
+            transform: 'translate(-50%, -100%)'
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -2434,24 +2434,24 @@ function Workspace({
           <div className="context-menu-actions">
             <button className="ctx-speak-btn" onClick={handleSpeakSelectedText}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
               </svg>
               Czytaj
             </button>
             <button className="ctx-vocab-btn" onClick={handleAddDirectly}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                <line x1="12" y1="9" x2="12" y2="15"/>
-                <line x1="9" y1="12" x2="15" y2="12"/>
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                <line x1="12" y1="9" x2="12" y2="15" />
+                <line x1="9" y1="12" x2="15" y2="12" />
               </svg>
               Słownik
             </button>
             <button className="ctx-practice-btn" onClick={handlePracticeSelectedText}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8"/>
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8" />
               </svg>
               Przećwicz wymowę
             </button>
@@ -2480,17 +2480,17 @@ function Workspace({
         <div className="modal-overlay">
           <div className="modal-content">
             <h3>Send Notebook</h3>
-            <input 
-              type="email" 
-              placeholder="Your email" 
-              value={recipientEmail} 
+            <input
+              type="email"
+              placeholder="Your email"
+              value={recipientEmail}
               onChange={e => setRecipientEmail(e.target.value)}
               className="premium-input"
               disabled={isSendingEmail}
             />
             <div className="modal-actions">
-              <button 
-                onClick={handleSendEmail} 
+              <button
+                onClick={handleSendEmail}
                 className="btn-primary"
                 disabled={isSendingEmail || !recipientEmail}
               >
@@ -2501,8 +2501,8 @@ function Workspace({
                   </>
                 ) : "Send Now"}
               </button>
-              <button 
-                onClick={() => setShowSendEmailModal(false)} 
+              <button
+                onClick={() => setShowSendEmailModal(false)}
                 className="btn-secondary"
                 disabled={isSendingEmail}
               >
@@ -2515,12 +2515,12 @@ function Workspace({
 
       {!generatedText ? (
         <main className="workspace-main">
-          <StoryGenerator 
-            onGenerate={generateStory} 
+          <StoryGenerator
+            onGenerate={generateStory}
             onGenerateDefault={generateDefaultText}
             onPasteText={pasteStory}
-            isLoading={isLoading} 
-            suggestedTopics={suggestedTopics} 
+            isLoading={isLoading}
+            suggestedTopics={suggestedTopics}
             user={user}
           />
         </main>
@@ -2582,7 +2582,7 @@ function Workspace({
                   <h2>Continue Story</h2>
                   <p>Tell the AI what should happen next in Part {storyParts.length + 1} of this story.</p>
                 </div>
-                
+
                 <div className="topic-grid">
                   {suggestedTopics.map((topic) => {
                     const isSelected = selectedContinuationTopics.includes(topic);
@@ -2590,7 +2590,7 @@ function Workspace({
                       <button
                         key={topic}
                         onClick={() => {
-                          setSelectedContinuationTopics(prev => 
+                          setSelectedContinuationTopics(prev =>
                             prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
                           );
                         }}
@@ -2639,8 +2639,8 @@ function Workspace({
       ) : (
         <div className="workspace-figma-container">
           <div className="workspace-figma-top-bar">
-            <button 
-              onClick={handleBackButtonClick} 
+            <button
+              onClick={handleBackButtonClick}
               className="workspace-back-pill-btn"
               title="Wróć do wyboru tematów / utwórz nową historię"
             >
@@ -2710,7 +2710,7 @@ function Workspace({
 
               {/* Reading toolbar */}
               <div className="story-reading-toolbar">
-                <button 
+                <button
                   className={`toolbar-pill-btn ${isSpeaking && !isPaused ? "active" : ""}`}
                   onClick={handlePlayback}
                 >
@@ -2733,7 +2733,7 @@ function Workspace({
                   )}
                 </button>
 
-                <button 
+                <button
                   className={`toolbar-pill-btn ${showFullTranslation ? "active" : ""}`}
                   onClick={handleToggleFullTranslation}
                 >
@@ -2743,7 +2743,7 @@ function Workspace({
                   <span>Translate</span>
                 </button>
 
-                <button 
+                <button
                   className="toolbar-icon-btn"
                   onClick={cycleFontSize}
                   title={`Zmień rozmiar czcionki (obecnie: ${fontSizeMode})`}
@@ -2751,7 +2751,7 @@ function Workspace({
                   <span style={{ fontWeight: 700, fontSize: "14px" }}>T</span>
                 </button>
 
-                <button 
+                <button
                   className="toolbar-icon-btn"
                   onClick={handleCopyStoryText}
                   title="Skopiuj treść opowiadania"
@@ -2802,8 +2802,8 @@ function Workspace({
                   </span>
                 </div>
                 <div className="progress-bar-track">
-                  <div 
-                    className="progress-bar-fill" 
+                  <div
+                    className="progress-bar-fill"
                     style={{ width: `${Math.min(100, Math.max(0, computedReadingProgress))}%` }}
                   />
                 </div>
@@ -2812,79 +2812,7 @@ function Workspace({
 
             {/* RIGHT COLUMN: 3 Figma Cards */}
             <aside className="workspace-figma-sidebar">
-              {/* Card 1: Your learning buddy */}
-              <div className="learning-buddy-card">
-                <div className="buddy-card-header">
-                  <span className="buddy-sparkle-icon">✨</span>
-                  <h3>Your learning buddy</h3>
-                </div>
-                <p className="buddy-card-desc">
-                  Make this story your own. Ask a question or practise it out loud.
-                </p>
-
-                <button 
-                  className="buddy-voice-ai-btn"
-                  onClick={() => {
-                    handleStop();
-                    setShowPracticeMode(true);
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
-                  </svg>
-                  <span>Practice with Voice AI</span>
-                </button>
-
-                <div className="buddy-try-asking-section">
-                  <span className="try-asking-label">TRY ASKING</span>
-                  <div className="try-asking-chips">
-                    <button 
-                      className="try-asking-chip"
-                      onClick={() => handleAskBuddy(inlineWordData ? `Explain "${inlineWordData.word}"` : 'Explain "speak up"')}
-                    >
-                      Explain "{inlineWordData ? inlineWordData.word : 'speak up'}"
-                    </button>
-                    <button 
-                      className="try-asking-chip"
-                      onClick={() => handleOpenSummary()}
-                    >
-                      Summarise this story
-                    </button>
-                  </div>
-                </div>
-
-                <form 
-                  className="buddy-ask-input-box"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleAskBuddy(buddyQuestion);
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" className="buddy-input-icon">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                  <input 
-                    type="text" 
-                    placeholder="Ask about the story..."
-                    value={buddyQuestion}
-                    onChange={(e) => setBuddyQuestion(e.target.value)}
-                  />
-                  {buddyQuestion.trim() && (
-                    <button type="submit" className="buddy-input-submit-btn" disabled={isBuddyLoading}>
-                      {isBuddyLoading ? "..." : "↑"}
-                    </button>
-                  )}
-                </form>
-
-                {buddyAnswer && (
-                  <div className="buddy-answer-box">
-                    {buddyAnswer}
-                  </div>
-                )}
-              </div>
-
-              {/* Card 2: Words in this story */}
+              {/* Card 1: Words in this story (top & always visible) */}
               <div className="story-words-card">
                 <div className="story-words-header">
                   <h3>Words in this story</h3>
@@ -2899,14 +2827,14 @@ function Workspace({
                     return (
                       <div key={item.word || idx} className="story-word-item">
                         <div className="story-word-item-top">
-                          <span 
+                          <span
                             className="story-word-name"
                             onClick={() => handleSpeakWord(item.word)}
                             title="Kliknij, aby posłuchać wymowy"
                           >
                             {item.word}
                           </span>
-                          <button 
+                          <button
                             className={`story-word-bookmark-btn ${isSaved ? "active" : ""}`}
                             onClick={() => handleToggleWordSaved(item)}
                             title={isSaved ? "Usuń ze słownika" : "Zapisz w słowniku"}
@@ -2928,7 +2856,7 @@ function Workspace({
                   })}
                 </div>
 
-                <button 
+                <button
                   className="open-vocabulary-btn"
                   onClick={() => {
                     if (onNavigateToDashboard) {
@@ -2942,6 +2870,77 @@ function Workspace({
                   </svg>
                   <span>Open vocabulary</span>
                 </button>
+              </div>
+
+              {/* Card 2: Your learning buddy */}
+              <div className="learning-buddy-card">
+                <div className="buddy-card-header">
+                  <h3>Your learning buddy</h3>
+                </div>
+                <p className="buddy-card-desc">
+                  Make this story your own. Ask a question or practise it out loud.
+                </p>
+
+                <button
+                  className="buddy-voice-ai-btn"
+                  onClick={() => {
+                    handleStop();
+                    setShowPracticeMode(true);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+                  </svg>
+                  <span>Practice with Voice AI</span>
+                </button>
+
+                <div className="buddy-try-asking-section">
+                  <span className="try-asking-label">TRY ASKING</span>
+                  <div className="try-asking-chips">
+                    <button
+                      className="try-asking-chip"
+                      onClick={() => handleAskBuddy(inlineWordData ? `Explain "${inlineWordData.word}"` : 'Explain "speak up"')}
+                    >
+                      Explain "{inlineWordData ? inlineWordData.word : 'speak up'}"
+                    </button>
+                    <button
+                      className="try-asking-chip"
+                      onClick={() => handleOpenSummary()}
+                    >
+                      Summarise this story
+                    </button>
+                  </div>
+                </div>
+
+                <form
+                  className="buddy-ask-input-box"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAskBuddy(buddyQuestion);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" className="buddy-input-icon">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Ask about the story..."
+                    value={buddyQuestion}
+                    onChange={(e) => setBuddyQuestion(e.target.value)}
+                  />
+                  {buddyQuestion.trim() && (
+                    <button type="submit" className="buddy-input-submit-btn" disabled={isBuddyLoading}>
+                      {isBuddyLoading ? "..." : "↑"}
+                    </button>
+                  )}
+                </form>
+
+                {buddyAnswer && (
+                  <div className="buddy-answer-box">
+                    {buddyAnswer}
+                  </div>
+                )}
               </div>
 
               {/* Card 3: Small steps count */}
@@ -2958,7 +2957,7 @@ function Workspace({
           </div>
 
           {/* Floating Chat Live Button */}
-          <button 
+          <button
             className="chat-live-floating-btn"
             onClick={() => {
               handleStop();
@@ -2980,7 +2979,7 @@ function Workspace({
       )}
 
       {showPracticeMode && (
-        <PracticeMode 
+        <PracticeMode
           text={generatedText}
           voices={voices}
           selectedVoiceURI={selectedVoiceURI}
@@ -2992,15 +2991,15 @@ function Workspace({
 
       {showFlashcards && (
         <div className="flashcards-overlay">
-          <Flashcards 
-            notebookWords={notebookWords} 
-            onFinishExercises={() => setShowFlashcards(false)} 
+          <Flashcards
+            notebookWords={notebookWords}
+            onFinishExercises={() => setShowFlashcards(false)}
           />
         </div>
       )}
 
       {showExerciseModal && (
-        <VocabularyExerciseModal 
+        <VocabularyExerciseModal
           notebookWords={notebookWords}
           user={user}
           onClose={() => setShowExerciseModal(false)}
@@ -3008,7 +3007,7 @@ function Workspace({
       )}
 
       {explanationWord && (
-        <WordExplanationModal 
+        <WordExplanationModal
           wordOrPhrase={explanationWord}
           user={user}
           onClose={() => {
@@ -3019,7 +3018,7 @@ function Workspace({
       )}
 
       {showSummaryModal && (
-        <SessionSummaryModal 
+        <SessionSummaryModal
           summary={summaryData}
           user={user}
           onClose={() => setShowSummaryModal(false)}
@@ -3029,7 +3028,7 @@ function Workspace({
       )}
 
       {showPracticeModal && (
-        <PronunciationPracticeModal 
+        <PronunciationPracticeModal
           targetText={practiceTargetText}
           user={user}
           onClose={() => {
@@ -3050,7 +3049,7 @@ function Workspace({
         </div>
       )}
       {showWordTooltip && activeWordHighlight && (
-        <div 
+        <div
           className="word-translation-tooltip"
           style={{
             position: 'absolute',
