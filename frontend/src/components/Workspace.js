@@ -172,6 +172,10 @@ function Workspace({
   const [genProgress, setGenProgress] = useState(0);
   const [genPhaseLabel, setGenPhaseLabel] = useState("");
   const progressTimersRef = useRef([]);
+
+  // Reading progress tracking
+  const [readingProgress, setReadingProgress] = useState(0);
+  const progressDebounceTimerRef = useRef(null);
   
   // States for word translation tooltip
   const [activeWordId, setActiveWordId] = useState(null);
@@ -344,6 +348,9 @@ function Workspace({
           if (activePart) {
             setGeneratedText(activePart.text);
             setCurrentStoryTitle(activePart.title);
+            if (typeof activePart.read_progress === 'number') {
+              setReadingProgress(activePart.read_progress);
+            }
           }
         }
       } catch (err) {
@@ -355,6 +362,72 @@ function Workspace({
     loadStoryParts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStoryId, user, setGeneratedText, setCurrentStoryTitle]);
+
+  const syncProgressDebounced = useCallback((storyId, progressVal) => {
+    if (!storyId || !user) return;
+    const clamped = Math.max(0, Math.min(100, Math.round(progressVal)));
+    try {
+      localStorage.setItem(`buddy_story_progress_${storyId}`, clamped);
+    } catch (e) {}
+
+    if (progressDebounceTimerRef.current) {
+      clearTimeout(progressDebounceTimerRef.current);
+    }
+    progressDebounceTimerRef.current = setTimeout(async () => {
+      try {
+        await fetch(`${API_BASE_URL}/api/stories/${storyId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user.token
+          },
+          body: JSON.stringify({ read_progress: clamped })
+        });
+      } catch (err) {
+        console.error("Błąd zapisu postępu czytania:", err);
+      }
+    }, 1200);
+  }, [user]);
+
+  // Load initial progress on story change
+  useEffect(() => {
+    if (!currentStoryId) {
+      setReadingProgress(0);
+      return;
+    }
+    try {
+      const cached = localStorage.getItem(`buddy_story_progress_${currentStoryId}`);
+      if (cached !== null) {
+        setReadingProgress(parseInt(cached, 10) || 0);
+      }
+    } catch (e) {}
+  }, [currentStoryId]);
+
+  // Audio reading progress tracking
+  useEffect(() => {
+    if (!currentStoryId || !textChunks || textChunks.length === 0) return;
+    if (currentChunkIndex >= 0) {
+      const audioPercent = Math.round(((currentChunkIndex + 1) / textChunks.length) * 100);
+      setReadingProgress(prev => {
+        const next = Math.max(prev, audioPercent);
+        if (next !== prev) {
+          syncProgressDebounced(currentStoryId, next);
+        }
+        return next;
+      });
+    }
+  }, [currentChunkIndex, textChunks, currentStoryId, syncProgressDebounced]);
+
+  const handleReadingProgressChange = useCallback((newPercent) => {
+    if (!currentStoryId) return;
+    setReadingProgress(prev => {
+      const next = Math.max(prev, newPercent);
+      if (next !== prev) {
+        syncProgressDebounced(currentStoryId, next);
+      }
+      return next;
+    });
+  }, [currentStoryId, syncProgressDebounced]);
 
   const handleSelectPart = (index) => {
     handleStop();
@@ -1986,6 +2059,8 @@ function Workspace({
             onWordClick={handleWordClick}
             activeWordId={activeWordId}
             user={user}
+            storyProgress={currentStoryId ? readingProgress : undefined}
+            onProgressChange={currentStoryId ? handleReadingProgressChange : undefined}
           />
         )}
       </main>

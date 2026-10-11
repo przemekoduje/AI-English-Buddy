@@ -454,13 +454,52 @@
   font-size: 0.78rem;
   font-weight: 600;
   color: #64748b;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.5rem;
   margin-top: auto;
+}
+
+.card-progress-right-side {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.quick-toggle-status-btn {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1.2;
+}
+
+.quick-toggle-status-btn:hover {
+  background: #f0fdf4;
+  border-color: #10b981;
+  color: #059669;
+  transform: scale(1.03);
+}
+
+.quick-toggle-status-btn.completed {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: #10b981;
+  color: #059669;
+}
+
+.quick-toggle-status-btn.completed:hover {
+  background: #fef2f2;
+  border-color: #f87171;
+  color: #dc2626;
 }
 
 .progress-status-badge {
   color: #0284c7;
   font-weight: 700;
+  font-size: 0.76rem;
 }
 
 .progress-status-badge.completed {
@@ -470,22 +509,57 @@
 /* Progress Track & Bar */
 .card-progress-track {
   width: 100%;
-  height: 4px;
-  background: #f1f5f9;
+  height: 6px;
+  background: #e2e8f0;
   border-radius: 999px;
-  overflow: hidden;
+  position: relative;
   margin-bottom: 1.25rem;
+  user-select: none;
+}
+
+.card-progress-track.interactive {
+  cursor: pointer;
+  transition: height 0.15s ease, background-color 0.15s ease;
+}
+
+.card-progress-track.interactive:hover {
+  height: 8px;
+  background: #cbd5e1;
 }
 
 .card-progress-bar {
   height: 100%;
   background: linear-gradient(90deg, #38bdf8 0%, #2563eb 100%);
   border-radius: 999px;
-  transition: width 0.3s ease;
+  position: relative;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .card-progress-bar.completed {
-  background: #10b981;
+  background: linear-gradient(90deg, #34d399 0%, #10b981 100%);
+}
+
+.card-progress-thumb {
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%) scale(0);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2.5px solid #2563eb;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease;
+  pointer-events: none;
+}
+
+.card-progress-bar.completed .card-progress-thumb {
+  border-color: #10b981;
+}
+
+.card-progress-track.interactive:hover .card-progress-thumb {
+  transform: translateY(-50%) scale(1);
 }
 
 /* Action Buttons Stack */

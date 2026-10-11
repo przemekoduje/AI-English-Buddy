@@ -2746,6 +2746,7 @@ def add_story_firestore():
             'title': title,
             'text': text,
             'text_hash': text_hash,
+            'read_progress': 0,
             'timestamp': firestore.SERVER_TIMESTAMP
         }
         doc_ref = stories_ref.add(new_story_data)
@@ -2786,15 +2787,30 @@ def delete_story_firestore(story_id):
 
 
 @app.route("/api/stories/<string:story_id>", methods=['PUT'])
-def update_story_title_firestore(story_id):
+def update_story_firestore(story_id):
     user_email = get_user_from_request()
     if not user_email:
         return jsonify({"error": "Brak autoryzacji"}), 401
 
     data = request.get_json() or {}
-    new_title = data.get('title')
-    if not new_title or not new_title.strip():
-        return jsonify({"error": "Tytuł nie może być pusty"}), 400
+    updates = {}
+
+    if 'title' in data:
+        new_title = data.get('title')
+        if not new_title or not new_title.strip():
+            return jsonify({"error": "Tytuł nie może być pusty"}), 400
+        updates['title'] = new_title.strip()
+
+    if 'read_progress' in data or 'progress' in data:
+        raw_val = data.get('read_progress') if 'read_progress' in data else data.get('progress')
+        try:
+            val = int(raw_val)
+            updates['read_progress'] = max(0, min(100, val))
+        except (ValueError, TypeError):
+            pass
+
+    if not updates:
+        return jsonify({"error": "Brak danych do aktualizacji"}), 400
 
     try:
         doc_ref = db.collection('stories').document(story_id)
@@ -2805,10 +2821,10 @@ def update_story_title_firestore(story_id):
         if doc.to_dict().get('user_email') != user_email:
             return jsonify({"error": "Brak uprawnień do edycji tej historii"}), 403
 
-        doc_ref.update({'title': new_title.strip()})
-        return jsonify({"message": "Tytuł zaktualizowany pomyślnie"}), 200
+        doc_ref.update(updates)
+        return jsonify({"message": "Historia zaktualizowana pomyślnie", "updates": updates}), 200
     except Exception as e:
-        return jsonify({"error": f"Błąd podczas aktualizowania tytułu historii w Firestore: {e}"}), 500
+        return jsonify({"error": f"Błąd podczas aktualizowania historii w Firestore: {e}"}), 500
 
 
 

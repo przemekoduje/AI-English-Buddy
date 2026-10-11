@@ -25,11 +25,52 @@ const Reader = ({
   onWordClick,
   activeWordId,
   user,
+  storyProgress,
+  onProgressChange,
 }) => {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [hoveredTokenIndex, setHoveredTokenIndex] = useState(null);
   const hoverTimerRef = useRef(null);
   const hoveredTokenIndexRef = useRef(null);
+
+  // Automatic reading scroll depth tracking
+  useEffect(() => {
+    if (!onProgressChange) return;
+
+    const scrollContainer = document.querySelector('.view-container') || window;
+
+    const handleScroll = () => {
+      let scrollRatio = 0;
+      if (scrollContainer === window) {
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        if (docHeight > 0) {
+          scrollRatio = window.scrollY / docHeight;
+        }
+      } else {
+        const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+        if (maxScroll > 0) {
+          scrollRatio = scrollContainer.scrollTop / maxScroll;
+        }
+      }
+
+      let calculated = 0;
+      if (scrollRatio >= 0.88) {
+        calculated = 100;
+      } else if (scrollRatio > 0.05) {
+        calculated = Math.round(scrollRatio * 100);
+      }
+
+      if (calculated > 0) {
+        onProgressChange(calculated);
+      }
+    };
+
+    const target = scrollContainer === window ? window : scrollContainer;
+    target.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      target.removeEventListener('scroll', handleScroll);
+    };
+  }, [onProgressChange]);
 
   // Live Chat State & Refs
   const [liveChatActive, setLiveChatActive] = useState(false);
@@ -443,6 +484,40 @@ const Reader = ({
 
   return (
     <div className="reader-container">
+      {/* Reading Progress Top Bar */}
+      {storyProgress !== undefined && (
+        <div className="reader-story-progress-card">
+          <div className="reader-story-progress-meta">
+            <div className="reader-story-progress-title-badge">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+              </svg>
+              <span>Postęp czytania</span>
+            </div>
+            <span className={`reader-story-progress-percent ${storyProgress === 100 ? "completed" : ""}`}>
+              {storyProgress === 100 ? "✓ Ukończono 100%" : `${storyProgress}%`}
+            </span>
+          </div>
+          <div 
+            className="reader-story-progress-track interactive"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const clickX = e.clientX - rect.left;
+              const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+              const targetVal = Math.round(ratio * 100);
+              if (onProgressChange) onProgressChange(targetVal);
+            }}
+            title="Kliknij, aby manualnie zmienić postęp"
+          >
+            <div 
+              className={`reader-story-progress-fill ${storyProgress === 100 ? "completed" : ""}`}
+              style={{ width: `${Math.max(storyProgress > 0 ? 3 : 0, storyProgress)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {showVoiceControls && (
         <div className="audio-dashboard">
           <div className="control-group">

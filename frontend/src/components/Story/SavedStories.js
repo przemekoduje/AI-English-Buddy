@@ -146,6 +146,34 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
     }
   };
 
+  // Update reading progress
+  const handleUpdateProgress = async (e, storyId, newProgress) => {
+    if (e) e.stopPropagation();
+    const clamped = Math.max(0, Math.min(100, Math.round(newProgress)));
+
+    // Optimistic UI update
+    setStories(prev =>
+      prev.map(s => (s.id === storyId ? { ...s, read_progress: clamped, progress: clamped } : s))
+    );
+
+    try {
+      localStorage.setItem(`buddy_story_progress_${storyId}`, clamped);
+    } catch (err) {}
+
+    try {
+      await fetch(`${API_BASE_URL}/api/stories/${storyId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || ""
+        },
+        body: JSON.stringify({ read_progress: clamped })
+      });
+    } catch (err) {
+      console.error("Błąd podczas aktualizowania postępu:", err);
+    }
+  };
+
   // Helper calculations per story
   const enrichedStories = useMemo(() => {
     return stories
@@ -154,14 +182,17 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
         const words = story.text ? story.text.split(/\s+/).filter(Boolean).length : 0;
         const readTimeMin = Math.max(1, Math.ceil(words / 130));
         
-        // Calculate or retrieve progress (mock/saved)
-        let progress = story.read_progress || story.progress;
-        if (progress === undefined) {
-          // Stable fallback progress calculation based on story ID
-          const hash = String(story.id || index).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-          const progressOptions = [0, 15, 30, 65, 100];
-          progress = progressOptions[hash % progressOptions.length];
+        // Retrieve real progress (backend or local cache fallback)
+        let rawProgress = story.read_progress !== undefined ? story.read_progress : story.progress;
+        if (rawProgress === undefined || rawProgress === null) {
+          try {
+            const cached = localStorage.getItem(`buddy_story_progress_${story.id}`);
+            if (cached !== null) {
+              rawProgress = parseInt(cached, 10);
+            }
+          } catch (e) {}
         }
+        const progress = Math.max(0, Math.min(100, typeof rawProgress === 'number' && !isNaN(rawProgress) ? Math.round(rawProgress) : 0));
 
         // Determine level
         const level = story.level || story.cefr_level || (index % 4 === 0 ? "B2" : index % 4 === 1 ? "B1" : index % 4 === 2 ? "A2" : "C1");
@@ -470,17 +501,40 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
                   <span className="stats-text">
                     {story.words} words · {story.readTimeMin} min
                   </span>
-                  <span className={`progress-status-badge ${story.progress === 100 ? "completed" : ""}`}>
-                    {story.progress === 100 ? "Completed" : story.progress > 0 ? `${story.progress}% read` : "0% read"}
-                  </span>
+                  <div className="card-progress-right-side" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className={`quick-toggle-status-btn ${story.progress === 100 ? "completed" : ""}`}
+                      onClick={(e) => handleUpdateProgress(e, story.id, story.progress === 100 ? 0 : 100)}
+                      title={story.progress === 100 ? "Resetuj do 0%" : "Oznacz jako przeczytane (100%)"}
+                    >
+                      {story.progress === 100 ? "✓ Przeczytane" : "Oznacz"}
+                    </button>
+                    <span className={`progress-status-badge ${story.progress === 100 ? "completed" : ""}`}>
+                      {story.progress === 100 ? "Completed" : `${story.progress}% read`}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Progress Bar */}
-                <div className="card-progress-track">
+                {/* Interactive Progress Slider / Track */}
+                <div
+                  className="card-progress-track interactive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+                    const targetProgress = Math.round(ratio * 100);
+                    handleUpdateProgress(e, story.id, targetProgress);
+                  }}
+                  title={`Postęp: ${story.progress}% (kliknij, aby zmienić)`}
+                >
                   <div
                     className={`card-progress-bar ${story.progress === 100 ? "completed" : ""}`}
-                    style={{ width: `${Math.max(4, story.progress)}%` }}
-                  ></div>
+                    style={{ width: `${Math.max(story.progress > 0 ? 4 : 0, story.progress)}%` }}
+                  >
+                    <div className="card-progress-thumb" />
+                  </div>
                 </div>
 
                 {/* Action Buttons Stack */}
