@@ -2,25 +2,176 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { API_BASE_URL } from '../../config';
 import "./SavedStories.css";
 
-// Curated stock photos for aesthetic story covers
-const CATEGORY_IMAGES = {
-  business: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=600&q=80",
-  travel: "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?auto=format&fit=crop&w=600&q=80",
-  "daily life": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=600&q=80",
-  tech: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80",
-  food: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?auto=format&fit=crop&w=600&q=80",
-  culture: "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=600&q=80",
-  general: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=600&q=80"
+// Baza wysokiej jakości zdjęć tematycznych odzwierciedlających treść opowiadań
+const THEMATIC_SCENES = [
+  {
+    keywords: ["coffee", "kawa", "cafe", "espresso", "latte", "cappuccino", "breakfast", "morning", "poranek"],
+    image: "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80",
+    theme: "cozy coffee shop with steaming cappuccino"
+  },
+  {
+    keywords: ["kraków", "krakow", "cracow", "wawel", "rynek", "sukiennice", "poland", "polska"],
+    image: "https://images.unsplash.com/photo-1519197924294-4ba991a11128?auto=format&fit=crop&w=800&q=80",
+    theme: "historic Krakow Old Town marketplace with historic buildings"
+  },
+  {
+    keywords: ["airport", "flight", "plane", "travel", "journey", "vacation", "holiday", "luggage", "passport", "lotnisko", "podróż", "samolot"],
+    image: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80",
+    theme: "modern international airport terminal and runway airplane"
+  },
+  {
+    keywords: ["london", "londyn", "england", "uk", "british", "big ben", "thames"],
+    image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=800&q=80",
+    theme: "atmospheric London street with classic red telephone booth"
+  },
+  {
+    keywords: ["new york", "nyc", "manhattan", "broadway", "central park", "america"],
+    image: "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=800&q=80",
+    theme: "lively New York City Manhattan street with yellow cabs"
+  },
+  {
+    keywords: ["interview", "job", "career", "office", "meeting", "resume", "boss", "colleague", "work", "biuro", "praca", "rekrutacja", "korporacja"],
+    image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=800&q=80",
+    theme: "professional job interview in a sleek modern sunny office"
+  },
+  {
+    keywords: ["business", "finance", "money", "deal", "startup", "invest", "stock", "biznes", "finanse"],
+    image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80",
+    theme: "sleek modern financial skyscraper architecture"
+  },
+  {
+    keywords: ["tech", "ai", "artificial intelligence", "coding", "code", "programming", "software", "computer", "developer", "robot", "cyber"],
+    image: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80",
+    theme: "software engineer programmer desk with modern monitors"
+  },
+  {
+    keywords: ["space", "mars", "moon", "star", "galaxy", "planet", "astronaut", "rocket", "universe", "kosmos"],
+    image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80",
+    theme: "astronaut exploring glowing red planet in deep space"
+  },
+  {
+    keywords: ["forest", "woods", "tree", "mountain", "hiking", "hike", "nature", "fog", "las", "góry", "szlak"],
+    image: "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80",
+    theme: "mystical green misty pine forest and mountain hiking trail"
+  },
+  {
+    keywords: ["sea", "ocean", "beach", "coast", "island", "summer", "waves", "morze", "plaża", "ocean", "wakacje"],
+    image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
+    theme: "golden sand beach with turquoise ocean waves and gentle sunshine"
+  },
+  {
+    keywords: ["food", "restaurant", "chef", "cooking", "kitchen", "dinner", "lunch", "meal", "pizza", "pasta", "recipe", "jedzenie", "restauracja", "obiad"],
+    image: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80",
+    theme: "delicious gourmet meal in cozy warm ambient restaurant"
+  },
+  {
+    keywords: ["book", "library", "bookstore", "reading", "study", "writer", "novel", "książka", "biblioteka", "czytanie"],
+    image: "https://images.unsplash.com/photo-1507842229458-577749e472c3?auto=format&fit=crop&w=800&q=80",
+    theme: "warm vintage wooden library with endless rows of classic books"
+  },
+  {
+    keywords: ["mystery", "detective", "crime", "investigation", "shadow", "night", "dark", "secret", "tajemnica", "deszcz", "rain", "rainy"],
+    image: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80",
+    theme: "cinematic detective mystery scene in rainy night street"
+  },
+  {
+    keywords: ["music", "concert", "guitar", "jazz", "piano", "song", "band", "muzyka", "gitara"],
+    image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80",
+    theme: "acoustic guitar player in warm atmospheric musical stage"
+  },
+  {
+    keywords: ["dog", "puppy", "cat", "pet", "animal", "walk", "pies", "kot", "zwierzę"],
+    image: "https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=800&q=80",
+    theme: "happy loyal golden retriever dog running in green park"
+  },
+  {
+    keywords: ["health", "fitness", "gym", "run", "running", "doctor", "hospital", "sport", "bieganie", "zdrowie", "lekarz"],
+    image: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=800&q=80",
+    theme: "energetic morning runner in sunny urban outdoor park"
+  },
+  {
+    keywords: ["art", "museum", "gallery", "painting", "artist", "exhibition", "sztuka", "obraz"],
+    image: "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=800&q=80",
+    theme: "fine art paintings in elegant spacious museum gallery"
+  },
+  {
+    keywords: ["school", "university", "college", "exam", "test", "student", "teacher", "nauka", "szkoła", "egzamin"],
+    image: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=800&q=80",
+    theme: "university campus students collaborating with notebooks"
+  },
+  {
+    keywords: ["winter", "snow", "cold", "christmas", "ice", "zima", "śnieg"],
+    image: "https://images.unsplash.com/photo-1517299321929-30a7063a34db?auto=format&fit=crop&w=800&q=80",
+    theme: "peaceful snowy winter mountain landscape with pine trees"
+  },
+  {
+    keywords: ["car", "drive", "driving", "road", "roadtrip", "highway", "samochód", "droga", "auto"],
+    image: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80",
+    theme: "scenic highway road trip through breathtaking panoramic landscape"
+  },
+  {
+    keywords: ["train", "railway", "station", "subway", "metro", "pociąg", "stacja"],
+    image: "https://images.unsplash.com/photo-1474487548417-781cb71495f3?auto=format&fit=crop&w=800&q=80",
+    theme: "classic railway station platform with train arriving"
+  },
+  {
+    keywords: ["shop", "shopping", "market", "store", "fashion", "mall", "zakupy", "sklep", "targ"],
+    image: "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=800&q=80",
+    theme: "stylish outdoor shopping boutique street with warm lights"
+  },
+  {
+    keywords: ["friend", "friends", "party", "laugh", "talk", "conversation", "przyjaciele", "spotkanie"],
+    image: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=800&q=80",
+    theme: "cheerful group of close friends laughing together outdoors"
+  }
+];
+
+// Funkcja odnajdująca najlepsze zdjęcie odzwierciedlające treść opowiadania
+const findBestMatchingSceneImage = (title = "", text = "", seed = 0) => {
+  const combined = `${title} ${text}`.toLowerCase();
+  let bestMatch = null;
+  let maxScore = 0;
+
+  for (const scene of THEMATIC_SCENES) {
+    let score = 0;
+    const tLower = title.toLowerCase();
+    for (const kw of scene.keywords) {
+      if (tLower.includes(kw)) score += 4;
+      if (combined.includes(kw)) score += 1;
+    }
+    if (score > maxScore) {
+      maxScore = score;
+      bestMatch = scene;
+    }
+  }
+
+  if (bestMatch && maxScore > 0) {
+    return bestMatch.image;
+  }
+
+  const hash = Math.abs(String(title || seed).split("").reduce((acc, c) => acc + c.charCodeAt(0), 0));
+  return THEMATIC_SCENES[hash % THEMATIC_SCENES.length].image;
 };
 
-const DEFAULT_COVER_IMAGES = [
-  "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=600&q=80",
-  "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?auto=format&fit=crop&w=600&q=80",
-  "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=600&q=80",
-  "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80",
-  "https://images.unsplash.com/photo-1488459716781-31db52582fe9?auto=format&fit=crop&w=600&q=80",
-  "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=600&q=80"
-];
+// Generowanie angielskiego promptu wizualnego odzwierciedlającego fabułę
+const buildEnglishImagePrompt = (title = "", text = "") => {
+  const combined = `${title} ${text}`.toLowerCase();
+  const detectedThemes = [];
+
+  for (const scene of THEMATIC_SCENES) {
+    for (const kw of scene.keywords) {
+      if (combined.includes(kw)) {
+        detectedThemes.push(scene.theme);
+        break;
+      }
+    }
+    if (detectedThemes.length >= 2) break;
+  }
+
+  const cleanTitle = title.replace(/[^a-zA-Z0-9\s]/g, " ").trim();
+  const themePart = detectedThemes.length > 0 ? detectedThemes.join(", ") : cleanTitle;
+  return `${themePart}, cinematic photography, photorealistic, 4k detailed, storytelling art, natural soft lighting`;
+};
 
 const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) => {
   const [stories, setStories] = useState([]);
@@ -43,74 +194,72 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
     }
   });
 
-  // Regenerate image tailored to story text
+  // Regenerate / find image tailored to story text
   const handleRegenerateStoryImage = async (e, story) => {
     if (e) e.stopPropagation();
     if (!story || !story.id) return;
 
     setRegeneratingImageIds(prev => new Set(prev).add(story.id));
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/stories/${story.id}/generate-image`, {
-        method: "POST",
-        headers: {
-          "X-Session-Token": user?.token || ""
-        }
+    // Skonstruuj dedykowany prompt w języku angielskim
+    const prompt = buildEnglishImagePrompt(story.title, story.text);
+    const newSeed = Math.floor(Math.random() * 900000) + 1000;
+    const aiCandidateUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=600&height=400&seed=${newSeed}`;
+
+    const applyImage = (finalUrl) => {
+      setStories(prev =>
+        prev.map(s => (s.id === story.id ? { ...s, image_url: finalUrl, cover_image: finalUrl } : s))
+      );
+      try {
+        localStorage.setItem(`buddy_story_image_${story.id}`, finalUrl);
+        fetch(`${API_BASE_URL}/api/stories/${story.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || ""
+          },
+          body: JSON.stringify({ image_url: finalUrl })
+        }).catch(() => {});
+      } catch (err) {}
+      setRegeneratingImageIds(prev => {
+        const next = new Set(prev);
+        next.delete(story.id);
+        return next;
       });
+    };
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.image_url) {
-          setStories(prev =>
-            prev.map(s => (s.id === story.id ? { ...s, image_url: data.image_url, cover_image: data.image_url } : s))
-          );
-          try {
-            localStorage.setItem(`buddy_story_image_${story.id}`, data.image_url);
-          } catch (err) {}
-          setRegeneratingImageIds(prev => {
-            const next = new Set(prev);
-            next.delete(story.id);
-            return next;
-          });
-          return;
-        }
+    // Preloader w tle: czekamy na rzeczywiste pobranie obrazu AI, aby uniknąć migania
+    let finished = false;
+    const preloader = new Image();
+
+    const fallbackTimer = setTimeout(() => {
+      if (!finished) {
+        finished = true;
+        // W razie dłuższego oczekiwania wybierz alternatywne doskonałe zdjęcie ze scenariusza
+        const hash = Math.floor(Math.random() * THEMATIC_SCENES.length);
+        const altImage = THEMATIC_SCENES[hash].image;
+        applyImage(altImage);
       }
-    } catch (err) {
-      console.warn("Backend generate-image failed, using direct AI fallback:", err);
-    }
+    }, 7000);
 
-    // Direct AI fallback: construct prompt from title and text with a new seed
-    const cleanTitle = (story.title || "").replace(/[^a-zA-Z0-9\s]/g, " ").trim();
-    let scene = "";
-    if (story.text) {
-      const clean = story.text.replace(/\n+/g, " ");
-      const sentences = clean.split(/[.?!]/).filter(s => s.trim().length > 10);
-      scene = sentences.slice(0, 2).join(". ").replace(/[^a-zA-Z0-9\s]/g, " ").trim().slice(0, 140);
-    }
-    const prompt = `${cleanTitle}. ${scene || story.category || "story scene"}, cinematic atmospheric photography, detailed 4k`.trim();
-    const newSeed = Math.floor(Math.random() * 1000000);
-    const newUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=600&height=400&seed=${newSeed}`;
+    preloader.onload = () => {
+      if (!finished) {
+        finished = true;
+        clearTimeout(fallbackTimer);
+        applyImage(aiCandidateUrl);
+      }
+    };
 
-    setStories(prev =>
-      prev.map(s => (s.id === story.id ? { ...s, image_url: newUrl, cover_image: newUrl } : s))
-    );
-    try {
-      localStorage.setItem(`buddy_story_image_${story.id}`, newUrl);
-      fetch(`${API_BASE_URL}/api/stories/${story.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-Token": user?.token || ""
-        },
-        body: JSON.stringify({ image_url: newUrl })
-      }).catch(() => {});
-    } catch (err) {}
+    preloader.onerror = () => {
+      if (!finished) {
+        finished = true;
+        clearTimeout(fallbackTimer);
+        const altImage = findBestMatchingSceneImage(story.title, story.text, newSeed);
+        applyImage(altImage);
+      }
+    };
 
-    setRegeneratingImageIds(prev => {
-      const next = new Set(prev);
-      next.delete(story.id);
-      return next;
-    });
+    preloader.src = aiCandidateUrl;
   };
 
   // Toggle bookmark for a story
@@ -284,7 +433,7 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
           else if (t.includes("market") || t.includes("food") || t.includes("recipe")) category = "Food & Market";
         }
 
-        // Tailored cover image reflecting text & story title
+        // Dopasowane zdjęcie odzwierciedlające treść opowiadania
         let coverImage = story.image_url || story.cover_image;
         if (!coverImage) {
           try {
@@ -293,16 +442,7 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
           } catch (e) {}
         }
         if (!coverImage) {
-          const cleanTitle = (story.title || "").replace(/[^a-zA-Z0-9\s]/g, " ").trim();
-          let scene = "";
-          if (story.text) {
-            const clean = story.text.replace(/\n+/g, " ");
-            const sentences = clean.split(/[.?!]/).filter(s => s.trim().length > 10);
-            scene = sentences.slice(0, 2).join(". ").replace(/[^a-zA-Z0-9\s]/g, " ").trim().slice(0, 140);
-          }
-          const prompt = `${cleanTitle}. ${scene || category || "story scene"}, cinematic atmospheric photography, detailed 4k`.trim();
-          const seed = Math.abs(String(story.id || story.title).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 100000;
-          coverImage = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=600&height=400&seed=${seed}`;
+          coverImage = findBestMatchingSceneImage(story.title, story.text, index);
         }
         const isBookmarked = bookmarkedIds.includes(story.id);
 
@@ -499,10 +639,17 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
                   className="card-cover-img"
                   onError={(e) => {
                     e.currentTarget.onerror = null;
-                    const catKey = (story.category || "general").toLowerCase();
-                    e.currentTarget.src = CATEGORY_IMAGES[catKey] || DEFAULT_COVER_IMAGES[0];
+                    e.currentTarget.src = findBestMatchingSceneImage(story.title, story.text, 2);
                   }}
                 />
+
+                {regeneratingImageIds.has(story.id) && (
+                  <div className="card-generating-overlay">
+                    <div className="btn-spinner-micro pulse-spinner" />
+                    <span>AI tworzy nowe zdjęcie...</span>
+                  </div>
+                )}
+
                 <button
                   type="button"
                   className="card-refresh-image-btn"

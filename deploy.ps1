@@ -33,9 +33,10 @@ if (Test-Path portal/index.html) {
 }
 
 Write-Host "=== 4. Publikacja połączonej aplikacji na Firebase Hosting ==="
-# Główny projekt (ai-english-buddy-150e5) jest zawieszony – domyślnie wdrażamy na hosting zastępczy
 $FirebaseProject = if ($env:FIREBASE_PROJECT) { $env:FIREBASE_PROJECT } else { "speakling-live-temp" }
 npx firebase-tools deploy --only hosting --project $FirebaseProject
+npx firebase-tools deploy --only hosting --project przemokoduje-online
+npx firebase-tools deploy --only hosting --project ai-english-buddy-150e5
 
 Write-Host "=== WDRUŻENIE ZAKOŃCZONE SUKCESEM! ===" -ForegroundColor Green
 Write-Host "Adres główny (Desktop): https://przemokoduje.com/speakling"
