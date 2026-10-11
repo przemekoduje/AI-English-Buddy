@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { API_BASE_URL } from "../config";
+import logoImg from "../assets/logo.png";
 import "./Flashcards.css";
 
 function Flashcards({
@@ -247,10 +248,7 @@ function Flashcards({
         {/* Speakling brand */}
         <div className="flashcards-brand">
           <div className="flashcards-logo-badge">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-              <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8" />
-            </svg>
+            <img src={logoImg} alt="Speakling Logo" />
           </div>
           <span className="flashcards-brand-name">speakling</span>
         </div>

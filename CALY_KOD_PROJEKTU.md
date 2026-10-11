@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-11 19:24:48
+Wygenerowano: 2026-10-11 19:33:50
 
 ## Spis Treści
 1. `backend/app.py`
@@ -20167,20 +20167,18 @@ export default AdminDashboard;
 }
 
 .auth-logo-icon {
-  width: 34px;
-  height: 34px;
-  background: #1a73e8;
-  border-radius: 9px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.25);
+  flex-shrink: 0;
 }
 
-.auth-logo-icon svg {
-  width: 19px;
-  height: 19px;
+.auth-logo-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .auth-logo-text {
@@ -20837,6 +20835,7 @@ export default AdminDashboard;
 ```javascript
 import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from '../../config';
+import logoImg from '../../assets/logo.png';
 import "./Auth.css";
 
 const Auth = ({ onLoginSuccess }) => {
@@ -20958,10 +20957,7 @@ const Auth = ({ onLoginSuccess }) => {
       <header className="auth-topbar">
         <div className="auth-logo-brand">
           <div className="auth-logo-icon">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-              <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8"/>
-            </svg>
+            <img src={logoImg} alt="Speakling Logo" />
           </div>
           <span className="auth-logo-text">speakling</span>
         </div>
@@ -25822,18 +25818,16 @@ export default Dashboard;
 .flashcards-logo-badge {
   width: 32px;
   height: 32px;
-  background: #1a73e8;
-  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(26, 115, 232, 0.25);
+  flex-shrink: 0;
 }
 
-.flashcards-logo-badge svg {
-  width: 18px;
-  height: 18px;
+.flashcards-logo-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .flashcards-brand-name {
@@ -26337,6 +26331,7 @@ export default Dashboard;
 ```javascript
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { API_BASE_URL } from "../config";
+import logoImg from "../assets/logo.png";
 import "./Flashcards.css";
 
 function Flashcards({
@@ -26584,10 +26579,7 @@ function Flashcards({
         {/* Speakling brand */}
         <div className="flashcards-brand">
           <div className="flashcards-logo-badge">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-              <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8" />
-            </svg>
+            <img src={logoImg} alt="Speakling Logo" />
           </div>
           <span className="flashcards-brand-name">speakling</span>
         </div>
@@ -74389,7 +74381,9 @@ export class GeminiLiveClient {
       <!-- Karta Speakling -->
       <div class="app-card card-speakling">
         <div class="card-header">
-          <div class="app-badge-icon icon-speakling">🎓</div>
+          <div class="app-badge-icon icon-speakling">
+            <img src="/favicon.png" alt="Speakling" style="width: 36px; height: 36px; object-fit: contain;" />
+          </div>
           <span class="card-tag tag-active">Dostępna • v1.4</span>
         </div>
         <h2 class="app-title">Speakling</h2>

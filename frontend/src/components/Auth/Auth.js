@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from '../../config';
+import logoImg from '../../assets/logo.png';
 import "./Auth.css";
 
 const Auth = ({ onLoginSuccess }) => {
@@ -121,10 +122,7 @@ const Auth = ({ onLoginSuccess }) => {
       <header className="auth-topbar">
         <div className="auth-logo-brand">
           <div className="auth-logo-icon">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-              <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8"/>
-            </svg>
+            <img src={logoImg} alt="Speakling Logo" />
           </div>
           <span className="auth-logo-text">speakling</span>
         </div>
