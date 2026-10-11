@@ -2123,6 +2123,45 @@ function Workspace({
     return matched.slice(0, 5);
   }, [generatedText, notebookWords, dismissedStoryWords]);
 
+  const effectivePracticeWords = useMemo(() => {
+    if (notebookWords && notebookWords.length > 0) {
+      return notebookWords;
+    }
+    if (keyStoryWords && keyStoryWords.length > 0) {
+      return keyStoryWords.map(w => ({
+        original: w.word,
+        translated: w.translation
+      }));
+    }
+    return [];
+  }, [notebookWords, keyStoryWords]);
+
+  const handleOpenFlashcards = () => {
+    if (effectivePracticeWords.length === 0) {
+      alert("Brak słówek do ćwiczeń. Zaznacz słowa w tekście, aby dodać je do bazy!");
+      return;
+    }
+    handleStop();
+    setShowFlashcards(true);
+  };
+
+  const handleOpenExercises = () => {
+    if (effectivePracticeWords.length === 0) {
+      alert("Brak słówek do ćwiczeń. Zaznacz słowa w tekście, aby dodać je do bazy!");
+      return;
+    }
+    handleStop();
+    setShowExerciseModal(true);
+  };
+
+  const handleOpenEmail = () => {
+    if (effectivePracticeWords.length === 0) {
+      alert("Twój zbiór słówek jest pusty. Zaznacz słowa w tekście, aby dodać je do bazy!");
+      return;
+    }
+    setShowSendEmailModal(true);
+  };
+
   const handleSendEmail = async () => {
     setIsSendingEmail(true);
     try {
@@ -2903,75 +2942,112 @@ function Workspace({
                 </button>
               </div>
 
-              {/* Card 2: Your learning buddy */}
+              {/* Card 2: Story Mastery & Learning Tools */}
               <div className="learning-buddy-card">
                 <div className="buddy-card-header">
-                  <h3>Your learning buddy</h3>
+                  <span className="buddy-sparkle-icon">✨</span>
+                  <h3>Story Mastery & Ćwiczenia</h3>
                 </div>
                 <p className="buddy-card-desc">
-                  Make this story your own. Ask a question or practise it out loud.
+                  Opanuj tę historię w 3 krokach z Mastery Path oraz utrwalaj słownictwo za pomocą interaktywnych fiszek i quizów.
                 </p>
 
+                {/* Główny przycisk: Mastery Path */}
                 <button
-                  className="buddy-voice-ai-btn"
+                  className="buddy-voice-ai-btn mastery-hero-btn"
                   onClick={() => {
                     handleStop();
                     setShowPracticeMode(true);
                   }}
+                  title="Rozpocznij trening Mastery Path — 3 kroki do opanowania historii"
                 >
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
-                  </svg>
-                  <span>Practice with Voice AI</span>
+                  <div className="mastery-hero-left">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                      <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 19v4M8 23h8"/>
+                    </svg>
+                    <div className="mastery-hero-titles">
+                      <div className="mastery-hero-main-title">
+                        <span>Mastery Path</span>
+                        <span className="mastery-step-badge">3 kroki</span>
+                      </div>
+                      <span className="mastery-hero-subtitle">Poznaj tekst w 3 krokach</span>
+                    </div>
+                  </div>
+                  <span className="mastery-hero-arrow">→</span>
                 </button>
 
-                <div className="buddy-try-asking-section">
-                  <span className="try-asking-label">TRY ASKING</span>
-                  <div className="try-asking-chips">
-                    <button
-                      className="try-asking-chip"
-                      onClick={() => handleAskBuddy(inlineWordData ? `Explain "${inlineWordData.word}"` : 'Explain "speak up"')}
-                    >
-                      Explain "{inlineWordData ? inlineWordData.word : 'speak up'}"
-                    </button>
-                    <button
-                      className="try-asking-chip"
-                      onClick={() => handleOpenSummary()}
-                    >
-                      Summarise this story
-                    </button>
-                  </div>
+                {/* Sekcja narzędzi treningowych */}
+                <div className="practice-tools-grid">
+                  <button
+                    className="practice-tool-tile"
+                    onClick={handleOpenFlashcards}
+                    title="Ćwicz słownictwo z tej historii na interaktywnych fiszkach"
+                  >
+                    <div className="practice-tool-icon-wrapper flashcards-icon">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <line x1="9" y1="3" x2="9" y2="21" />
+                      </svg>
+                    </div>
+                    <div className="practice-tool-info">
+                      <span className="practice-tool-name">Fiszki</span>
+                      <span className="practice-tool-desc">Ćwicz słówka</span>
+                    </div>
+                  </button>
+
+                  <button
+                    className="practice-tool-tile"
+                    onClick={handleOpenExercises}
+                    title="Rozwiąż test tłumaczeniowy ze słówek z historii wygenerowany przez AI"
+                  >
+                    <div className="practice-tool-icon-wrapper quiz-icon">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 11l3 3L22 4" />
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                      </svg>
+                    </div>
+                    <div className="practice-tool-info">
+                      <span className="practice-tool-name">Quiz słówek</span>
+                      <span className="practice-tool-desc">Zadania z AI</span>
+                    </div>
+                  </button>
+
+                  <button
+                    className="practice-tool-tile"
+                    onClick={handleOpenSummary}
+                    title="Generuj podsumowanie postępów i analizę sesji AI"
+                  >
+                    <div className="practice-tool-icon-wrapper summary-icon">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10" />
+                        <line x1="12" y1="20" x2="12" y2="4" />
+                        <line x1="6" y1="20" x2="6" y2="14" />
+                      </svg>
+                    </div>
+                    <div className="practice-tool-info">
+                      <span className="practice-tool-name">Podsumowanie AI</span>
+                      <span className="practice-tool-desc">Analiza sesji</span>
+                    </div>
+                  </button>
+
+                  <button
+                    className="practice-tool-tile"
+                    onClick={handleOpenEmail}
+                    title="Wyślij zebrane słownictwo na swój adres e-mail"
+                  >
+                    <div className="practice-tool-icon-wrapper email-icon">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                        <polyline points="22,6 12,13 2,6" />
+                      </svg>
+                    </div>
+                    <div className="practice-tool-info">
+                      <span className="practice-tool-name">E-mail</span>
+                      <span className="practice-tool-desc">Eksport słówek</span>
+                    </div>
+                  </button>
                 </div>
-
-                <form
-                  className="buddy-ask-input-box"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleAskBuddy(buddyQuestion);
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" className="buddy-input-icon">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder="Ask about the story..."
-                    value={buddyQuestion}
-                    onChange={(e) => setBuddyQuestion(e.target.value)}
-                  />
-                  {buddyQuestion.trim() && (
-                    <button type="submit" className="buddy-input-submit-btn" disabled={isBuddyLoading}>
-                      {isBuddyLoading ? "..." : "↑"}
-                    </button>
-                  )}
-                </form>
-
-                {buddyAnswer && (
-                  <div className="buddy-answer-box">
-                    {buddyAnswer}
-                  </div>
-                )}
               </div>
 
               {/* Card 3: Small steps count */}
@@ -3023,7 +3099,7 @@ function Workspace({
       {showFlashcards && (
         <div className="flashcards-overlay">
           <Flashcards
-            notebookWords={notebookWords}
+            notebookWords={effectivePracticeWords}
             onFinishExercises={() => setShowFlashcards(false)}
           />
         </div>
@@ -3031,7 +3107,7 @@ function Workspace({
 
       {showExerciseModal && (
         <VocabularyExerciseModal
-          notebookWords={notebookWords}
+          notebookWords={effectivePracticeWords}
           user={user}
           onClose={() => setShowExerciseModal(false)}
         />
