@@ -303,6 +303,25 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredWords.length);
   const currentWordsPage = filteredWords.slice(startIndex, endIndex);
 
+  // Sliding window pagination: exactly max 5 pages centered around current page
+  const visiblePages = useMemo(() => {
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    let start = Math.max(1, currentPageSafe - 2);
+    let end = start + maxVisible - 1;
+    if (end > totalPages) {
+      end = totalPages;
+      start = Math.max(1, end - maxVisible + 1);
+    }
+    const pages = [];
+    for (let p = start; p <= end; p++) {
+      pages.push(p);
+    }
+    return pages;
+  }, [totalPages, currentPageSafe]);
+
   // Play Pronunciation (TTS)
   const handlePlayTTS = async (text) => {
     if (!text || playingWord === text) return;
@@ -933,11 +952,20 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
               <button
                 className="pagination-btn arrow-btn"
                 disabled={currentPageSafe <= 1}
+                onClick={() => setCurrentPage(1)}
+                title="Pierwsza strona"
+              >
+                «
+              </button>
+              <button
+                className="pagination-btn arrow-btn"
+                disabled={currentPageSafe <= 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                title="Poprzednia strona"
               >
                 ‹
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              {visiblePages.map((page) => (
                 <button
                   key={page}
                   className={`pagination-btn page-num-btn ${page === currentPageSafe ? "active" : ""}`}
@@ -950,8 +978,17 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                 className="pagination-btn arrow-btn"
                 disabled={currentPageSafe >= totalPages}
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                title="Następna strona"
               >
                 ›
+              </button>
+              <button
+                className="pagination-btn arrow-btn"
+                disabled={currentPageSafe >= totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                title="Ostatnia strona"
+              >
+                »
               </button>
             </div>
           </div>
