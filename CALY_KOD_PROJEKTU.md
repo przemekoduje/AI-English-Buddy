@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-11 21:58:17
+Wygenerowano: 2026-10-11 22:07:25
 
 ## Spis Treści
 1. `backend/app.py`
