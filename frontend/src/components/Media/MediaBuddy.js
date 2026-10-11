@@ -1649,115 +1649,7 @@ function MediaBuddy({ user }) {
             </div>
           </div>
 
-          {/* Lesson Details Card — Figma Design */}
-          <div className="lesson-details-card">
-            <div className="lesson-title-row">
-              <h2 className="lesson-video-title">{currentVideo.title}</h2>
-              <span className="lesson-badge">Video lesson</span>
-            </div>
-            <p className="lesson-description">
-              {currentVideo.description || "Everyday English for natural comprehension. Listen for advice, useful phrases and the language of encouragement."}
-            </p>
-            <div className="lesson-meta-pills">
-              <span className="lesson-meta-pill duration-pill">
-                ⏱ {formatTime(totalDuration).replace(":", " min ")} sec
-              </span>
-              <span className="lesson-meta-pill words-pill">
-                {keyWordsList.length} useful words
-              </span>
-              <span className="lesson-meta-pill ai-pill">
-                AI analysis ready
-              </span>
-            </div>
-
-            <div className="lesson-divider" />
-
-            <div className="active-lesson-section">
-              <h4 className="active-lesson-heading">Make it an active lesson</h4>
-              <div className="active-lesson-buttons">
-                <button
-                  type="button"
-                  className={`lesson-act-btn ${showSummary ? "active" : ""}`}
-                  onClick={() => setShowSummary(prev => !prev)}
-                >
-                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-                  </svg>
-                  Summarise
-                </button>
-
-                <button
-                  type="button"
-                  className={`lesson-act-btn ${showPhrases ? "active" : ""}`}
-                  onClick={() => {
-                    setShowPhrases(prev => !prev);
-                    if (activeSegmentIndex !== -1) {
-                      translateActiveSegment(activeSegmentIndex);
-                    }
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />
-                  </svg>
-                  Explain phrases
-                </button>
-
-                <button
-                  type="button"
-                  className="lesson-act-btn voice-ai-btn"
-                  onClick={handleVoiceAiClick}
-                >
-                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                    <line x1="12" y1="19" x2="12" y2="22" />
-                    <line x1="8" y1="22" x2="16" y2="22" />
-                  </svg>
-                  Practice with Voice AI
-                </button>
-              </div>
-
-              {/* Collapsible Lesson Summary */}
-              {showSummary && (
-                <div className="summary-expand-box animate-fade-in">
-                  <h5 className="summary-box-title">💡 Główne punkty lekcji:</h5>
-                  <p className="summary-box-text">
-                    {currentVideo.description || "Ten materiał prezentuje autentyczny, żywy język angielski. Skup się na intonacji, naturalnym akcentowaniu oraz sposobie budowania żartów i puent w mowie potocznej."}
-                  </p>
-                  <ul className="summary-bullets">
-                    <li>Zwróć uwagę na zwroty wprowadzające kontekst sytuacji.</li>
-                    <li>Kliknij dowolne słowo w transkrypcji po prawej, aby poznać jego definicję i dodać do powtórek.</li>
-                    <li>Skorzystaj z Voice AI, aby wyćwiczyć akcent i płynność wymowy.</li>
-                  </ul>
-                </div>
-              )}
-
-              {/* Collapsible Phrase Explanation */}
-              {showPhrases && (
-                <div className="phrases-expand-box animate-fade-in">
-                  <h5 className="summary-box-title">💬 Tłumaczenie i objaśnienie aktywnej frazy:</h5>
-                  {activeSegmentIndex !== -1 ? (
-                    <div>
-                      <p className="active-phrase-en">"{currentVideo.transcript[activeSegmentIndex]?.text}"</p>
-                      <p className="active-phrase-pl">{segmentTranslation || "Tłumaczenie w toku..."}</p>
-                      <button
-                        type="button"
-                        className="btn-save-inline"
-                        onClick={handleSaveSegmentPhrase}
-                        disabled={isSegmentSaved}
-                      >
-                        {isSegmentSaved ? "Zapisano frazę! ✓" : "Zapisz frazę do słownika (+)"}
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="empty-hint-text">Zatrzymaj wideo lub kliknij zdanie w transkrypcji, aby zobaczyć jego pełne tłumaczenie.</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Words Worth Keeping Card — Figma Design */}
+          {/* Words Worth Keeping Card — Figma Design (Above) */}
           <div className="words-keeping-card">
             <h3 className="words-keeping-title">Words worth keeping</h3>
 
@@ -1910,6 +1802,114 @@ function MediaBuddy({ user }) {
                 <p className="notebook-empty-hint">
                   Zapisuj nowe słówka podczas oglądania, aby generować z nich ćwiczenia tłumaczeniowe.
                 </p>
+              )}
+            </div>
+          </div>
+
+          {/* Lesson Details Card — Figma Design (Below) */}
+          <div className="lesson-details-card">
+            <div className="lesson-title-row">
+              <h2 className="lesson-video-title">{currentVideo.title}</h2>
+              <span className="lesson-badge">Video lesson</span>
+            </div>
+            <p className="lesson-description">
+              {currentVideo.description || "Everyday English for natural comprehension. Listen for advice, useful phrases and the language of encouragement."}
+            </p>
+            <div className="lesson-meta-pills">
+              <span className="lesson-meta-pill duration-pill">
+                ⏱ {formatTime(totalDuration).replace(":", " min ")} sec
+              </span>
+              <span className="lesson-meta-pill words-pill">
+                {keyWordsList.length} useful words
+              </span>
+              <span className="lesson-meta-pill ai-pill">
+                AI analysis ready
+              </span>
+            </div>
+
+            <div className="lesson-divider" />
+
+            <div className="active-lesson-section">
+              <h4 className="active-lesson-heading">Make it an active lesson</h4>
+              <div className="active-lesson-buttons">
+                <button
+                  type="button"
+                  className={`lesson-act-btn ${showSummary ? "active" : ""}`}
+                  onClick={() => setShowSummary(prev => !prev)}
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                  </svg>
+                  Summarise
+                </button>
+
+                <button
+                  type="button"
+                  className={`lesson-act-btn ${showPhrases ? "active" : ""}`}
+                  onClick={() => {
+                    setShowPhrases(prev => !prev);
+                    if (activeSegmentIndex !== -1) {
+                      translateActiveSegment(activeSegmentIndex);
+                    }
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />
+                  </svg>
+                  Explain phrases
+                </button>
+
+                <button
+                  type="button"
+                  className="lesson-act-btn voice-ai-btn"
+                  onClick={handleVoiceAiClick}
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="22" />
+                    <line x1="8" y1="22" x2="16" y2="22" />
+                  </svg>
+                  Practice with Voice AI
+                </button>
+              </div>
+
+              {/* Collapsible Lesson Summary */}
+              {showSummary && (
+                <div className="summary-expand-box animate-fade-in">
+                  <h5 className="summary-box-title">💡 Główne punkty lekcji:</h5>
+                  <p className="summary-box-text">
+                    {currentVideo.description || "Ten materiał prezentuje autentyczny, żywy język angielski. Skup się na intonacji, naturalnym akcentowaniu oraz sposobie budowania żartów i puent w mowie potocznej."}
+                  </p>
+                  <ul className="summary-bullets">
+                    <li>Zwróć uwagę na zwroty wprowadzające kontekst sytuacji.</li>
+                    <li>Kliknij dowolne słowo w transkrypcji po prawej, aby poznać jego definicję i dodać do powtórek.</li>
+                    <li>Skorzystaj z Voice AI, aby wyćwiczyć akcent i płynność wymowy.</li>
+                  </ul>
+                </div>
+              )}
+
+              {/* Collapsible Phrase Explanation */}
+              {showPhrases && (
+                <div className="phrases-expand-box animate-fade-in">
+                  <h5 className="summary-box-title">💬 Tłumaczenie i objaśnienie aktywnej frazy:</h5>
+                  {activeSegmentIndex !== -1 ? (
+                    <div>
+                      <p className="active-phrase-en">"{currentVideo.transcript[activeSegmentIndex]?.text}"</p>
+                      <p className="active-phrase-pl">{segmentTranslation || "Tłumaczenie w toku..."}</p>
+                      <button
+                        type="button"
+                        className="btn-save-inline"
+                        onClick={handleSaveSegmentPhrase}
+                        disabled={isSegmentSaved}
+                      >
+                        {isSegmentSaved ? "Zapisano frazę! ✓" : "Zapisz frazę do słownika (+)"}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="empty-hint-text">Zatrzymaj wideo lub kliknij zdanie w transkrypcji, aby zobaczyć jego pełne tłumaczenie.</p>
+                  )}
+                </div>
               )}
             </div>
           </div>
