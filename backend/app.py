@@ -23,6 +23,8 @@ import urllib.parse
 import requests
 from openai import OpenAI
 
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(backend_dir, ".env"))
 load_dotenv()
 
 app = Flask(__name__)
@@ -38,8 +40,13 @@ try:
         cred = credentials.Certificate(firebase_creds)
         print("Firebase: Używam poświadczeń ze zmiennej środowiskowej FIREBASE_CREDENTIALS_JSON.")
     else:
-        cred = credentials.Certificate("firebase_service_account.json")
-        print("Firebase: Używam pliku firebase_service_account.json.")
+        service_account_file = "firebase_service_account.json"
+        if not os.path.exists(service_account_file):
+            alt_file = os.path.join(backend_dir, "firebase_service_account.json")
+            if os.path.exists(alt_file):
+                service_account_file = alt_file
+        cred = credentials.Certificate(service_account_file)
+        print(f"Firebase: Używam pliku {service_account_file}.")
         
     firebase_admin.initialize_app(cred)
     db = firestore.client() # Klient Firestore
