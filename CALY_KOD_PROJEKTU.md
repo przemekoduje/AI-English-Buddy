@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-11 19:06:20
+Wygenerowano: 2026-10-11 19:24:48
 
 ## Spis Treści
 1. `backend/app.py`
@@ -25780,293 +25780,553 @@ export default Dashboard;
 
 ```css
 /* src/components/Flashcards.css */
-.flashcards-container {
+
+.flashcards-fullscreen-view {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #ffffff;
+  z-index: 10000;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 2rem;
-  padding: 2rem;
-  max-width: 500px;
-  margin: 0 auto;
+  overflow-y: auto;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #0f172a;
 }
 
-.progress-bar {
-  width: 100%;
-  height: 6px;
-  background: var(--slate-200);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--primary-600);
-  transition: width 0.3s ease;
-}
-
-.flashcards-header {
-  width: 100%;
+/* ==========================================================================
+   TOPBAR
+   ========================================================================== */
+.flashcards-topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: var(--slate-400);
-  cursor: pointer;
-}
-
-.flashcard-scene {
-  width: 350px;
-  height: 450px;
-  perspective: 1000px;
-  cursor: pointer;
-}
-
-.flashcard-card {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  transform-style: preserve-3d;
-}
-
-.is-flipped .flashcard-card {
-  transform: rotateY(180deg);
-}
-
-.flashcard-face {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  backface-visibility: hidden;
-  background: white;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-premium);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  text-align: center;
-}
-
-.back {
-  transform: rotateY(180deg);
-  box-shadow: inset 0 0 40px rgba(99, 102, 241, 0.05);
-}
-
-.card-label {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--slate-500);
-  position: absolute;
-  top: 2rem;
-}
-
-.card-text {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--slate-800);
-  font-family: var(--font-serif);
-}
-
-.tap-hint {
-  font-size: 0.8rem;
-  color: var(--primary-600);
-  position: absolute;
-  bottom: 2rem;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
-}
-
-.evaluation-buttons {
-  display: flex;
-  gap: 1rem;
-  width: 100%;
-}
-
-.eval-btn {
-  flex: 1;
-  padding: 1rem;
-  border-radius: var(--radius-md);
-  font-weight: 600;
-  border: none;
-}
-
-.eval-btn.primary {
-  background: var(--primary-600);
-  color: white;
-}
-
-.eval-btn.secondary {
-  background: var(--slate-200);
-  color: var(--slate-700);
-}
-
-/* ── Practice Complete Results ──────────────────────────────── */
-.flashcards-results {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2rem;
-  padding: 3rem 2rem 2.5rem;
-  max-width: 400px;
-  margin: 3rem auto;
-  background: var(--surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-  text-align: center;
-}
-
-.results-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.results-emoji {
-  font-size: 2.25rem;
-  line-height: 1;
-  margin-bottom: 0.25rem;
-}
-
-.results-title {
-  font-family: var(--font-display);
-  font-size: var(--text-title-lg);
-  font-weight: 700;
-  color: var(--gray-900);
-  letter-spacing: var(--ls-headline);
-  margin: 0;
-}
-
-.results-subtitle {
-  font-size: var(--text-body-md);
-  color: var(--gray-500);
-  line-height: var(--lh-body);
-  max-width: 280px;
-  margin: 0;
-}
-
-/* ── Animated SVG ring ── */
-.results-score-ring {
-  position: relative;
-  width: 128px;
-  height: 128px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.score-ring-svg {
-  width: 128px;
-  height: 128px;
-  position: absolute;
+  padding: 18px 48px;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  position: sticky;
   top: 0;
-  left: 0;
-}
-
-.score-ring-label {
-  position: relative;
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-  z-index: 1;
-}
-
-.score-ring-num {
-  font-size: 2.25rem;
-  font-weight: 800;
-  color: var(--gray-900);
-  font-family: var(--font-display);
-  line-height: 1;
-}
-
-.score-ring-total {
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--gray-400);
-  line-height: 1;
-}
-
-/* ── Stat row ── */
-.results-stats {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  background: var(--gray-50);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 1rem 1.5rem;
+  z-index: 50;
+  box-sizing: border-box;
   width: 100%;
 }
 
-.results-stat {
-  flex: 1;
+.flashcards-brand {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
+  gap: 10px;
 }
 
-.results-stat-val {
-  font-size: var(--text-title-lg);
+.flashcards-logo-badge {
+  width: 32px;
+  height: 32px;
+  background: #1a73e8;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(26, 115, 232, 0.25);
+}
+
+.flashcards-logo-badge svg {
+  width: 18px;
+  height: 18px;
+}
+
+.flashcards-brand-name {
+  font-size: 22px;
   font-weight: 700;
-  color: var(--gray-900);
-  font-family: var(--font-display);
-  line-height: 1.1;
+  letter-spacing: -0.5px;
+  color: #0f172a;
 }
 
-.results-stat-lbl {
-  font-size: var(--text-label-sm);
-  font-weight: 500;
-  color: var(--gray-400);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.flashcards-category-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #1e293b;
 }
 
-.results-stat-divider {
-  width: 1px;
-  height: 36px;
-  background: var(--border-subtle);
+.category-stack-icon {
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
 
-/* ── Actions ── */
-.results-actions {
-  width: 100%;
-}
-
-.results-btn-primary {
-  width: 100%;
-  padding: 0.75rem 1.5rem;
-  background: var(--accent);
+.flashcards-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
   border: none;
-  border-radius: var(--radius-full);
-  color: var(--gray-900);
-  font-family: var(--font-display);
-  font-size: var(--text-label-lg);
+  color: #1a73e8;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background var(--transition-fast);
-  letter-spacing: 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
 }
 
-.results-btn-primary:hover {
-  background: var(--accent-hover);
-  color: var(--gray-900);
+.flashcards-back-link:hover {
+  background: #eff6ff;
+  color: #1557b0;
+}
+
+/* ==========================================================================
+   MAIN BODY & STAGE
+   ========================================================================== */
+.flashcards-main-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px 60px;
+  box-sizing: border-box;
+}
+
+.flashcards-stage-wrapper {
+  width: 100%;
+  max-width: 740px;
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+}
+
+/* Meta Row Above Card */
+.flashcards-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.meta-card-count {
+  font-weight: 500;
+}
+
+.meta-topic-pill {
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+.meta-practice-timer {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Progress Track */
+.flashcards-progress-track {
+  width: 100%;
+  height: 4px;
+  background: #f1f5f9;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 32px;
+}
+
+.flashcards-progress-fill {
+  height: 100%;
+  background: #f59e0b;
+  border-radius: 2px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================================================
+   INTERACTIVE FLASHCARD
+   ========================================================================== */
+.flashcard-canvas {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.flashcard-sheet {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 28px;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.04);
+  padding: 48px 40px;
+  box-sizing: border-box;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 380px;
+  transition: all 0.25s ease;
+  animation: cardSheetFade 0.2s ease;
+}
+
+@keyframes cardSheetFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Card badges */
+.card-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 5px 14px;
+  border-radius: 999px;
+  margin-bottom: 24px;
+}
+
+.badge-think-first {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.badge-answer-pl {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+/* Word Headlines */
+.card-headline-word {
+  font-size: 46px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.6px;
+  margin: 0 0 16px 0;
+  line-height: 1.15;
+}
+
+.card-headline-word.pl-answer {
+  font-size: 42px;
+  margin-bottom: 12px;
+}
+
+/* Context quotes */
+.card-context-quote {
+  font-size: 16px;
+  line-height: 1.5;
+  color: #475569;
+  max-width: 540px;
+  margin: 0 auto 32px auto;
+  font-weight: 400;
+}
+
+.card-context-pl {
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: #334155;
+  max-width: 540px;
+  margin: 0 auto 8px auto;
+}
+
+.card-definition-en {
+  font-size: 13.5px;
+  color: #64748b;
+  max-width: 520px;
+  margin: 0 auto 28px auto;
+}
+
+/* Phonetic & Audio row */
+.card-phonetic-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.card-phonetic-meta {
+  font-size: 14.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.card-audio-speaker-btn {
+  background: #eff6ff;
+  color: #1a73e8;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card-audio-speaker-btn:hover {
+  background: #dbeafe;
+  transform: scale(1.05);
+}
+
+/* Flip / Reveal pill button inside card */
+.card-flip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #1a73e8;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.card-flip-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1557b0;
+}
+
+/* ==========================================================================
+   FOOTER CONTROLS & EVALUATION
+   ========================================================================== */
+.flashcards-footer-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 28px;
+  width: 100%;
+}
+
+.evaluation-prompt {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #475569;
+  margin: 0 0 16px 0;
+  text-align: center;
+}
+
+.evaluation-buttons-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.eval-btn-review-again {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fef3c7;
+  color: #b45309;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 999px;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.eval-btn-review-again:hover {
+  background: #fde68a;
+  transform: translateY(-1px);
+}
+
+.eval-btn-know-it {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #10b981;
+  color: #ffffff;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 999px;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.25);
+}
+
+.eval-btn-know-it:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(16, 185, 129, 0.35);
+}
+
+/* Keyboard hint */
+.keyboard-shortcuts-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 18px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+/* Live review count line */
+.session-progress-summary {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 18px;
+  text-align: center;
+}
+
+/* ==========================================================================
+   RESULTS / COMPLETE SCREEN
+   ========================================================================== */
+.flashcards-complete-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 28px;
+  padding: 50px 40px;
+  max-width: 520px;
+  width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.05);
+  animation: cardSheetFade 0.3s ease;
+}
+
+.complete-badge-circle {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.complete-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 8px 0;
+}
+
+.complete-subtitle {
+  font-size: 14.5px;
+  color: #64748b;
+  margin: 0 0 28px 0;
+}
+
+.complete-stats-row {
+  display: flex;
+  justify-content: space-around;
+  background: #f8fafc;
+  border-radius: 18px;
+  padding: 18px 12px;
+  margin-bottom: 28px;
+}
+
+.complete-stat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.complete-stat-number {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.complete-stat-label {
+  font-size: 12px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.complete-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.complete-btn-primary {
+  background: #1a73e8;
+  color: #ffffff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.complete-btn-primary:hover {
+  background: #1557b0;
+}
+
+.complete-btn-secondary {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #1e293b;
+  padding: 12px 24px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.complete-btn-secondary:hover {
+  background: #f8fafc;
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN
+   ========================================================================== */
+@media (max-width: 768px) {
+  .flashcards-topbar {
+    padding: 16px 20px;
+  }
+
+  .flashcards-category-pill {
+    display: none;
+  }
+
+  .flashcards-main-body {
+    padding: 20px 16px 40px;
+  }
+
+  .flashcard-sheet {
+    padding: 32px 20px;
+    border-radius: 20px;
+  }
+
+  .card-headline-word {
+    font-size: 34px;
+  }
+
+  .card-headline-word.pl-answer {
+    font-size: 30px;
+  }
+
+  .evaluation-buttons-group {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .eval-btn-review-again,
+  .eval-btn-know-it {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .keyboard-shortcuts-hint {
+    display: none;
+  }
 }
 ```
 
@@ -26075,134 +26335,488 @@ export default Dashboard;
 ## 22. Plik: `frontend/src/components/Flashcards.js`
 
 ```javascript
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { API_BASE_URL } from "../config";
 import "./Flashcards.css";
 
-function Flashcards({ notebookWords, onFinishExercises }) {
+function Flashcards({
+  words,
+  notebookWords,
+  onClose,
+  onFinishExercises,
+  user,
+  categoryTitle = "My Vocabulary · B2 review",
+}) {
+  const handleExit = onClose || onFinishExercises || (() => {});
+
+  // Determine card list from props, with rich fallback for standalone practice
+  const initialCards = useMemo(() => {
+    const rawList = words || notebookWords || [];
+    if (Array.isArray(rawList) && rawList.length > 0) {
+      return rawList.map((item, idx) => {
+        const original = typeof item === "string" ? item : item.original || item.word || "adapt";
+        const translated = typeof item === "string" ? "tłumaczenie" : item.translated || "dostosować się";
+        const cleanOriginal = original.trim().toLowerCase();
+
+        // Default or enriched phonetic
+        const phonetic = item.phonetic || (cleanOriginal === "adapt" ? "/əˈdæpt/" : `/${cleanOriginal}/`);
+
+        // Default or enriched part of speech
+        const partOfSpeech = item.part_of_speech || (cleanOriginal === "adapt" ? "verb" : "expression");
+
+        // Context sentence
+        const contextSentence = item.context_sentence || 
+          (cleanOriginal === "adapt" 
+            ? "Maya knew she would need to adapt to a new routine."
+            : `“${original} is an important expression to remember.”`);
+
+        // Polish context sentence or translation
+        const contextSentencePl = item.context_sentence_pl ||
+          (cleanOriginal === "adapt"
+            ? "Maya wiedziała, że będzie musiała dostosować się do nowej rutyny."
+            : translated);
+
+        // Definition
+        const definition = item.definition ||
+          (cleanOriginal === "adapt"
+            ? "To change to suit a new situation."
+            : `To understand and use "${original}" confidently in everyday conversation.`);
+
+        // Topic and Story title
+        const topic = item.topic || "Business";
+        const storyTitle = item.story_title || "A new beginning";
+
+        return {
+          id: item.id || `card_${idx}`,
+          original,
+          translated,
+          phonetic,
+          part_of_speech: partOfSpeech,
+          context_sentence: contextSentence,
+          context_sentence_pl: contextSentencePl,
+          definition,
+          topic,
+          story_title: storyTitle,
+          status: item.status || "Learning",
+        };
+      });
+    }
+
+    // Default sample set if list is completely empty
+    return [
+      {
+        id: "sample_1",
+        original: "adapt",
+        translated: "dostosować się",
+        phonetic: "/əˈdæpt/",
+        part_of_speech: "verb",
+        context_sentence: "Maya knew she would need to adapt to a new routine.",
+        context_sentence_pl: "Maya wiedziała, że będzie musiała dostosować się do nowej rutyny.",
+        definition: "To change to suit a new situation.",
+        topic: "Business",
+        story_title: "A new beginning",
+        status: "Learning",
+      },
+      {
+        id: "sample_2",
+        original: "supportive",
+        translated: "wspierający",
+        phonetic: "/səˈpɔː.tɪv/",
+        part_of_speech: "adjective",
+        context_sentence: "Her manager was extremely supportive during her first week.",
+        context_sentence_pl: "Jej przełożony był niezwykle wspierający podczas pierwszego tygodnia.",
+        definition: "Providing encouragement, sympathy, or emotional help.",
+        topic: "Workplace",
+        story_title: "A new beginning",
+        status: "Learning",
+      },
+      {
+        id: "sample_3",
+        original: "clarify",
+        translated: "wyjaśnić, doprecyzować",
+        phonetic: "/ˈklær.ɪ.faɪ/",
+        part_of_speech: "verb",
+        context_sentence: "Could you please clarify the main objective of this task?",
+        context_sentence_pl: "Czy mógłbyś proszę doprecyzować główny cel tego zadania?",
+        definition: "To make something clearer or easier to understand.",
+        topic: "Communication",
+        story_title: "Team Meeting",
+        status: "Learning",
+      },
+    ];
+  }, [words, notebookWords]);
+
+  const [cards, setCards] = useState(initialCards);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [score, setScore] = useState(0);
 
-  const total = notebookWords.length;
-  const currentWord = notebookWords[currentIndex];
+  // Stats counters matching the design
+  const [reviewedCount, setReviewedCount] = useState(0);
+  const [knownCount, setKnownCount] = useState(0);
+  const [reviewAgainCount, setReviewAgainCount] = useState(0);
 
-  const handleFlip = () => setIsFlipped(!isFlipped);
+  // Practice Timer
+  const [timerSeconds, setTimerSeconds] = useState(0);
 
-  const handleNext = (known) => {
-    if (known) setScore(score + 1);
-    setIsFlipped(false);
-    
-    setTimeout(() => {
-      if (currentIndex + 1 < total) {
-        setCurrentIndex(currentIndex + 1);
-      } else {
-        setShowResults(true);
-      }
-    }, 150);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimerSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatTimer = (totalSec) => {
+    const mins = Math.floor(totalSec / 60)
+      .toString()
+      .padStart(2, "0");
+    const secs = (totalSec % 60).toString().padStart(2, "0");
+    return `${mins}:${secs}`;
   };
 
-  if (showResults) {
-    const pct = Math.round((score / total) * 100);
-    const isPerfect = score === total;
-    const isGood = pct >= 70;
-    const message = isPerfect
-      ? "Perfect score! You nailed every word."
-      : isGood
-      ? "Good job! A few more rounds and you'll have them all."
-      : "Keep going — repetition is how it sticks.";
-    const emoji = isPerfect ? "🏆" : isGood ? "⭐" : "💪";
+  const total = cards.length;
+  const currentWord = cards[currentIndex] || cards[0];
 
-    return (
-      <div className="flashcards-results">
-        <div className="results-header">
-          <span className="results-emoji">{emoji}</span>
-          <h2 className="results-title">Practice Complete</h2>
-          <p className="results-subtitle">{message}</p>
-        </div>
+  // Flip card
+  const handleFlip = useCallback(() => {
+    setIsFlipped((prev) => !prev);
+  }, []);
 
-        <div className="results-score-ring">
-          <svg viewBox="0 0 120 120" className="score-ring-svg">
-            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--gray-200)" strokeWidth="8"/>
-            <circle
-              cx="60" cy="60" r="50"
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth="8"
-              strokeLinecap="round"
-              strokeDasharray={`${2 * Math.PI * 50}`}
-              strokeDashoffset={`${2 * Math.PI * 50 * (1 - score / total)}`}
-              transform="rotate(-90 60 60)"
-              style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)' }}
-            />
-          </svg>
-          <div className="score-ring-label">
-            <span className="score-ring-num">{score}</span>
-            <span className="score-ring-total">/ {total}</span>
-          </div>
-        </div>
+  // Answer handler
+  const handleAnswer = useCallback(
+    async (isKnown) => {
+      if (!currentWord) return;
 
-        <div className="results-stats">
-          <div className="results-stat">
-            <span className="results-stat-val">{pct}%</span>
-            <span className="results-stat-lbl">Accuracy</span>
-          </div>
-          <div className="results-stat-divider"/>
-          <div className="results-stat">
-            <span className="results-stat-val">{score}</span>
-            <span className="results-stat-lbl">Known</span>
-          </div>
-          <div className="results-stat-divider"/>
-          <div className="results-stat">
-            <span className="results-stat-val">{total - score}</span>
-            <span className="results-stat-lbl">To review</span>
-          </div>
-        </div>
+      if (isKnown) {
+        setKnownCount((prev) => prev + 1);
+      } else {
+        setReviewAgainCount((prev) => prev + 1);
+      }
+      setReviewedCount((prev) => prev + 1);
 
-        <div className="results-actions">
-          <button onClick={onFinishExercises} className="results-btn-primary">
-            Back to Workspace
-          </button>
-        </div>
-      </div>
-    );
-  }
+      // Persist status update to backend if user token is present
+      if (user?.token && currentWord?.original) {
+        const newStatus = isKnown ? "Known" : "Learning";
+        fetch(
+          `${API_BASE_URL}/api/vocabulary/${encodeURIComponent(
+            currentWord.id || currentWord.original
+          )}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Session-Token": user.token,
+            },
+            body: JSON.stringify({ status: newStatus }),
+          }
+        ).catch((err) => {
+          console.warn("Could not sync flashcard status:", err);
+        });
+      }
+
+      setIsFlipped(false);
+
+      setTimeout(() => {
+        if (currentIndex + 1 < total) {
+          setCurrentIndex((prev) => prev + 1);
+        } else {
+          setShowResults(true);
+        }
+      }, 160);
+    },
+    [currentIndex, total, currentWord, user]
+  );
+
+  // Pronounce word via SpeechSynthesis
+  const handlePronounce = (e) => {
+    e.stopPropagation();
+    if (!currentWord?.original) return;
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(currentWord.original);
+      utterance.lang = "en-US";
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // Keyboard navigation: Space (flip), ArrowLeft (Review again), ArrowRight (Know it)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (showResults) return;
+
+      if (e.code === "Space") {
+        e.preventDefault();
+        handleFlip();
+      } else if (e.code === "ArrowLeft") {
+        e.preventDefault();
+        handleAnswer(false);
+      } else if (e.code === "ArrowRight") {
+        e.preventDefault();
+        handleAnswer(true);
+      } else if (e.code === "Escape") {
+        handleExit();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleFlip, handleAnswer, handleExit, showResults]);
+
+  // Restart practice session
+  const handleRestart = () => {
+    setCurrentIndex(0);
+    setIsFlipped(false);
+    setShowResults(false);
+    setReviewedCount(0);
+    setKnownCount(0);
+    setReviewAgainCount(0);
+    setTimerSeconds(0);
+  };
+
+  // Progress percentage
+  const progressPercent = total > 0 ? ((currentIndex + 1) / total) * 100 : 0;
 
   return (
-    <div className="flashcards-container">
-      <div className="progress-bar">
-        <div 
-          className="progress-fill" 
-          style={{ width: `${((currentIndex) / total) * 100}%` }}
-        ></div>
-      </div>
-      
-      <div className="flashcards-header">
-        <button className="close-btn" onClick={onFinishExercises}>✕</button>
-        <h3>Card {currentIndex + 1} of {total}</h3>
-      </div>
-
-      <div className={`flashcard-scene ${isFlipped ? "is-flipped" : ""}`} onClick={handleFlip}>
-        <div className="flashcard-card">
-          <div className="flashcard-face front">
-            <span className="card-label">Original Phrase</span>
-            <p className="card-text">{currentWord.original}</p>
-            <span className="tap-hint">Tap to see translation</span>
+    <div className="flashcards-fullscreen-view">
+      {/* ── Top Header Bar ──────────────────────────────────────── */}
+      <header className="flashcards-topbar">
+        {/* Speakling brand */}
+        <div className="flashcards-brand">
+          <div className="flashcards-logo-badge">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+              <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8" />
+            </svg>
           </div>
-          <div className="flashcard-face back">
-            <span className="card-label">Translation</span>
-            <p className="card-text">{currentWord.translated}</p>
-            <span className="tap-hint">Tap to see original</span>
-          </div>
+          <span className="flashcards-brand-name">speakling</span>
         </div>
-      </div>
 
-      <div className="evaluation-buttons">
-        <button className="eval-btn secondary" onClick={() => handleNext(false)}>Still learning ❌</button>
-        <button className="eval-btn primary" onClick={() => handleNext(true)}>I know this! ✅</button>
-      </div>
+        {/* Center Category Indicator */}
+        <div className="flashcards-category-pill">
+          <svg className="category-stack-icon" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+            <path d="M2 17l10 5 10-5" />
+            <path d="M2 12l10 5 10-5" />
+          </svg>
+          <span className="category-title-text">{categoryTitle}</span>
+        </div>
 
+        {/* Back to Vocabulary */}
+        <button
+          type="button"
+          className="flashcards-back-link"
+          onClick={handleExit}
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+          <span>Back to vocabulary</span>
+        </button>
+      </header>
 
+      {/* ── Main Review Area ─────────────────────────────────────── */}
+      <main className="flashcards-main-body">
+        {showResults ? (
+          /* Results Complete Screen */
+          <div className="flashcards-complete-card">
+            <div className="complete-badge-circle">🏆</div>
+            <h2 className="complete-title">Review Session Complete!</h2>
+            <p className="complete-subtitle">
+              You reviewed {reviewedCount} words in {formatTimer(timerSeconds)}.
+            </p>
+
+            <div className="complete-stats-row">
+              <div className="complete-stat-box">
+                <span className="complete-stat-number">{knownCount}</span>
+                <span className="complete-stat-label">Known</span>
+              </div>
+              <div className="complete-stat-box">
+                <span className="complete-stat-number">{reviewAgainCount}</span>
+                <span className="complete-stat-label">To review again</span>
+              </div>
+              <div className="complete-stat-box">
+                <span className="complete-stat-number">
+                  {reviewedCount > 0 ? `${Math.round((knownCount / reviewedCount) * 100)}%` : "100%"}
+                </span>
+                <span className="complete-stat-label">Accuracy</span>
+              </div>
+            </div>
+
+            <div className="complete-actions">
+              <button
+                type="button"
+                className="complete-btn-primary"
+                onClick={handleExit}
+              >
+                Back to vocabulary
+              </button>
+              <button
+                type="button"
+                className="complete-btn-secondary"
+                onClick={handleRestart}
+              >
+                Review again
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flashcards-stage-wrapper">
+            {/* Meta bar above card */}
+            <div className="flashcards-meta-row">
+              <span className="meta-card-count">
+                Card {currentIndex + 1} of {total}
+              </span>
+
+              <span className="meta-topic-pill">
+                {currentWord.topic} · {currentWord.story_title}
+              </span>
+
+              <span className="meta-practice-timer">
+                {formatTimer(timerSeconds)} practice
+              </span>
+            </div>
+
+            {/* Progress line track */}
+            <div className="flashcards-progress-track">
+              <div
+                className="flashcards-progress-fill"
+                style={{ width: `${progressPercent}%` }}
+              ></div>
+            </div>
+
+            {/* ── Interactive Card ───────────────────────────────── */}
+            <div className="flashcard-canvas">
+              <div className={`flashcard-sheet ${isFlipped ? "is-flipped-mode" : ""}`}>
+                {!isFlipped ? (
+                  /* FRONT OF CARD: English · Think First */
+                  <div className="card-side-front">
+                    <div className="card-badge badge-think-first">
+                      ENGLISH · THINK FIRST
+                    </div>
+
+                    <h1 className="card-headline-word">
+                      {currentWord.original}
+                    </h1>
+
+                    {currentWord.context_sentence && (
+                      <p className="card-context-quote">
+                        {currentWord.context_sentence.startsWith("“") || currentWord.context_sentence.startsWith('"')
+                          ? currentWord.context_sentence
+                          : `“${currentWord.context_sentence}”`}
+                      </p>
+                    )}
+
+                    <button
+                      type="button"
+                      className="card-flip-btn"
+                      onClick={handleFlip}
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>Reveal translation</span>
+                    </button>
+                  </div>
+                ) : (
+                  /* BACK OF CARD: Polski · Answer */
+                  <div className="card-side-back">
+                    <div className="card-badge badge-answer-pl">
+                      POLSKI · ANSWER
+                    </div>
+
+                    <h1 className="card-headline-word pl-answer">
+                      {currentWord.translated}
+                    </h1>
+
+                    <div className="card-phonetic-row">
+                      <span className="card-phonetic-meta">
+                        {currentWord.original} · {currentWord.phonetic} · {currentWord.part_of_speech}
+                      </span>
+                      <button
+                        type="button"
+                        className="card-audio-speaker-btn"
+                        onClick={handlePronounce}
+                        title="Listen pronunciation"
+                      >
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                        </svg>
+                      </button>
+                    </div>
+
+                    {currentWord.context_sentence_pl && (
+                      <p className="card-context-pl">
+                        {currentWord.context_sentence_pl}
+                      </p>
+                    )}
+
+                    {currentWord.definition && (
+                      <p className="card-definition-en">
+                        {currentWord.definition}
+                      </p>
+                    )}
+
+                    <button
+                      type="button"
+                      className="card-flip-btn"
+                      onClick={handleFlip}
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>Show English</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Evaluation Controls ────────────────────────────── */}
+            <div className="flashcards-footer-actions">
+              <p className="evaluation-prompt">
+                How well did you remember this word?
+              </p>
+
+              <div className="evaluation-buttons-group">
+                <button
+                  type="button"
+                  className="eval-btn-review-again"
+                  onClick={() => handleAnswer(false)}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Review again</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="eval-btn-know-it"
+                  onClick={() => handleAnswer(true)}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.6">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Know it</span>
+                </button>
+              </div>
+
+              {/* Keyboard shortcuts reminder */}
+              <div className="keyboard-shortcuts-hint">
+                <span>← Review again</span>
+                <span>Space · Flip card</span>
+                <span>→ Know it</span>
+              </div>
+
+              {/* Review session live summary */}
+              <div className="session-progress-summary">
+                {reviewedCount} {reviewedCount === 1 ? "word" : "words"} reviewed · {knownCount} known · {reviewAgainCount} to review again
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
@@ -54337,6 +54951,10 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   const totalSavedCount = enrichedWords.length;
   const dueCount = enrichedWords.filter((w) => w.status === "Learning" || w.status === "New").length;
   const knownCount = enrichedWords.filter((w) => w.status === "Known").length;
+  const dueWords = useMemo(() => {
+    const due = enrichedWords.filter((w) => w.status === "Learning" || w.status === "New");
+    return due.length > 0 ? due : enrichedWords;
+  }, [enrichedWords]);
 
   // Pagination Slice
   const totalPages = Math.max(1, Math.ceil(filteredWords.length / ITEMS_PER_PAGE));
@@ -55301,14 +55919,18 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
       {/* ── Flashcards Modal ────────────────────────────────────── */}
       {showFlashcards && (
         <Flashcards
-          words={enrichedWords.map((w) => ({
-            original: w.original,
-            translated: w.translated,
-            context_sentence: w.context_sentence,
-            id: w.id
-          }))}
+          words={dueWords}
+          notebookWords={dueWords}
           user={user}
-          onClose={() => setShowFlashcards(false)}
+          categoryTitle={`My Vocabulary · ${difficultyFilter !== "all" ? difficultyFilter.toUpperCase() : "B2"} review`}
+          onClose={() => {
+            setShowFlashcards(false);
+            fetchVocabulary();
+          }}
+          onFinishExercises={() => {
+            setShowFlashcards(false);
+            fetchVocabulary();
+          }}
         />
       )}
 

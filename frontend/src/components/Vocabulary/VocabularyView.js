@@ -295,6 +295,10 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   const totalSavedCount = enrichedWords.length;
   const dueCount = enrichedWords.filter((w) => w.status === "Learning" || w.status === "New").length;
   const knownCount = enrichedWords.filter((w) => w.status === "Known").length;
+  const dueWords = useMemo(() => {
+    const due = enrichedWords.filter((w) => w.status === "Learning" || w.status === "New");
+    return due.length > 0 ? due : enrichedWords;
+  }, [enrichedWords]);
 
   // Pagination Slice
   const totalPages = Math.max(1, Math.ceil(filteredWords.length / ITEMS_PER_PAGE));
@@ -1259,14 +1263,18 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
       {/* ── Flashcards Modal ────────────────────────────────────── */}
       {showFlashcards && (
         <Flashcards
-          words={enrichedWords.map((w) => ({
-            original: w.original,
-            translated: w.translated,
-            context_sentence: w.context_sentence,
-            id: w.id
-          }))}
+          words={dueWords}
+          notebookWords={dueWords}
           user={user}
-          onClose={() => setShowFlashcards(false)}
+          categoryTitle={`My Vocabulary · ${difficultyFilter !== "all" ? difficultyFilter.toUpperCase() : "B2"} review`}
+          onClose={() => {
+            setShowFlashcards(false);
+            fetchVocabulary();
+          }}
+          onFinishExercises={() => {
+            setShowFlashcards(false);
+            fetchVocabulary();
+          }}
         />
       )}
 
