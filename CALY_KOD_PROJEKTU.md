@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-11 18:38:56
+Wygenerowano: 2026-10-11 18:47:16
 
 ## Spis Treści
 1. `backend/app.py`
@@ -48980,29 +48980,29 @@ export default TopBar;
 
 ```css
 /* ============================================================
-   TranslatorDrawer.css — Slide-out Sidebar & Floating Tab
+   TranslatorDrawer.css — Instant Translator Slide-out Panel
    ============================================================ */
 
 /* ── Floating Pull-out Button ──────────────────────────────── */
 .translator-drawer-trigger {
   position: fixed;
   right: 0;
-  top: calc(50% + 140px); /* Poniżej Vocabulary Drawer */
+  top: 50%;
   transform: translateY(-50%);
   z-index: 990;
-  background: var(--surface-100);
-  color: var(--primary);
-  border: 1px solid var(--border);
+  background: #ffffff;
+  color: #2563eb;
+  border: 1px solid #e2e8f0;
   border-right: none;
-  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  border-radius: 12px 0 0 12px;
   padding: 0.85rem 0.6rem;
   cursor: pointer;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.4rem;
-  transition: all var(--transition-fast);
+  transition: all 0.2s ease;
 }
 
 .translator-drawer-trigger.hidden {
@@ -49010,9 +49010,9 @@ export default TopBar;
 }
 
 .translator-drawer-trigger:hover {
-  background: var(--surface-200);
+  background: #f8fafc;
   padding-right: 0.85rem;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
 }
 
 .translator-drawer-trigger .trigger-icon {
@@ -49024,10 +49024,9 @@ export default TopBar;
 .translator-drawer-trigger .trigger-label {
   writing-mode: vertical-rl;
   text-orientation: mixed;
-  font-family: var(--font-display);
-  font-size: var(--text-label-sm);
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   margin-top: 0.2rem;
 }
@@ -49039,257 +49038,378 @@ export default TopBar;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(15, 23, 42, 0.25);
   backdrop-filter: blur(2px);
   z-index: 1000;
-  transition: opacity var(--transition-soft);
+  transition: opacity 0.25s ease;
 }
 
-/* ── Sliding Panel ────────────────────────────────────────── */
+/* ── Sliding Panel Container ──────────────────────────────── */
 .translator-drawer-container {
   position: fixed;
   top: 0;
-  right: -420px;
-  width: min(420px, 100vw);
+  right: 0;
+  width: 440px;
+  max-width: 100vw;
   height: 100vh;
-  background: var(--surface);
-  box-shadow: var(--shadow-xl);
+  background: #ffffff;
+  box-shadow: -4px 0 28px rgba(0, 0, 0, 0.09);
   z-index: 1001;
   display: flex;
   flex-direction: column;
-  transition: right var(--transition-soft);
-  border-left: 1px solid var(--border);
-  font-family: var(--font-main);
-  color: var(--gray-900);
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border-left: 1px solid #e2e8f0;
+  font-family: inherit;
+  overflow-y: auto;
 }
 
 .translator-drawer-container.open {
-  right: 0;
+  transform: translateX(0);
+}
+
+/* ── Content Layout ───────────────────────────────────────── */
+.instant-translator-content {
+  padding: 2rem 1.75rem 2.5rem 1.75rem;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Header ───────────────────────────────────────────────── */
-.translator-drawer-header {
+.instant-translator-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-50);
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
 }
 
-.translator-drawer-header h2 {
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
+.instant-translator-title-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.instant-translator-title {
+  font-size: 1.35rem;
   font-weight: 700;
-  color: var(--gray-900);
-  margin: 0;
+  color: #0f172a;
+  margin: 0 0 0.35rem 0;
+  letter-spacing: -0.01em;
 }
 
-.translator-drawer-close {
+.instant-translator-subtitle {
+  font-size: 0.88rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.instant-translator-close-btn {
   background: transparent;
   border: none;
-  color: var(--gray-500);
+  color: #64748b;
   cursor: pointer;
-  padding: 0.5rem;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  padding: 6px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.15s ease;
+  margin-top: -4px;
 }
 
-.translator-drawer-close:hover {
-  background: var(--surface-100);
-  color: var(--danger);
+.instant-translator-close-btn:hover {
+  color: #0f172a;
+  background: #f1f5f9;
 }
 
-/* ── Body (Translator UI) ─────────────────────────────────── */
-.translator-drawer-body {
-  flex: 1;
+/* ── Language Switcher Bar ────────────────────────────────── */
+.instant-translator-lang-bar {
   display: flex;
-  flex-direction: column;
-  padding: 1.25rem;
-  overflow-y: auto;
-  gap: 1rem;
-  background: var(--surface-50);
-}
-
-.translator-box {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  min-height: 200px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.translator-box:focus-within {
-  border-color: var(--primary);
-  box-shadow: 0 4px 24px rgba(var(--primary-rgb), 0.1);
-}
-
-.translator-box-header {
-  display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  border-bottom: 1px solid var(--border);
-  background: rgba(var(--surface-rgb), 0.5);
+  margin-bottom: 1.75rem;
 }
 
-.translator-lang-label {
-  font-weight: 700;
-  font-size: 0.8rem;
-  color: var(--primary);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  background: var(--primary-light, rgba(var(--primary-rgb), 0.1));
-  padding: 0.3rem 0.8rem;
-  border-radius: var(--radius-full);
-  white-space: nowrap;
-}
-
-.clear-btn {
-  background: transparent;
-  border: none;
-  color: var(--gray-400);
+.lang-pill {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+  font-weight: 500;
+  font-size: 0.86rem;
+  padding: 0.45rem 1.35rem;
+  border-radius: 999px;
   cursor: pointer;
-  padding: 0.2rem;
-  transition: color 0.2s;
-  display: flex;
-  align-items: center;
+  transition: all 0.15s ease;
 }
 
-.clear-btn:hover {
-  color: var(--gray-700);
-}
-
-.translator-mini-loader {
-  font-size: var(--text-xs);
-  color: var(--primary);
-  animation: translator-pulse 1.5s infinite;
+.lang-pill.active {
+  border: 1.5px solid #2563eb;
+  color: #2563eb;
   font-weight: 600;
+  background: #eff6ff;
 }
 
-@keyframes translator-pulse {
-  0% { opacity: 0.5; }
-  50% { opacity: 1; }
-  100% { opacity: 0.5; }
-}
-
-.translator-input {
-  flex: 1;
-  width: 100%;
-  border: none;
-  resize: none;
-  padding: 1rem;
-  font-size: 1.1rem;
-  line-height: 1.5;
-  font-family: var(--font-main);
-  color: var(--gray-900);
-  background: transparent;
-  outline: none;
-}
-
-.translator-input::placeholder {
-  color: var(--gray-400);
-  font-weight: 300;
-}
-
-.translator-output {
-  flex: 1;
-  padding: 1.25rem;
-  font-size: 1.1rem;
-  line-height: 1.6;
-  color: var(--gray-900);
-  background: var(--surface-50);
-  overflow-y: auto;
-}
-
-.translator-output p {
-  margin: 0;
-}
-
-.translator-placeholder-text {
-  color: var(--gray-400);
-  font-weight: 400;
-  margin: 0;
-}
-
-.translator-divider {
+.lang-swap-icon {
+  color: #64748b;
   display: flex;
-  justify-content: center;
   align-items: center;
-  padding: 0.5rem 0;
-  position: relative;
+  justify-content: center;
 }
 
-.translator-divider::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 10%;
-  right: 10%;
-  height: 1px;
-  background: var(--border);
-  z-index: 0;
+/* ── Cards Section ────────────────────────────────────────── */
+.translator-card-section {
+  margin-bottom: 1.25rem;
 }
 
-.translator-divider-icon {
-  background: var(--surface);
-  border: 1px solid var(--border);
+.translator-card-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #475569;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.translator-card-label.translation-label {
+  color: #0284c7;
+}
+
+.translator-white-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.2rem 1.35rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 105px;
+  transition: border-color 0.15s ease;
+}
+
+.translator-white-card:hover {
+  border-color: #cbd5e1;
+}
+
+.sentence-text {
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: #1e293b;
+  margin: 0 0 1rem 0;
+}
+
+.translation-bold-text {
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.45;
+  color: #0f172a;
+  margin: 0 0 1rem 0;
+}
+
+.translation-loading-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #64748b;
+  font-size: 0.9rem;
+  margin: 0 0 1rem 0;
+}
+
+.translation-mini-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #2563eb;
   border-radius: 50%;
-  width: 36px;
-  height: 36px;
+  animation: transSpin 0.7s linear infinite;
+}
+
+@keyframes transSpin {
+  to { transform: rotate(360deg); }
+}
+
+.card-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.card-action-icon-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 6px;
+  border-radius: 8px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--gray-500);
-  z-index: 1;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  transition: all 0.15s ease;
 }
 
-.translator-input-container {
-  position: relative;
-  flex: 1;
+.card-action-icon-btn:hover {
+  color: #1e293b;
+  background: #f1f5f9;
+}
+
+.card-action-icon-btn.playing {
+  color: #2563eb;
+}
+
+/* ── Custom Sentence Input (when editing) ─────────────────── */
+.custom-sentence-input-wrapper {
+  margin-bottom: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.custom-sentence-textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.95rem;
+  color: #0f172a;
+  background: #f8fafc;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.custom-sentence-textarea:focus {
+  border-color: #2563eb;
+  background: #ffffff;
+}
+
+.custom-sentence-input-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.custom-sentence-submit-btn {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.custom-sentence-submit-btn:hover {
+  background: #1d4ed8;
+}
+
+/* ── AI Context Section ───────────────────────────────────── */
+.translator-context-section {
+  margin-top: 0.4rem;
+  margin-bottom: 1.75rem;
+}
+
+.ai-assisted-badge {
+  display: inline-block;
+  background: #f3e8ff;
+  color: #9333ea;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.22rem 0.68rem;
+  border-radius: 999px;
+  margin-bottom: 0.55rem;
+}
+
+.context-note-text {
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Keep This Phrase Section ─────────────────────────────── */
+.keep-phrase-section {
+  margin-top: 0.25rem;
   display: flex;
   flex-direction: column;
 }
 
-.translator-tts-btn {
-  position: absolute;
-  bottom: 0.75rem;
-  right: 0.75rem;
-  background: var(--surface-100);
+.keep-phrase-heading {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.35rem 0;
+}
+
+.keep-phrase-subtitle {
+  font-size: 0.9rem;
+  color: #475569;
+  margin: 0 0 1.25rem 0;
+  font-weight: 400;
+}
+
+.save-phrase-btn {
+  background: #1a73e8;
+  color: #ffffff;
   border: none;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
+  border-radius: 999px;
+  height: 46px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--primary);
+  gap: 0.55rem;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 10px rgba(26, 115, 232, 0.28);
+  transition: all 0.15s ease;
+  margin-bottom: 0.75rem;
 }
 
-.translator-tts-btn:hover:not(:disabled) {
-  background: var(--surface-200);
-  transform: scale(1.05);
+.save-phrase-btn:hover {
+  background: #1557b0;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(26, 115, 232, 0.36);
 }
 
-.translator-tts-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.save-phrase-btn.saved {
+  background: #10b981;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.28);
 }
 
-.translator-tts-btn.playing {
-  color: var(--primary);
-  animation: translator-pulse 1.5s infinite;
+.translate-another-btn {
+  background: #ffffff;
+  color: #1a73e8;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  height: 46px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.translate-another-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+/* ── Mobile Responsiveness ────────────────────────────────── */
+@media (max-width: 640px) {
+  .translator-drawer-container {
+    width: 100vw;
+  }
+  .instant-translator-content {
+    padding: 1.5rem 1.25rem 2rem 1.25rem;
+  }
 }
 ```
 
@@ -49304,12 +49424,19 @@ import "./TranslatorDrawer.css";
 
 const TranslatorDrawer = ({ user }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [sourceText, setSourceText] = useState("");
-  const [translatedText, setTranslatedText] = useState("");
+  const [sentence, setSentence] = useState("Maya knew she would need to adapt to a new routine.");
+  const [polishTranslation, setPolishTranslation] = useState("Maya wiedziała, że będzie musiała dostosować się do nowej rutyny.");
+  const [phrase, setPhrase] = useState("adapt to a new routine");
+  const [contextExplanation, setContextExplanation] = useState('Translations depend on context. Here, "adapt to" means "dostosować się do".');
   const [isTranslating, setIsTranslating] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isSavingVocab, setIsSavingVocab] = useState(false);
-  const [vocabSaved, setVocabSaved] = useState(false);
+  const [isPlayingEnglish, setIsPlayingEnglish] = useState(false);
+  const [isPlayingPolish, setIsPlayingPolish] = useState(false);
+  const [isSavingPhrase, setIsSavingPhrase] = useState(false);
+  const [phraseSaved, setPhraseSaved] = useState(false);
+  const [copiedSource, setCopiedSource] = useState(false);
+  const [copiedTrans, setCopiedTrans] = useState(false);
+  const [isInputMode, setIsInputMode] = useState(false);
+
   const debounceTimerRef = useRef(null);
 
   const handleOpenDrawer = () => setIsOpen(true);
@@ -49326,13 +49453,50 @@ const TranslatorDrawer = ({ user }) => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
-  const translateText = async (text) => {
-    if (!text.trim()) {
-      setTranslatedText("");
-      setIsTranslating(false);
-      return;
-    }
+  // Listen to open-instant-translator events from Workspace and other components
+  useEffect(() => {
+    const handleOpenCustom = (e) => {
+      setIsOpen(true);
+      if (e.detail) {
+        const {
+          sentence: incomingSentence,
+          sentenceTranslation: incomingSentenceTranslation,
+          phrase: incomingPhrase,
+          word: incomingWord,
+          wordTranslation: incomingWordTranslation
+        } = e.detail;
 
+        if (incomingSentence) {
+          setSentence(incomingSentence);
+          if (incomingSentenceTranslation) {
+            setPolishTranslation(incomingSentenceTranslation);
+          } else {
+            fetchTranslation(incomingSentence, incomingWord);
+          }
+        }
+
+        if (incomingPhrase) {
+          setPhrase(incomingPhrase);
+        } else if (incomingWord) {
+          setPhrase(incomingWord);
+        }
+
+        if (incomingWord && incomingWordTranslation) {
+          setContextExplanation(`Translations depend on context. Here, "${incomingWord}" means "${incomingWordTranslation}".`);
+        } else if (incomingWord) {
+          setContextExplanation(`Translations depend on context. Key expression: "${incomingWord}".`);
+        } else {
+          setContextExplanation('Translations depend on context and story tone.');
+        }
+      }
+    };
+
+    window.addEventListener("open-instant-translator", handleOpenCustom);
+    return () => window.removeEventListener("open-instant-translator", handleOpenCustom);
+  }, []);
+
+  const fetchTranslation = async (textToTranslate, wordContext) => {
+    if (!textToTranslate || !textToTranslate.trim()) return;
     setIsTranslating(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/translate`, {
@@ -49341,25 +49505,41 @@ const TranslatorDrawer = ({ user }) => {
           "Content-Type": "application/json",
           "X-Session-Token": user?.token || "",
         },
-        body: JSON.stringify({ text: text }),
+        body: JSON.stringify({
+          text: textToTranslate.trim(),
+          context: wordContext || textToTranslate.trim()
+        }),
       });
-      const data = await response.json();
-      if (data.translation) {
-        setTranslatedText(data.translation);
+      if (response.ok) {
+        const data = await response.json();
+        const resText = data.sentence_translation || data.translation || "Brak tłumaczenia.";
+        setPolishTranslation(resText);
       } else {
-        setTranslatedText("Błąd tłumaczenia.");
+        setPolishTranslation("Translation error.");
       }
     } catch (err) {
-      console.error("Błąd tłumaczenia:", err);
-      setTranslatedText("Błąd połączenia z serwerem.");
+      console.error("Instant translation error:", err);
+      setPolishTranslation("Connection error.");
     } finally {
       setIsTranslating(false);
     }
   };
 
-  const handlePlayTTS = async (textToPlay) => {
-    if (!textToPlay || isPlaying) return;
-    setIsPlaying(true);
+  const handleSentenceInputChange = (e) => {
+    const val = e.target.value;
+    setSentence(val);
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      if (val.trim()) {
+        fetchTranslation(val);
+        setPhrase(val.trim().split(" ").slice(0, 4).join(" "));
+      }
+    }, 900);
+  };
+
+  const handlePlayEnglish = async (textToPlay) => {
+    if (!textToPlay || isPlayingEnglish) return;
+    setIsPlayingEnglish(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
         method: "POST",
@@ -49369,83 +49549,102 @@ const TranslatorDrawer = ({ user }) => {
         },
         body: JSON.stringify({
           text: textToPlay,
-          voice: "en-US-BrianNeural", // Lepszy domyślny męski głos dla ang.
+          voice: "en-US-BrianNeural",
         }),
       });
-      if (!response.ok) throw new Error("TTS failed");
-      const data = await response.json();
-      if (data.audio_base64) {
-        const audio = new Audio("data:audio/mp3;base64," + data.audio_base64);
-        audio.play();
-        audio.onended = () => setIsPlaying(false);
-      } else {
-        setIsPlaying(false);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.audio_base64) {
+          const audio = new Audio("data:audio/mp3;base64," + data.audio_base64);
+          audio.play().catch(() => {});
+          audio.onended = () => setIsPlayingEnglish(false);
+          audio.onerror = () => setIsPlayingEnglish(false);
+          return;
+        }
       }
-    } catch (err) {
-      console.error("Błąd odtwarzania TTS:", err);
-      setIsPlaying(false);
+    } catch (e) {
+      console.warn("TTS API failed, falling back to Web Speech:", e);
+    }
+
+    if ("speechSynthesis" in window) {
+      const utter = new SpeechSynthesisUtterance(textToPlay);
+      utter.lang = "en-US";
+      utter.onend = () => setIsPlayingEnglish(false);
+      utter.onerror = () => setIsPlayingEnglish(false);
+      window.speechSynthesis.speak(utter);
+    } else {
+      setIsPlayingEnglish(false);
     }
   };
 
-  const handleSourceChange = (e) => {
-    const text = e.target.value;
-    setSourceText(text);
-
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    debounceTimerRef.current = setTimeout(() => {
-      translateText(text);
-    }, 800); // 800ms opóźnienia przy pisaniu
-  };
-
-  const handleClear = () => {
-    setSourceText("");
-    setTranslatedText("");
-    setVocabSaved(false);
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
+  const handlePlayPolish = (textToPlay) => {
+    if (!textToPlay || isPlayingPolish) return;
+    setIsPlayingPolish(true);
+    if ("speechSynthesis" in window) {
+      const utter = new SpeechSynthesisUtterance(textToPlay);
+      utter.lang = "pl-PL";
+      utter.onend = () => setIsPlayingPolish(false);
+      utter.onerror = () => setIsPlayingPolish(false);
+      window.speechSynthesis.speak(utter);
+    } else {
+      setIsPlayingPolish(false);
     }
   };
 
-  const handleSaveToVocabulary = async () => {
-    if (!sourceText.trim() || !translatedText.trim() || isSavingVocab || !user?.token) return;
-    setIsSavingVocab(true);
+  const handleCopy = (text, type) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    if (type === "source") {
+      setCopiedSource(true);
+      setTimeout(() => setCopiedSource(false), 2000);
+    } else {
+      setCopiedTrans(true);
+      setTimeout(() => setCopiedTrans(false), 2000);
+    }
+  };
+
+  const handleSavePhraseToVocabulary = async () => {
+    if (isSavingPhrase) return;
+    const targetWord = phrase || sentence;
+    const targetTranslation = polishTranslation;
+    if (!targetWord || !targetTranslation) return;
+
+    setIsSavingPhrase(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Session-Token": user.token,
+          "X-Session-Token": user?.token || "",
         },
         body: JSON.stringify({
-          original: sourceText.trim(),
-          translated: translatedText.trim(),
+          original: targetWord.trim(),
+          translated: targetTranslation.trim(),
+          context_sentence: sentence.trim(),
         }),
       });
       if (response.ok) {
-        setVocabSaved(true);
+        setPhraseSaved(true);
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
-        setTimeout(() => setVocabSaved(false), 3000);
+        setTimeout(() => setPhraseSaved(false), 3000);
       }
     } catch (e) {
-      console.error("Błąd zapisu do słownika:", e);
+      console.error("Error saving phrase to vocabulary:", e);
     } finally {
-      setIsSavingVocab(false);
+      setIsSavingPhrase(false);
     }
   };
 
   return (
     <>
-      {/* Przycisk wysuwający z boku, umiejscowiony pod słownikiem */}
+      {/* Floating Edge Trigger Tab (visible when drawer is closed) */}
       <button 
         className={`translator-drawer-trigger ${isOpen ? "hidden" : ""}`}
         onClick={handleOpenDrawer}
-        title="Otwórz podręczny tłumacz"
+        title="Open Instant Translator"
       >
         <div className="trigger-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
             <path d="M5 8l6 6" />
             <path d="M4 14l6-6 2-3" />
             <path d="M2 5h12" />
@@ -49454,121 +49653,206 @@ const TranslatorDrawer = ({ user }) => {
             <path d="M14 18h6" />
           </svg>
         </div>
-        <div className="trigger-label">Tłumacz</div>
+        <div className="trigger-label">Translator</div>
       </button>
 
-      {/* Główny panel (Drawer) */}
+      {/* Main Slide-out Drawer */}
       <div className={`translator-drawer-container ${isOpen ? "open" : ""}`}>
-        <div className="translator-drawer-header">
-          <h2>Podręczny Tłumacz</h2>
-          <button className="translator-drawer-close" onClick={handleCloseDrawer} title="Zamknij panel">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-
-        <div className="translator-drawer-body">
-          <div className="translator-box">
-            <div className="translator-box-header">
-              <span className="translator-lang-label">Auto (EN/PL)</span>
-              {sourceText && (
-                <button className="clear-btn" onClick={handleClear} title="Wyczyść tekst">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
-              )}
+        <div className="instant-translator-content">
+          {/* Top Header */}
+          <div className="instant-translator-header">
+            <div className="instant-translator-title-group">
+              <h2 className="instant-translator-title">Instant translator</h2>
+              <p className="instant-translator-subtitle">
+                A little clarity, without leaving your story.
+              </p>
             </div>
-            <div className="translator-input-container">
-              <textarea
-                className="translator-input"
-                placeholder="Wpisz lub wklej tekst do przetłumaczenia..."
-                value={sourceText}
-                onChange={handleSourceChange}
-              />
-              {sourceText && (
-                <button 
-                  className={`translator-tts-btn ${isPlaying ? "playing" : ""}`}
-                  onClick={() => handlePlayTTS(sourceText)}
-                  title="Odtwórz tekst"
-                  disabled={isPlaying}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                  </svg>
-                </button>
-              )}
-            </div>
+            <button 
+              className="instant-translator-close-btn"
+              onClick={handleCloseDrawer}
+              aria-label="Close translator"
+              title="Close translator"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
           </div>
 
-          <div className="translator-divider">
-            <div className="translator-divider-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                <path d="M7 11L12 16L17 11" />
-                <path d="M7 13L12 18L17 13" opacity="0.3" />
+          {/* Language Switcher */}
+          <div className="instant-translator-lang-bar">
+            <button className="lang-pill active">
+              English
+            </button>
+            <div className="lang-swap-icon" title="Swap languages">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
             </div>
+            <button className="lang-pill">
+              Polski
+            </button>
           </div>
 
-          <div className="translator-box output-box">
-            <div className="translator-box-header">
-              <span className="translator-lang-label">Tłumaczenie</span>
-              {isTranslating && <span className="translator-mini-loader">Tłumaczenie...</span>}
-            </div>
-            <div className="translator-output">
-              {translatedText ? (
-                <>
-                  <p>{translatedText}</p>
-                  {user && !isTranslating && translatedText !== "Błąd połączenia z serwerem." && translatedText !== "Błąd tłumaczenia." && (
+          {/* Card 1: SELECTED SENTENCE */}
+          <div className="translator-card-section">
+            <span className="translator-card-label">SELECTED SENTENCE</span>
+            <div className="translator-white-card">
+              {isInputMode ? (
+                <div className="custom-sentence-input-wrapper">
+                  <textarea
+                    className="custom-sentence-textarea"
+                    placeholder="Type or paste a sentence to translate..."
+                    value={sentence}
+                    onChange={handleSentenceInputChange}
+                    rows={3}
+                    autoFocus
+                  />
+                  <div className="custom-sentence-input-actions">
                     <button 
-                      className={`translator-add-vocab-btn ${vocabSaved ? "saved" : ""}`}
-                      onClick={handleSaveToVocabulary}
-                      disabled={isSavingVocab}
-                      style={{
-                        marginTop: "12px",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "8px 14px",
-                        borderRadius: "8px",
-                        border: "1px solid var(--border)",
-                        background: vocabSaved ? "rgba(16, 185, 129, 0.2)" : "rgba(139, 92, 246, 0.15)",
-                        color: vocabSaved ? "#10b981" : "#c4b5fd",
-                        fontWeight: "600",
-                        fontSize: "0.85rem",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease"
+                      className="custom-sentence-submit-btn"
+                      onClick={() => {
+                        fetchTranslation(sentence);
+                        setIsInputMode(false);
                       }}
+                      disabled={isTranslating || !sentence.trim()}
                     >
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        {vocabSaved ? (
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        ) : (
-                          <>
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                          </>
-                        )}
-                      </svg>
-                      <span>{vocabSaved ? "Zapisano w słowniku!" : isSavingVocab ? "Zapisywanie..." : "Dodaj do słownika"}</span>
+                      {isTranslating ? "Translating..." : "Done"}
                     </button>
-                  )}
-                </>
+                  </div>
+                </div>
               ) : (
-                <p className="translator-placeholder-text">Tłumaczenie pojawi się tutaj.</p>
+                <p className="sentence-text">
+                  {sentence || "Maya knew she would need to adapt to a new routine."}
+                </p>
               )}
+
+              <div className="card-actions-row">
+                <button 
+                  className={`card-action-icon-btn ${isPlayingEnglish ? 'playing' : ''}`}
+                  onClick={() => handlePlayEnglish(sentence)}
+                  title="Listen to English sentence"
+                  disabled={isPlayingEnglish}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </svg>
+                </button>
+                <button 
+                  className="card-action-icon-btn"
+                  onClick={() => handleCopy(sentence, "source")}
+                  title={copiedSource ? "Copied!" : "Copy sentence"}
+                >
+                  {copiedSource ? (
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
+          </div>
+
+          {/* Card 2: POLISH TRANSLATION */}
+          <div className="translator-card-section">
+            <span className="translator-card-label translation-label">POLISH TRANSLATION</span>
+            <div className="translator-white-card">
+              {isTranslating ? (
+                <div className="translation-loading-placeholder">
+                  <span className="translation-mini-spinner" />
+                  <span>Translating with AI...</span>
+                </div>
+              ) : (
+                <p className="translation-bold-text">
+                  {polishTranslation || "Maya wiedziała, że będzie musiała dostosować się do nowej rutyny."}
+                </p>
+              )}
+
+              <div className="card-actions-row">
+                <button 
+                  className={`card-action-icon-btn ${isPlayingPolish ? 'playing' : ''}`}
+                  onClick={() => handlePlayPolish(polishTranslation)}
+                  title="Posłuchaj wymowy po polsku"
+                  disabled={isPlayingPolish}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </svg>
+                </button>
+                <button 
+                  className="card-action-icon-btn"
+                  onClick={() => handleCopy(polishTranslation, "trans")}
+                  title={copiedTrans ? "Skopiowano!" : "Kopiuj tłumaczenie"}
+                >
+                  {copiedTrans ? (
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* AI-assisted translation Badge & Context Note */}
+          <div className="translator-context-section">
+            <span className="ai-assisted-badge">AI-assisted translation</span>
+            <p className="context-note-text">
+              {contextExplanation}
+            </p>
+          </div>
+
+          {/* Section: Keep this phrase */}
+          <div className="keep-phrase-section">
+            <h3 className="keep-phrase-heading">Keep this phrase</h3>
+            <p className="keep-phrase-subtitle">
+              {phrase || "adapt to a new routine"}
+            </p>
+
+            <button 
+              className={`save-phrase-btn ${phraseSaved ? "saved" : ""}`}
+              onClick={handleSavePhraseToVocabulary}
+              disabled={isSavingPhrase}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                {phraseSaved ? (
+                  <polyline points="20 6 9 17 4 12" />
+                ) : (
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                )}
+              </svg>
+              <span>{phraseSaved ? "Saved to vocabulary!" : "Save phrase to vocabulary"}</span>
+            </button>
+
+            <button 
+              className="translate-another-btn"
+              onClick={() => setIsInputMode(prev => !prev)}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />
+              </svg>
+              <span>{isInputMode ? "Cancel edit" : "Translate another sentence"}</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Nakładka przyciemniająca tło (opcjonalna, zależy czy chcemy blokować ekran) */}
+      {/* Backdrop overlay */}
       {isOpen && (
-        <div className="translator-drawer-overlay" onClick={handleCloseDrawer}></div>
+        <div className="translator-drawer-overlay" onClick={handleCloseDrawer} />
       )}
     </>
   );
@@ -57258,6 +57542,7 @@ function Workspace({
       level: meta.level || "B2",
       pl: meta.pl || "Wczytuję...",
       enDef: meta.enDef || "",
+      sentence: sentenceContext,
       sentenceTranslation: "",
       paragraphIndex: pIdx
     };
@@ -57828,8 +58113,18 @@ function Workspace({
           </button>
 
           <button
-            className={`inline-trans-sentence-btn ${showInlineSentenceTrans ? "active" : ""}`}
-            onClick={() => setShowInlineSentenceTrans(!showInlineSentenceTrans)}
+            className="inline-trans-sentence-btn"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('open-instant-translator', {
+                detail: {
+                  sentence: inlineWordData.sentence || "Maya knew she would need to adapt to a new routine.",
+                  sentenceTranslation: inlineWordData.sentenceTranslation,
+                  phrase: inlineWordData.word ? `${inlineWordData.word} to a new routine` : "adapt to a new routine",
+                  word: inlineWordData.word,
+                  wordTranslation: inlineWordData.pl
+                }
+              }));
+            }}
           >
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />
@@ -57837,12 +58132,6 @@ function Workspace({
             <span>Translate sentence</span>
           </button>
         </div>
-
-        {showInlineSentenceTrans && (
-          <div className="inline-sentence-translation-box">
-            {inlineWordData.sentenceTranslation || "Tłumaczenie zdania: wczytywanie..."}
-          </div>
-        )}
       </div>
     );
   };
@@ -58219,8 +58508,18 @@ function Workspace({
                 </button>
 
                 <button
-                  className={`toolbar-pill-btn ${showFullTranslation ? "active" : ""}`}
-                  onClick={handleToggleFullTranslation}
+                  className="toolbar-pill-btn"
+                  onClick={() => {
+                    const activeSentence = (textChunks && textChunks[currentChunkIndex]) || (generatedText ? generatedText.split(/[.!?]+/)[0] + "." : "") || "Maya knew she would need to adapt to a new routine.";
+                    window.dispatchEvent(new CustomEvent('open-instant-translator', {
+                      detail: {
+                        sentence: activeSentence.trim(),
+                        phrase: inlineWordData ? inlineWordData.word : "adapt to a new routine",
+                        word: inlineWordData ? inlineWordData.word : "adapt",
+                        wordTranslation: inlineWordData ? inlineWordData.pl : "dostosować się"
+                      }
+                    }));
+                  }}
                 >
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />

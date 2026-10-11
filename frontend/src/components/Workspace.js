@@ -1831,6 +1831,7 @@ function Workspace({
       level: meta.level || "B2",
       pl: meta.pl || "Wczytuję...",
       enDef: meta.enDef || "",
+      sentence: sentenceContext,
       sentenceTranslation: "",
       paragraphIndex: pIdx
     };
@@ -2401,8 +2402,18 @@ function Workspace({
           </button>
 
           <button
-            className={`inline-trans-sentence-btn ${showInlineSentenceTrans ? "active" : ""}`}
-            onClick={() => setShowInlineSentenceTrans(!showInlineSentenceTrans)}
+            className="inline-trans-sentence-btn"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('open-instant-translator', {
+                detail: {
+                  sentence: inlineWordData.sentence || "Maya knew she would need to adapt to a new routine.",
+                  sentenceTranslation: inlineWordData.sentenceTranslation,
+                  phrase: inlineWordData.word ? `${inlineWordData.word} to a new routine` : "adapt to a new routine",
+                  word: inlineWordData.word,
+                  wordTranslation: inlineWordData.pl
+                }
+              }));
+            }}
           >
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />
@@ -2410,12 +2421,6 @@ function Workspace({
             <span>Translate sentence</span>
           </button>
         </div>
-
-        {showInlineSentenceTrans && (
-          <div className="inline-sentence-translation-box">
-            {inlineWordData.sentenceTranslation || "Tłumaczenie zdania: wczytywanie..."}
-          </div>
-        )}
       </div>
     );
   };
@@ -2792,8 +2797,18 @@ function Workspace({
                 </button>
 
                 <button
-                  className={`toolbar-pill-btn ${showFullTranslation ? "active" : ""}`}
-                  onClick={handleToggleFullTranslation}
+                  className="toolbar-pill-btn"
+                  onClick={() => {
+                    const activeSentence = (textChunks && textChunks[currentChunkIndex]) || (generatedText ? generatedText.split(/[.!?]+/)[0] + "." : "") || "Maya knew she would need to adapt to a new routine.";
+                    window.dispatchEvent(new CustomEvent('open-instant-translator', {
+                      detail: {
+                        sentence: activeSentence.trim(),
+                        phrase: inlineWordData ? inlineWordData.word : "adapt to a new routine",
+                        word: inlineWordData ? inlineWordData.word : "adapt",
+                        wordTranslation: inlineWordData ? inlineWordData.pl : "dostosować się"
+                      }
+                    }));
+                  }}
                 >
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />
