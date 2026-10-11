@@ -770,6 +770,17 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
                 }
               }}
             >
+              {/* Multi-part story circle badge (on the edge of story-figma-card) */}
+              {story.totalParts > 1 && (
+                <div
+                  className="card-parts-circle"
+                  title={`Opowiadanie wieloczęściowe: ${story.totalParts} części`}
+                  aria-label={`Opowiadanie wieloczęściowe: ${story.totalParts} części`}
+                >
+                  <span>{story.totalParts}</span>
+                </div>
+              )}
+
               {/* Cover Image */}
               <div className="card-cover-wrapper">
                 <img
@@ -781,17 +792,6 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
                     e.currentTarget.src = getNextSceneImage(story.title, story.text, story.coverImage, 2);
                   }}
                 />
-
-                {/* Multi-part story circle badge */}
-                {story.totalParts > 1 && (
-                  <div
-                    className="card-parts-circle"
-                    title={`Opowiadanie wieloczęściowe: ${story.totalParts} części`}
-                    aria-label={`Opowiadanie wieloczęściowe: ${story.totalParts} części`}
-                  >
-                    <span>{story.totalParts}</span>
-                  </div>
-                )}
 
                 {regeneratingImageIds.has(story.id) && (
                   <div
