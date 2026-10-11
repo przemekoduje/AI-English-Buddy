@@ -995,9 +995,37 @@
   margin: 0 1px;
 }
 
-.reader-word.reading-now {
-  background: rgba(219, 234, 254, 0.5);
-  border-radius: 4px;
+/* ── STORY SENTENCE & TTS HIGHLIGHTING ── */
+.story-sentence {
+  display: inline;
+  border-radius: 6px;
+  padding: 2px 4px;
+  margin: 0 1px;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.story-sentence.reading-now {
+  background-color: #fed7aa !important; /* Ciepłe, wyraźne pomarańczowe tło całego zdania */
+  color: #7c2d12 !important; /* Ciemny kontrastowy tekst o ciepłym odcieniu */
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.35);
+  border-radius: 6px;
+}
+
+.story-sentence.reading-now .reader-word {
+  color: inherit;
+}
+
+.story-sentence.reading-now .reader-word:hover {
+  background: rgba(249, 115, 22, 0.22);
+  color: #7c2d12;
+}
+
+.story-sentence.reading-now .reader-word.selected-pill {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
 }
 
 /* ── INLINE WORD DETAIL CARD ── */

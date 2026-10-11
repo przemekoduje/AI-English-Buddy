@@ -1964,6 +1964,59 @@ function Workspace({
     return raw;
   }, [generatedText]);
 
+  // Map each paragraph to its constituent sentence chunks with exact textChunks indices
+  const paragraphSentences = useMemo(() => {
+    if (!paragraphs || paragraphs.length === 0) return [];
+    if (!textChunks || textChunks.length === 0) {
+      return paragraphs.map(p => [{ chunkIndex: -1, text: p }]);
+    }
+
+    let chunkCursor = 0;
+    return paragraphs.map((pText) => {
+      const list = [];
+      let remaining = pText;
+
+      while (remaining && chunkCursor < textChunks.length) {
+        const nextChunk = textChunks[chunkCursor];
+        const trimmedChunk = nextChunk.trim();
+        const foundIdx = remaining.indexOf(trimmedChunk);
+
+        if (foundIdx !== -1) {
+          if (foundIdx > 0) {
+            const before = remaining.substring(0, foundIdx).trim();
+            if (before) {
+              list.push({ chunkIndex: -1, text: before });
+            }
+          }
+          list.push({
+            chunkIndex: chunkCursor,
+            text: trimmedChunk
+          });
+          remaining = remaining.substring(foundIdx + trimmedChunk.length).trim();
+          chunkCursor++;
+        } else {
+          break;
+        }
+      }
+
+      if (remaining && remaining.trim()) {
+        list.push({ chunkIndex: -1, text: remaining.trim() });
+      }
+
+      return list;
+    });
+  }, [paragraphs, textChunks]);
+
+  // Auto-scroll currently read sentence into view
+  useEffect(() => {
+    if (currentChunkIndex !== -1 && isSpeaking && !isPaused) {
+      const activeEl = document.querySelector(".story-sentence.reading-now");
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, [currentChunkIndex, isSpeaking, isPaused]);
+
   const storyLevel = useMemo(() => {
     if (!generatedText) return "B2";
     return calculateCEFRLevel(generatedText, currentStoryTitle) || "B2";
@@ -2169,28 +2222,41 @@ function Workspace({
   };
 
   const renderParagraphTokens = (pText, pIdx) => {
-    const tokens = pText.split(/([\w\u00C0-\u017F'-]+)/g);
-    return tokens.map((token, tIdx) => {
-      const isWord = /[\w\u00C0-\u017F'-]+/.test(token);
-      if (!isWord) {
-        return <span key={tIdx}>{token}</span>;
-      }
-      const cleanWord = token.toLowerCase();
-      const isSelected = inlineWordData && inlineWordData.word.toLowerCase() === cleanWord && inlineWordData.paragraphIndex === pIdx;
-      
-      const isSentenceReading = isSpeaking && !isPaused && currentChunkIndex >= 0 && textChunks[currentChunkIndex] && textChunks[currentChunkIndex].includes(token);
+    const sents = (paragraphSentences && paragraphSentences[pIdx]) ? paragraphSentences[pIdx] : [{ chunkIndex: -1, text: pText }];
+    return sents.map((sentence, sIdx) => {
+      const isCurrentReading = isSpeaking && !isPaused && currentChunkIndex >= 0 && sentence.chunkIndex === currentChunkIndex;
+      const tokens = sentence.text.split(/([\w\u00C0-\u017F'-]+)/g);
 
       return (
-        <span
-          key={tIdx}
-          className={`reader-word ${isSelected ? "selected-pill" : ""} ${isSentenceReading ? "reading-now" : ""}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleFigmaWordClick(token, pIdx, pText);
-          }}
-        >
-          {token}
-        </span>
+        <React.Fragment key={sentence.chunkIndex >= 0 ? `chunk-${sentence.chunkIndex}` : `p-${pIdx}-s-${sIdx}`}>
+          <span
+            className={`story-sentence ${isCurrentReading ? "reading-now" : ""}`}
+            data-chunk-index={sentence.chunkIndex}
+          >
+            {tokens.map((token, tIdx) => {
+              const isWord = /[\w\u00C0-\u017F'-]+/.test(token);
+              if (!isWord) {
+                return <span key={tIdx}>{token}</span>;
+              }
+              const cleanWord = token.toLowerCase();
+              const isSelected = inlineWordData && inlineWordData.word.toLowerCase() === cleanWord && inlineWordData.paragraphIndex === pIdx;
+
+              return (
+                <span
+                  key={tIdx}
+                  className={`reader-word ${isSelected ? "selected-pill" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFigmaWordClick(token, pIdx, sentence.text);
+                  }}
+                >
+                  {token}
+                </span>
+              );
+            })}
+          </span>
+          {sIdx < sents.length - 1 ? " " : ""}
+        </React.Fragment>
       );
     });
   };
