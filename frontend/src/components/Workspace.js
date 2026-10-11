@@ -173,8 +173,9 @@ function Workspace({
   const [genPhaseLabel, setGenPhaseLabel] = useState("");
   const progressTimersRef = useRef([]);
 
-  // Reading progress tracking
+  // Reading progress tracking (narrator sentence counting)
   const [readingProgress, setReadingProgress] = useState(0);
+  const [readSentenceIndices, setReadSentenceIndices] = useState(new Set());
   const progressDebounceTimerRef = useRef(null);
   
   // States for word translation tooltip
@@ -389,45 +390,67 @@ function Workspace({
     }, 1200);
   }, [user]);
 
-  // Load initial progress on story change
+  // Load initial progress and read sentences strictly on story / textChunks change
   useEffect(() => {
     if (!currentStoryId) {
       setReadingProgress(0);
+      setReadSentenceIndices(new Set());
       return;
     }
+
+    let initialSet = new Set();
+    try {
+      const saved = localStorage.getItem(`buddy_story_read_sentences_${currentStoryId}`);
+      if (saved) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) {
+          initialSet = new Set(arr);
+        }
+      }
+    } catch (e) {}
+
+    let initialProgress = 0;
     try {
       const cached = localStorage.getItem(`buddy_story_progress_${currentStoryId}`);
       if (cached !== null) {
-        setReadingProgress(parseInt(cached, 10) || 0);
+        initialProgress = parseInt(cached, 10) || 0;
       }
     } catch (e) {}
-  }, [currentStoryId]);
 
-  // Audio reading progress tracking
-  useEffect(() => {
-    if (!currentStoryId || !textChunks || textChunks.length === 0) return;
-    if (currentChunkIndex >= 0) {
-      const audioPercent = Math.round(((currentChunkIndex + 1) / textChunks.length) * 100);
-      setReadingProgress(prev => {
-        const next = Math.max(prev, audioPercent);
-        if (next !== prev) {
-          syncProgressDebounced(currentStoryId, next);
-        }
-        return next;
-      });
-    }
-  }, [currentChunkIndex, textChunks, currentStoryId, syncProgressDebounced]);
-
-  const handleReadingProgressChange = useCallback((newPercent) => {
-    if (!currentStoryId) return;
-    setReadingProgress(prev => {
-      const next = Math.max(prev, newPercent);
-      if (next !== prev) {
-        syncProgressDebounced(currentStoryId, next);
+    if (initialSet.size === 0 && initialProgress > 0 && textChunks && textChunks.length > 0) {
+      const count = Math.min(textChunks.length, Math.round((initialProgress / 100) * textChunks.length));
+      for (let i = 0; i < count; i++) {
+        initialSet.add(i);
       }
+    }
+
+    setReadSentenceIndices(initialSet);
+
+    const total = textChunks && textChunks.length > 0 ? textChunks.length : 0;
+    const calculated = total > 0 ? Math.min(100, Math.round((initialSet.size / total) * 100)) : initialProgress;
+    setReadingProgress(calculated);
+  }, [currentStoryId, textChunks]);
+
+  const markSentenceAsRead = useCallback((index) => {
+    if (!currentStoryId || !textChunks || textChunks.length === 0) return;
+    setReadSentenceIndices(prev => {
+      const next = new Set(prev);
+      next.add(index);
+      
+      const total = textChunks.length;
+      const count = next.size;
+      const calculated = Math.min(100, Math.round((count / total) * 100));
+      
+      setReadingProgress(calculated);
+      try {
+        localStorage.setItem(`buddy_story_read_sentences_${currentStoryId}`, JSON.stringify(Array.from(next)));
+        localStorage.setItem(`buddy_story_progress_${currentStoryId}`, calculated);
+      } catch (e) {}
+      
+      syncProgressDebounced(currentStoryId, calculated);
       return next;
     });
-  }, [currentStoryId, syncProgressDebounced]);
+  }, [currentStoryId, textChunks, syncProgressDebounced]);
 
   const handleSelectPart = (index) => {
     handleStop();
@@ -1004,6 +1027,8 @@ function Workspace({
     if (index >= textChunks.length) {
       isChunkFetchingRef.current = false;
       handleStop();
+      setReadingProgress(100);
+      syncProgressDebounced(currentStoryId, 100);
       return;
     }
 
@@ -1015,6 +1040,9 @@ function Workspace({
     setIsPaused(false);
     isPausedRef.current = false;
     setPlaySingle(single);
+
+    // Zlicz zdanie czytane przez lektora
+    markSentenceAsRead(index);
 
     setActivityLog(prev => [
       ...prev,
@@ -1055,6 +1083,17 @@ function Workspace({
       audio.onended = () => {
         if (!globalAudioManager.isValid(requestId)) return;
         globalAudioManager.release(requestId);
+        markSentenceAsRead(index);
+
+        if (index === textChunks.length - 1) {
+          // Lektor ukończył ostatnie zdanie tekstu -> 100%
+          setReadingProgress(100);
+          syncProgressDebounced(currentStoryId, 100);
+          try {
+            localStorage.setItem(`buddy_story_progress_${currentStoryId}`, 100);
+          } catch (e) {}
+        }
+
         if (single) {
           handleStop();
         } else {
@@ -2058,9 +2097,9 @@ function Workspace({
             showVoiceControls={showVoiceControls}
             onWordClick={handleWordClick}
             activeWordId={activeWordId}
-            user={user}
-            storyProgress={currentStoryId ? readingProgress : undefined}
-            onProgressChange={currentStoryId ? handleReadingProgressChange : undefined}
+            storyProgress={currentStoryId ? readingProgress : 0}
+            readSentenceCount={currentStoryId ? readSentenceIndices.size : 0}
+            totalSentences={textChunks.length}
           />
         )}
       </main>

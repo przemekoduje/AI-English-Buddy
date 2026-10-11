@@ -158,6 +158,9 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
 
     try {
       localStorage.setItem(`buddy_story_progress_${storyId}`, clamped);
+      if (clamped === 0) {
+        localStorage.removeItem(`buddy_story_read_sentences_${storyId}`);
+      }
     } catch (err) {}
 
     try {
