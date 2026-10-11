@@ -514,6 +514,14 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
 
   // Helper calculations per story
   const enrichedStories = useMemo(() => {
+    // Mapowanie dzieci wg parent_id, aby poznać liczbę części dla każdej historii
+    const childCounts = {};
+    stories.forEach(s => {
+      if (s.parent_id) {
+        childCounts[s.parent_id] = (childCounts[s.parent_id] || 0) + 1;
+      }
+    });
+
     return stories
       .filter(s => !s.parent_id)
       .map((story, index) => {
@@ -567,6 +575,15 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
         }
         const isBookmarked = bookmarkedIds.includes(story.id);
 
+        // Ilość części w opowieści wieloczęściowej
+        const directChildren = childCounts[story.id] || 0;
+        const totalParts = Math.max(
+          1,
+          story.parts_count ||
+          (Array.isArray(story.parts) ? story.parts.length : 0) ||
+          (1 + directChildren)
+        );
+
         return {
           ...story,
           words,
@@ -575,7 +592,8 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
           level,
           category,
           coverImage,
-          isBookmarked
+          isBookmarked,
+          totalParts
         };
       });
   }, [stories, bookmarkedIds]);
@@ -763,6 +781,17 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
                     e.currentTarget.src = getNextSceneImage(story.title, story.text, story.coverImage, 2);
                   }}
                 />
+
+                {/* Multi-part story circle badge */}
+                {story.totalParts > 1 && (
+                  <div
+                    className="card-parts-circle"
+                    title={`Opowiadanie wieloczęściowe: ${story.totalParts} części`}
+                    aria-label={`Opowiadanie wieloczęściowe: ${story.totalParts} części`}
+                  >
+                    <span>{story.totalParts}</span>
+                  </div>
+                )}
 
                 {regeneratingImageIds.has(story.id) && (
                   <div
