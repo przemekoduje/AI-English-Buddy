@@ -441,12 +441,22 @@ function Workspace({
       });
       if (response.ok) {
         const data = await response.json();
-        setNotebookWords(data);
+        setNotebookWords(Array.isArray(data) ? data : []);
+      } else {
+        setNotebookWords([]);
       }
     } catch (err) {
       console.error("Błąd podczas ładowania słownika:", err);
+      setNotebookWords([]);
     }
   }, [user, currentStoryId]);
+
+  useEffect(() => {
+    setDismissedStoryWords(new Set());
+    if (!currentStoryId) {
+      setNotebookWords([]);
+    }
+  }, [currentStoryId, generatedText]);
 
   useEffect(() => {
     loadVocabulary();
@@ -2168,22 +2178,7 @@ function Workspace({
     }
   };
 
-  // Auto-init inline card on 'adapt' when Maya's story is loaded
-  useEffect(() => {
-    if (activeStoryText && activeStoryText.includes("Maya knew she would need to adapt")) {
-      const meta = VOCABULARY_INFO.adapt;
-      setInlineWordData({
-        word: "adapt",
-        phonetic: meta.phonetic,
-        pos: meta.pos,
-        level: meta.level,
-        pl: meta.pl,
-        enDef: meta.enDef,
-        sentenceTranslation: "Maya wiedziała, że będzie musiała dostosować się do nowej rutyny.",
-        paragraphIndex: 1
-      });
-    }
-  }, [activeStoryText]);
+  // Inicjalizacja podziału tekstu na akapity
 
   const paragraphs = useMemo(() => {
     if (!activeStoryText) return [];
@@ -2302,53 +2297,32 @@ function Workspace({
   };
 
   const keyStoryWords = useMemo(() => {
-    if (!activeStoryText) return [];
+    // Podręczne słownictwo czytanki: wyłącznie słowa zapisane przez użytkownika w tej czytance
+    if (!activeStoryText || !notebookWords || notebookWords.length === 0) return [];
+
     const textLower = activeStoryText.toLowerCase();
     const matched = [];
-    const targetWords = ["adapt", "supportive", "clarify", "routine", "confidence", "curious", "unfamiliar", "progress", "beginning"];
-
-    for (const w of targetWords) {
-      if (dismissedStoryWords.has(w.toLowerCase())) continue;
-      const regex = new RegExp(`\\b${w}\\b`, "i");
-      if (regex.test(textLower)) {
-        const info = VOCABULARY_INFO[w] || getWordMeta(w);
-        matched.push({
-          word: w,
-          translation: info.pl || "",
-          pos: info.pos || "word",
-          level: info.level || "B2"
-        });
-      }
-    }
 
     for (const nw of notebookWords) {
-      const w = (nw.original || nw.word || "").toLowerCase();
-      if (dismissedStoryWords.has(w)) continue;
-      if (w && textLower.includes(w) && !matched.some(m => m.word.toLowerCase() === w)) {
-        const info = getWordMeta(w);
+      const w = (nw.original || nw.word || "").trim();
+      const wLower = w.toLowerCase();
+      if (!wLower || dismissedStoryWords.has(wLower)) continue;
+
+      // Sprawdź czy słowo występuje w tekście czytanki
+      const regex = new RegExp(`\\b${wLower}\\b`, "i");
+      if (regex.test(textLower) && !matched.some(m => m.word.toLowerCase() === wLower)) {
+        const info = VOCABULARY_INFO[wLower] || getWordMeta(w);
         matched.push({
-          word: nw.original || nw.word,
+          word: w,
           translation: nw.translated || nw.translation || info.pl || "",
-          pos: info.pos || "word",
-          level: info.level || "B2"
+          pos: nw.pos || info.pos || "word",
+          level: nw.level || info.level || "B2"
         });
       }
     }
 
-    if (matched.length === 0) {
-      const fallbackList = [
-        { word: "adapt", translation: "dostosować się", pos: "verb", level: "B2" },
-        { word: "supportive", translation: "wspierający", pos: "adjective", level: "B2" },
-        { word: "clarify", translation: "wyjaśnić", pos: "verb", level: "B2" }
-      ];
-      for (const item of fallbackList) {
-        if (!dismissedStoryWords.has(item.word.toLowerCase())) {
-          matched.push(item);
-        }
-      }
-    }
-    return matched.slice(0, 5);
-  }, [generatedText, notebookWords, dismissedStoryWords]);
+    return matched;
+  }, [activeStoryText, notebookWords, dismissedStoryWords]);
 
   const effectivePracticeWords = useMemo(() => {
     if (notebookWords && notebookWords.length > 0) {
@@ -3200,59 +3174,72 @@ function Workspace({
               <div className="story-words-card">
                 <div className="story-words-header">
                   <h3>Words in this story</h3>
-                  <span className="story-words-count-badge">
+                  <span className={`story-words-count-badge ${keyStoryWords.length === 0 ? 'empty' : ''}`}>
                     {keyStoryWords.length}
                   </span>
                 </div>
 
                 <div className="story-words-list">
-                  {keyStoryWords.map((item, idx) => {
-                    const meta = getWordMeta(item.word);
-                    const pos = item.pos || meta.pos || "word";
-                    const level = item.level || meta.level || "B2";
-                    const translation = item.translation || meta.pl || "";
+                  {keyStoryWords.length === 0 ? (
+                    <div className="story-words-empty">
+                      <div className="story-words-empty-icon">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                        </svg>
+                      </div>
+                      <div className="story-words-empty-title">Brak zapisanych słówek</div>
+                      <div className="story-words-empty-sub">Kliknij dowolne słowo w tekście, aby poznać znaczenie i dodać je do podręcznego słownika.</div>
+                    </div>
+                  ) : (
+                    keyStoryWords.map((item, idx) => {
+                      const meta = getWordMeta(item.word);
+                      const pos = item.pos || meta.pos || "word";
+                      const level = item.level || meta.level || "B2";
+                      const translation = item.translation || meta.pl || "";
 
-                    return (
-                      <div key={item.word || idx} className="story-word-item">
-                        <div className="story-word-item-top">
-                          <span
-                            className="story-word-name"
-                            onClick={() => handleSpeakWord(item.word)}
-                            title="Kliknij, aby posłuchać wymowy"
-                          >
-                            {item.word}
-                          </span>
-                          <div className="story-word-item-actions">
-                            <button
-                              className="story-word-speaker-btn"
+                      return (
+                        <div key={item.word || idx} className="story-word-item">
+                          <div className="story-word-item-top">
+                            <span
+                              className="story-word-name"
                               onClick={() => handleSpeakWord(item.word)}
-                              title="Posłuchaj wymowy"
+                              title="Kliknij, aby posłuchać wymowy"
                             >
-                              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                              </svg>
-                            </button>
-                            <button
-                              className="story-word-delete-btn"
-                              onClick={() => handleDeleteStoryWord(item.word)}
-                              title="Usuń słowo z listy"
-                            >
-                              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="3 6 5 6 21 6" />
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                <line x1="10" y1="11" x2="10" y2="17" />
-                                <line x1="14" y1="11" x2="14" y2="17" />
-                              </svg>
-                            </button>
+                              {item.word}
+                            </span>
+                            <div className="story-word-item-actions">
+                              <button
+                                className="story-word-speaker-btn"
+                                onClick={() => handleSpeakWord(item.word)}
+                                title="Posłuchaj wymowy"
+                              >
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                </svg>
+                              </button>
+                              <button
+                                className="story-word-delete-btn"
+                                onClick={() => handleDeleteStoryWord(item.word)}
+                                title="Usuń słowo z listy"
+                              >
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6" />
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                  <line x1="10" y1="11" x2="10" y2="17" />
+                                  <line x1="14" y1="11" x2="14" y2="17" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                          <div className="story-word-item-sub">
+                            <span>{translation ? `${translation} · ` : ""}{pos} · {level}</span>
                           </div>
                         </div>
-                        <div className="story-word-item-sub">
-                          <span>{translation ? `${translation} · ` : ""}{pos} · {level}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
 
                 <button
