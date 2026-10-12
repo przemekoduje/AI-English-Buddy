@@ -1,5 +1,5 @@
 # Speakling — Kompletny Moduł Subskrypcji, Paywalla i Limitów AI
-Wygenerowano: 2026-10-11 22:17:22
+Wygenerowano: 2026-10-12 19:35:57
 > Dedykowany, lekki pakiet kodu dla zewnętrznych modeli AI (ChatGPT, Claude, DeepSeek). Zawiera 100% logiki subskrypcji, Stripe, limitów minut Gemini Live i blokad paywalla bez obcinania.
 
 ## Spis Zawartości Pakietu
@@ -577,6 +577,7 @@ def stripe_webhook():
 # 2. BRAMKA PAYWALLA W MODULE MEDIA BUDDY (YouTube)
 # (Z pliku backend/app.py: /api/media/transcript)
 # ========================================================
+            elif len(parts) == 3:
                 return parts[0] * 3600 + parts[1] * 60 + parts[2]
         except Exception:
             pass
@@ -592,7 +593,6 @@ def stripe_webhook():
             ts = ts_to_secs(line)
             text_parts = []
             i += 1
-            while i < len(lines) and not re.match(ts_regex, lines[i]):
 
 ... (dalsza część pobierania napisów)
 
@@ -600,6 +600,7 @@ def stripe_webhook():
 # 3. BRAMKA PAYWALLA W MODULE MASTERY PATH (3 kroki)
 # (Z pliku backend/app.py: /api/mastery-prepare)
 # ========================================================
+        2. Wybierz *jedno* reprezentatywne zdanie z tekstu, które ją zawiera.
         3. Opisz krótko i jasno, czym jest ta struktura/czas i w jakich sytuacjach się jej używa, jakbyś tłumaczył to uczącej się osobie.
 
         Formatuj odpowiedź jako listę JSON, gdzie każdy element to obiekt z kluczami 'title', 'example_sentence', 'explanation'.
@@ -611,7 +612,6 @@ def stripe_webhook():
         [
           {{
             "title": "Przykład Tytułu Gramatycznego",
-            "example_sentence": "Przykład zdania z tekstu.",
 
 ... (dalsza część przygotowania etapów treningu)
 
@@ -619,6 +619,7 @@ def stripe_webhook():
 # 4. WYMUSZENIE DARMOWEGO EDGE TTS DLA PLANU STARTER
 # (Z pliku backend/app.py: generate_tts_base64)
 # ========================================================
+        tts = gTTS(text=text_to_speak, lang=lang)
         tts.write_to_fp(fp)
         return fp.getvalue()
     except Exception as e_gtts:
@@ -632,7 +633,6 @@ def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
             is_pl = ('pl-PL' in voice_name or 'Marek' in voice_name or 'Zofia' in voice_name)
             gcp_voice_name = "pl-PL-Wavenet-B" if is_pl else "en-US-Neural2-D"
             lang_code = "pl-PL" if is_pl else "en-US"
-            
 
 ...
 
@@ -640,6 +640,25 @@ def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
 # 5. TWARDY LIMIT MINUT DLA GEMINI LIVE ORB (KOD 403)
 # (Z pliku backend/app.py: /api/live/token)
 # ========================================================
+    if prompt_tokens == 0 and completion_tokens == 0 and duration_seconds > 0:
+        prompt_tokens = int(duration_seconds * 16)
+        completion_tokens = int(duration_seconds * 20)
+
+    log_api_usage(
+        user_email=user_email,
+        service=service,
+        feature="gemini_live_session",
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        quantity=duration_seconds
+    )
+
+    # Aktualizacja zużytych minut w subskrypcji użytkownika
+    if duration_seconds > 0 and user_email:
+        added_minutes = duration_seconds / 60.0
+        sub = get_user_subscription(user_email)
+        new_used = round(sub.get("live_minutes_used", 0.0) + added_minutes, 2)
         update_user_subscription(user_email, {"live_minutes_used": new_used})
         updated_sub = get_user_subscription(user_email)
     else:
@@ -648,25 +667,6 @@ def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
     return jsonify({
         "success": True,
         "service": service,
-        "model": model,
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "duration_seconds": duration_seconds,
-        "minutes_used": updated_sub.get("live_minutes_used", 0),
-        "minutes_remaining": updated_sub.get("minutes_remaining", 0),
-        "quota_exceeded": updated_sub.get("minutes_remaining", 0) <= 0
-    }), 200
-
-
-@app.route("/api/live/save-key", methods=['POST'])
-def save_live_key():
-    """Zapisuje podany przez użytkownika klucz GEMINI_API_KEY do pliku .env i do pamięci procesu."""
-    global GEMINI_API_KEY
-    user_email = get_user_from_request()
-    if not user_email:
-        return jsonify({"error": "Brak autoryzacji"}), 401
-
-    req_data = request.get_json(silent=True) or {}
 
 
 ```
@@ -2955,15 +2955,103 @@ export class GeminiLiveClient {
 ## 5. Plik: `frontend/src/components/TopBar.js`
 
 ```javascript
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './TopBar.css';
+import { API_BASE_URL } from '../config';
 
-const TopBar = ({ title, user, subscription, onOpenPaywall }) => {
-  const userName = user?.name || (user?.email ? user.email.split('@')[0] : 'Anna Kowalska');
+const AVAILABLE_NARRATORS = [
+  { id: 'en-US-BrianNeural', name: 'Brian (US — Natural)' },
+  { id: 'en-US-GuyNeural', name: 'Guy (US — Warm)' },
+  { id: 'en-US-ChristopherNeural', name: 'Christopher (US — Radio)' },
+  { id: 'en-US-JennyNeural', name: 'Jenny (US — Friendly)' },
+  { id: 'en-US-AriaNeural', name: 'Aria (US — Expressive)' },
+  { id: 'en-GB-RyanNeural', name: 'Ryan (UK — British)' },
+  { id: 'en-GB-SoniaNeural', name: 'Sonia (UK — British)' },
+];
+
+const TopBar = ({ 
+  title, 
+  user, 
+  subscription, 
+  onOpenPaywall,
+  selectedVoice = 'en-US-BrianNeural',
+  onVoiceChange,
+  onLogout
+}) => {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const dropdownRef = useRef(null);
+  const previewAudioRef = useRef(null);
+
+  const userName = user?.name || user?.full_name || (user?.email ? user.email.split('@')[0] : 'Użytkownik');
+  const userEmail = user?.email || '';
+  const userPhoto = user?.photoURL || user?.avatar_url || (typeof user?.picture === 'string' ? user?.picture : user?.picture?.data?.url) || user?.photo_url || null;
+  const avatarUrl = userPhoto || (userEmail ? `https://unavatar.io/${encodeURIComponent(userEmail)}?fallback=false` : null);
+  const userInitial = (userName || 'U').charAt(0).toUpperCase();
+
   const tier = subscription?.tier || 'starter';
   const remaining = subscription?.minutes_remaining !== undefined ? subscription.minutes_remaining : 5;
   const isProOrIntensive = tier === 'pro' || tier === 'intensive';
-  
+
+  // Zamknięcie rozwijanego menu po kliknięciu poza nim
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
+  const handlePreviewVoice = async (voiceToTest) => {
+    const v = voiceToTest || selectedVoice;
+    if (isPlayingPreview) {
+      if (previewAudioRef.current) {
+        try { previewAudioRef.current.pause(); } catch (e) {}
+        previewAudioRef.current = null;
+      }
+      setIsPlayingPreview(false);
+      return;
+    }
+
+    setIsPlayingPreview(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Hello! I am your Speakling voice tutor. Ready to practice?",
+          voice: v
+        })
+      });
+      const data = await response.json();
+      if (data.audio_base64) {
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        previewAudioRef.current = audio;
+        audio.onended = () => {
+          setIsPlayingPreview(false);
+          previewAudioRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsPlayingPreview(false);
+          previewAudioRef.current = null;
+        };
+        await audio.play();
+      } else {
+        setIsPlayingPreview(false);
+      }
+    } catch (err) {
+      console.warn("Preview error:", err);
+      setIsPlayingPreview(false);
+    }
+  };
+
   return (
     <header className="mission-topbar">
       <div className="topbar-left">
@@ -2994,12 +3082,124 @@ const TopBar = ({ title, user, subscription, onOpenPaywall }) => {
           </svg>
         </button>
 
-        <div className="topbar-user-pill" onClick={() => onOpenPaywall && onOpenPaywall()} style={{ cursor: 'pointer' }} title="Profil i subskrypcja">
-          <span className="topbar-avatar">{userName.charAt(0).toUpperCase()}</span>
-          <span className="topbar-username">{userName}</span>
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+        {/* Menu profilu użytkownika z Settings & Głos lektora */}
+        <div className="topbar-user-wrapper" ref={dropdownRef}>
+          <div 
+            className={`topbar-user-pill ${isDropdownOpen ? 'active' : ''}`}
+            onClick={() => setIsDropdownOpen(prev => !prev)}
+            title="Kliknij, aby otworzyć ustawienia profilu i lektora"
+          >
+            {avatarUrl && !imgError ? (
+              <img 
+                src={avatarUrl} 
+                alt={userName} 
+                className="topbar-avatar topbar-avatar-img" 
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <span className="topbar-avatar">{userInitial}</span>
+            )}
+            <span className="topbar-username">{userName}</span>
+            <svg 
+              className={`topbar-chevron ${isDropdownOpen ? 'open' : ''}`} 
+              viewBox="0 0 24 24" 
+              width="14" 
+              height="14" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+
+          {/* Rozwijane menu z ustawieniami */}
+          {isDropdownOpen && (
+            <div className="topbar-user-dropdown animate-fade-in">
+              <div className="dropdown-user-header">
+                {avatarUrl && !imgError ? (
+                  <img 
+                    src={avatarUrl} 
+                    alt={userName} 
+                    className="dropdown-avatar-img" 
+                    onError={() => setImgError(true)}
+                  />
+                ) : (
+                  <span className="dropdown-avatar-initial">{userInitial}</span>
+                )}
+                <div className="dropdown-user-meta">
+                  <div className="dropdown-user-name">{userName}</div>
+                  {userEmail && <div className="dropdown-user-email">{userEmail}</div>}
+                  <span className={`dropdown-plan-badge ${isProOrIntensive ? 'badge-pro' : 'badge-free'}`}>
+                    {tier.toUpperCase()} PLAN
+                  </span>
+                </div>
+              </div>
+
+              <div className="dropdown-divider" />
+
+              {/* Sekcja Ustawienia Lektora */}
+              <div className="dropdown-settings-section">
+                <div className="dropdown-section-title">
+                  Głos lektora (Narrator Voice)
+                </div>
+                <div className="dropdown-section-desc">
+                  Stały lektor czytający teksty w całej aplikacji
+                </div>
+
+                <div className="dropdown-voice-selector">
+                  <select
+                    className="dropdown-voice-select"
+                    value={selectedVoice}
+                    onChange={(e) => {
+                      if (onVoiceChange) onVoiceChange(e.target.value);
+                    }}
+                  >
+                    {AVAILABLE_NARRATORS.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    className={`dropdown-voice-preview-btn ${isPlayingPreview ? 'playing' : ''}`}
+                    onClick={() => handlePreviewVoice(selectedVoice)}
+                    title="Posłuchaj próbki głosu"
+                  >
+                    {isPlayingPreview ? 'Stop' : 'Próbka'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="dropdown-divider" />
+
+              {/* Opcje dodatkowe */}
+              <button 
+                className="dropdown-action-item"
+                onClick={() => {
+                  setIsDropdownOpen(false);
+                  if (onOpenPaywall) onOpenPaywall();
+                }}
+              >
+                <span>Zarządzaj subskrypcją i minutami</span>
+              </button>
+
+              {onLogout && (
+                <button 
+                  className="dropdown-action-item dropdown-logout-item"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    onLogout();
+                  }}
+                >
+                  <span>Wyloguj się</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>
@@ -3258,8 +3458,8 @@ import PaywallModal from './components/Paywall/PaywallModal';
 function App() {
   const [currentView, setCurrentView] = useState(() => {
     const savedView = localStorage.getItem("buddy_current_view");
-    if (savedView) return savedView;
-    return 'dashboard';
+    if (savedView && savedView !== 'dashboard') return savedView;
+    return 'workspace';
   });
   const [user, setUser] = useState(() => {
     const stored = localStorage.getItem("buddy_user");
@@ -3267,6 +3467,15 @@ function App() {
   });
 
   const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState(() => {
+    return localStorage.getItem("buddy_selected_voice") || "en-US-BrianNeural";
+  });
+
+  const handleVoiceChange = (newVoice) => {
+    if (!newVoice) return;
+    setSelectedVoice(newVoice);
+    localStorage.setItem("buddy_selected_voice", newVoice);
+  };
 
   const [subscription, setSubscription] = useState(() => {
     return user?.subscription || null;
@@ -3288,9 +3497,34 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         setSubscription(data.subscription);
+      } else {
+        setSubscription(prev => prev || {
+          tier: 'starter',
+          status: 'free',
+          name: 'Starter (Free)',
+          can_access_mastery: false,
+          can_access_media: false,
+          can_access_industry_modes: false,
+          can_buy_topup: false,
+          minutes_remaining: 5.0,
+          live_minutes_limit: 5.0,
+          is_admin: false
+        });
       }
     } catch (e) {
       console.warn("Błąd pobierania subskrypcji:", e);
+      setSubscription(prev => prev || {
+        tier: 'starter',
+        status: 'free',
+        name: 'Starter (Free)',
+        can_access_mastery: false,
+        can_access_media: false,
+        can_access_industry_modes: false,
+        can_buy_topup: false,
+        minutes_remaining: 5.0,
+        live_minutes_limit: 5.0,
+        is_admin: false
+      });
     }
   };
 
@@ -3518,14 +3752,15 @@ function App() {
       />
       
       <main className="main-content">
-        {currentView !== 'workspace' && (
-          <TopBar 
-            title={getPageTitle()} 
-            user={user} 
-            subscription={subscription}
-            onOpenPaywall={openPaywall}
-          />
-        )}
+        <TopBar 
+          title={getPageTitle()} 
+          user={user} 
+          subscription={subscription}
+          onOpenPaywall={openPaywall}
+          selectedVoice={selectedVoice}
+          onVoiceChange={handleVoiceChange}
+          onLogout={handleLogout}
+        />
         <div className="view-container">
           {currentView === 'dashboard' ? (
             <Dashboard 
@@ -3574,6 +3809,7 @@ function App() {
               onNavigateToDashboard={() => handleNavigate('dashboard')} 
               onNavigateToVocabulary={() => handleNavigate('notebook')}
               user={user}
+              isAdmin={isAdmin}
               generatedText={generatedText}
               setGeneratedText={setGeneratedText}
               currentStoryTitle={currentStoryTitle}
@@ -3582,6 +3818,8 @@ function App() {
               setCurrentStoryId={setCurrentStoryId}
               subscription={subscription}
               onOpenPaywall={openPaywall}
+              selectedVoice={selectedVoice}
+              onVoiceChange={handleVoiceChange}
             />
           )}
         </div>

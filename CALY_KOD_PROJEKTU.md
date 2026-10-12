@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-11 22:17:22
+Wygenerowano: 2026-10-12 19:35:57
 
 ## Spis Treści
 1. `backend/app.py`
@@ -1950,6 +1950,7 @@ def login():
             "token": token, 
             "email": email, 
             "full_name": user_data.get("full_name", ""),
+            "avatar_url": user_data.get("avatar_url") or user_data.get("photo_url") or user_data.get("picture"),
             "subscription": get_user_subscription(email)
         }), 200
     except Exception as e:
@@ -5365,34 +5366,54 @@ def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
     return generate_gtts_bytes(text_to_speak, voice_name)
 
 async def get_edge_audio_with_retry(text_to_speak, primary_voice="en-US-BrianNeural"):
-    voices_to_try = [primary_voice]
-    if "en-US" in primary_voice or "Brian" in primary_voice or "Guy" in primary_voice or "Neural" in primary_voice:
-        for alt_v in ["en-US-BrianNeural", "en-US-GuyNeural", "en-US-ChristopherNeural", "en-GB-RyanNeural"]:
-            if alt_v not in voices_to_try:
-                voices_to_try.append(alt_v)
-    elif "pl-PL" in primary_voice or "Marek" in primary_voice:
-        for alt_v in ["pl-PL-MarekNeural"]:
-            if alt_v not in voices_to_try:
-                voices_to_try.append(alt_v)
-
-    for v in voices_to_try:
-        for attempt in range(2):
-            try:
-                communicate = edge_tts.Communicate(text_to_speak, v)
-                audio_data = b""
-                async for chunk in communicate.stream():
-                    if chunk["type"] == "audio":
-                        audio_data += chunk["data"]
-                if audio_data and len(audio_data) > 100:
-                    print(f"Edge TTS succeeded with male voice '{v}' (attempt {attempt + 1})", flush=True)
-                    return audio_data
-            except Exception as e_edge:
-                print(f"Edge TTS error for voice '{v}' (attempt {attempt + 1}): {e_edge}", flush=True)
-                await asyncio.sleep(0.15)
+    # Stały, jednolity lektor w całej aplikacji — nie zmieniamy głosu w trakcie kolejnych zdań!
+    target_voice = primary_voice or "en-US-BrianNeural"
+    for attempt in range(3):
+        try:
+            communicate = edge_tts.Communicate(text_to_speak, target_voice)
+            audio_data = b""
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_data += chunk["data"]
+            if audio_data and len(audio_data) > 100:
+                return audio_data
+        except Exception as e_edge:
+            print(f"Edge TTS error for voice '{target_voice}' (attempt {attempt + 1}): {e_edge}", flush=True)
+            await asyncio.sleep(0.12)
                 
     return b""
 
+TTS_MEMORY_CACHE = {}
+TTS_CACHE_MAX_ITEMS = 1500
+
+def get_cached_tts(voice, text):
+    key = f"{voice}:::{text.strip()}"
+    return TTS_MEMORY_CACHE.get(key)
+
+def set_cached_tts(voice, text, base64_data):
+    if not base64_data:
+        return
+    key = f"{voice}:::{text.strip()}"
+    if len(TTS_MEMORY_CACHE) >= TTS_CACHE_MAX_ITEMS:
+        try:
+            first_key = next(iter(TTS_MEMORY_CACHE))
+            del TTS_MEMORY_CACHE[first_key]
+        except Exception:
+            pass
+    TTS_MEMORY_CACHE[key] = base64_data
+
 def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_email=None):
+    if not text:
+        return ""
+
+    if "Neural" not in voice:
+        voice = "en-US-BrianNeural"
+
+    # Fast in-memory cache check for instant sentence playback
+    cached_audio = get_cached_tts(voice, text)
+    if cached_audio:
+        return cached_audio
+
     if not user_email:
         user_email = get_user_from_request()
 
@@ -5402,9 +5423,6 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
         if sub.get("tier") == "starter":
             ai_mode = "free"
 
-    if "Neural" not in voice:
-        voice = "en-US-BrianNeural"
-        
     print(f"DEBUG TTS: Input text = '{text}', voice = '{voice}'", flush=True)
     
     # If the text does not contain bilingual tags, synthesize it in one go with the requested voice
@@ -5537,6 +5555,7 @@ def get_tts_audio():
     base64_data = generate_tts_base64(text, voice, user_email=user_email)
     if not base64_data:
         return jsonify({"error": "Błąd generowania mowy"}), 500
+    set_cached_tts(voice, text, base64_data)
     return jsonify({"audio_base64": base64_data})
 
 @app.route("/api/stories/generate-questions", methods=['POST'])
@@ -19346,8 +19365,8 @@ import PaywallModal from './components/Paywall/PaywallModal';
 function App() {
   const [currentView, setCurrentView] = useState(() => {
     const savedView = localStorage.getItem("buddy_current_view");
-    if (savedView) return savedView;
-    return 'dashboard';
+    if (savedView && savedView !== 'dashboard') return savedView;
+    return 'workspace';
   });
   const [user, setUser] = useState(() => {
     const stored = localStorage.getItem("buddy_user");
@@ -19355,6 +19374,15 @@ function App() {
   });
 
   const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState(() => {
+    return localStorage.getItem("buddy_selected_voice") || "en-US-BrianNeural";
+  });
+
+  const handleVoiceChange = (newVoice) => {
+    if (!newVoice) return;
+    setSelectedVoice(newVoice);
+    localStorage.setItem("buddy_selected_voice", newVoice);
+  };
 
   const [subscription, setSubscription] = useState(() => {
     return user?.subscription || null;
@@ -19376,9 +19404,34 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         setSubscription(data.subscription);
+      } else {
+        setSubscription(prev => prev || {
+          tier: 'starter',
+          status: 'free',
+          name: 'Starter (Free)',
+          can_access_mastery: false,
+          can_access_media: false,
+          can_access_industry_modes: false,
+          can_buy_topup: false,
+          minutes_remaining: 5.0,
+          live_minutes_limit: 5.0,
+          is_admin: false
+        });
       }
     } catch (e) {
       console.warn("Błąd pobierania subskrypcji:", e);
+      setSubscription(prev => prev || {
+        tier: 'starter',
+        status: 'free',
+        name: 'Starter (Free)',
+        can_access_mastery: false,
+        can_access_media: false,
+        can_access_industry_modes: false,
+        can_buy_topup: false,
+        minutes_remaining: 5.0,
+        live_minutes_limit: 5.0,
+        is_admin: false
+      });
     }
   };
 
@@ -19606,14 +19659,15 @@ function App() {
       />
       
       <main className="main-content">
-        {currentView !== 'workspace' && (
-          <TopBar 
-            title={getPageTitle()} 
-            user={user} 
-            subscription={subscription}
-            onOpenPaywall={openPaywall}
-          />
-        )}
+        <TopBar 
+          title={getPageTitle()} 
+          user={user} 
+          subscription={subscription}
+          onOpenPaywall={openPaywall}
+          selectedVoice={selectedVoice}
+          onVoiceChange={handleVoiceChange}
+          onLogout={handleLogout}
+        />
         <div className="view-container">
           {currentView === 'dashboard' ? (
             <Dashboard 
@@ -19662,6 +19716,7 @@ function App() {
               onNavigateToDashboard={() => handleNavigate('dashboard')} 
               onNavigateToVocabulary={() => handleNavigate('notebook')}
               user={user}
+              isAdmin={isAdmin}
               generatedText={generatedText}
               setGeneratedText={setGeneratedText}
               currentStoryTitle={currentStoryTitle}
@@ -19670,6 +19725,8 @@ function App() {
               setCurrentStoryId={setCurrentStoryId}
               subscription={subscription}
               onOpenPaywall={openPaywall}
+              selectedVoice={selectedVoice}
+              onVoiceChange={handleVoiceChange}
             />
           )}
         </div>
@@ -24976,7 +25033,8 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   const handleExerciseTypeChange = (e) => {
     const newType = e.target.value;
     const selectedEx = EXERCISE_TYPES.find(ex => ex.id === newType);
-    if (selectedEx?.tierRequired === 'intensive' && subscription?.tier !== 'intensive' && !user?.is_admin) {
+    const isUserAdmin = Boolean(user?.is_admin || subscription?.is_admin);
+    if (selectedEx?.tierRequired === 'intensive' && subscription?.tier !== 'intensive' && !isUserAdmin) {
       if (onOpenPaywall) {
         onOpenPaywall({ feature: 'industry' });
         return;
@@ -25220,7 +25278,8 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   // ==========================================
 
   const startLiveSession = async (overrideOptions = {}) => {
-    if (subscription && subscription.minutes_remaining <= 0 && !user?.is_admin) {
+    const isUserAdmin = Boolean(user?.is_admin || subscription?.is_admin);
+    if (subscription && subscription.minutes_remaining <= 0 && !isUserAdmin) {
       if (onOpenPaywall) {
         onOpenPaywall({ feature: 'quota', reason: 'quota_exceeded' });
       }
@@ -30065,7 +30124,7 @@ const formatTime = (secs) => {
 };
 
 function MediaBuddy({ user, subscription, onOpenPaywall }) {
-  const isLocked = subscription && !subscription.can_access_media && !user?.is_admin;
+  const isLocked = !user?.is_admin && !subscription?.is_admin && !subscription?.can_access_media;
 
   useEffect(() => {
     if (isLocked && onOpenPaywall) {
@@ -45262,7 +45321,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from '../../config';
 import "./PracticeMode.css";
 
-const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActivity }) => {
+const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActivity, onOpenPaywall }) => {
   const [phase, setPhase] = useState(1);
   const [subPhase, setSubPhase] = useState(1);
   const [masteryData, setMasteryData] = useState([]);
@@ -45395,11 +45454,21 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "X-Session-Token": user.token
+          "X-Session-Token": user?.token || ""
         },
         body: JSON.stringify({ text }),
       });
+      if (response.status === 403) {
+        if (onOpenPaywall) onOpenPaywall({ feature: 'mastery' });
+        if (onExit) onExit();
+        return;
+      }
       const data = await response.json();
+      if (data?.error === "PAYWALL_REQUIRED") {
+        if (onOpenPaywall) onOpenPaywall({ feature: 'mastery' });
+        if (onExit) onExit();
+        return;
+      }
       if (Array.isArray(data)) {
         setMasteryData(data);
         if (data.length > 0) {
@@ -45603,10 +45672,18 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       }
       const res = await fetch(`${API_BASE_URL}/api/mastery-evaluate`, { 
         method: "POST", 
-        headers: { "X-Session-Token": user.token },
+        headers: { "X-Session-Token": user?.token || "" },
         body: formData 
       });
+      if (res.status === 403) {
+        if (onOpenPaywall) onOpenPaywall({ feature: 'mastery' });
+        return;
+      }
       const result = await res.json();
+      if (result?.error === "PAYWALL_REQUIRED") {
+        if (onOpenPaywall) onOpenPaywall({ feature: 'mastery' });
+        return;
+      }
       setEvaluation(result);
 
       if (onLogActivity && result && typeof result.score !== 'undefined') {
@@ -52560,6 +52637,10 @@ describe('StoryGenerator Popular Science Settings', () => {
   color: var(--gray-900);
 }
 
+.topbar-user-wrapper {
+  position: relative;
+}
+
 .topbar-user-pill {
   display: flex;
   align-items: center;
@@ -52568,10 +52649,12 @@ describe('StoryGenerator Popular Science Settings', () => {
   background: transparent;
   border-radius: 999px;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: all 0.15s ease;
+  user-select: none;
 }
 
-.topbar-user-pill:hover {
+.topbar-user-pill:hover,
+.topbar-user-pill.active {
   background: var(--gray-100);
 }
 
@@ -52587,6 +52670,16 @@ describe('StoryGenerator Popular Science Settings', () => {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 0.8125rem;
+  overflow: hidden;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.topbar-avatar-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
 }
 
 .topbar-username {
@@ -52594,6 +52687,264 @@ describe('StoryGenerator Popular Science Settings', () => {
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--gray-900);
+}
+
+.topbar-chevron {
+  color: var(--gray-500);
+  transition: transform 0.2s ease;
+}
+
+.topbar-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Dropdown Menu — Figma Design & Apple Clean */
+.topbar-user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px -4px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.03);
+  padding: 1rem;
+  z-index: 1000;
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  animation: dropdown-pop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+@keyframes dropdown-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dropdown-user-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.dropdown-avatar-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--border, #e2e8f0);
+  flex-shrink: 0;
+}
+
+.dropdown-avatar-initial {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #f8fafc;
+  color: #7c3aed;
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--border, #e2e8f0);
+  flex-shrink: 0;
+}
+
+.dropdown-user-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.dropdown-user-name {
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-user-email {
+  font-family: var(--font-main, 'Roboto', sans-serif);
+  font-size: 0.75rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.dropdown-plan-badge {
+  display: inline-block;
+  margin-top: 4px;
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.dropdown-plan-badge.badge-pro {
+  background: #7c3aed;
+  color: #ffffff;
+}
+
+.dropdown-plan-badge.badge-free {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 0.75rem 0;
+}
+
+/* Sekcja Ustawienia Lektora */
+.dropdown-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dropdown-section-title {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.dropdown-section-desc {
+  font-family: var(--font-main, 'Roboto', sans-serif);
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.dropdown-voice-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+  width: 100%;
+}
+
+.dropdown-voice-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 0.6rem;
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #0f172a;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.dropdown-voice-select:hover {
+  background: #ffffff;
+  border-color: #94a3b8;
+}
+
+.dropdown-voice-select:focus {
+  border-color: #7c3aed;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.12);
+}
+
+.dropdown-voice-preview-btn {
+  flex: 0 0 auto;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 0.75rem;
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.dropdown-voice-preview-btn:hover {
+  background: #ede4ff;
+  color: #7c3aed;
+  border-color: rgba(124, 58, 237, 0.3);
+}
+
+.dropdown-voice-preview-btn.playing {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+/* Opcje akcji */
+.dropdown-action-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.dropdown-action-item:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.dropdown-logout-item {
+  color: #dc2626;
+  margin-top: 2px;
+}
+
+.dropdown-logout-item .dropdown-action-svg {
+  color: #ef4444;
+}
+
+.dropdown-logout-item:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.dropdown-logout-item:hover .dropdown-action-svg {
+  color: #b91c1c;
 }
 
 @media (max-width: 768px) {
@@ -52617,15 +52968,103 @@ describe('StoryGenerator Popular Science Settings', () => {
 ## 56. Plik: `frontend/src/components/TopBar.js`
 
 ```javascript
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './TopBar.css';
+import { API_BASE_URL } from '../config';
 
-const TopBar = ({ title, user, subscription, onOpenPaywall }) => {
-  const userName = user?.name || (user?.email ? user.email.split('@')[0] : 'Anna Kowalska');
+const AVAILABLE_NARRATORS = [
+  { id: 'en-US-BrianNeural', name: 'Brian (US — Natural)' },
+  { id: 'en-US-GuyNeural', name: 'Guy (US — Warm)' },
+  { id: 'en-US-ChristopherNeural', name: 'Christopher (US — Radio)' },
+  { id: 'en-US-JennyNeural', name: 'Jenny (US — Friendly)' },
+  { id: 'en-US-AriaNeural', name: 'Aria (US — Expressive)' },
+  { id: 'en-GB-RyanNeural', name: 'Ryan (UK — British)' },
+  { id: 'en-GB-SoniaNeural', name: 'Sonia (UK — British)' },
+];
+
+const TopBar = ({ 
+  title, 
+  user, 
+  subscription, 
+  onOpenPaywall,
+  selectedVoice = 'en-US-BrianNeural',
+  onVoiceChange,
+  onLogout
+}) => {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const dropdownRef = useRef(null);
+  const previewAudioRef = useRef(null);
+
+  const userName = user?.name || user?.full_name || (user?.email ? user.email.split('@')[0] : 'Użytkownik');
+  const userEmail = user?.email || '';
+  const userPhoto = user?.photoURL || user?.avatar_url || (typeof user?.picture === 'string' ? user?.picture : user?.picture?.data?.url) || user?.photo_url || null;
+  const avatarUrl = userPhoto || (userEmail ? `https://unavatar.io/${encodeURIComponent(userEmail)}?fallback=false` : null);
+  const userInitial = (userName || 'U').charAt(0).toUpperCase();
+
   const tier = subscription?.tier || 'starter';
   const remaining = subscription?.minutes_remaining !== undefined ? subscription.minutes_remaining : 5;
   const isProOrIntensive = tier === 'pro' || tier === 'intensive';
-  
+
+  // Zamknięcie rozwijanego menu po kliknięciu poza nim
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
+  const handlePreviewVoice = async (voiceToTest) => {
+    const v = voiceToTest || selectedVoice;
+    if (isPlayingPreview) {
+      if (previewAudioRef.current) {
+        try { previewAudioRef.current.pause(); } catch (e) {}
+        previewAudioRef.current = null;
+      }
+      setIsPlayingPreview(false);
+      return;
+    }
+
+    setIsPlayingPreview(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Hello! I am your Speakling voice tutor. Ready to practice?",
+          voice: v
+        })
+      });
+      const data = await response.json();
+      if (data.audio_base64) {
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        previewAudioRef.current = audio;
+        audio.onended = () => {
+          setIsPlayingPreview(false);
+          previewAudioRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsPlayingPreview(false);
+          previewAudioRef.current = null;
+        };
+        await audio.play();
+      } else {
+        setIsPlayingPreview(false);
+      }
+    } catch (err) {
+      console.warn("Preview error:", err);
+      setIsPlayingPreview(false);
+    }
+  };
+
   return (
     <header className="mission-topbar">
       <div className="topbar-left">
@@ -52656,12 +53095,124 @@ const TopBar = ({ title, user, subscription, onOpenPaywall }) => {
           </svg>
         </button>
 
-        <div className="topbar-user-pill" onClick={() => onOpenPaywall && onOpenPaywall()} style={{ cursor: 'pointer' }} title="Profil i subskrypcja">
-          <span className="topbar-avatar">{userName.charAt(0).toUpperCase()}</span>
-          <span className="topbar-username">{userName}</span>
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+        {/* Menu profilu użytkownika z Settings & Głos lektora */}
+        <div className="topbar-user-wrapper" ref={dropdownRef}>
+          <div 
+            className={`topbar-user-pill ${isDropdownOpen ? 'active' : ''}`}
+            onClick={() => setIsDropdownOpen(prev => !prev)}
+            title="Kliknij, aby otworzyć ustawienia profilu i lektora"
+          >
+            {avatarUrl && !imgError ? (
+              <img 
+                src={avatarUrl} 
+                alt={userName} 
+                className="topbar-avatar topbar-avatar-img" 
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <span className="topbar-avatar">{userInitial}</span>
+            )}
+            <span className="topbar-username">{userName}</span>
+            <svg 
+              className={`topbar-chevron ${isDropdownOpen ? 'open' : ''}`} 
+              viewBox="0 0 24 24" 
+              width="14" 
+              height="14" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+
+          {/* Rozwijane menu z ustawieniami */}
+          {isDropdownOpen && (
+            <div className="topbar-user-dropdown animate-fade-in">
+              <div className="dropdown-user-header">
+                {avatarUrl && !imgError ? (
+                  <img 
+                    src={avatarUrl} 
+                    alt={userName} 
+                    className="dropdown-avatar-img" 
+                    onError={() => setImgError(true)}
+                  />
+                ) : (
+                  <span className="dropdown-avatar-initial">{userInitial}</span>
+                )}
+                <div className="dropdown-user-meta">
+                  <div className="dropdown-user-name">{userName}</div>
+                  {userEmail && <div className="dropdown-user-email">{userEmail}</div>}
+                  <span className={`dropdown-plan-badge ${isProOrIntensive ? 'badge-pro' : 'badge-free'}`}>
+                    {tier.toUpperCase()} PLAN
+                  </span>
+                </div>
+              </div>
+
+              <div className="dropdown-divider" />
+
+              {/* Sekcja Ustawienia Lektora */}
+              <div className="dropdown-settings-section">
+                <div className="dropdown-section-title">
+                  Głos lektora (Narrator Voice)
+                </div>
+                <div className="dropdown-section-desc">
+                  Stały lektor czytający teksty w całej aplikacji
+                </div>
+
+                <div className="dropdown-voice-selector">
+                  <select
+                    className="dropdown-voice-select"
+                    value={selectedVoice}
+                    onChange={(e) => {
+                      if (onVoiceChange) onVoiceChange(e.target.value);
+                    }}
+                  >
+                    {AVAILABLE_NARRATORS.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    className={`dropdown-voice-preview-btn ${isPlayingPreview ? 'playing' : ''}`}
+                    onClick={() => handlePreviewVoice(selectedVoice)}
+                    title="Posłuchaj próbki głosu"
+                  >
+                    {isPlayingPreview ? 'Stop' : 'Próbka'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="dropdown-divider" />
+
+              {/* Opcje dodatkowe */}
+              <button 
+                className="dropdown-action-item"
+                onClick={() => {
+                  setIsDropdownOpen(false);
+                  if (onOpenPaywall) onOpenPaywall();
+                }}
+              >
+                <span>Zarządzaj subskrypcją i minutami</span>
+              </button>
+
+              {onLogout && (
+                <button 
+                  className="dropdown-action-item dropdown-logout-item"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    onLogout();
+                  }}
+                >
+                  <span>Wyloguj się</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>
@@ -58373,7 +58924,7 @@ export default VocabularyView;
 /* Floating Apple Player Controls */
 .apple-player-controls-floating {
   position: fixed;
-  top: 1.5rem;
+  top: 4.85rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
@@ -58927,10 +59478,10 @@ export default VocabularyView;
   width: 100%;
   max-width: 1360px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 4rem;
+  padding: 1.25rem 2rem 4rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   animation: view-enter 0.35s ease-out;
   position: relative;
 }
@@ -59131,6 +59682,18 @@ export default VocabularyView;
   background: #2563eb;
   border-color: #2563eb;
   color: #ffffff;
+}
+
+.toolbar-pill-btn.toolbar-stop-btn {
+  border-color: #fecaca;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.toolbar-pill-btn.toolbar-stop-btn:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
 }
 
 .toolbar-icon-btn {
@@ -59642,11 +60205,54 @@ export default VocabularyView;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 999px;
+  transition: all 0.2s ease;
+}
+
+.story-words-count-badge.empty {
+  background: #f1f5f9;
+  color: #64748b;
 }
 
 .story-words-list {
   display: flex;
   flex-direction: column;
+}
+
+.story-words-empty {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px dashed #e2e8f0;
+  margin: 0.25rem 0 1rem 0;
+}
+
+.story-words-empty-icon {
+  color: #94a3b8;
+  margin-bottom: 0.45rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.story-words-empty-title {
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.25rem;
+}
+
+.story-words-empty-sub {
+  font-family: var(--font-main, 'Roboto', sans-serif);
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.4;
+  max-width: 230px;
 }
 
 .story-word-item {
@@ -59823,6 +60429,498 @@ export default VocabularyView;
   from { opacity: 0; transform: translate(-50%, 10px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
+
+/* ── FIGMA HERO & COLLAPSIBLE CREATE STORY CARD ── */
+.workspace-hero-header {
+  margin-bottom: 1.5rem;
+  max-height: 140px;
+  opacity: 1;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.workspace-hero-header.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+  transform: translateY(-8px);
+}
+
+.workspace-hero-title {
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 2.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.025em;
+  margin: 0 0 0.45rem 0;
+  line-height: 1.15;
+}
+
+.workspace-hero-subtitle {
+  font-size: 1.05rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* CREATE YOUR NEXT STORY CARD */
+.workspace-create-story-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 1.35rem 1.65rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
+  max-height: 800px;
+  flex-shrink: 0;
+  opacity: 1;
+  transform: translateY(0);
+  overflow: hidden;
+  transition: max-height 0.35s ease, opacity 0.3s ease, margin 0.35s ease, padding 0.35s ease, transform 0.35s ease;
+}
+
+.workspace-create-story-card.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border: none;
+  transform: translateY(-8px);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.create-story-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.15rem;
+}
+
+.create-story-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.create-story-sparkle {
+  color: #8b5cf6;
+  flex-shrink: 0;
+}
+
+.create-story-heading {
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.create-story-cancel-btn {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.create-story-cancel-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+
+.create-story-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.create-story-badge {
+  background: #f5f3ff;
+  color: #7c3aed;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.create-story-collapse-btn {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.create-story-collapse-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.create-story-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.create-story-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.create-story-chip {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.48rem 1.15rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.create-story-chip:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.create-story-chip.active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.create-story-right-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.create-story-level-select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.create-story-level-select {
+  appearance: none;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.5rem 2.1rem 0.5rem 1.1rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.create-story-level-select:hover,
+.create-story-level-select:focus {
+  border-color: #94a3b8;
+}
+
+.level-select-chevron {
+  position: absolute;
+  right: 0.75rem;
+  pointer-events: none;
+  color: #64748b;
+}
+
+.create-story-generate-btn {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.55rem 1.35rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.create-story-generate-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.38);
+}
+
+.create-story-generate-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.create-story-prompt-wrapper {
+  margin: 0.95rem 0 0.85rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.create-story-prompt-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.create-story-prompt-label svg {
+  color: #7c3aed;
+  flex-shrink: 0;
+}
+
+.create-story-prompt-textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  font-family: var(--font-main, 'Roboto', sans-serif);
+  font-size: 0.88rem;
+  color: #0f172a;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 72px;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.create-story-prompt-textarea:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
+.create-story-prompt-textarea:focus {
+  background: #ffffff;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+}
+
+.create-story-prompt-textarea::placeholder {
+  color: #94a3b8;
+  font-size: 0.84rem;
+}
+
+.create-story-footer-note {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  font-weight: 500;
+  font-family: var(--font-main, 'Roboto', sans-serif);
+}
+
+/* COLLAPSED EXPAND BAR */
+.workspace-collapsed-bar {
+  margin-bottom: 1.25rem;
+  animation: fade-in-bar 0.3s ease-out;
+}
+
+@keyframes fade-in-bar {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.workspace-open-generator-pill {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.workspace-open-generator-pill:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+/* LEARNING BUDDY CARD DETAILS */
+.buddy-card-desc {
+  font-size: 0.88rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0 0 1rem 0;
+}
+
+.buddy-divider {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 1.15rem 0;
+}
+
+.buddy-try-asking-section {
+  margin-bottom: 0.85rem;
+}
+
+.buddy-ask-form {
+  margin-top: 0.65rem;
+}
+
+.buddy-ask-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.45rem 0.55rem 0.45rem 0.75rem;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.buddy-ask-input-wrap:focus-within {
+  background: #ffffff;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.buddy-ask-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.86rem;
+  color: #0f172a;
+  width: 100%;
+}
+
+.buddy-ask-send-btn {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.buddy-ask-send-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: scale(1.04);
+}
+
+.buddy-ask-send-btn:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.buddy-ask-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.buddy-inline-answer-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 0.85rem;
+  margin-top: 0.85rem;
+  font-size: 0.86rem;
+  color: #14532d;
+  line-height: 1.5;
+}
+
+.buddy-inline-answer-text {
+  margin-bottom: 0.5rem;
+}
+
+.buddy-inline-answer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.buddy-answer-speak-btn {
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #15803d;
+  cursor: pointer;
+}
+
+.buddy-answer-close-btn {
+  background: none;
+  border: none;
+  font-size: 0.85rem;
+  color: #15803d;
+  cursor: pointer;
+}
+
+.story-word-bookmark-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.story-word-bookmark-btn:hover {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.story-word-bookmark-btn.saved {
+  color: #2563eb;
+}
+
 
 ```
 
@@ -60087,6 +61185,7 @@ function Workspace({
   onNavigateToDashboard,
   onNavigateToVocabulary,
   user,
+  isAdmin = false,
   generatedText,
   setGeneratedText,
   currentStoryTitle,
@@ -60095,14 +61194,19 @@ function Workspace({
   setCurrentStoryId,
   subscription,
   onOpenPaywall,
+  selectedVoice = 'en-US-BrianNeural',
+  onVoiceChange,
 }) {
+  const hasMasteryAccess = Boolean(user?.is_admin || isAdmin || subscription?.is_admin || subscription?.can_access_mastery);
+  const isMasteryLocked = !hasMasteryAccess;
+
   const [dismissedStoryWords, setDismissedStoryWords] = useState(new Set());
   const [showPracticeMode, setShowPracticeMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [suggestedTopics, setSuggestedTopics] = useState([]);
   const voices = PREMIUM_VOICES;
-  const [selectedVoiceURI, setSelectedVoiceURI] = useState('en-US-BrianNeural');
+  const selectedVoiceURI = selectedVoice || 'en-US-BrianNeural';
   const [speechRate, setSpeechRate] = useState(1.0);
   const [speechPitch, setSpeechPitch] = useState(1);
   const [notebookWords, setNotebookWords] = useState([]);
@@ -60164,6 +61268,14 @@ function Workspace({
   const [inlineWordData, setInlineWordData] = useState(null);
   const [showInlineSentenceTrans, setShowInlineSentenceTrans] = useState(false);
 
+  // Create your next story banner states (Figma top card)
+  const [isGeneratorCollapsed, setIsGeneratorCollapsed] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("Business");
+  const [selectedLevel, setSelectedLevel] = useState("B2");
+  const [customStoryPrompt, setCustomStoryPrompt] = useState("");
+  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
+  const [isAskingBuddy, setIsAskingBuddy] = useState(false);
+
   const currentAudioRef = useRef(null);
   const contextMenuRef = useRef(null);
   const activeSelectionRangeRef = useRef(null);
@@ -60179,6 +61291,8 @@ function Workspace({
   const currentChunkIndexRef = useRef(-1);
   // Mutex blokujący równoległe wywołania speakChunk
   const isChunkFetchingRef = useRef(false);
+  // Pamięć podręczna i bufor pobranego z wyprzedzeniem dźwięku TTS (prefetching)
+  const audioCacheRef = useRef(new Map());
 
   // Telemetry & summary states
   const [activityLog, setActivityLog] = useState([]);
@@ -60259,12 +61373,22 @@ function Workspace({
       });
       if (response.ok) {
         const data = await response.json();
-        setNotebookWords(data);
+        setNotebookWords(Array.isArray(data) ? data : []);
+      } else {
+        setNotebookWords([]);
       }
     } catch (err) {
       console.error("Błąd podczas ładowania słownika:", err);
+      setNotebookWords([]);
     }
   }, [user, currentStoryId]);
+
+  useEffect(() => {
+    setDismissedStoryWords(new Set());
+    if (!currentStoryId) {
+      setNotebookWords([]);
+    }
+  }, [currentStoryId, generatedText]);
 
   useEffect(() => {
     loadVocabulary();
@@ -60439,6 +61563,7 @@ function Workspace({
       setGeneratedText(part.text);
       setCurrentStoryTitle(part.title);
       setCurrentStoryId(part.id);
+      setDismissedStoryWords(new Set());
     }
   };
 
@@ -60795,10 +61920,33 @@ function Workspace({
     prevExplanationWordRef.current = explanationWord;
   }, [explanationWord]);
 
+  const activeStoryText = generatedText || FIGMA_SAMPLE_TEXT;
+  const activeStoryTitle = currentStoryTitle || FIGMA_SAMPLE_TITLE;
+
+  // Initialize sample story if empty on mount and reset scroll
   useEffect(() => {
-    if (generatedText) {
+    if (!generatedText) {
+      setGeneratedText(FIGMA_SAMPLE_TEXT);
+      if (!currentStoryTitle) setCurrentStoryTitle(FIGMA_SAMPLE_TITLE);
+    }
+    const container = document.querySelector('.view-container');
+    if (container) {
+      container.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+  }, []);
+
+  // Auto-collapse top generator panel when user begins playback/reading
+  useEffect(() => {
+    if (isSpeaking && !isPaused) {
+      setIsGeneratorCollapsed(true);
+    }
+  }, [isSpeaking, isPaused]);
+
+  useEffect(() => {
+    if (activeStoryText) {
       const abbreviations = /\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Co|Corp|Inc|Ltd|e\.g|i\.e|vs|a\.m|p\.m)\.$/i;
-      let markedText = generatedText.replace(/([.?!]["')\]]*)\s+/g, (match, p1, offset, string) => {
+      let markedText = activeStoryText.replace(/([.?!]["')\]]*)\s+/g, (match, p1, offset, string) => {
         const beforeText = string.substring(0, offset + 1);
         if (abbreviations.test(beforeText)) {
           return match;
@@ -60814,7 +61962,7 @@ function Workspace({
       setTextChunks([]);
       setCurrentChunkIndex(-1);
     }
-  }, [generatedText]);
+  }, [activeStoryText]);
 
 
   const saveStoryToDb = async (title, text) => {
@@ -60890,6 +62038,203 @@ function Workspace({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleGenerateFigmaStory = async () => {
+    handleStop();
+    setIsGeneratingStory(true);
+    try {
+      const levelMap = {
+        "A1": "simple",
+        "A2": "simple",
+        "B1": "medium",
+        "B2": "medium",
+        "C1": "advanced",
+        "C2": "advanced"
+      };
+
+      if (isContinuing) {
+        let rootStoryId = loadedRootId || currentStoryId;
+        if (!rootStoryId && generatedText) {
+          const savedStory = await saveStoryToDb(currentStoryTitle || "Part 1", generatedText);
+          if (savedStory && savedStory.id) {
+            rootStoryId = savedStory.id;
+            setLoadedRootId(savedStory.id);
+            setCurrentStoryId(savedStory.id);
+            if (storyParts.length === 0) {
+              setStoryParts([{
+                id: savedStory.id,
+                title: currentStoryTitle || "Part 1",
+                text: generatedText,
+                part_number: 1
+              }]);
+            }
+          }
+        }
+
+        let promptDetails = customStoryPrompt.trim();
+        if (!promptDetails) {
+          promptDetails = `Continue the story logically following the events of the previous parts. Maintain the characters and narrative arc, tailored for ${selectedLevel} CEFR level, theme: ${selectedCategory}.`;
+        } else {
+          promptDetails = `${promptDetails}. Tailored for ${selectedLevel} CEFR level, theme: ${selectedCategory}. Continue logically from previous parts.`;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/generate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || ""
+          },
+          body: JSON.stringify({
+            topics: [selectedCategory],
+            customDetails: promptDetails,
+            settings: {
+              language_level: levelMap[selectedLevel] || "medium",
+              length: "medium",
+              is_factual: false,
+              genre: selectedCategory.toLowerCase(),
+              focus_area: "none"
+            },
+            parent_id: rootStoryId
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok || (data && data.error)) {
+          alert(data?.error || data?.details || "Wystąpił błąd podczas generowania kontynuacji opowiadania.");
+          return;
+        }
+
+        if (data && data[0] && data[0].generated_text) {
+          const nextPartNum = storyParts.length + 1;
+          const newPart = {
+            id: data[0].story_id,
+            title: data[0].title || `Part ${nextPartNum}`,
+            text: data[0].generated_text,
+            part_number: nextPartNum
+          };
+
+          const updatedParts = [...storyParts, newPart];
+          setStoryParts(updatedParts);
+          setActivePartIndex(updatedParts.length - 1);
+
+          setGeneratedText(newPart.text);
+          setCurrentStoryTitle(newPart.title);
+          setCurrentStoryId(newPart.id);
+
+          setDismissedStoryWords(new Set());
+          setReadSentenceIndices(new Set());
+          setCurrentChunkIndex(-1);
+          setCustomStoryPrompt("");
+          setIsContinuing(false);
+          setIsGeneratorCollapsed(true);
+        }
+      } else {
+        let promptDetails = customStoryPrompt.trim();
+        if (!promptDetails) {
+          promptDetails = `Create an engaging, modern story tailored for ${selectedLevel} CEFR level about ${selectedCategory}.`;
+        } else {
+          promptDetails = `${promptDetails}. Tailored for ${selectedLevel} CEFR level, theme: ${selectedCategory}.`;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/generate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || ""
+          },
+          body: JSON.stringify({
+            topics: [selectedCategory],
+            customDetails: promptDetails,
+            settings: {
+              language_level: levelMap[selectedLevel] || "medium",
+              length: "medium",
+              is_factual: false,
+              genre: selectedCategory.toLowerCase(),
+              focus_area: "none"
+            }
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok || (data && data.error)) {
+          alert(data?.error || data?.details || "Wystąpił błąd podczas generowania opowiadania.");
+          return;
+        }
+
+        if (data && data[0] && data[0].generated_text) {
+          const title = data[0].title || `${selectedCategory} Story`;
+          const storyId = data[0].story_id;
+
+          const newPart = {
+            id: storyId,
+            title: title,
+            text: data[0].generated_text,
+            part_number: 1
+          };
+
+          setStoryParts([newPart]);
+          setActivePartIndex(0);
+          setLoadedRootId(storyId);
+          setCurrentStoryId(storyId);
+          setGeneratedText(data[0].generated_text);
+          setCurrentStoryTitle(title);
+
+          setDismissedStoryWords(new Set());
+          setReadSentenceIndices(new Set());
+          setCurrentChunkIndex(-1);
+          setCustomStoryPrompt("");
+          setIsContinuing(false);
+          setIsGeneratorCollapsed(true);
+        }
+      }
+    } catch (err) {
+      console.error("Błąd generowania historii:", err);
+      alert("Nie udało się wygenerować opowiadania. Sprawdź połączenie z internetem lub spróbuj ponownie.");
+    } finally {
+      setIsGeneratingStory(false);
+    }
+  };
+
+
+
+  const handleToggleBookmarkWord = async (word, translation, phonetic, pos, level) => {
+    const isSaved = notebookWords.some(
+      w => (w.original || w.word || "").toLowerCase() === (word || "").toLowerCase()
+    );
+    if (isSaved) {
+      setNotebookWords(prev => prev.filter(
+        w => (w.original || w.word || "").toLowerCase() !== (word || "").toLowerCase()
+      ));
+      try {
+        await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(word)}`, {
+          method: "DELETE",
+          headers: { "X-Session-Token": user?.token || "" }
+        });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+      } catch (e) {
+        console.error("Błąd usuwania słówka:", e);
+      }
+    } else {
+      const trans = translation || word;
+      const newEntry = { original: word, translated: trans, phonetic, pos, level };
+      setNotebookWords(prev => [newEntry, ...prev]);
+      try {
+        await fetch(`${API_BASE_URL}/api/vocabulary`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
+          body: JSON.stringify({ original: word, translated: trans, story_id: currentStoryId })
+        });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+      } catch (err) {
+        console.error("Błąd zapisywania słówka:", err);
+      }
+    }
+  };
+
+  const handleAskBuddySubmit = (e) => {
+    e.preventDefault();
+    handleAskBuddy(buddyQuestion);
   };
 
   const generateDefaultText = async () => {
@@ -60997,6 +62342,82 @@ function Workspace({
     }
   };
 
+  // Prefetching audio zdań z wyprzedzeniem (eliminacja pauz i namyślania się lektora)
+  const prefetchSentenceAudio = useCallback((text, voice) => {
+    if (!text || typeof text !== "string") return Promise.resolve(null);
+    const clean = text.trim();
+    if (!clean) return Promise.resolve(null);
+    const voiceToUse = voice || selectedVoiceURI || "en-US-BrianNeural";
+    const cacheKey = `${voiceToUse}:::${clean}`;
+
+    if (audioCacheRef.current.has(cacheKey)) {
+      const cached = audioCacheRef.current.get(cacheKey);
+      if (cached.audioUrl) return Promise.resolve(cached.audioUrl);
+      if (cached.promise) return cached.promise;
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/tts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: clean,
+            voice: voiceToUse
+          })
+        });
+        if (!response.ok) throw new Error("TTS request failed");
+        const data = await response.json();
+        if (!data.audio_base64) throw new Error("No audio base64 returned");
+
+        const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+
+        // Ograniczenie rozmiaru cache w pamięci
+        if (audioCacheRef.current.size > 200) {
+          try {
+            const firstKey = audioCacheRef.current.keys().next().value;
+            audioCacheRef.current.delete(firstKey);
+          } catch (e) { }
+        }
+
+        audioCacheRef.current.set(cacheKey, {
+          audioUrl,
+          promise: null
+        });
+
+        return audioUrl;
+      } catch (err) {
+        audioCacheRef.current.delete(cacheKey);
+        throw err;
+      }
+    })();
+
+    audioCacheRef.current.set(cacheKey, {
+      audioUrl: null,
+      promise: fetchPromise
+    });
+
+    return fetchPromise;
+  }, [selectedVoiceURI]);
+
+  const prefetchUpcomingChunks = useCallback((startIndex, count = 2) => {
+    if (!textChunks || textChunks.length === 0) return;
+    const voice = selectedVoiceURI || "en-US-BrianNeural";
+    for (let offset = 0; offset < count; offset++) {
+      const targetIdx = startIndex + offset;
+      if (targetIdx >= 0 && targetIdx < textChunks.length && textChunks[targetIdx]) {
+        prefetchSentenceAudio(textChunks[targetIdx], voice).catch(() => { });
+      }
+    }
+  }, [textChunks, selectedVoiceURI, prefetchSentenceAudio]);
+
+  // Wstępny prefetch pierwszych 2-3 zdań przy wczytaniu tekstu, aby start Play był natychmiastowy
+  useEffect(() => {
+    if (textChunks && textChunks.length > 0) {
+      prefetchUpcomingChunks(0, 3);
+    }
+  }, [textChunks, prefetchUpcomingChunks]);
+
   const speakChunk = async (index, single = false) => {
     // Zajmij globalny slot — anuluje poprzednie odtwarzanie z dowolnego źródła
     const requestId = globalAudioManager.acquire();
@@ -61032,29 +62453,24 @@ function Workspace({
       }
     ]);
 
+    // Równolegle z wyprzedzeniem pobieramy w tle kolejne zdania (lookahead pipeline)
+    if (!single) {
+      prefetchUpcomingChunks(index + 1, 2);
+    }
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: textChunks[index],
-          voice: selectedVoiceURI || "en-US-BrianNeural"
-        })
-      });
+      const audioUrl = await prefetchSentenceAudio(textChunks[index], selectedVoiceURI || "en-US-BrianNeural");
 
       if (!globalAudioManager.isValid(requestId)) {
         return;
       }
 
-      if (!response.ok) throw new Error("Failed to generate audio");
-      const data = await response.json();
-      if (!data.audio_base64) throw new Error("No audio data returned");
+      if (!audioUrl) throw new Error("No audio data returned");
 
       if (!globalAudioManager.isValid(requestId) || wasPlayingBeforeTooltipRef.current || isPausedRef.current) {
         return;
       }
 
-      const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
       const audio = new Audio(audioUrl);
       audio.playbackRate = speechRate;
 
@@ -61070,12 +62486,19 @@ function Workspace({
           try {
             localStorage.setItem(`buddy_story_progress_${currentStoryId}`, 100);
           } catch (e) { }
+          handleStop();
+          return;
         }
 
         if (single) {
           handleStop();
         } else {
-          speakChunk(index + 1, false);
+          // Naturalna, krótka mikropauza (80ms) – eliminuje nienaturalną ciszę, lektor czyta płynnie
+          setTimeout(() => {
+            if (isSpeakingRef.current && !isPausedRef.current) {
+              speakChunk(index + 1, false);
+            }
+          }, 80);
         }
       };
 
@@ -61109,7 +62532,8 @@ function Workspace({
   speakChunkRef.current = speakChunk;
 
   const handlePlayback = () => {
-    if (!generatedText || textChunks.length === 0) return;
+    if (!activeStoryText || textChunks.length === 0) return;
+    setIsGeneratorCollapsed(true);
     if (currentAudioRef.current) {
       if (isPausedRef.current || currentAudioRef.current.paused) {
         currentAudioRef.current.play().catch(() => { });
@@ -61150,6 +62574,7 @@ function Workspace({
   };
 
   const handlePlaySentence = (index, single = false) => {
+    setIsGeneratorCollapsed(true);
     if (isSpeaking && currentChunkIndex === index && playSingle === single) {
       handlePlayback();
     } else {
@@ -61268,6 +62693,7 @@ function Workspace({
   };
 
   const handleWordClick = async (word, wordId, element, sentenceContext) => {
+    setIsGeneratorCollapsed(true);
     pauseAudioForTooltip();
 
     const layoutEl = document.querySelector('.workspace-layout');
@@ -61707,10 +63133,11 @@ function Workspace({
     const q = (queryText || buddyQuestion || "").trim();
     if (!q) return;
     setIsBuddyLoading(true);
+    setIsAskingBuddy(true);
     setBuddyAnswer("");
     try {
       const formData = new FormData();
-      formData.append("story_text", generatedText || "");
+      formData.append("story_text", activeStoryText || "");
       formData.append("transcription", q);
       formData.append("history", JSON.stringify([]));
 
@@ -61732,6 +63159,7 @@ function Workspace({
       setBuddyAnswer("Błąd połączenia z asystentem AI.");
     } finally {
       setIsBuddyLoading(false);
+      setIsAskingBuddy(false);
     }
   };
 
@@ -61777,26 +63205,11 @@ function Workspace({
     }
   };
 
-  // Auto-init inline card on 'adapt' when Maya's story is loaded
-  useEffect(() => {
-    if (generatedText && generatedText.includes("Maya knew she would need to adapt")) {
-      const meta = VOCABULARY_INFO.adapt;
-      setInlineWordData({
-        word: "adapt",
-        phonetic: meta.phonetic,
-        pos: meta.pos,
-        level: meta.level,
-        pl: meta.pl,
-        enDef: meta.enDef,
-        sentenceTranslation: "Maya wiedziała, że będzie musiała dostosować się do nowej rutyny.",
-        paragraphIndex: 1
-      });
-    }
-  }, [generatedText]);
+  // Inicjalizacja podziału tekstu na akapity
 
   const paragraphs = useMemo(() => {
-    if (!generatedText) return [];
-    const raw = generatedText.split(/\n+/).map(p => p.trim()).filter(Boolean);
+    if (!activeStoryText) return [];
+    const raw = activeStoryText.split(/\n+/).map(p => p.trim()).filter(Boolean);
     if (raw.length <= 1 && raw[0] && raw[0].length > 400) {
       const sents = raw[0].split(/(?<=[.!?])\s+/);
       const grouped = [];
@@ -61806,7 +63219,7 @@ function Workspace({
       return grouped;
     }
     return raw;
-  }, [generatedText]);
+  }, [activeStoryText]);
 
   // Map each paragraph to its constituent sentence chunks with exact textChunks indices
   const paragraphSentences = useMemo(() => {
@@ -61862,12 +63275,12 @@ function Workspace({
   }, [currentChunkIndex, isSpeaking, isPaused]);
 
   const storyLevel = useMemo(() => {
-    if (!generatedText) return "B2";
-    return calculateCEFRLevel(generatedText, currentStoryTitle) || "B2";
-  }, [generatedText, currentStoryTitle]);
+    if (!activeStoryText) return "B2";
+    return calculateCEFRLevel(activeStoryText, activeStoryTitle) || "B2";
+  }, [activeStoryText, activeStoryTitle]);
 
   const storyCategory = useMemo(() => {
-    const combined = `${currentStoryTitle || ""} ${generatedText || ""}`.toLowerCase();
+    const combined = `${activeStoryTitle || ""} ${activeStoryText || ""}`.toLowerCase();
     if (combined.includes("office") || combined.includes("business") || combined.includes("job") || combined.includes("routine") || combined.includes("colleague")) {
       return "Business";
     }
@@ -61881,12 +63294,12 @@ function Workspace({
       return "Health";
     }
     return "General";
-  }, [currentStoryTitle, generatedText]);
+  }, [activeStoryTitle, activeStoryText]);
 
   const wordCount = useMemo(() => {
-    if (!generatedText) return 0;
-    return generatedText.trim().split(/\s+/).filter(Boolean).length;
-  }, [generatedText]);
+    if (!activeStoryText) return 0;
+    return activeStoryText.trim().split(/\s+/).filter(Boolean).length;
+  }, [activeStoryText]);
 
   const readingTime = useMemo(() => {
     return Math.max(1, Math.ceil(wordCount / 130));
@@ -61911,53 +63324,32 @@ function Workspace({
   };
 
   const keyStoryWords = useMemo(() => {
-    if (!generatedText) return [];
-    const textLower = generatedText.toLowerCase();
-    const matched = [];
-    const targetWords = ["adapt", "supportive", "clarify", "routine", "confidence", "curious", "unfamiliar", "progress", "beginning"];
+    // Podręczne słownictwo czytanki: wyłącznie słowa zapisane przez użytkownika w tej czytance
+    if (!activeStoryText || !notebookWords || notebookWords.length === 0) return [];
 
-    for (const w of targetWords) {
-      if (dismissedStoryWords.has(w.toLowerCase())) continue;
-      const regex = new RegExp(`\\b${w}\\b`, "i");
-      if (regex.test(textLower)) {
-        const info = VOCABULARY_INFO[w] || getWordMeta(w);
-        matched.push({
-          word: w,
-          translation: info.pl || "",
-          pos: info.pos || "word",
-          level: info.level || "B2"
-        });
-      }
-    }
+    const textLower = activeStoryText.toLowerCase();
+    const matched = [];
 
     for (const nw of notebookWords) {
-      const w = (nw.original || nw.word || "").toLowerCase();
-      if (dismissedStoryWords.has(w)) continue;
-      if (w && textLower.includes(w) && !matched.some(m => m.word.toLowerCase() === w)) {
-        const info = getWordMeta(w);
+      const w = (nw.original || nw.word || "").trim();
+      const wLower = w.toLowerCase();
+      if (!wLower || dismissedStoryWords.has(wLower)) continue;
+
+      // Sprawdź czy słowo występuje w tekście czytanki
+      const regex = new RegExp(`\\b${wLower}\\b`, "i");
+      if (regex.test(textLower) && !matched.some(m => m.word.toLowerCase() === wLower)) {
+        const info = VOCABULARY_INFO[wLower] || getWordMeta(w);
         matched.push({
-          word: nw.original || nw.word,
+          word: w,
           translation: nw.translated || nw.translation || info.pl || "",
-          pos: info.pos || "word",
-          level: info.level || "B2"
+          pos: nw.pos || info.pos || "word",
+          level: nw.level || info.level || "B2"
         });
       }
     }
 
-    if (matched.length === 0) {
-      const fallbackList = [
-        { word: "adapt", translation: "dostosować się", pos: "verb", level: "B2" },
-        { word: "supportive", translation: "wspierający", pos: "adjective", level: "B2" },
-        { word: "clarify", translation: "wyjaśnić", pos: "verb", level: "B2" }
-      ];
-      for (const item of fallbackList) {
-        if (!dismissedStoryWords.has(item.word.toLowerCase())) {
-          matched.push(item);
-        }
-      }
-    }
-    return matched.slice(0, 5);
-  }, [generatedText, notebookWords, dismissedStoryWords]);
+    return matched;
+  }, [activeStoryText, notebookWords, dismissedStoryWords]);
 
   const effectivePracticeWords = useMemo(() => {
     if (notebookWords && notebookWords.length > 0) {
@@ -62262,7 +63654,7 @@ function Workspace({
 
   return (
     <div className="workspace-layout">
-      {generatedText && (
+      {(generatedText || activeStoryText) && (
         <div
           ref={floatingPlayerRef}
           className={`apple-player-controls-floating ${isDraggingPlayer ? 'dragging' : ''}`}
@@ -62301,7 +63693,7 @@ function Workspace({
           <button
             className="player-btn player-stop-btn"
             onClick={handleStop}
-            disabled={!isSpeaking}
+            disabled={!isSpeaking && !isPaused}
             title="Zatrzymaj"
           >
             <svg viewBox="0 0 24 24" fill="currentColor">
@@ -62411,21 +63803,127 @@ function Workspace({
         </div>
       )}
 
-      {!generatedText ? (
-        <main className="workspace-main">
-          <StoryGenerator
-            onGenerate={generateStory}
-            onGenerateDefault={generateDefaultText}
-            onPasteText={pasteStory}
-            isLoading={isLoading}
-            suggestedTopics={suggestedTopics}
-            user={user}
-          />
-        </main>
-      ) : isContinuing ? (
-        <main className="workspace-main">
-          {storyParts.length > 0 && (
-            <div className="chapter-tabs">
+      <div className="workspace-figma-container">
+        {/* Collapsible Panel: Create your next story / Continue your story */}
+        <div className={`workspace-create-story-card ${isGeneratorCollapsed ? "collapsed" : ""}`}>
+          <div className="create-story-top-row">
+            <div className="create-story-title-group">
+              <h2 className="create-story-heading">
+                {isContinuing
+                  ? `Continue your story ${storyParts.length > 0 ? `(Part ${storyParts.length + 1})` : ""}`
+                  : "Create your next story"}
+              </h2>
+              {isContinuing && (
+                <button
+                  type="button"
+                  className="create-story-cancel-btn"
+                  onClick={() => {
+                    setIsContinuing(false);
+                    setCustomStoryPrompt("");
+                  }}
+                  title="Wróć do tworzenia nowego opowiadania"
+                >
+                  Anuluj kontynuację
+                </button>
+              )}
+            </div>
+            <div className="create-story-top-actions">
+              <button
+                type="button"
+                className="create-story-collapse-btn"
+                onClick={() => setIsGeneratorCollapsed(true)}
+                title="Zwiń panel i zacznij czytać"
+              >
+                <span>Zwiń do czytania</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="create-story-controls-row">
+            <div className="create-story-chips">
+              {["Business", "Daily Life", "Travel", "Tech"].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`create-story-chip ${selectedCategory === cat ? "active" : ""}`}
+                  onClick={() => setSelectedCategory(cat)}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="create-story-right-controls">
+              <div className="create-story-level-select-wrapper">
+                <select
+                  className="create-story-level-select"
+                  value={selectedLevel}
+                  onChange={(e) => setSelectedLevel(e.target.value)}
+                >
+                  {["A1", "A2", "B1", "B2", "C1", "C2"].map((lvl) => (
+                    <option key={lvl} value={lvl}>{lvl}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                className="create-story-generate-btn"
+                onClick={handleGenerateFigmaStory}
+                disabled={isGeneratingStory || isLoading}
+              >
+                <span>
+                  {isGeneratingStory || isLoading
+                    ? (isContinuing ? "Tworzę kontynuację..." : "Tworzę opowiadanie...")
+                    : (isContinuing
+                        ? (storyParts.length > 0 ? `Wygeneruj część ${storyParts.length + 1}` : "Kontynuuj opowiadanie")
+                        : "Create a story"
+                      )
+                  }
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="create-story-prompt-wrapper">
+            <label htmlFor="create-story-prompt" className="create-story-prompt-label">
+              {isContinuing ? "Co ma się wydarzyć w kolejnej części? (opcjonalnie):" : "Własny opis opowiadania (opcjonalnie):"}
+            </label>
+            <textarea
+              id="create-story-prompt"
+              className="create-story-prompt-textarea"
+              value={customStoryPrompt}
+              onChange={(e) => setCustomStoryPrompt(e.target.value)}
+              placeholder={isContinuing
+                ? "Np. Alex poznaje przewodnika, dociera do tajemniczego miejsca, dochodzi do niespodziewanego zwrotu akcji..."
+                : "Np. Maya jest młodą projektantką w Cambridge. Opisz jej pierwszy dzień w pracy i rozmowę z wymagającym klientem..."}
+              rows="3"
+              disabled={isGeneratingStory || isLoading}
+            />
+          </div>
+
+          <div className="create-story-footer-note">
+            CEFR levels: A1 • A2 • B1 • B2 • C1 • C2. Stories are tailored to your selected level.
+          </div>
+        </div>
+
+        {/* Sleek expandable pill when collapsed */}
+        {isGeneratorCollapsed && (
+          <div className="workspace-collapsed-bar">
+            <button
+              type="button"
+              className="workspace-open-generator-pill"
+              onClick={() => setIsGeneratorCollapsed(false)}
+              title="Otwórz generator opowieści"
+            >
+              <span>{isContinuing ? `Continue your story (Part ${storyParts.length + 1})` : `Create your next story (${selectedCategory} · ${selectedLevel})`}</span>
+            </button>
+          </div>
+        )}
+
+        <div className="workspace-figma-top-bar">
+          {(storyParts.length > 0 || generatedText) && (
+            <div className="chapter-tabs" style={{ margin: 0 }}>
               {storyParts.map((part, index) => (
                 <button
                   key={part.id}
@@ -62440,138 +63938,15 @@ function Workspace({
                 onClick={() => {
                   handleStop();
                   setIsContinuing(true);
+                  setIsGeneratorCollapsed(false);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
               >
                 + Continue Story
               </button>
             </div>
           )}
-
-          <div className="story-generator continuation-panel">
-            {isLoading ? (
-              <div className="generation-progress-overlay">
-                <div className="gen-progress-card">
-                  <div className="gen-progress-ring-wrapper">
-                    <svg className="gen-progress-ring" viewBox="0 0 120 120">
-                      <circle
-                        className="gen-progress-ring-track"
-                        cx="60" cy="60" r="50"
-                        fill="none" strokeWidth="8"
-                      />
-                      <circle
-                        className="gen-progress-ring-fill"
-                        cx="60" cy="60" r="50"
-                        fill="none" strokeWidth="8"
-                        strokeDasharray={`${2 * Math.PI * 50}`}
-                        strokeDashoffset={`${2 * Math.PI * 50 * (1 - genProgress / 100)}`}
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <div className="gen-progress-pct">{Math.round(genProgress)}%</div>
-                  </div>
-                  <div className="gen-progress-label">{genPhaseLabel}</div>
-                  <div className="gen-progress-title">Tworzę kontynuację Twojej opowieści</div>
-                  <div className="gen-progress-subtitle">To może potrwać do 30 sekund...</div>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="generator-header">
-                  <h2>Continue Story</h2>
-                  <p>Tell the AI what should happen next in Part {storyParts.length + 1} of this story.</p>
-                </div>
-
-                <div className="topic-grid">
-                  {suggestedTopics.map((topic) => {
-                    const isSelected = selectedContinuationTopics.includes(topic);
-                    return (
-                      <button
-                        key={topic}
-                        onClick={() => {
-                          setSelectedContinuationTopics(prev =>
-                            prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
-                          );
-                        }}
-                        className={`topic-chip ${isSelected ? "selected" : ""}`}
-                        disabled={isLoading}
-                      >
-                        <span className="topic-chip-icon">{getTopicIcon(topic)}</span>
-                        <span className="topic-chip-text">{topic}</span>
-                        {isSelected && <span className="topic-chip-check">✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="details-composer">
-                  <textarea
-                    value={continuationDetails}
-                    onChange={(e) => setContinuationDetails(e.target.value)}
-                    placeholder="Describe what happens next (e.g. Alex meets a new friend, finds a key, goes to the forest...)"
-                    rows="4"
-                    disabled={isLoading}
-                  />
-                </div>
-
-                <div className="continuation-actions">
-                  <button
-                    onClick={handleGenerateContinuation}
-                    disabled={isLoading}
-                    className="generate-story-btn"
-                  >
-                    {isLoading ? "Generating sequel..." : `Generate Part ${storyParts.length + 1}`}
-                  </button>
-                  <button
-                    onClick={() => setIsContinuing(false)}
-                    disabled={isLoading}
-                    className="cancel-continuation-btn"
-                    style={{ marginLeft: '12px', padding: '12px 24px', borderRadius: '8px', border: '1px solid var(--border)', fontFamily: 'var(--font-main)', fontWeight: '600', cursor: 'pointer' }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </main>
-      ) : (
-        <div className="workspace-figma-container">
-          <div className="workspace-figma-top-bar">
-            <button
-              onClick={handleBackButtonClick}
-              className="workspace-back-pill-btn"
-              title="Wróć do wyboru tematów / utwórz nową historię"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="19" y1="12" x2="5" y2="12"></line>
-                <polyline points="12 19 5 12 12 5"></polyline>
-              </svg>
-              <span>Nowa opowieść</span>
-            </button>
-
-            {storyParts.length > 0 && (
-              <div className="chapter-tabs" style={{ margin: 0 }}>
-                {storyParts.map((part, index) => (
-                  <button
-                    key={part.id}
-                    className={`chapter-tab ${!isContinuing && activePartIndex === index ? "active" : ""}`}
-                    onClick={() => handleSelectPart(index)}
-                  >
-                    Part {part.part_number || index + 1}
-                  </button>
-                ))}
-                <button
-                  className={`chapter-tab continue-tab ${isContinuing ? "active" : ""}`}
-                  onClick={() => {
-                    handleStop();
-                    setIsContinuing(true);
-                  }}
-                >
-                  + Continue Story
-                </button>
-              </div>
-            )}
-          </div>
+        </div>
 
           <div className="workspace-figma-grid">
             {/* LEFT COLUMN: Story Reading Card */}
@@ -62630,6 +64005,19 @@ function Workspace({
                     </>
                   )}
                 </button>
+
+                {(isSpeaking || isPaused) && (
+                  <button
+                    className="toolbar-pill-btn toolbar-stop-btn"
+                    onClick={handleStop}
+                    title="Zatrzymaj czytanie"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <rect x="6" y="6" width="12" height="12" rx="2" />
+                    </svg>
+                    <span>Stop</span>
+                  </button>
+                )}
 
                 <button
                   className="toolbar-pill-btn"
@@ -62718,60 +64106,72 @@ function Workspace({
               </div>
             </article>
 
-            {/* RIGHT COLUMN: 3 Figma Cards */}
+            {/* RIGHT COLUMN: 3 Cards (Words in this story -> Your learning buddy -> Small steps count) */}
             <aside className="workspace-figma-sidebar">
-              {/* Card 1: Words in this story (top & always visible) */}
+              {/* Card 1: Words in this story (TOP) */}
               <div className="story-words-card">
                 <div className="story-words-header">
                   <h3>Words in this story</h3>
-                  <span className="story-words-count-badge">
+                  <span className={`story-words-count-badge ${keyStoryWords.length === 0 ? 'empty' : ''}`}>
                     {keyStoryWords.length}
                   </span>
                 </div>
 
                 <div className="story-words-list">
-                  {keyStoryWords.map((item, idx) => {
-                    return (
-                      <div key={item.word || idx} className="story-word-item">
-                        <div className="story-word-item-top">
-                          <span
-                            className="story-word-name"
-                            onClick={() => handleSpeakWord(item.word)}
-                            title="Kliknij, aby posłuchać wymowy"
-                          >
-                            {item.word}
-                          </span>
-                          <div className="story-word-item-actions">
-                            <button
-                              className="story-word-speaker-btn"
+                  {keyStoryWords.length === 0 ? (
+                    <div className="story-words-empty">
+                      <div className="story-words-empty-title">Brak zapisanych słówek</div>
+                      <div className="story-words-empty-sub">Kliknij słowo w tekście, aby sprawdzić znaczenie i dodać je do listy.</div>
+                    </div>
+                  ) : (
+                    keyStoryWords.map((item, idx) => {
+                      const meta = getWordMeta(item.word);
+                      const pos = item.pos || meta.pos || "word";
+                      const level = item.level || meta.level || "B2";
+                      const translation = item.translation || meta.pl || "";
+
+                      return (
+                        <div key={item.word || idx} className="story-word-item">
+                          <div className="story-word-item-top">
+                            <span
+                              className="story-word-name"
                               onClick={() => handleSpeakWord(item.word)}
-                              title="Posłuchaj wymowy"
+                              title="Kliknij, aby posłuchać wymowy"
                             >
-                              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                              </svg>
-                            </button>
-                            <button
-                              className="story-word-delete-btn"
-                              onClick={() => handleDeleteStoryWord(item.word)}
-                              title="Usuń słowo ze słownika"
-                            >
-                              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="3 6 5 6 21 6" />
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                <line x1="10" y1="11" x2="10" y2="17" />
-                                <line x1="14" y1="11" x2="14" y2="17" />
-                              </svg>
-                            </button>
+                              {item.word}
+                            </span>
+                            <div className="story-word-item-actions">
+                              <button
+                                className="story-word-speaker-btn"
+                                onClick={() => handleSpeakWord(item.word)}
+                                title="Posłuchaj wymowy"
+                              >
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                </svg>
+                              </button>
+                              <button
+                                className="story-word-delete-btn"
+                                onClick={() => handleDeleteStoryWord(item.word)}
+                                title="Usuń słowo z listy"
+                              >
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6" />
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                  <line x1="10" y1="11" x2="10" y2="17" />
+                                  <line x1="14" y1="11" x2="14" y2="17" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                          <div className="story-word-item-sub">
+                            <span>{translation ? `${translation} · ` : ""}{pos} · {level}</span>
                           </div>
                         </div>
-                        <div className="story-word-item-sub">
-                          <span>{item.translation}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
 
                 <button
@@ -62805,9 +64205,9 @@ function Workspace({
                 </p>
 
                 <button
-                  className={`buddy-voice-ai-btn ${subscription && !subscription.can_access_mastery && !user?.is_admin ? 'btn-pro-locked' : ''}`}
+                  className={`buddy-voice-ai-btn ${isMasteryLocked ? 'btn-pro-locked' : ''}`}
                   onClick={() => {
-                    if (subscription && !subscription.can_access_mastery && !user?.is_admin) {
+                    if (isMasteryLocked) {
                       if (onOpenPaywall) {
                         onOpenPaywall({ feature: 'mastery' });
                         return;
@@ -62823,7 +64223,7 @@ function Workspace({
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
                   </svg>
                   <span>Mastery Path · 3 steps</span>
-                  {subscription && !subscription.can_access_mastery && !user?.is_admin && (
+                  {isMasteryLocked && (
                     <span style={{
                       marginLeft: '6px',
                       background: 'rgba(255,255,255,0.25)',
@@ -62888,6 +64288,12 @@ function Workspace({
           <button
             className="chat-live-floating-btn"
             onClick={() => {
+              if (isMasteryLocked) {
+                if (onOpenPaywall) {
+                  onOpenPaywall({ feature: 'mastery' });
+                  return;
+                }
+              }
               handleStop();
               setShowPracticeMode(true);
             }}
@@ -62896,6 +64302,17 @@ function Workspace({
               <path d="M12 3v18M8 8v8M4 11v2M16 6v12M20 10v4" />
             </svg>
             <span>Chat Live</span>
+            {isMasteryLocked && (
+              <span style={{
+                marginLeft: '6px',
+                background: 'rgba(255,255,255,0.25)',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: 800,
+                letterSpacing: '0.05em'
+              }}>PRO</span>
+            )}
           </button>
 
           {storyCopiedToast && (
@@ -62904,7 +64321,6 @@ function Workspace({
             </div>
           )}
         </div>
-      )}
 
       {showPracticeMode && (
         <PracticeMode
@@ -62912,6 +64328,7 @@ function Workspace({
           voices={voices}
           selectedVoiceURI={selectedVoiceURI}
           user={user}
+          onOpenPaywall={onOpenPaywall}
           onExit={() => setShowPracticeMode(false)}
           onLogActivity={(act) => setActivityLog(prev => [...prev, act])}
         />
