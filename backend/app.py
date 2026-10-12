@@ -3386,6 +3386,67 @@ def save_user_settings():
         return jsonify({"error": f"Błąd zapisu ustawień: {e}"}), 500
 
 
+@app.route("/api/user/daily-practice", methods=['GET', 'POST'])
+def handle_daily_practice():
+    """Zarządza licznikiem dziennego czasu ćwiczeń (Your daily practice) użytkownika."""
+    user_email = get_user_from_request()
+    if not user_email:
+        req_data = request.get_json(silent=True) or {}
+        user_email = req_data.get("user_email")
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+
+    if request.method == 'GET':
+        practice_data = {"date": today_str, "seconds": 0, "target_minutes": 20}
+        try:
+            if 'db' in globals() and db is not None:
+                user_doc = db.collection('users').document(user_email).get()
+                if user_doc.exists:
+                    stored = (user_doc.to_dict() or {}).get('daily_practice') or {}
+                    if stored.get('date') == today_str:
+                        practice_data = stored
+        except Exception as e:
+            print(f"Błąd odczytu daily_practice: {e}")
+        return jsonify(practice_data), 200
+
+    if request.method == 'POST':
+        req_data = request.get_json(silent=True) or {}
+        seconds_to_add = int(req_data.get('add_seconds', 0) or 0)
+        set_seconds = req_data.get('seconds')
+        target_minutes = int(req_data.get('target_minutes', 20) or 20)
+
+        current_seconds = 0
+        try:
+            if 'db' in globals() and db is not None:
+                user_ref = db.collection('users').document(user_email)
+                user_doc = user_ref.get()
+                if user_doc.exists:
+                    stored = (user_doc.to_dict() or {}).get('daily_practice') or {}
+                    if stored.get('date') == today_str:
+                        current_seconds = int(stored.get('seconds', 0) or 0)
+
+                if set_seconds is not None:
+                    new_seconds = max(0, int(set_seconds))
+                else:
+                    new_seconds = max(0, current_seconds + seconds_to_add)
+
+                updated_practice = {
+                    "date": today_str,
+                    "seconds": new_seconds,
+                    "target_minutes": target_minutes,
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                user_ref.set({"daily_practice": updated_practice}, merge=True)
+                return jsonify(updated_practice), 200
+        except Exception as e:
+            print(f"Błąd zapisu daily_practice: {e}")
+            return jsonify({"error": str(e)}), 500
+
+        return jsonify({"date": today_str, "seconds": set_seconds or seconds_to_add, "target_minutes": target_minutes}), 200
+
+
 # ### NOWE/ZMODYFIKOWANE ENDPOINTY DLA ZARZĄDZANIA HISTORIAMI PRZEZ FIRESTORE ###
 
 def analyze_cefr_level(text, title=""):

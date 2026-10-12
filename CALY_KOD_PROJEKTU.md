@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-12 21:20:27
+Wygenerowano: 2026-10-12 21:42:45
 
 ## Spis Treści
 1. `backend/app.py`
@@ -3503,6 +3503,67 @@ def save_user_settings():
         return jsonify({"message": "Ustawienia zapisane pomyślnie", "settings": settings_data}), 200
     except Exception as e:
         return jsonify({"error": f"Błąd zapisu ustawień: {e}"}), 500
+
+
+@app.route("/api/user/daily-practice", methods=['GET', 'POST'])
+def handle_daily_practice():
+    """Zarządza licznikiem dziennego czasu ćwiczeń (Your daily practice) użytkownika."""
+    user_email = get_user_from_request()
+    if not user_email:
+        req_data = request.get_json(silent=True) or {}
+        user_email = req_data.get("user_email")
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+
+    if request.method == 'GET':
+        practice_data = {"date": today_str, "seconds": 0, "target_minutes": 20}
+        try:
+            if 'db' in globals() and db is not None:
+                user_doc = db.collection('users').document(user_email).get()
+                if user_doc.exists:
+                    stored = (user_doc.to_dict() or {}).get('daily_practice') or {}
+                    if stored.get('date') == today_str:
+                        practice_data = stored
+        except Exception as e:
+            print(f"Błąd odczytu daily_practice: {e}")
+        return jsonify(practice_data), 200
+
+    if request.method == 'POST':
+        req_data = request.get_json(silent=True) or {}
+        seconds_to_add = int(req_data.get('add_seconds', 0) or 0)
+        set_seconds = req_data.get('seconds')
+        target_minutes = int(req_data.get('target_minutes', 20) or 20)
+
+        current_seconds = 0
+        try:
+            if 'db' in globals() and db is not None:
+                user_ref = db.collection('users').document(user_email)
+                user_doc = user_ref.get()
+                if user_doc.exists:
+                    stored = (user_doc.to_dict() or {}).get('daily_practice') or {}
+                    if stored.get('date') == today_str:
+                        current_seconds = int(stored.get('seconds', 0) or 0)
+
+                if set_seconds is not None:
+                    new_seconds = max(0, int(set_seconds))
+                else:
+                    new_seconds = max(0, current_seconds + seconds_to_add)
+
+                updated_practice = {
+                    "date": today_str,
+                    "seconds": new_seconds,
+                    "target_minutes": target_minutes,
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                user_ref.set({"daily_practice": updated_practice}, merge=True)
+                return jsonify(updated_practice), 200
+        except Exception as e:
+            print(f"Błąd zapisu daily_practice: {e}")
+            return jsonify({"error": str(e)}), 500
+
+        return jsonify({"date": today_str, "seconds": set_seconds or seconds_to_add, "target_minutes": target_minutes}), 200
 
 
 # ### NOWE/ZMODYFIKOWANE ENDPOINTY DLA ZARZĄDZANIA HISTORIAMI PRZEZ FIRESTORE ###
@@ -48680,15 +48741,142 @@ export default Reader;
 ## 49. Plik: `frontend/src/components/Sidebar.js`
 
 ```javascript
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import logoImg from '../assets/logo.png';
+import { API_BASE_URL } from '../config';
 import './Sidebar.css';
+
+const DAILY_GOAL_MINUTES = 20;
 
 const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscription, onOpenPaywall }) => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const stored = localStorage.getItem('buddy_sidebar_collapsed');
     return stored ? JSON.parse(stored) : false;
   });
+
+  const getTodayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const todayStr = getTodayStr();
+  const storageKey = `speakling_practice_${user?.email || 'guest'}_${todayStr}`;
+
+  const [practiceSeconds, setPracticeSeconds] = useState(() => {
+    try {
+      const val = localStorage.getItem(storageKey);
+      return val ? parseInt(val, 10) || 0 : 0;
+    } catch (e) {
+      return 0;
+    }
+  });
+
+  const lastActivityRef = useRef(Date.now());
+  const practiceSecondsRef = useRef(practiceSeconds);
+  practiceSecondsRef.current = practiceSeconds;
+
+  // Inicjalizacja i pobranie zapisanego czasu z backendu
+  useEffect(() => {
+    if (!user?.token) return;
+
+    fetch(`${API_BASE_URL}/api/user/daily-practice`, {
+      headers: {
+        'X-Session-Token': user.token
+      }
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.date === todayStr) {
+          const serverSec = parseInt(data.seconds, 10) || 0;
+          setPracticeSeconds(prev => {
+            const chosen = Math.max(prev, serverSec);
+            try {
+              localStorage.setItem(storageKey, String(chosen));
+            } catch (e) {}
+            return chosen;
+          });
+        }
+      })
+      .catch(() => {});
+  }, [user?.token, todayStr, storageKey]);
+
+  // Śledzenie aktywnego czasu spędzonego na ćwiczeniach
+  useEffect(() => {
+    const markActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    window.addEventListener('mousemove', markActivity, { passive: true });
+    window.addEventListener('keydown', markActivity, { passive: true });
+    window.addEventListener('click', markActivity, { passive: true });
+    window.addEventListener('touchstart', markActivity, { passive: true });
+    window.addEventListener('scroll', markActivity, { passive: true });
+
+    let tickCounter = 0;
+    const interval = setInterval(() => {
+      // Jeśli karta jest ukryta lub użytkownik był bezczynny ponad 2 minuty - nie zliczaj czasu
+      if (document.hidden) return;
+      if (Date.now() - lastActivityRef.current > 120000) return;
+
+      setPracticeSeconds(prev => {
+        const next = prev + 1;
+        tickCounter++;
+
+        // Zapis lokalny co 5 sekund
+        if (tickCounter % 5 === 0) {
+          try {
+            localStorage.setItem(storageKey, String(next));
+          } catch (e) {}
+        }
+
+        // Zapis do backendu co 30 sekund
+        if (tickCounter % 30 === 0 && user?.token) {
+          fetch(`${API_BASE_URL}/api/user/daily-practice`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Session-Token': user.token
+            },
+            body: JSON.stringify({
+              seconds: next,
+              target_minutes: DAILY_GOAL_MINUTES
+            })
+          }).catch(() => {});
+        }
+
+        return next;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('mousemove', markActivity);
+      window.removeEventListener('keydown', markActivity);
+      window.removeEventListener('click', markActivity);
+      window.removeEventListener('touchstart', markActivity);
+      window.removeEventListener('scroll', markActivity);
+
+      try {
+        localStorage.setItem(storageKey, String(practiceSecondsRef.current));
+      } catch (e) {}
+    };
+  }, [user?.token, storageKey]);
+
+  const currentPracticeMinutes = practiceSeconds / 60;
+  const practicePercentage = Math.min(100, Math.round((practiceSeconds / (DAILY_GOAL_MINUTES * 60)) * 100));
+
+  let practiceMetaText = "";
+  if (practiceSeconds < 60) {
+    practiceMetaText = `${practiceSeconds}s of ${DAILY_GOAL_MINUTES} min today`;
+  } else if (currentPracticeMinutes < 10) {
+    practiceMetaText = `${currentPracticeMinutes.toFixed(1)} of ${DAILY_GOAL_MINUTES} min today`;
+  } else {
+    practiceMetaText = `${Math.floor(currentPracticeMinutes)} of ${DAILY_GOAL_MINUTES} min today`;
+  }
+
+  if (practicePercentage >= 100) {
+    practiceMetaText = `${Math.floor(currentPracticeMinutes)} of ${DAILY_GOAL_MINUTES} min today · Goal achieved!`;
+  }
 
   const toggleCollapse = () => {
     setIsCollapsed(prev => {
@@ -48833,42 +49021,20 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
 
       <div className="sidebar-footer">
         {!isCollapsed && (
-          <div className="sidebar-subscription-box" onClick={() => onOpenPaywall && onOpenPaywall()}>
-            {isStarter ? (
-              <div className="sidebar-sub-card sub-card-upgrade">
-                <div className="sub-card-header">
-                  <span className="sub-card-tag">7 DNI FREE</span>
-                  <span className="sub-card-sparkle">✨</span>
-                </div>
-                <div className="sub-card-title">Przejdź na Pro</div>
-                <div className="sub-card-desc">150 min Live Orb + Mastery Path</div>
-                <button className="sub-card-btn">Uaktualnij plan →</button>
-              </div>
-            ) : (
-              <div className="sidebar-sub-card sub-card-active">
-                <div className="sub-card-header">
-                  <span className="sub-card-tag">{subscription?.tier?.toUpperCase()}</span>
-                </div>
-                <div className="sub-card-title">Plan {subscription?.name || 'Pro'}</div>
-                <div className="sub-card-desc">
-                  Pozostało: <strong>{(subscription?.minutes_remaining || 0).toFixed(1)} min</strong>
-                </div>
-                <button className="sub-card-btn-secondary">Zarządzaj planem</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!isCollapsed && (
           <div className="daily-practice-card">
             <div className="practice-card-header">
               <span className="practice-card-title">Your daily practice</span>
             </div>
-            <p className="practice-card-sub">A little English, every day.</p>
+            <p className="practice-card-sub">
+              {practicePercentage >= 100 ? "Great job! Daily goal achieved." : "A little English, every day."}
+            </p>
             <div className="practice-progress-bar">
-              <div className="practice-progress-fill" style={{ width: '60%' }}></div>
+              <div 
+                className="practice-progress-fill" 
+                style={{ width: `${Math.max(practiceSeconds > 0 ? 3 : 0, practicePercentage)}%` }}
+              ></div>
             </div>
-            <span className="practice-card-meta">12 of 20 minutes today</span>
+            <span className="practice-card-meta">{practiceMetaText}</span>
           </div>
         )}
 

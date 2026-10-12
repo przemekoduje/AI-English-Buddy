@@ -1,5 +1,5 @@
 # Speakling — Kompletny Moduł Subskrypcji, Paywalla i Limitów AI
-Wygenerowano: 2026-10-12 21:20:27
+Wygenerowano: 2026-10-12 21:42:45
 > Dedykowany, lekki pakiet kodu dla zewnętrznych modeli AI (ChatGPT, Claude, DeepSeek). Zawiera 100% logiki subskrypcji, Stripe, limitów minut Gemini Live i blokad paywalla bez obcinania.
 
 ## Spis Zawartości Pakietu
@@ -600,18 +600,18 @@ def stripe_webhook():
 # 3. BRAMKA PAYWALLA W MODULE MASTERY PATH (3 kroki)
 # (Z pliku backend/app.py: /api/mastery-prepare)
 # ========================================================
-        2. Wybierz *jedno* reprezentatywne zdanie z tekstu, które ją zawiera.
-        3. Opisz krótko i jasno, czym jest ta struktura/czas i w jakich sytuacjach się jej używa, jakbyś tłumaczył to uczącej się osobie.
+          <p style="margin: 6px 0;"><strong>Dodane do słownika:</strong> {', '.join(added_words) if added_words else 'Brak'}</p>
+    """
 
-        Formatuj odpowiedź jako listę JSON, gdzie każdy element to obiekt z kluczami 'title', 'example_sentence', 'explanation'.
-
-        Tekst do analizy:
-        "{text}"
-
-        Przykład formatu JSON (tylko dla jednego elementu, ma być ich 3):
-        [
-          {{
-            "title": "Przykład Tytułu Gramatycznego",
+    if forgotten_words:
+        email_html += f"""
+          <p style="margin: 12px 0 6px 0; font-weight: 700; color: #b91c1c;">Słówka, które warto zapisać (często sprawdzane, lecz pominięte):</p>
+        """
+        for item in forgotten_words:
+            email_html += f"""
+              <div style="border: 1px solid #fca5a5; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #fff5f5;">
+                <p style="margin: 2px 0; font-size: 1.1rem; font-weight: 700; color: #991b1b;">{item.get('word')}</p>
+                <p style="margin: 2px 0; color: #b91c1c; font-weight: 600;">Tłumaczenie: {item.get('translation')}</p>
 
 ... (dalsza część przygotowania etapów treningu)
 
@@ -619,20 +619,20 @@ def stripe_webhook():
 # 4. WYMUSZENIE DARMOWEGO EDGE TTS DLA PLANU STARTER
 # (Z pliku backend/app.py: generate_tts_base64)
 # ========================================================
-        tts = gTTS(text=text_to_speak, lang=lang)
-        tts.write_to_fp(fp)
-        return fp.getvalue()
-    except Exception as e_gtts:
-        print(f"gTTS fallback error: {e_gtts}", flush=True)
-        return b""
+            segment_lang = detect_primary_language(chunk_stripped)
+            add_segment(chunk, segment_lang)
+            
+    return segments
 
-def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
-    if gcp_tts_client:
-        try:
-            from google.cloud import texttospeech
-            is_pl = ('pl-PL' in voice_name or 'Marek' in voice_name or 'Zofia' in voice_name)
-            gcp_voice_name = "pl-PL-Wavenet-B" if is_pl else "en-US-Neural2-D"
-            lang_code = "pl-PL" if is_pl else "en-US"
+def split_text_by_tags(text):
+    if "[PL]" not in text and "[EN]" not in text:
+        return split_text_by_language(text)
+        
+    parts = re.split(r'(\[PL\]|\[EN\])', text)
+    segments = []
+    current_lang = "en"
+    
+    for part in parts:
 
 ...
 
@@ -640,33 +640,33 @@ def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
 # 5. TWARDY LIMIT MINUT DLA GEMINI LIVE ORB (KOD 403)
 # (Z pliku backend/app.py: /api/live/token)
 # ========================================================
-    duration_seconds = float(req_data.get("duration_seconds", 0) or 0)
+        "voices": [
+            {"id": "Puck", "name": "Puck (Energetyczny męski)", "gender": "male"},
+            {"id": "Charon", "name": "Charon (Głęboki męski)", "gender": "male"},
+            {"id": "Fenrir", "name": "Fenrir (Spokojny męski)", "gender": "male"},
+            {"id": "Aoede", "name": "Aoede (Ciepły żeński)", "gender": "female"},
+            {"id": "Kore", "name": "Kore (Naturalny żeński)", "gender": "female"}
+        ],
+        "models": [
+            {"id": "gemini-2.5-flash-native-audio-latest", "name": "Gemini 2.5 Flash Native Audio (Zalecany - najszybszy)"},
+            {"id": "gemini-3.8-live", "name": "Gemini 3.8 Live (Nowa generacja)"},
+            {"id": "gemini-3.1-flash-live-preview", "name": "Gemini 3.1 Flash Live"},
+        ]
+    })
 
-    # Jeśli Gemini nie zwróciło tokenów w ramce WebSocket, estymujemy z czasu sesji
-    if prompt_tokens == 0 and completion_tokens == 0 and duration_seconds > 0:
-        prompt_tokens = int(duration_seconds * 16)
-        completion_tokens = int(duration_seconds * 20)
 
-    log_api_usage(
-        user_email=user_email,
-        service=service,
-        feature="gemini_live_session",
-        model=model,
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        quantity=duration_seconds
-    )
+@app.route("/api/live/transcribe", methods=['POST'])
+def live_transcribe():
+    """Transcribes an audio turn (WAV / PCM) from Gemini Live for display in the chat transcript."""
+    audio_file = request.files.get('audio')
+    if not audio_file:
+        return jsonify({"text": ""}), 200
 
-    # log-usage rejestruje wydatek tokenowy w api_usage (monitor kosztów),
-    # natomiast czas subskrypcji użytkownika jest precyzyjnie śledzony w czasie rzeczywistym
-    # przez endpoint /api/subscription/track-live-time.
-    sub = get_user_subscription(user_email)
+    audio_bytes = audio_file.read()
+    if not audio_bytes or len(audio_bytes) < 300:
+        return jsonify({"text": ""}), 200
 
-    return jsonify({
-        "success": True,
-        "service": service,
-        "model": model,
-        "prompt_tokens": prompt_tokens,
+    get_gemini_api_key()  # upewnij się, że klucz Gemini jest załadowany
 
 
 ```
@@ -3348,15 +3348,142 @@ export default TopBar;
 ## 6. Plik: `frontend/src/components/Sidebar.js`
 
 ```javascript
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import logoImg from '../assets/logo.png';
+import { API_BASE_URL } from '../config';
 import './Sidebar.css';
+
+const DAILY_GOAL_MINUTES = 20;
 
 const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscription, onOpenPaywall }) => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const stored = localStorage.getItem('buddy_sidebar_collapsed');
     return stored ? JSON.parse(stored) : false;
   });
+
+  const getTodayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const todayStr = getTodayStr();
+  const storageKey = `speakling_practice_${user?.email || 'guest'}_${todayStr}`;
+
+  const [practiceSeconds, setPracticeSeconds] = useState(() => {
+    try {
+      const val = localStorage.getItem(storageKey);
+      return val ? parseInt(val, 10) || 0 : 0;
+    } catch (e) {
+      return 0;
+    }
+  });
+
+  const lastActivityRef = useRef(Date.now());
+  const practiceSecondsRef = useRef(practiceSeconds);
+  practiceSecondsRef.current = practiceSeconds;
+
+  // Inicjalizacja i pobranie zapisanego czasu z backendu
+  useEffect(() => {
+    if (!user?.token) return;
+
+    fetch(`${API_BASE_URL}/api/user/daily-practice`, {
+      headers: {
+        'X-Session-Token': user.token
+      }
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.date === todayStr) {
+          const serverSec = parseInt(data.seconds, 10) || 0;
+          setPracticeSeconds(prev => {
+            const chosen = Math.max(prev, serverSec);
+            try {
+              localStorage.setItem(storageKey, String(chosen));
+            } catch (e) {}
+            return chosen;
+          });
+        }
+      })
+      .catch(() => {});
+  }, [user?.token, todayStr, storageKey]);
+
+  // Śledzenie aktywnego czasu spędzonego na ćwiczeniach
+  useEffect(() => {
+    const markActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    window.addEventListener('mousemove', markActivity, { passive: true });
+    window.addEventListener('keydown', markActivity, { passive: true });
+    window.addEventListener('click', markActivity, { passive: true });
+    window.addEventListener('touchstart', markActivity, { passive: true });
+    window.addEventListener('scroll', markActivity, { passive: true });
+
+    let tickCounter = 0;
+    const interval = setInterval(() => {
+      // Jeśli karta jest ukryta lub użytkownik był bezczynny ponad 2 minuty - nie zliczaj czasu
+      if (document.hidden) return;
+      if (Date.now() - lastActivityRef.current > 120000) return;
+
+      setPracticeSeconds(prev => {
+        const next = prev + 1;
+        tickCounter++;
+
+        // Zapis lokalny co 5 sekund
+        if (tickCounter % 5 === 0) {
+          try {
+            localStorage.setItem(storageKey, String(next));
+          } catch (e) {}
+        }
+
+        // Zapis do backendu co 30 sekund
+        if (tickCounter % 30 === 0 && user?.token) {
+          fetch(`${API_BASE_URL}/api/user/daily-practice`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Session-Token': user.token
+            },
+            body: JSON.stringify({
+              seconds: next,
+              target_minutes: DAILY_GOAL_MINUTES
+            })
+          }).catch(() => {});
+        }
+
+        return next;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('mousemove', markActivity);
+      window.removeEventListener('keydown', markActivity);
+      window.removeEventListener('click', markActivity);
+      window.removeEventListener('touchstart', markActivity);
+      window.removeEventListener('scroll', markActivity);
+
+      try {
+        localStorage.setItem(storageKey, String(practiceSecondsRef.current));
+      } catch (e) {}
+    };
+  }, [user?.token, storageKey]);
+
+  const currentPracticeMinutes = practiceSeconds / 60;
+  const practicePercentage = Math.min(100, Math.round((practiceSeconds / (DAILY_GOAL_MINUTES * 60)) * 100));
+
+  let practiceMetaText = "";
+  if (practiceSeconds < 60) {
+    practiceMetaText = `${practiceSeconds}s of ${DAILY_GOAL_MINUTES} min today`;
+  } else if (currentPracticeMinutes < 10) {
+    practiceMetaText = `${currentPracticeMinutes.toFixed(1)} of ${DAILY_GOAL_MINUTES} min today`;
+  } else {
+    practiceMetaText = `${Math.floor(currentPracticeMinutes)} of ${DAILY_GOAL_MINUTES} min today`;
+  }
+
+  if (practicePercentage >= 100) {
+    practiceMetaText = `${Math.floor(currentPracticeMinutes)} of ${DAILY_GOAL_MINUTES} min today · Goal achieved!`;
+  }
 
   const toggleCollapse = () => {
     setIsCollapsed(prev => {
@@ -3501,42 +3628,20 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
 
       <div className="sidebar-footer">
         {!isCollapsed && (
-          <div className="sidebar-subscription-box" onClick={() => onOpenPaywall && onOpenPaywall()}>
-            {isStarter ? (
-              <div className="sidebar-sub-card sub-card-upgrade">
-                <div className="sub-card-header">
-                  <span className="sub-card-tag">7 DNI FREE</span>
-                  <span className="sub-card-sparkle">✨</span>
-                </div>
-                <div className="sub-card-title">Przejdź na Pro</div>
-                <div className="sub-card-desc">150 min Live Orb + Mastery Path</div>
-                <button className="sub-card-btn">Uaktualnij plan →</button>
-              </div>
-            ) : (
-              <div className="sidebar-sub-card sub-card-active">
-                <div className="sub-card-header">
-                  <span className="sub-card-tag">{subscription?.tier?.toUpperCase()}</span>
-                </div>
-                <div className="sub-card-title">Plan {subscription?.name || 'Pro'}</div>
-                <div className="sub-card-desc">
-                  Pozostało: <strong>{(subscription?.minutes_remaining || 0).toFixed(1)} min</strong>
-                </div>
-                <button className="sub-card-btn-secondary">Zarządzaj planem</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!isCollapsed && (
           <div className="daily-practice-card">
             <div className="practice-card-header">
               <span className="practice-card-title">Your daily practice</span>
             </div>
-            <p className="practice-card-sub">A little English, every day.</p>
+            <p className="practice-card-sub">
+              {practicePercentage >= 100 ? "Great job! Daily goal achieved." : "A little English, every day."}
+            </p>
             <div className="practice-progress-bar">
-              <div className="practice-progress-fill" style={{ width: '60%' }}></div>
+              <div 
+                className="practice-progress-fill" 
+                style={{ width: `${Math.max(practiceSeconds > 0 ? 3 : 0, practicePercentage)}%` }}
+              ></div>
             </div>
-            <span className="practice-card-meta">12 of 20 minutes today</span>
+            <span className="practice-card-meta">{practiceMetaText}</span>
           </div>
         )}
 
