@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-12 19:58:22
+Wygenerowano: 2026-10-12 20:00:47
 
 ## Spis Treści
 1. `backend/app.py`
@@ -56383,8 +56383,8 @@ export default VocabularyExerciseModal;
 }
 
 .hero-illustration-block {
-  flex: 0 0 auto;
-  max-width: 440px;
+  flex: 1 1 auto;
+  max-width: 540px;
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -56392,7 +56392,7 @@ export default VocabularyExerciseModal;
 
 .hero-characters-img {
   width: 100%;
-  max-width: 360px;
+  max-width: 500px;
   height: auto;
   object-fit: contain;
   display: block;
@@ -56406,9 +56406,10 @@ export default VocabularyExerciseModal;
   .hero-illustration-block {
     justify-content: center;
     width: 100%;
+    max-width: 100%;
   }
   .hero-characters-img {
-    max-width: 280px;
+    max-width: 380px;
   }
 }
 
