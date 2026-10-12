@@ -1,5 +1,5 @@
 # Kod Projektu AI-English-Buddy (Speakling)
-Wygenerowano: 2026-10-12 21:46:54
+Wygenerowano: 2026-10-12 21:57:32
 > Skondensowany eksport aktywnych plików produkcyjnych (bez plików testowych, mocków i kopii archiwalnych).
 
 ## Spis Treści
@@ -18,76 +18,78 @@ Wygenerowano: 2026-10-12 21:46:54
 13. [`frontend/src/components/Flashcards.js`](#13-plik-frontendsrccomponentsFlashcardsjs)
 14. [`frontend/src/components/GoodToKnow.css`](#14-plik-frontendsrccomponentsGoodToKnowcss)
 15. [`frontend/src/components/GoodToKnow.js`](#15-plik-frontendsrccomponentsGoodToKnowjs)
-16. [`frontend/src/components/Media/MediaBuddy.css`](#16-plik-frontendsrccomponentsMediaMediaBuddycss)
-17. [`frontend/src/components/Media/MediaBuddy.js`](#17-plik-frontendsrccomponentsMediaMediaBuddyjs)
-18. [`frontend/src/components/Media/sentenceGrouping.js`](#18-plik-frontendsrccomponentsMediasentenceGroupingjs)
-19. [`frontend/src/components/Navbar.css`](#19-plik-frontendsrccomponentsNavbarcss)
-20. [`frontend/src/components/Navbar.js`](#20-plik-frontendsrccomponentsNavbarjs)
-21. [`frontend/src/components/Notebook/NotebookSidebar.css`](#21-plik-frontendsrccomponentsNotebookNotebookSidebarcss)
-22. [`frontend/src/components/Notebook/NotebookSidebar.js`](#22-plik-frontendsrccomponentsNotebookNotebookSidebarjs)
-23. [`frontend/src/components/Notebook/PronunciationPracticeModal.css`](#23-plik-frontendsrccomponentsNotebookPronunciationPracticeModalcss)
-24. [`frontend/src/components/Notebook/PronunciationPracticeModal.js`](#24-plik-frontendsrccomponentsNotebookPronunciationPracticeModaljs)
-25. [`frontend/src/components/Notebook/PronunciationPracticeModal.test.js`](#25-plik-frontendsrccomponentsNotebookPronunciationPracticeModaltestjs)
-26. [`frontend/src/components/Notebook/SessionSummaryModal.css`](#26-plik-frontendsrccomponentsNotebookSessionSummaryModalcss)
-27. [`frontend/src/components/Notebook/SessionSummaryModal.js`](#27-plik-frontendsrccomponentsNotebookSessionSummaryModaljs)
-28. [`frontend/src/components/Notebook/SessionSummaryModal.test.js`](#28-plik-frontendsrccomponentsNotebookSessionSummaryModaltestjs)
-29. [`frontend/src/components/Notebook/VoiceSessionSummaryModal.js`](#29-plik-frontendsrccomponentsNotebookVoiceSessionSummaryModaljs)
-30. [`frontend/src/components/Notebook/WordExplanationModal.css`](#30-plik-frontendsrccomponentsNotebookWordExplanationModalcss)
-31. [`frontend/src/components/Notebook/WordExplanationModal.js`](#31-plik-frontendsrccomponentsNotebookWordExplanationModaljs)
-32. [`frontend/src/components/Paywall/PaywallModal.css`](#32-plik-frontendsrccomponentsPaywallPaywallModalcss)
-33. [`frontend/src/components/Paywall/PaywallModal.js`](#33-plik-frontendsrccomponentsPaywallPaywallModaljs)
-34. [`frontend/src/components/Practice/PracticeMode.css`](#34-plik-frontendsrccomponentsPracticePracticeModecss)
-35. [`frontend/src/components/Practice/PracticeMode.js`](#35-plik-frontendsrccomponentsPracticePracticeModejs)
-36. [`frontend/src/components/Reader/Reader.css`](#36-plik-frontendsrccomponentsReaderReadercss)
-37. [`frontend/src/components/Reader/Reader.js`](#37-plik-frontendsrccomponentsReaderReaderjs)
-38. [`frontend/src/components/Sidebar.css`](#38-plik-frontendsrccomponentsSidebarcss)
-39. [`frontend/src/components/Sidebar.js`](#39-plik-frontendsrccomponentsSidebarjs)
-40. [`frontend/src/components/Story/SavedStories.css`](#40-plik-frontendsrccomponentsStorySavedStoriescss)
-41. [`frontend/src/components/Story/SavedStories.js`](#41-plik-frontendsrccomponentsStorySavedStoriesjs)
-42. [`frontend/src/components/Story/StoryGenerator.css`](#42-plik-frontendsrccomponentsStoryStoryGeneratorcss)
-43. [`frontend/src/components/Story/StoryGenerator.js`](#43-plik-frontendsrccomponentsStoryStoryGeneratorjs)
-44. [`frontend/src/components/Story/StoryGenerator.test.js`](#44-plik-frontendsrccomponentsStoryStoryGeneratortestjs)
-45. [`frontend/src/components/TopBar.css`](#45-plik-frontendsrccomponentsTopBarcss)
-46. [`frontend/src/components/TopBar.js`](#46-plik-frontendsrccomponentsTopBarjs)
-47. [`frontend/src/components/Translator/TranslatorDrawer.css`](#47-plik-frontendsrccomponentsTranslatorTranslatorDrawercss)
-48. [`frontend/src/components/Translator/TranslatorDrawer.js`](#48-plik-frontendsrccomponentsTranslatorTranslatorDrawerjs)
-49. [`frontend/src/components/Vocabulary/VocabularyDrawer.css`](#49-plik-frontendsrccomponentsVocabularyVocabularyDrawercss)
-50. [`frontend/src/components/Vocabulary/VocabularyDrawer.js`](#50-plik-frontendsrccomponentsVocabularyVocabularyDrawerjs)
-51. [`frontend/src/components/Vocabulary/VocabularyExerciseModal.js`](#51-plik-frontendsrccomponentsVocabularyVocabularyExerciseModaljs)
-52. [`frontend/src/components/Vocabulary/VocabularyView.css`](#52-plik-frontendsrccomponentsVocabularyVocabularyViewcss)
-53. [`frontend/src/components/Vocabulary/VocabularyView.js`](#53-plik-frontendsrccomponentsVocabularyVocabularyViewjs)
-54. [`frontend/src/components/Workspace.css`](#54-plik-frontendsrccomponentsWorkspacecss)
-55. [`frontend/src/components/Workspace.js`](#55-plik-frontendsrccomponentsWorkspacejs)
-56. [`frontend/src/config.js`](#56-plik-frontendsrcconfigjs)
-57. [`frontend/src/globalAudioManager.js`](#57-plik-frontendsrcglobalAudioManagerjs)
-58. [`frontend/src/index.css`](#58-plik-frontendsrcindexcss)
-59. [`frontend/src/index.js`](#59-plik-frontendsrcindexjs)
-60. [`frontend/src/services/GeminiLiveClient.js`](#60-plik-frontendsrcservicesGeminiLiveClientjs)
-61. [`mobile/expo-env.d.ts`](#61-plik-mobileexpo-envdts)
-62. [`mobile/scripts/patch-viewport.py`](#62-plik-mobilescriptspatch-viewportpy)
-63. [`mobile/scripts/reset-project.js`](#63-plik-mobilescriptsreset-projectjs)
-64. [`mobile/src/app/_layout.tsx`](#64-plik-mobilesrcapp_layouttsx)
-65. [`mobile/src/app/explore.tsx`](#65-plik-mobilesrcappexploretsx)
-66. [`mobile/src/app/index.tsx`](#66-plik-mobilesrcappindextsx)
-67. [`mobile/src/components/animated-icon.module.css`](#67-plik-mobilesrccomponentsanimated-iconmodulecss)
-68. [`mobile/src/components/animated-icon.tsx`](#68-plik-mobilesrccomponentsanimated-icontsx)
-69. [`mobile/src/components/animated-icon.web.tsx`](#69-plik-mobilesrccomponentsanimated-iconwebtsx)
-70. [`mobile/src/components/app-tabs.tsx`](#70-plik-mobilesrccomponentsapp-tabstsx)
-71. [`mobile/src/components/app-tabs.web.tsx`](#71-plik-mobilesrccomponentsapp-tabswebtsx)
-72. [`mobile/src/components/external-link.tsx`](#72-plik-mobilesrccomponentsexternal-linktsx)
-73. [`mobile/src/components/hint-row.tsx`](#73-plik-mobilesrccomponentshint-rowtsx)
-74. [`mobile/src/components/themed-text.tsx`](#74-plik-mobilesrccomponentsthemed-texttsx)
-75. [`mobile/src/components/themed-view.tsx`](#75-plik-mobilesrccomponentsthemed-viewtsx)
-76. [`mobile/src/components/ui/collapsible.tsx`](#76-plik-mobilesrccomponentsuicollapsibletsx)
-77. [`mobile/src/components/web-badge.tsx`](#77-plik-mobilesrccomponentsweb-badgetsx)
-78. [`mobile/src/constants/theme.ts`](#78-plik-mobilesrcconstantsthemets)
-79. [`mobile/src/global.css`](#79-plik-mobilesrcglobalcss)
-80. [`mobile/src/hooks/use-color-scheme.ts`](#80-plik-mobilesrchooksuse-color-schemets)
-81. [`mobile/src/hooks/use-color-scheme.web.ts`](#81-plik-mobilesrchooksuse-color-schemewebts)
-82. [`mobile/src/hooks/use-theme.ts`](#82-plik-mobilesrchooksuse-themets)
-83. [`mobile/src/services/GeminiLiveClient.ts`](#83-plik-mobilesrcservicesGeminiLiveClientts)
-84. [`portal/index.html`](#84-plik-portalindexhtml)
-85. [`scratch.js`](#85-plik-scratchjs)
+16. [`frontend/src/components/Help/HelpFeedback.css`](#16-plik-frontendsrccomponentsHelpHelpFeedbackcss)
+17. [`frontend/src/components/Help/HelpFeedback.js`](#17-plik-frontendsrccomponentsHelpHelpFeedbackjs)
+18. [`frontend/src/components/Media/MediaBuddy.css`](#18-plik-frontendsrccomponentsMediaMediaBuddycss)
+19. [`frontend/src/components/Media/MediaBuddy.js`](#19-plik-frontendsrccomponentsMediaMediaBuddyjs)
+20. [`frontend/src/components/Media/sentenceGrouping.js`](#20-plik-frontendsrccomponentsMediasentenceGroupingjs)
+21. [`frontend/src/components/Navbar.css`](#21-plik-frontendsrccomponentsNavbarcss)
+22. [`frontend/src/components/Navbar.js`](#22-plik-frontendsrccomponentsNavbarjs)
+23. [`frontend/src/components/Notebook/NotebookSidebar.css`](#23-plik-frontendsrccomponentsNotebookNotebookSidebarcss)
+24. [`frontend/src/components/Notebook/NotebookSidebar.js`](#24-plik-frontendsrccomponentsNotebookNotebookSidebarjs)
+25. [`frontend/src/components/Notebook/PronunciationPracticeModal.css`](#25-plik-frontendsrccomponentsNotebookPronunciationPracticeModalcss)
+26. [`frontend/src/components/Notebook/PronunciationPracticeModal.js`](#26-plik-frontendsrccomponentsNotebookPronunciationPracticeModaljs)
+27. [`frontend/src/components/Notebook/PronunciationPracticeModal.test.js`](#27-plik-frontendsrccomponentsNotebookPronunciationPracticeModaltestjs)
+28. [`frontend/src/components/Notebook/SessionSummaryModal.css`](#28-plik-frontendsrccomponentsNotebookSessionSummaryModalcss)
+29. [`frontend/src/components/Notebook/SessionSummaryModal.js`](#29-plik-frontendsrccomponentsNotebookSessionSummaryModaljs)
+30. [`frontend/src/components/Notebook/SessionSummaryModal.test.js`](#30-plik-frontendsrccomponentsNotebookSessionSummaryModaltestjs)
+31. [`frontend/src/components/Notebook/VoiceSessionSummaryModal.js`](#31-plik-frontendsrccomponentsNotebookVoiceSessionSummaryModaljs)
+32. [`frontend/src/components/Notebook/WordExplanationModal.css`](#32-plik-frontendsrccomponentsNotebookWordExplanationModalcss)
+33. [`frontend/src/components/Notebook/WordExplanationModal.js`](#33-plik-frontendsrccomponentsNotebookWordExplanationModaljs)
+34. [`frontend/src/components/Paywall/PaywallModal.css`](#34-plik-frontendsrccomponentsPaywallPaywallModalcss)
+35. [`frontend/src/components/Paywall/PaywallModal.js`](#35-plik-frontendsrccomponentsPaywallPaywallModaljs)
+36. [`frontend/src/components/Practice/PracticeMode.css`](#36-plik-frontendsrccomponentsPracticePracticeModecss)
+37. [`frontend/src/components/Practice/PracticeMode.js`](#37-plik-frontendsrccomponentsPracticePracticeModejs)
+38. [`frontend/src/components/Reader/Reader.css`](#38-plik-frontendsrccomponentsReaderReadercss)
+39. [`frontend/src/components/Reader/Reader.js`](#39-plik-frontendsrccomponentsReaderReaderjs)
+40. [`frontend/src/components/Sidebar.css`](#40-plik-frontendsrccomponentsSidebarcss)
+41. [`frontend/src/components/Sidebar.js`](#41-plik-frontendsrccomponentsSidebarjs)
+42. [`frontend/src/components/Story/SavedStories.css`](#42-plik-frontendsrccomponentsStorySavedStoriescss)
+43. [`frontend/src/components/Story/SavedStories.js`](#43-plik-frontendsrccomponentsStorySavedStoriesjs)
+44. [`frontend/src/components/Story/StoryGenerator.css`](#44-plik-frontendsrccomponentsStoryStoryGeneratorcss)
+45. [`frontend/src/components/Story/StoryGenerator.js`](#45-plik-frontendsrccomponentsStoryStoryGeneratorjs)
+46. [`frontend/src/components/Story/StoryGenerator.test.js`](#46-plik-frontendsrccomponentsStoryStoryGeneratortestjs)
+47. [`frontend/src/components/TopBar.css`](#47-plik-frontendsrccomponentsTopBarcss)
+48. [`frontend/src/components/TopBar.js`](#48-plik-frontendsrccomponentsTopBarjs)
+49. [`frontend/src/components/Translator/TranslatorDrawer.css`](#49-plik-frontendsrccomponentsTranslatorTranslatorDrawercss)
+50. [`frontend/src/components/Translator/TranslatorDrawer.js`](#50-plik-frontendsrccomponentsTranslatorTranslatorDrawerjs)
+51. [`frontend/src/components/Vocabulary/VocabularyDrawer.css`](#51-plik-frontendsrccomponentsVocabularyVocabularyDrawercss)
+52. [`frontend/src/components/Vocabulary/VocabularyDrawer.js`](#52-plik-frontendsrccomponentsVocabularyVocabularyDrawerjs)
+53. [`frontend/src/components/Vocabulary/VocabularyExerciseModal.js`](#53-plik-frontendsrccomponentsVocabularyVocabularyExerciseModaljs)
+54. [`frontend/src/components/Vocabulary/VocabularyView.css`](#54-plik-frontendsrccomponentsVocabularyVocabularyViewcss)
+55. [`frontend/src/components/Vocabulary/VocabularyView.js`](#55-plik-frontendsrccomponentsVocabularyVocabularyViewjs)
+56. [`frontend/src/components/Workspace.css`](#56-plik-frontendsrccomponentsWorkspacecss)
+57. [`frontend/src/components/Workspace.js`](#57-plik-frontendsrccomponentsWorkspacejs)
+58. [`frontend/src/config.js`](#58-plik-frontendsrcconfigjs)
+59. [`frontend/src/globalAudioManager.js`](#59-plik-frontendsrcglobalAudioManagerjs)
+60. [`frontend/src/index.css`](#60-plik-frontendsrcindexcss)
+61. [`frontend/src/index.js`](#61-plik-frontendsrcindexjs)
+62. [`frontend/src/services/GeminiLiveClient.js`](#62-plik-frontendsrcservicesGeminiLiveClientjs)
+63. [`mobile/expo-env.d.ts`](#63-plik-mobileexpo-envdts)
+64. [`mobile/scripts/patch-viewport.py`](#64-plik-mobilescriptspatch-viewportpy)
+65. [`mobile/scripts/reset-project.js`](#65-plik-mobilescriptsreset-projectjs)
+66. [`mobile/src/app/_layout.tsx`](#66-plik-mobilesrcapp_layouttsx)
+67. [`mobile/src/app/explore.tsx`](#67-plik-mobilesrcappexploretsx)
+68. [`mobile/src/app/index.tsx`](#68-plik-mobilesrcappindextsx)
+69. [`mobile/src/components/animated-icon.module.css`](#69-plik-mobilesrccomponentsanimated-iconmodulecss)
+70. [`mobile/src/components/animated-icon.tsx`](#70-plik-mobilesrccomponentsanimated-icontsx)
+71. [`mobile/src/components/animated-icon.web.tsx`](#71-plik-mobilesrccomponentsanimated-iconwebtsx)
+72. [`mobile/src/components/app-tabs.tsx`](#72-plik-mobilesrccomponentsapp-tabstsx)
+73. [`mobile/src/components/app-tabs.web.tsx`](#73-plik-mobilesrccomponentsapp-tabswebtsx)
+74. [`mobile/src/components/external-link.tsx`](#74-plik-mobilesrccomponentsexternal-linktsx)
+75. [`mobile/src/components/hint-row.tsx`](#75-plik-mobilesrccomponentshint-rowtsx)
+76. [`mobile/src/components/themed-text.tsx`](#76-plik-mobilesrccomponentsthemed-texttsx)
+77. [`mobile/src/components/themed-view.tsx`](#77-plik-mobilesrccomponentsthemed-viewtsx)
+78. [`mobile/src/components/ui/collapsible.tsx`](#78-plik-mobilesrccomponentsuicollapsibletsx)
+79. [`mobile/src/components/web-badge.tsx`](#79-plik-mobilesrccomponentsweb-badgetsx)
+80. [`mobile/src/constants/theme.ts`](#80-plik-mobilesrcconstantsthemets)
+81. [`mobile/src/global.css`](#81-plik-mobilesrcglobalcss)
+82. [`mobile/src/hooks/use-color-scheme.ts`](#82-plik-mobilesrchooksuse-color-schemets)
+83. [`mobile/src/hooks/use-color-scheme.web.ts`](#83-plik-mobilesrchooksuse-color-schemewebts)
+84. [`mobile/src/hooks/use-theme.ts`](#84-plik-mobilesrchooksuse-themets)
+85. [`mobile/src/services/GeminiLiveClient.ts`](#85-plik-mobilesrcservicesGeminiLiveClientts)
+86. [`portal/index.html`](#86-plik-portalindexhtml)
+87. [`scratch.js`](#87-plik-scratchjs)
 
 ---
 
@@ -3541,6 +3543,41 @@ def handle_daily_practice():
             return jsonify({"error": str(e)}), 500
 
         return jsonify({"date": today_str, "seconds": set_seconds or seconds_to_add, "target_minutes": target_minutes}), 200
+
+
+@app.route("/api/feedback", methods=['POST'])
+def submit_user_feedback():
+    """Zapisuje zgłoszenie feedbacku, uwagi lub błędu od użytkownika w Firestore."""
+    user_email = get_user_from_request()
+    req_data = request.get_json(silent=True) or {}
+    if not user_email:
+        user_email = req_data.get("email") or "guest@speakling.ai"
+
+    category = str(req_data.get("category", "suggestion") or "suggestion").strip()
+    message = str(req_data.get("message", "") or "").strip()
+    if not message:
+        return jsonify({"error": "Treść wiadomości nie może być pusta."}), 400
+
+    feedback_doc = {
+        "user_email": user_email,
+        "category": category,
+        "message": message,
+        "created_at": datetime.utcnow().isoformat(),
+        "user_agent": request.headers.get("User-Agent", ""),
+        "status": "new"
+    }
+
+    try:
+        if 'db' in globals() and db is not None:
+            db.collection('user_feedback').add(feedback_doc)
+        return jsonify({
+            "success": True,
+            "message": "Dziękujemy za przesłanie wiadomości! Twoja opinia pomaga rozwijać Speakling."
+        }), 200
+    except Exception as e:
+        print(f"Błąd zapisu feedbacku: {e}")
+        return jsonify({"error": f"Błąd zapisu feedbacku: {str(e)}"}), 500
+
 
 
 # ### NOWE/ZMODYFIKOWANE ENDPOINTY DLA ZARZĄDZANIA HISTORIAMI PRZEZ FIRESTORE ###
@@ -7018,6 +7055,7 @@ import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import GoodToKnow from './components/GoodToKnow';
+import HelpFeedback from './components/Help/HelpFeedback';
 import PaywallModal from './components/Paywall/PaywallModal';
 
 function App() {
@@ -7296,6 +7334,7 @@ function App() {
       case 'media': return 'Media Buddy';
       case 'admin': return 'Panel Administratora';
       case 'good-to-know': return 'Good to know';
+      case 'help-feedback': return 'Help & Feedback';
       default: return 'Speakling';
     }
   };
@@ -7366,6 +7405,11 @@ function App() {
           ) : currentView === 'admin' ? (
             <AdminDashboard 
               user={user}
+            />
+          ) : currentView === 'help-feedback' ? (
+            <HelpFeedback 
+              user={user} 
+              onNavigate={handleNavigate} 
             />
           ) : currentView === 'good-to-know' ? (
             <GoodToKnow />
@@ -16058,7 +16102,713 @@ export default GoodToKnow;
 
 ---
 
-## 16. Plik: `frontend/src/components/Media/MediaBuddy.css`
+## 16. Plik: `frontend/src/components/Help/HelpFeedback.css`
+
+```css
+.help-feedback-container {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem 1.5rem;
+  box-sizing: border-box;
+  font-family: var(--font-main, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  color: var(--text-primary, #1e293b);
+}
+
+.help-feedback-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.help-header {
+  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+  padding-bottom: 1.75rem;
+}
+
+.help-kicker {
+  display: inline-block;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #1a73e8;
+  margin-bottom: 0.5rem;
+}
+
+.help-title {
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin: 0 0 0.75rem 0;
+  color: #0f172a;
+}
+
+.help-subtitle {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #64748b;
+  margin: 0 0 1.5rem 0;
+  max-width: 720px;
+}
+
+/* ── Tabs ───────────────────────────────────────────────────── */
+.help-nav-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.help-tab-btn {
+  padding: 0.625rem 1.125rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.help-tab-btn:hover {
+  background: #f8fafc;
+  color: #1e293b;
+  border-color: #cbd5e1;
+}
+
+.help-tab-btn.active {
+  background: #1a73e8;
+  color: #ffffff;
+  border-color: #1a73e8;
+  box-shadow: 0 2px 4px rgba(26, 115, 232, 0.2);
+}
+
+/* ── Cards / Content ────────────────────────────────────────── */
+.help-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.help-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.help-card-header {
+  margin-bottom: 0.875rem;
+}
+
+.help-module-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #6366f1;
+  background: #eef2ff;
+  padding: 0.25rem 0.625rem;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.help-card h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  margin: 0;
+  color: #0f172a;
+}
+
+.help-card-lead {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: #475569;
+  margin: 0 0 1.25rem 0;
+}
+
+.help-feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.help-feature-list li {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #334155;
+  padding-left: 1.25rem;
+  position: relative;
+}
+
+.help-feature-list li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #1a73e8;
+  font-weight: bold;
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.help-feature-list strong {
+  color: #0f172a;
+}
+
+/* ── FAQ Grid ───────────────────────────────────────────────── */
+.faq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+.faq-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.faq-item h3 {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.625rem 0;
+}
+
+.faq-item p {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #64748b;
+  margin: 0;
+}
+
+.help-contact-box {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.help-contact-box h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.375rem 0;
+}
+
+.help-contact-box p {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+
+/* ── Feedback Form ─────────────────────────────────────────── */
+.feedback-form-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 2.25rem;
+  max-width: 680px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.feedback-form-card h2 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem 0;
+  color: #0f172a;
+}
+
+.feedback-intro {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: #64748b;
+  margin: 0 0 1.75rem 0;
+}
+
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.form-group label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.form-select,
+.form-input,
+.form-textarea {
+  font-family: inherit;
+  font-size: 0.9375rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-select:focus,
+.form-input:focus,
+.form-textarea:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 120px;
+  line-height: 1.55;
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.btn-submit-feedback {
+  align-self: flex-start;
+  padding: 0.8125rem 1.75rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #1a73e8;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.btn-submit-feedback:hover:not(:disabled) {
+  background: #1557b0;
+}
+
+.btn-submit-feedback:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-submit-feedback:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Feedback Alert ─────────────────────────────────────────── */
+.feedback-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1.125rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-bottom: 1.25rem;
+}
+
+.feedback-alert.success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.feedback-alert.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.alert-dismiss {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: inherit;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+@media (max-width: 640px) {
+  .help-title {
+    font-size: 1.75rem;
+  }
+  .help-card,
+  .feedback-form-card {
+    padding: 1.25rem;
+  }
+  .faq-grid {
+    grid-template-columns: 1fr;
+  }
+}
+```
+
+---
+
+## 17. Plik: `frontend/src/components/Help/HelpFeedback.js`
+
+```javascript
+import React, { useState } from 'react';
+import { API_BASE_URL } from '../../config';
+import './HelpFeedback.css';
+
+const HelpFeedback = ({ user, onNavigate }) => {
+  const [activeTab, setActiveTab] = useState('guide'); // 'guide' | 'troubleshooting' | 'feedback'
+  const [category, setCategory] = useState('suggestion');
+  const [message, setMessage] = useState('');
+  const [email, setEmail] = useState(user?.email || '');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(null); // { type: 'success' | 'error', text: string }
+
+  const handleSubmitFeedback = async (e) => {
+    e.preventDefault();
+    if (!message.trim()) {
+      setSubmitStatus({ type: 'error', text: 'Proszę wpisać treść wiadomości przed wysłaniem.' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitStatus(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Token': user?.token || ''
+        },
+        body: JSON.stringify({
+          category,
+          message: message.trim(),
+          email: email.trim() || user?.email || 'guest@speakling.ai'
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setSubmitStatus({
+          type: 'success',
+          text: data.message || 'Dziękujemy! Twoja opinia została pomyślnie wysłana i przekazana do zespołu.'
+        });
+        setMessage('');
+      } else {
+        setSubmitStatus({
+          type: 'error',
+          text: data.error || 'Wystąpił problem podczas wysyłania wiadomości. Spróbuj ponownie za chwilę.'
+        });
+      }
+    } catch (err) {
+      setSubmitStatus({
+        type: 'error',
+        text: 'Błąd połączenia z serwerem. Sprawdź połączenie internetowe i spróbuj ponownie.'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="help-feedback-container">
+      <div className="help-feedback-wrapper">
+        
+        {/* Header */}
+        <header className="help-header">
+          <span className="help-kicker">Centrum Pomocy & Opinie</span>
+          <h1 className="help-title">Help & Feedback</h1>
+          <p className="help-subtitle">
+            Dowiedz się jak w pełni wykorzystać możliwości Speakling, rozwiąż ewentualne problemy techniczne lub podziel się z nami swoimi sugestiami i uwagami.
+          </p>
+
+          <div className="help-nav-tabs">
+            <button 
+              className={`help-tab-btn ${activeTab === 'guide' ? 'active' : ''}`}
+              onClick={() => setActiveTab('guide')}
+            >
+              Przewodnik po platformie
+            </button>
+            <button 
+              className={`help-tab-btn ${activeTab === 'troubleshooting' ? 'active' : ''}`}
+              onClick={() => setActiveTab('troubleshooting')}
+            >
+              Rozwiązywanie problemów & FAQ
+            </button>
+            <button 
+              className={`help-tab-btn ${activeTab === 'feedback' ? 'active' : ''}`}
+              onClick={() => setActiveTab('feedback')}
+            >
+              Prześlij feedback lub zgłoś błąd
+            </button>
+          </div>
+        </header>
+
+        {/* Tab 1: Przewodnik po platformie */}
+        {activeTab === 'guide' && (
+          <div className="help-section-content">
+            
+            <article className="help-card">
+              <div className="help-card-header">
+                <span className="help-module-tag">Moduł Konwersacji</span>
+                <h2>Chat Live (Rozmowa z lektorem AI)</h2>
+              </div>
+              <p className="help-card-lead">
+                Chat Live pozwala na naturalną, płynną rozmowę głosową z inteligentnym native speakerem. AI słucha Twojej wypowiedzi, odpowiada na żywo i wspiera Cię w pokonywaniu bariery językowej.
+              </p>
+              <ul className="help-feature-list">
+                <li>
+                  <strong>Dwa tryby rozmowy:</strong> Zaawansowany model Gemini Live (naturalny dialog audio w czasie rzeczywistym) oraz tryb Classic (silnik transkrypcji mowy i odpowiedzi tekstowej).
+                </li>
+                <li>
+                  <strong>Korekta błędów i polskie wtrącenia:</strong> Jeśli w trakcie mówienia zabraknie Ci słowa i powiesz je po polsku, lektor natychmiast podpowie właściwy angielski odpowiednik w naturalnym kontekście zdania.
+                </li>
+                <li>
+                  <strong>Udostępnianie ekranu i kamera:</strong> Możesz udostępnić lektorowi swój ekran lub obraz z kamery, aby wspólnie analizować artykuł, prezentację lub sytuację na żywo.
+                </li>
+                <li>
+                  <strong>Podsumowanie sesji (Session Summary):</strong> Po zakończeniu rozmowy otrzymujesz kompleksowy raport z punktacją, listą nowo poznanego słownictwa oraz omówieniem kwestii do powtórzenia.
+                </li>
+              </ul>
+            </article>
+
+            <article className="help-card">
+              <div className="help-card-header">
+                <span className="help-module-tag">Moduł Tekstowy</span>
+                <h2>Practice Room & Generator Opowieści (Workspace)</h2>
+              </div>
+              <p className="help-card-lead">
+                Serce treningu biernego i leksykalnego. Ucz się angielskiego przez wciągające historie dopasowane do Twojego poziomu.
+              </p>
+              <ul className="help-feature-list">
+                <li>
+                  <strong>Tworzenie i kontynuowanie historii:</strong> Wpisz dowolny pomysł lub wybierz temat. Dzięki przyciskowi "Continue Story" możesz rozwijać opowiadanie o kolejne części, a sztuczna inteligencja zachowuje pełny kontekst postaci i fabuły.
+                </li>
+                <li>
+                  <strong>Lektor zsynchronizowany z tekstem:</strong> Kliknij przycisk odtwarzania, aby słuchać lektora z precyzyjnym podświetlaniem aktualnie czytanego zdania.
+                </li>
+                <li>
+                  <strong>Tłumaczenie jednym kliknięciem:</strong> Kliknij na dowolne słowo lub zaznacz fragment tekstu, aby natychmiast wyświetlić polskie tłumaczenie i dodać je do własnego notesu.
+                </li>
+              </ul>
+            </article>
+
+            <article className="help-card">
+              <div className="help-card-header">
+                <span className="help-module-tag">Słownictwo & Pamięć</span>
+                <h2>My Vocabulary (Word Bank & Inteligentne Powtórki)</h2>
+              </div>
+              <p className="help-card-lead">
+                Automatyczny system utrwalania słówek oparty na algorytmie powtórek w optymalnych odstępach czasu (Spaced Repetition).
+              </p>
+              <ul className="help-feature-list">
+                <li>
+                  <strong>Zeszyt słówek:</strong> Każde słowo dodane podczas czytania lub rozmowy trafia do Twojej bazy z przykładem użycia i wymową.
+                </li>
+                <li>
+                  <strong>Fiszki i quizy:</strong> Trenuj pamięć z wykorzystaniem interaktywnych fiszek oraz quizów sprawdzających rozumienie słów w pełnym zdaniu.
+                </li>
+                <li>
+                  <strong>Eksport słownictwa:</strong> Możliwość wysłania zestawu słówek na swój adres e-mail lub pobrania do wydruku.
+                </li>
+              </ul>
+            </article>
+
+            <article className="help-card">
+              <div className="help-card-header">
+                <span className="help-module-tag">Zasady Treningu</span>
+                <h2>Your Daily Practice (Licznik dziennego zaangażowania)</h2>
+              </div>
+              <p className="help-card-lead">
+                Licznik w lewym panelu pomaga utrzymać regularność w nauce angielskiego.
+              </p>
+              <ul className="help-feature-list">
+                <li>
+                  <strong>Realny czas nauki:</strong> System zlicza czas tylko wtedy, gdy aktywnie korzystasz z platformy — rozmawiasz w Chat Live, rozwiązujesz ćwiczenia, słuchasz lektora lub czytasz.
+                </li>
+                <li>
+                  <strong>Ochrona przed bezczynnością:</strong> Jeśli odejdziesz od komputera na ponad 45 sekund, naliczanie automatycznie się zatrzymuje, dając Ci rzetelny obraz włożonej pracy.
+                </li>
+                <li>
+                  <strong>Dzienny cel:</strong> Rekomendowany dzienny cel to 20 minut regularnego kontaktu z językiem każdego dnia.
+                </li>
+              </ul>
+            </article>
+
+          </div>
+        )}
+
+        {/* Tab 2: Rozwiązywanie problemów & FAQ */}
+        {activeTab === 'troubleshooting' && (
+          <div className="help-section-content">
+            
+            <div className="faq-grid">
+              
+              <div className="faq-item">
+                <h3>Brak dostępu do mikrofonu w przeglądarce</h3>
+                <p>
+                  Upewnij się, że przeglądarka posiada uprawnienia do nagrywania dźwięku. W przeglądarce Google Chrome kliknij ikonę kłódki lub suwaków po lewej stronie paska adresu URL i upewnij się, że opcja „Mikrofon” jest ustawiona na „Zezwalaj”. Następnie odśwież stronę.
+                </p>
+              </div>
+
+              <div className="faq-item">
+                <h3>Echo lub powtarzanie wypowiedzi lektora</h3>
+                <p>
+                  Gdy mikrofon wychwytuje dźwięk dochodzący z Twoich głośników, może powstać pętla akustyczna. Zdecydowanie zalecamy korzystanie ze słuchawek podczas sesji Chat Live, aby zapewnić najwyższą czystość dźwięku i bezbłędne rozpoznawanie mowy.
+                </p>
+              </div>
+
+              <div className="faq-item">
+                <h3>Czy potrzebuję własnego klucza API?</h3>
+                <p>
+                  Nie, platforma posiada domyślnie skonfigurowane modele. Jeśli jednak chcesz korzystać z własnego klucza Google AI Studio (Gemini), możesz go bezpiecznie wprowadzić w oknie ustawień Chat Live.
+                </p>
+              </div>
+
+              <div className="faq-item">
+                <h3>Przerywanie połączenia WebSocket w Chat Live</h3>
+                <p>
+                  Połączenie z modelem Gemini Live wymaga stabilnego łącza internetowego. Jeśli połączenie zostanie przerwane, kliknij przycisk „Zakończ” i rozpocznij sesję ponownie.
+                </p>
+              </div>
+
+              <div className="faq-item">
+                <h3>Jak działa limit minut rozmów Live?</h3>
+                <p>
+                  Każda sekunda aktywnej rozmowy jest precyzyjnie odejmowana z Twojej puli w planie subskrypcyjnym. Jeśli skończą Ci się minuty, możesz doładować konto lub przełączyć się jednym kliknięciem na tryb Classic.
+                </p>
+              </div>
+
+              <div className="faq-item">
+                <h3>Synchronizacja postępów między urządzeniami</h3>
+                <p>
+                  Wszystkie Twoje opowiadania, słówka i statystyki są bezpiecznie zapisywane w chmurze i przypisane do Twojego konta e-mail. Po zalogowaniu na innym komputerze lub telefonie masz natychmiastowy dostęp do wszystkich materiałów.
+                </p>
+              </div>
+
+            </div>
+
+            <div className="help-contact-box">
+              <h3>Potrzebujesz bezpośredniej pomocy?</h3>
+              <p>Napisz do nas bezpośrednio na adres: <strong>kontakt@przemokoduje.com</strong></p>
+            </div>
+
+          </div>
+        )}
+
+        {/* Tab 3: Formularz opinii i zgłoszeń */}
+        {activeTab === 'feedback' && (
+          <div className="help-section-content">
+            <div className="feedback-form-card">
+              <h2>Prześlij opinię lub zgłoś usterkę</h2>
+              <p className="feedback-intro">
+                Twoje uwagi mają bezpośredni wpływ na rozwój Speakling. Niezależnie od tego, czy masz pomysł na nową funkcję, napotkałeś błąd czy chcesz podzielić się wrażeniami z nauki — czekamy na Twoją wiadomość!
+              </p>
+
+              {submitStatus && (
+                <div className={`feedback-alert ${submitStatus.type}`}>
+                  <span>{submitStatus.text}</span>
+                  <button 
+                    type="button" 
+                    className="alert-dismiss" 
+                    onClick={() => setSubmitStatus(null)}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitFeedback} className="feedback-form">
+                
+                <div className="form-group">
+                  <label htmlFor="fb-category">Kategoria zgłoszenia</label>
+                  <select 
+                    id="fb-category" 
+                    value={category} 
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="form-select"
+                  >
+                    <option value="suggestion">Pomysł na nową funkcję / Rozwój aplikacji</option>
+                    <option value="bug">Zgłoszenie błędu / Problem techniczny</option>
+                    <option value="praise">Pozytywna opinia / Wrażenia z nauki</option>
+                    <option value="question">Pytanie dotyczące działania platformy</option>
+                    <option value="other">Inna sprawa</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="fb-email">Twój adres e-mail do odpowiedzi</label>
+                  <input 
+                    type="email" 
+                    id="fb-email" 
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="twoj-email@example.com"
+                    className="form-input"
+                  />
+                  <span className="form-hint">Na ten adres prześlemy odpowiedź, jeśli zgłoszenie wymaga kontaktu.</span>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="fb-message">Treść Twojej wiadomości</label>
+                  <textarea 
+                    id="fb-message" 
+                    value={message} 
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Opisz swój pomysł, zaobserwowany problem lub podziel się wrażeniami..."
+                    rows={6}
+                    className="form-textarea"
+                    required
+                  />
+                  <span className="form-hint">Im dokładniejszy opis, tym szybciej będziemy mogli wprowadzić ulepszenia.</span>
+                </div>
+
+                <div className="form-actions">
+                  <button 
+                    type="submit" 
+                    className="btn-submit-feedback"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Wysyłanie wiadomości...' : 'Wyślij wiadomość'}
+                  </button>
+                </div>
+
+              </form>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+};
+
+export default HelpFeedback;
+```
+
+---
+
+## 18. Plik: `frontend/src/components/Media/MediaBuddy.css`
 
 ```css
 /* MediaBuddy.css — Redesigned according to Figma Mockup */
@@ -17797,7 +18547,7 @@ export default GoodToKnow;
 
 ---
 
-## 17. Plik: `frontend/src/components/Media/MediaBuddy.js`
+## 19. Plik: `frontend/src/components/Media/MediaBuddy.js`
 
 ```javascript
 import React, { useState, useEffect, useRef, useMemo } from "react";
@@ -19936,7 +20686,7 @@ export default MediaBuddy;
 
 ---
 
-## 18. Plik: `frontend/src/components/Media/sentenceGrouping.js`
+## 20. Plik: `frontend/src/components/Media/sentenceGrouping.js`
 
 ```javascript
 /**
@@ -20289,7 +21039,7 @@ export default ensureCompleteSentences;
 
 ---
 
-## 19. Plik: `frontend/src/components/Navbar.css`
+## 21. Plik: `frontend/src/components/Navbar.css`
 
 ```css
 /* frontend/src/components/Navbar.css */
@@ -20353,7 +21103,7 @@ export default ensureCompleteSentences;
 
 ---
 
-## 20. Plik: `frontend/src/components/Navbar.js`
+## 22. Plik: `frontend/src/components/Navbar.js`
 
 ```javascript
 // frontend/src/components/Navbar.js
@@ -20397,7 +21147,7 @@ export default Navbar;
 
 ---
 
-## 21. Plik: `frontend/src/components/Notebook/NotebookSidebar.css`
+## 23. Plik: `frontend/src/components/Notebook/NotebookSidebar.css`
 
 ```css
 .notebook-sidebar {
@@ -20662,7 +21412,7 @@ export default Navbar;
 
 ---
 
-## 22. Plik: `frontend/src/components/Notebook/NotebookSidebar.js`
+## 24. Plik: `frontend/src/components/Notebook/NotebookSidebar.js`
 
 ```javascript
 import React, { useState, useEffect, useRef } from "react";
@@ -20847,7 +21597,7 @@ export default NotebookSidebar;
 
 ---
 
-## 23. Plik: `frontend/src/components/Notebook/PronunciationPracticeModal.css`
+## 25. Plik: `frontend/src/components/Notebook/PronunciationPracticeModal.css`
 
 ```css
 .practice-modal-overlay {
@@ -21220,7 +21970,7 @@ export default NotebookSidebar;
 
 ---
 
-## 24. Plik: `frontend/src/components/Notebook/PronunciationPracticeModal.js`
+## 26. Plik: `frontend/src/components/Notebook/PronunciationPracticeModal.js`
 
 ```javascript
 import React, { useState, useRef, useEffect } from "react";
@@ -21549,7 +22299,7 @@ export default PronunciationPracticeModal;
 
 ---
 
-## 25. Plik: `frontend/src/components/Notebook/PronunciationPracticeModal.test.js`
+## 27. Plik: `frontend/src/components/Notebook/PronunciationPracticeModal.test.js`
 
 ```javascript
 import React from "react";
@@ -21726,7 +22476,7 @@ describe("PronunciationPracticeModal", () => {
 
 ---
 
-## 26. Plik: `frontend/src/components/Notebook/SessionSummaryModal.css`
+## 28. Plik: `frontend/src/components/Notebook/SessionSummaryModal.css`
 
 ```css
 .summary-modal-overlay {
@@ -22303,7 +23053,7 @@ describe("PronunciationPracticeModal", () => {
 
 ---
 
-## 27. Plik: `frontend/src/components/Notebook/SessionSummaryModal.js`
+## 29. Plik: `frontend/src/components/Notebook/SessionSummaryModal.js`
 
 ```javascript
 import React, { useState } from "react";
@@ -22552,7 +23302,7 @@ export default SessionSummaryModal;
 
 ---
 
-## 28. Plik: `frontend/src/components/Notebook/SessionSummaryModal.test.js`
+## 30. Plik: `frontend/src/components/Notebook/SessionSummaryModal.test.js`
 
 ```javascript
 import React from "react";
@@ -22707,7 +23457,7 @@ describe("SessionSummaryModal", () => {
 
 ---
 
-## 29. Plik: `frontend/src/components/Notebook/VoiceSessionSummaryModal.js`
+## 31. Plik: `frontend/src/components/Notebook/VoiceSessionSummaryModal.js`
 
 ```javascript
 import React, { useState } from "react";
@@ -22935,7 +23685,7 @@ export default VoiceSessionSummaryModal;
 
 ---
 
-## 30. Plik: `frontend/src/components/Notebook/WordExplanationModal.css`
+## 32. Plik: `frontend/src/components/Notebook/WordExplanationModal.css`
 
 ```css
 .explanation-modal-overlay {
@@ -23325,7 +24075,7 @@ export default VoiceSessionSummaryModal;
 
 ---
 
-## 31. Plik: `frontend/src/components/Notebook/WordExplanationModal.js`
+## 33. Plik: `frontend/src/components/Notebook/WordExplanationModal.js`
 
 ```javascript
 import React, { useState, useEffect } from "react";
@@ -23535,7 +24285,7 @@ export default WordExplanationModal;
 
 ---
 
-## 32. Plik: `frontend/src/components/Paywall/PaywallModal.css`
+## 34. Plik: `frontend/src/components/Paywall/PaywallModal.css`
 
 ```css
 /* ========================================================
@@ -24078,7 +24828,7 @@ export default WordExplanationModal;
 
 ---
 
-## 33. Plik: `frontend/src/components/Paywall/PaywallModal.js`
+## 35. Plik: `frontend/src/components/Paywall/PaywallModal.js`
 
 ```javascript
 import React, { useState } from 'react';
@@ -24585,7 +25335,7 @@ export default PaywallModal;
 
 ---
 
-## 34. Plik: `frontend/src/components/Practice/PracticeMode.css`
+## 36. Plik: `frontend/src/components/Practice/PracticeMode.css`
 
 ```css
 /* src/components/Practice/PracticeMode.css */
@@ -25436,7 +26186,7 @@ export default PaywallModal;
 
 ---
 
-## 35. Plik: `frontend/src/components/Practice/PracticeMode.js`
+## 37. Plik: `frontend/src/components/Practice/PracticeMode.js`
 
 ```javascript
 import React, { useState, useEffect, useRef } from "react";
@@ -26533,7 +27283,7 @@ export default PracticeMode;
 
 ---
 
-## 36. Plik: `frontend/src/components/Reader/Reader.css`
+## 38. Plik: `frontend/src/components/Reader/Reader.css`
 
 ```css
 .reader-container {
@@ -27237,7 +27987,7 @@ input[type="range"] {
 
 ---
 
-## 37. Plik: `frontend/src/components/Reader/Reader.js`
+## 39. Plik: `frontend/src/components/Reader/Reader.js`
 
 ```javascript
 import React, { useState, useRef, useEffect } from "react";
@@ -28083,7 +28833,7 @@ export default Reader;
 
 ---
 
-## 38. Plik: `frontend/src/components/Sidebar.css`
+## 40. Plik: `frontend/src/components/Sidebar.css`
 
 ```css
 /* ============================================================
@@ -28323,9 +29073,11 @@ export default Reader;
   transition: background 0.15s ease;
 }
 
-.help-feedback-btn:hover {
+.help-feedback-btn:hover,
+.help-feedback-btn.active {
   background: var(--gray-100);
   color: var(--gray-900);
+  font-weight: 600;
 }
 
 .logout-btn-minimal {
@@ -28651,7 +29403,7 @@ export default Reader;
 
 ---
 
-## 39. Plik: `frontend/src/components/Sidebar.js`
+## 41. Plik: `frontend/src/components/Sidebar.js`
 
 ```javascript
 import React, { useState, useEffect, useRef } from 'react';
@@ -28964,7 +29716,11 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
         )}
 
         <div className="sidebar-bottom-actions">
-          <button className="help-feedback-btn" onClick={() => onNavigate('good-to-know')}>
+          <button 
+            className={`help-feedback-btn ${currentView === 'help-feedback' ? 'active' : ''}`} 
+            onClick={() => onNavigate('help-feedback')}
+            title={isCollapsed ? "Help & feedback" : undefined}
+          >
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
@@ -28989,7 +29745,7 @@ export default Sidebar;
 
 ---
 
-## 40. Plik: `frontend/src/components/Story/SavedStories.css`
+## 42. Plik: `frontend/src/components/Story/SavedStories.css`
 
 ```css
 /* src/components/Story/SavedStories.css */
@@ -30043,7 +30799,7 @@ export default Sidebar;
 
 ---
 
-## 41. Plik: `frontend/src/components/Story/SavedStories.js`
+## 43. Plik: `frontend/src/components/Story/SavedStories.js`
 
 ```javascript
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -31251,7 +32007,7 @@ export default SavedStories;
 
 ---
 
-## 42. Plik: `frontend/src/components/Story/StoryGenerator.css`
+## 44. Plik: `frontend/src/components/Story/StoryGenerator.css`
 
 ```css
 .story-generator {
@@ -32017,7 +32773,7 @@ export default SavedStories;
 
 ---
 
-## 43. Plik: `frontend/src/components/Story/StoryGenerator.js`
+## 45. Plik: `frontend/src/components/Story/StoryGenerator.js`
 
 ```javascript
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -32598,7 +33354,7 @@ export default StoryGenerator;
 
 ---
 
-## 44. Plik: `frontend/src/components/Story/StoryGenerator.test.js`
+## 46. Plik: `frontend/src/components/Story/StoryGenerator.test.js`
 
 ```javascript
 import React from 'react';
@@ -32687,7 +33443,7 @@ describe('StoryGenerator Popular Science Settings', () => {
 
 ---
 
-## 45. Plik: `frontend/src/components/TopBar.css`
+## 47. Plik: `frontend/src/components/TopBar.css`
 
 ```css
 /* ============================================================
@@ -33204,7 +33960,7 @@ describe('StoryGenerator Popular Science Settings', () => {
 
 ---
 
-## 46. Plik: `frontend/src/components/TopBar.js`
+## 48. Plik: `frontend/src/components/TopBar.js`
 
 ```javascript
 import React, { useState, useRef, useEffect } from 'react';
@@ -33463,7 +34219,7 @@ export default TopBar;
 
 ---
 
-## 47. Plik: `frontend/src/components/Translator/TranslatorDrawer.css`
+## 49. Plik: `frontend/src/components/Translator/TranslatorDrawer.css`
 
 ```css
 /* ============================================================
@@ -34100,7 +34856,7 @@ export default TopBar;
 
 ---
 
-## 48. Plik: `frontend/src/components/Translator/TranslatorDrawer.js`
+## 50. Plik: `frontend/src/components/Translator/TranslatorDrawer.js`
 
 ```javascript
 import React, { useState, useEffect, useRef } from "react";
@@ -34767,7 +35523,7 @@ export default TranslatorDrawer;
 
 ---
 
-## 49. Plik: `frontend/src/components/Vocabulary/VocabularyDrawer.css`
+## 51. Plik: `frontend/src/components/Vocabulary/VocabularyDrawer.css`
 
 ```css
 /* ============================================================
@@ -35531,7 +36287,7 @@ export default TranslatorDrawer;
 
 ---
 
-## 50. Plik: `frontend/src/components/Vocabulary/VocabularyDrawer.js`
+## 52. Plik: `frontend/src/components/Vocabulary/VocabularyDrawer.js`
 
 ```javascript
 import React, { useState, useEffect, useCallback } from "react";
@@ -36399,7 +37155,7 @@ export default VocabularyDrawer;
 
 ---
 
-## 51. Plik: `frontend/src/components/Vocabulary/VocabularyExerciseModal.js`
+## 53. Plik: `frontend/src/components/Vocabulary/VocabularyExerciseModal.js`
 
 ```javascript
 import React, { useState } from "react";
@@ -36579,7 +37335,7 @@ export default VocabularyExerciseModal;
 
 ---
 
-## 52. Plik: `frontend/src/components/Vocabulary/VocabularyView.css`
+## 54. Plik: `frontend/src/components/Vocabulary/VocabularyView.css`
 
 ```css
 /* ============================================================
@@ -37717,7 +38473,7 @@ export default VocabularyExerciseModal;
 
 ---
 
-## 53. Plik: `frontend/src/components/Vocabulary/VocabularyView.js`
+## 55. Plik: `frontend/src/components/Vocabulary/VocabularyView.js`
 
 ```javascript
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -39074,7 +39830,7 @@ export default VocabularyView;
 
 ---
 
-## 54. Plik: `frontend/src/components/Workspace.css`
+## 56. Plik: `frontend/src/components/Workspace.css`
 
 ```css
 .workspace-layout {
@@ -41230,7 +41986,7 @@ export default VocabularyView;
 
 ---
 
-## 55. Plik: `frontend/src/components/Workspace.js`
+## 57. Plik: `frontend/src/components/Workspace.js`
 
 ```javascript
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -44757,7 +45513,7 @@ export default Workspace;
 
 ---
 
-## 56. Plik: `frontend/src/config.js`
+## 58. Plik: `frontend/src/config.js`
 
 ```javascript
 export const getApiBaseUrl = () => {
@@ -44781,7 +45537,7 @@ export const API_BASE_URL = getApiBaseUrl();
 
 ---
 
-## 57. Plik: `frontend/src/globalAudioManager.js`
+## 59. Plik: `frontend/src/globalAudioManager.js`
 
 ```javascript
 /**
@@ -44869,7 +45625,7 @@ export default globalAudioManager;
 
 ---
 
-## 58. Plik: `frontend/src/index.css`
+## 60. Plik: `frontend/src/index.css`
 
 ```css
 /* Outfit and Roboto — Google Keep Style Fonts */
@@ -45071,7 +45827,7 @@ button, input, select, textarea {
 
 ---
 
-## 59. Plik: `frontend/src/index.js`
+## 61. Plik: `frontend/src/index.js`
 
 ```javascript
 import React from 'react';
@@ -45089,7 +45845,7 @@ root.render(
 
 ---
 
-## 60. Plik: `frontend/src/services/GeminiLiveClient.js`
+## 62. Plik: `frontend/src/services/GeminiLiveClient.js`
 
 ```javascript
 /**
@@ -46448,7 +47204,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 61. Plik: `mobile/expo-env.d.ts`
+## 63. Plik: `mobile/expo-env.d.ts`
 
 ```typescript
 /// <reference types="expo/types" />
@@ -46458,7 +47214,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 62. Plik: `mobile/scripts/patch-viewport.py`
+## 64. Plik: `mobile/scripts/patch-viewport.py`
 
 ```python
 #!/usr/bin/env python3
@@ -46535,7 +47291,7 @@ print(f'\nDone. Patched {patched}/{len(html_files)} files.')
 
 ---
 
-## 63. Plik: `mobile/scripts/reset-project.js`
+## 65. Plik: `mobile/scripts/reset-project.js`
 
 ```javascript
 #!/usr/bin/env node
@@ -46656,7 +47412,7 @@ rl.question(
 
 ---
 
-## 64. Plik: `mobile/src/app/_layout.tsx`
+## 66. Plik: `mobile/src/app/_layout.tsx`
 
 ```typescript
 import { Slot } from 'expo-router';
@@ -46682,7 +47438,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 65. Plik: `mobile/src/app/explore.tsx`
+## 67. Plik: `mobile/src/app/explore.tsx`
 
 ```typescript
 import React from 'react';
@@ -46699,7 +47455,7 @@ export default function ExploreScreen() {
 
 ---
 
-## 66. Plik: `mobile/src/app/index.tsx`
+## 68. Plik: `mobile/src/app/index.tsx`
 
 ```typescript
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -53819,7 +54575,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 67. Plik: `mobile/src/components/animated-icon.module.css`
+## 69. Plik: `mobile/src/components/animated-icon.module.css`
 
 ```css
 .expoLogoBackground {
@@ -53832,7 +54588,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 68. Plik: `mobile/src/components/animated-icon.tsx`
+## 70. Plik: `mobile/src/components/animated-icon.tsx`
 
 ```typescript
 import { Image } from 'expo-image';
@@ -53971,7 +54727,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 69. Plik: `mobile/src/components/animated-icon.web.tsx`
+## 71. Plik: `mobile/src/components/animated-icon.web.tsx`
 
 ```typescript
 import { Image } from 'expo-image';
@@ -54086,7 +54842,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 70. Plik: `mobile/src/components/app-tabs.tsx`
+## 72. Plik: `mobile/src/components/app-tabs.tsx`
 
 ```typescript
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
@@ -54125,7 +54881,7 @@ export default function AppTabs() {
 
 ---
 
-## 71. Plik: `mobile/src/components/app-tabs.web.tsx`
+## 73. Plik: `mobile/src/components/app-tabs.web.tsx`
 
 ```typescript
 import {
@@ -54247,7 +55003,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 72. Plik: `mobile/src/components/external-link.tsx`
+## 74. Plik: `mobile/src/components/external-link.tsx`
 
 ```typescript
 import { Href, Link } from 'expo-router';
@@ -54279,7 +55035,7 @@ export function ExternalLink({ href, ...rest }: Props) {
 
 ---
 
-## 73. Plik: `mobile/src/components/hint-row.tsx`
+## 75. Plik: `mobile/src/components/hint-row.tsx`
 
 ```typescript
 import type { ReactNode } from 'react';
@@ -54321,7 +55077,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 74. Plik: `mobile/src/components/themed-text.tsx`
+## 76. Plik: `mobile/src/components/themed-text.tsx`
 
 ```typescript
 import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
@@ -54401,7 +55157,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 75. Plik: `mobile/src/components/themed-view.tsx`
+## 77. Plik: `mobile/src/components/themed-view.tsx`
 
 ```typescript
 import { View, type ViewProps } from 'react-native';
@@ -54424,7 +55180,7 @@ export function ThemedView({ style, lightColor, darkColor, type, ...otherProps }
 
 ---
 
-## 76. Plik: `mobile/src/components/ui/collapsible.tsx`
+## 78. Plik: `mobile/src/components/ui/collapsible.tsx`
 
 ```typescript
 import { SymbolView } from 'expo-symbols';
@@ -54496,7 +55252,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 77. Plik: `mobile/src/components/web-badge.tsx`
+## 79. Plik: `mobile/src/components/web-badge.tsx`
 
 ```typescript
 import { version } from 'expo/package.json';
@@ -54546,7 +55302,7 @@ const styles = StyleSheet.create({
 
 ---
 
-## 78. Plik: `mobile/src/constants/theme.ts`
+## 80. Plik: `mobile/src/constants/theme.ts`
 
 ```typescript
 /**
@@ -54618,7 +55374,7 @@ export const MaxContentWidth = 800;
 
 ---
 
-## 79. Plik: `mobile/src/global.css`
+## 81. Plik: `mobile/src/global.css`
 
 ```css
 :root {
@@ -54634,7 +55390,7 @@ export const MaxContentWidth = 800;
 
 ---
 
-## 80. Plik: `mobile/src/hooks/use-color-scheme.ts`
+## 82. Plik: `mobile/src/hooks/use-color-scheme.ts`
 
 ```typescript
 export { useColorScheme } from 'react-native';
@@ -54642,7 +55398,7 @@ export { useColorScheme } from 'react-native';
 
 ---
 
-## 81. Plik: `mobile/src/hooks/use-color-scheme.web.ts`
+## 83. Plik: `mobile/src/hooks/use-color-scheme.web.ts`
 
 ```typescript
 import { useEffect, useState } from 'react';
@@ -54670,7 +55426,7 @@ export function useColorScheme() {
 
 ---
 
-## 82. Plik: `mobile/src/hooks/use-theme.ts`
+## 84. Plik: `mobile/src/hooks/use-theme.ts`
 
 ```typescript
 /**
@@ -54691,7 +55447,7 @@ export function useTheme() {
 
 ---
 
-## 83. Plik: `mobile/src/services/GeminiLiveClient.ts`
+## 85. Plik: `mobile/src/services/GeminiLiveClient.ts`
 
 ```typescript
 /**
@@ -55606,7 +56362,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 84. Plik: `portal/index.html`
+## 86. Plik: `portal/index.html`
 
 ```html
 <!DOCTYPE html>
@@ -56293,7 +57049,7 @@ export class GeminiLiveClient {
 
 ---
 
-## 85. Plik: `scratch.js`
+## 87. Plik: `scratch.js`
 
 ```javascript
 

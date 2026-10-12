@@ -1,0 +1,359 @@
+.help-feedback-container {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem 1.5rem;
+  box-sizing: border-box;
+  font-family: var(--font-main, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  color: var(--text-primary, #1e293b);
+}
+
+.help-feedback-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.help-header {
+  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+  padding-bottom: 1.75rem;
+}
+
+.help-kicker {
+  display: inline-block;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #1a73e8;
+  margin-bottom: 0.5rem;
+}
+
+.help-title {
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin: 0 0 0.75rem 0;
+  color: #0f172a;
+}
+
+.help-subtitle {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #64748b;
+  margin: 0 0 1.5rem 0;
+  max-width: 720px;
+}
+
+/* ── Tabs ───────────────────────────────────────────────────── */
+.help-nav-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.help-tab-btn {
+  padding: 0.625rem 1.125rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.help-tab-btn:hover {
+  background: #f8fafc;
+  color: #1e293b;
+  border-color: #cbd5e1;
+}
+
+.help-tab-btn.active {
+  background: #1a73e8;
+  color: #ffffff;
+  border-color: #1a73e8;
+  box-shadow: 0 2px 4px rgba(26, 115, 232, 0.2);
+}
+
+/* ── Cards / Content ────────────────────────────────────────── */
+.help-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.help-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.help-card-header {
+  margin-bottom: 0.875rem;
+}
+
+.help-module-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #6366f1;
+  background: #eef2ff;
+  padding: 0.25rem 0.625rem;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.help-card h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  margin: 0;
+  color: #0f172a;
+}
+
+.help-card-lead {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: #475569;
+  margin: 0 0 1.25rem 0;
+}
+
+.help-feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.help-feature-list li {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #334155;
+  padding-left: 1.25rem;
+  position: relative;
+}
+
+.help-feature-list li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #1a73e8;
+  font-weight: bold;
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.help-feature-list strong {
+  color: #0f172a;
+}
+
+/* ── FAQ Grid ───────────────────────────────────────────────── */
+.faq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+.faq-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.faq-item h3 {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.625rem 0;
+}
+
+.faq-item p {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #64748b;
+  margin: 0;
+}
+
+.help-contact-box {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.help-contact-box h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.375rem 0;
+}
+
+.help-contact-box p {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+
+/* ── Feedback Form ─────────────────────────────────────────── */
+.feedback-form-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 2.25rem;
+  max-width: 680px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.feedback-form-card h2 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem 0;
+  color: #0f172a;
+}
+
+.feedback-intro {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: #64748b;
+  margin: 0 0 1.75rem 0;
+}
+
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.form-group label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.form-select,
+.form-input,
+.form-textarea {
+  font-family: inherit;
+  font-size: 0.9375rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-select:focus,
+.form-input:focus,
+.form-textarea:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 120px;
+  line-height: 1.55;
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.btn-submit-feedback {
+  align-self: flex-start;
+  padding: 0.8125rem 1.75rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #1a73e8;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.btn-submit-feedback:hover:not(:disabled) {
+  background: #1557b0;
+}
+
+.btn-submit-feedback:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-submit-feedback:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Feedback Alert ─────────────────────────────────────────── */
+.feedback-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1.125rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-bottom: 1.25rem;
+}
+
+.feedback-alert.success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.feedback-alert.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.alert-dismiss {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: inherit;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+@media (max-width: 640px) {
+  .help-title {
+    font-size: 1.75rem;
+  }
+  .help-card,
+  .feedback-form-card {
+    padding: 1.25rem;
+  }
+  .faq-grid {
+    grid-template-columns: 1fr;
+  }
+}

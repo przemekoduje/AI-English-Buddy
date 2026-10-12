@@ -3447,6 +3447,41 @@ def handle_daily_practice():
         return jsonify({"date": today_str, "seconds": set_seconds or seconds_to_add, "target_minutes": target_minutes}), 200
 
 
+@app.route("/api/feedback", methods=['POST'])
+def submit_user_feedback():
+    """Zapisuje zgłoszenie feedbacku, uwagi lub błędu od użytkownika w Firestore."""
+    user_email = get_user_from_request()
+    req_data = request.get_json(silent=True) or {}
+    if not user_email:
+        user_email = req_data.get("email") or "guest@speakling.ai"
+
+    category = str(req_data.get("category", "suggestion") or "suggestion").strip()
+    message = str(req_data.get("message", "") or "").strip()
+    if not message:
+        return jsonify({"error": "Treść wiadomości nie może być pusta."}), 400
+
+    feedback_doc = {
+        "user_email": user_email,
+        "category": category,
+        "message": message,
+        "created_at": datetime.utcnow().isoformat(),
+        "user_agent": request.headers.get("User-Agent", ""),
+        "status": "new"
+    }
+
+    try:
+        if 'db' in globals() and db is not None:
+            db.collection('user_feedback').add(feedback_doc)
+        return jsonify({
+            "success": True,
+            "message": "Dziękujemy za przesłanie wiadomości! Twoja opinia pomaga rozwijać Speakling."
+        }), 200
+    except Exception as e:
+        print(f"Błąd zapisu feedbacku: {e}")
+        return jsonify({"error": f"Błąd zapisu feedbacku: {str(e)}"}), 500
+
+
+
 # ### NOWE/ZMODYFIKOWANE ENDPOINTY DLA ZARZĄDZANIA HISTORIAMI PRZEZ FIRESTORE ###
 
 def analyze_cefr_level(text, title=""):

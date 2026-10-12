@@ -1,5 +1,5 @@
 # Speakling — Kompletny Moduł Subskrypcji, Paywalla i Limitów AI
-Wygenerowano: 2026-10-12 21:46:54
+Wygenerowano: 2026-10-12 21:57:32
 > Dedykowany, lekki pakiet kodu dla zewnętrznych modeli AI (ChatGPT, Claude, DeepSeek). Zawiera 100% logiki subskrypcji, Stripe, limitów minut Gemini Live i blokad paywalla bez obcinania.
 
 ## Spis Zawartości Pakietu
@@ -600,18 +600,18 @@ def stripe_webhook():
 # 3. BRAMKA PAYWALLA W MODULE MASTERY PATH (3 kroki)
 # (Z pliku backend/app.py: /api/mastery-prepare)
 # ========================================================
-          <p style="margin: 6px 0;"><strong>Dodane do słownika:</strong> {', '.join(added_words) if added_words else 'Brak'}</p>
-    """
-
-    if forgotten_words:
-        email_html += f"""
-          <p style="margin: 12px 0 6px 0; font-weight: 700; color: #b91c1c;">Słówka, które warto zapisać (często sprawdzane, lecz pominięte):</p>
-        """
-        for item in forgotten_words:
-            email_html += f"""
-              <div style="border: 1px solid #fca5a5; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #fff5f5;">
-                <p style="margin: 2px 0; font-size: 1.1rem; font-weight: 700; color: #991b1b;">{item.get('word')}</p>
-                <p style="margin: 2px 0; color: #b91c1c; font-weight: 600;">Tłumaczenie: {item.get('translation')}</p>
+              {listening_data.get('feedback_pl', '')}
+            </p>
+          </div>
+          
+          <h3 style="color: #334155;">2. Ocena Zaangażowania (Praca z Tekstem):</h3>
+          <div style="background-color: #f1f5f9; border-left: 4px solid #15803d; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+            <p style="margin: 0; font-weight: 500;">
+              Poziom zaangażowania: <strong>{engagement_data.get('level', 'Średnie')}</strong><br/>
+              Sprawdzenia w słowniku: <strong>{engagement_data.get('dictionary_checks_count', 0)}</strong><br/>
+              Zapisane słówka: <strong>{engagement_data.get('saved_words_count', 0)}</strong><br/>
+              {engagement_data.get('feedback_pl', '')}
+            </p>
 
 ... (dalsza część przygotowania etapów treningu)
 
@@ -619,20 +619,20 @@ def stripe_webhook():
 # 4. WYMUSZENIE DARMOWEGO EDGE TTS DLA PLANU STARTER
 # (Z pliku backend/app.py: generate_tts_base64)
 # ========================================================
-            segment_lang = detect_primary_language(chunk_stripped)
-            add_segment(chunk, segment_lang)
-            
-    return segments
+            segments[-1] = (segments[-1][0] + " " + clean_val, lang_val)
+        else:
+            segments.append((clean_val, lang_val))
 
-def split_text_by_tags(text):
-    if "[PL]" not in text and "[EN]" not in text:
-        return split_text_by_language(text)
-        
-    parts = re.split(r'(\[PL\]|\[EN\])', text)
-    segments = []
-    current_lang = "en"
-    
-    for part in parts:
+    # Check if this looks like a vocabulary item: e.g. "buzzword - modne hasło" (short text with a dash where left & right have different languages)
+    if (" - " in text or " — " in text or " – " in text) and len(text.split()) <= 15:
+        parts = re.split(r'\s+[\-\—\–]\s+', text, maxsplit=1)
+        if len(parts) == 2:
+            left_lang = detect_primary_language(parts[0])
+            right_lang = detect_primary_language(parts[1])
+            if left_lang != right_lang:
+                add_segment(parts[0], left_lang)
+                add_segment(parts[1], right_lang)
+                return segments
 
 ...
 
@@ -640,33 +640,33 @@ def split_text_by_tags(text):
 # 5. TWARDY LIMIT MINUT DLA GEMINI LIVE ORB (KOD 403)
 # (Z pliku backend/app.py: /api/live/token)
 # ========================================================
-        "voices": [
-            {"id": "Puck", "name": "Puck (Energetyczny męski)", "gender": "male"},
-            {"id": "Charon", "name": "Charon (Głęboki męski)", "gender": "male"},
-            {"id": "Fenrir", "name": "Fenrir (Spokojny męski)", "gender": "male"},
-            {"id": "Aoede", "name": "Aoede (Ciepły żeński)", "gender": "female"},
-            {"id": "Kore", "name": "Kore (Naturalny żeński)", "gender": "female"}
-        ],
-        "models": [
-            {"id": "gemini-2.5-flash-native-audio-latest", "name": "Gemini 2.5 Flash Native Audio (Zalecany - najszybszy)"},
-            {"id": "gemini-3.8-live", "name": "Gemini 3.8 Live (Nowa generacja)"},
-            {"id": "gemini-3.1-flash-live-preview", "name": "Gemini 3.1 Flash Live"},
-        ]
-    })
+            "model": model_full
+        }
+    }
+    headers = {
+        "x-goog-api-key": api_key,
+        "Content-Type": "application/json"
+    }
+    resp = requests.post(url, json=payload, headers=headers, timeout=10)
+    if not resp.ok:
+        raise Exception(f"Gemini API error {resp.status_code}: {resp.text}")
 
+    data = resp.json()
+    token = data.get("token") or data.get("name", "")
+    if token.startswith("auth_tokens/"):
+        token = token[len("auth_tokens/"):]
+    if not token:
+        raise Exception(f"Brak pola token w odpowiedzi: {data}")
+    return token
 
-@app.route("/api/live/transcribe", methods=['POST'])
-def live_transcribe():
-    """Transcribes an audio turn (WAV / PCM) from Gemini Live for display in the chat transcript."""
-    audio_file = request.files.get('audio')
-    if not audio_file:
-        return jsonify({"text": ""}), 200
+def get_gemini_api_key():
+    """Zwraca aktywny klucz GEMINI_API_KEY z pamięci lub dynamicznie doładowuje z .env."""
+    global GEMINI_API_KEY
+    if not GEMINI_API_KEY:
+        load_dotenv(override=True)
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    return GEMINI_API_KEY
 
-    audio_bytes = audio_file.read()
-    if not audio_bytes or len(audio_bytes) < 300:
-        return jsonify({"text": ""}), 200
-
-    get_gemini_api_key()  # upewnij się, że klucz Gemini jest załadowany
 
 
 ```
@@ -3658,7 +3658,11 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
         )}
 
         <div className="sidebar-bottom-actions">
-          <button className="help-feedback-btn" onClick={() => onNavigate('good-to-know')}>
+          <button 
+            className={`help-feedback-btn ${currentView === 'help-feedback' ? 'active' : ''}`} 
+            onClick={() => onNavigate('help-feedback')}
+            title={isCollapsed ? "Help & feedback" : undefined}
+          >
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
@@ -3703,6 +3707,7 @@ import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import GoodToKnow from './components/GoodToKnow';
+import HelpFeedback from './components/Help/HelpFeedback';
 import PaywallModal from './components/Paywall/PaywallModal';
 
 function App() {
@@ -3981,6 +3986,7 @@ function App() {
       case 'media': return 'Media Buddy';
       case 'admin': return 'Panel Administratora';
       case 'good-to-know': return 'Good to know';
+      case 'help-feedback': return 'Help & Feedback';
       default: return 'Speakling';
     }
   };
@@ -4051,6 +4057,11 @@ function App() {
           ) : currentView === 'admin' ? (
             <AdminDashboard 
               user={user}
+            />
+          ) : currentView === 'help-feedback' ? (
+            <HelpFeedback 
+              user={user} 
+              onNavigate={handleNavigate} 
             />
           ) : currentView === 'good-to-know' ? (
             <GoodToKnow />

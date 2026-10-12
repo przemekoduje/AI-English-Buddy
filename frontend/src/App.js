@@ -14,6 +14,7 @@ import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import GoodToKnow from './components/GoodToKnow';
+import HelpFeedback from './components/Help/HelpFeedback';
 import PaywallModal from './components/Paywall/PaywallModal';
 
 function App() {
@@ -292,6 +293,7 @@ function App() {
       case 'media': return 'Media Buddy';
       case 'admin': return 'Panel Administratora';
       case 'good-to-know': return 'Good to know';
+      case 'help-feedback': return 'Help & Feedback';
       default: return 'Speakling';
     }
   };
@@ -362,6 +364,11 @@ function App() {
           ) : currentView === 'admin' ? (
             <AdminDashboard 
               user={user}
+            />
+          ) : currentView === 'help-feedback' ? (
+            <HelpFeedback 
+              user={user} 
+              onNavigate={handleNavigate} 
             />
           ) : currentView === 'good-to-know' ? (
             <GoodToKnow />
