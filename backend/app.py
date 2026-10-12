@@ -5273,7 +5273,37 @@ async def get_edge_audio_with_retry(text_to_speak, primary_voice="en-US-BrianNeu
                 
     return b""
 
+TTS_MEMORY_CACHE = {}
+TTS_CACHE_MAX_ITEMS = 1500
+
+def get_cached_tts(voice, text):
+    key = f"{voice}:::{text.strip()}"
+    return TTS_MEMORY_CACHE.get(key)
+
+def set_cached_tts(voice, text, base64_data):
+    if not base64_data:
+        return
+    key = f"{voice}:::{text.strip()}"
+    if len(TTS_MEMORY_CACHE) >= TTS_CACHE_MAX_ITEMS:
+        try:
+            first_key = next(iter(TTS_MEMORY_CACHE))
+            del TTS_MEMORY_CACHE[first_key]
+        except Exception:
+            pass
+    TTS_MEMORY_CACHE[key] = base64_data
+
 def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_email=None):
+    if not text:
+        return ""
+
+    if "Neural" not in voice:
+        voice = "en-US-BrianNeural"
+
+    # Fast in-memory cache check for instant sentence playback
+    cached_audio = get_cached_tts(voice, text)
+    if cached_audio:
+        return cached_audio
+
     if not user_email:
         user_email = get_user_from_request()
 
@@ -5283,9 +5313,6 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
         if sub.get("tier") == "starter":
             ai_mode = "free"
 
-    if "Neural" not in voice:
-        voice = "en-US-BrianNeural"
-        
     print(f"DEBUG TTS: Input text = '{text}', voice = '{voice}'", flush=True)
     
     # If the text does not contain bilingual tags, synthesize it in one go with the requested voice
@@ -5418,6 +5445,7 @@ def get_tts_audio():
     base64_data = generate_tts_base64(text, voice, user_email=user_email)
     if not base64_data:
         return jsonify({"error": "Błąd generowania mowy"}), 500
+    set_cached_tts(voice, text, base64_data)
     return jsonify({"audio_base64": base64_data})
 
 @app.route("/api/stories/generate-questions", methods=['POST'])

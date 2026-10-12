@@ -357,6 +357,8 @@ function Workspace({
   const currentChunkIndexRef = useRef(-1);
   // Mutex blokujący równoległe wywołania speakChunk
   const isChunkFetchingRef = useRef(false);
+  // Pamięć podręczna i bufor pobranego z wyprzedzeniem dźwięku TTS (prefetching)
+  const audioCacheRef = useRef(new Map());
 
   // Telemetry & summary states
   const [activityLog, setActivityLog] = useState([]);
@@ -1301,6 +1303,82 @@ function Workspace({
     }
   };
 
+  // Prefetching audio zdań z wyprzedzeniem (eliminacja pauz i namyślania się lektora)
+  const prefetchSentenceAudio = useCallback((text, voice) => {
+    if (!text || typeof text !== "string") return Promise.resolve(null);
+    const clean = text.trim();
+    if (!clean) return Promise.resolve(null);
+    const voiceToUse = voice || selectedVoiceURI || "en-US-BrianNeural";
+    const cacheKey = `${voiceToUse}:::${clean}`;
+
+    if (audioCacheRef.current.has(cacheKey)) {
+      const cached = audioCacheRef.current.get(cacheKey);
+      if (cached.audioUrl) return Promise.resolve(cached.audioUrl);
+      if (cached.promise) return cached.promise;
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/tts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: clean,
+            voice: voiceToUse
+          })
+        });
+        if (!response.ok) throw new Error("TTS request failed");
+        const data = await response.json();
+        if (!data.audio_base64) throw new Error("No audio base64 returned");
+
+        const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
+
+        // Ograniczenie rozmiaru cache w pamięci
+        if (audioCacheRef.current.size > 200) {
+          try {
+            const firstKey = audioCacheRef.current.keys().next().value;
+            audioCacheRef.current.delete(firstKey);
+          } catch (e) { }
+        }
+
+        audioCacheRef.current.set(cacheKey, {
+          audioUrl,
+          promise: null
+        });
+
+        return audioUrl;
+      } catch (err) {
+        audioCacheRef.current.delete(cacheKey);
+        throw err;
+      }
+    })();
+
+    audioCacheRef.current.set(cacheKey, {
+      audioUrl: null,
+      promise: fetchPromise
+    });
+
+    return fetchPromise;
+  }, [selectedVoiceURI]);
+
+  const prefetchUpcomingChunks = useCallback((startIndex, count = 2) => {
+    if (!textChunks || textChunks.length === 0) return;
+    const voice = selectedVoiceURI || "en-US-BrianNeural";
+    for (let offset = 0; offset < count; offset++) {
+      const targetIdx = startIndex + offset;
+      if (targetIdx >= 0 && targetIdx < textChunks.length && textChunks[targetIdx]) {
+        prefetchSentenceAudio(textChunks[targetIdx], voice).catch(() => {});
+      }
+    }
+  }, [textChunks, selectedVoiceURI, prefetchSentenceAudio]);
+
+  // Wstępny prefetch pierwszych 2-3 zdań przy wczytaniu tekstu, aby start Play był natychmiastowy
+  useEffect(() => {
+    if (textChunks && textChunks.length > 0) {
+      prefetchUpcomingChunks(0, 3);
+    }
+  }, [textChunks, prefetchUpcomingChunks]);
+
   const speakChunk = async (index, single = false) => {
     // Zajmij globalny slot — anuluje poprzednie odtwarzanie z dowolnego źródła
     const requestId = globalAudioManager.acquire();
@@ -1336,29 +1414,24 @@ function Workspace({
       }
     ]);
 
+    // Równolegle z wyprzedzeniem pobieramy w tle kolejne zdania (lookahead pipeline)
+    if (!single) {
+      prefetchUpcomingChunks(index + 1, 2);
+    }
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: textChunks[index],
-          voice: selectedVoiceURI || "en-US-BrianNeural"
-        })
-      });
+      const audioUrl = await prefetchSentenceAudio(textChunks[index], selectedVoiceURI || "en-US-BrianNeural");
 
       if (!globalAudioManager.isValid(requestId)) {
         return;
       }
 
-      if (!response.ok) throw new Error("Failed to generate audio");
-      const data = await response.json();
-      if (!data.audio_base64) throw new Error("No audio data returned");
+      if (!audioUrl) throw new Error("No audio data returned");
 
       if (!globalAudioManager.isValid(requestId) || wasPlayingBeforeTooltipRef.current || isPausedRef.current) {
         return;
       }
 
-      const audioUrl = `data:audio/mp3;base64,${data.audio_base64}`;
       const audio = new Audio(audioUrl);
       audio.playbackRate = speechRate;
 
@@ -1374,12 +1447,19 @@ function Workspace({
           try {
             localStorage.setItem(`buddy_story_progress_${currentStoryId}`, 100);
           } catch (e) { }
+          handleStop();
+          return;
         }
 
         if (single) {
           handleStop();
         } else {
-          speakChunk(index + 1, false);
+          // Naturalna, krótka mikropauza (80ms) – eliminuje nienaturalną ciszę, lektor czyta płynnie
+          setTimeout(() => {
+            if (isSpeakingRef.current && !isPausedRef.current) {
+              speakChunk(index + 1, false);
+            }
+          }, 80);
         }
       };
 
