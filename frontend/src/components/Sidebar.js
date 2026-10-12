@@ -63,31 +63,49 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
       lastActivityRef.current = Date.now();
     };
 
+    const isLearningMediaActive = () => {
+      // Sprawdź czy trwa odtwarzanie nagrania lektora lub wideo edukacyjnego
+      const mediaList = document.querySelectorAll('audio, video');
+      for (const m of mediaList) {
+        if (!m.paused && !m.ended && m.currentTime > 0) return true;
+      }
+      return false;
+    };
+
     window.addEventListener('mousemove', markActivity, { passive: true });
     window.addEventListener('keydown', markActivity, { passive: true });
     window.addEventListener('click', markActivity, { passive: true });
     window.addEventListener('touchstart', markActivity, { passive: true });
     window.addEventListener('scroll', markActivity, { passive: true });
+    document.addEventListener('selectionchange', markActivity, { passive: true });
 
     let tickCounter = 0;
     const interval = setInterval(() => {
-      // Jeśli karta jest ukryta lub użytkownik był bezczynny ponad 2 minuty - nie zliczaj czasu
+      // 1. Karta musi być aktywna/widoczna
       if (document.hidden) return;
-      if (Date.now() - lastActivityRef.current > 120000) return;
+
+      // 2. Sprawdzamy czy użytkownik faktycznie wykonuje zajęcia lub słucha/ogląda materiał
+      const hasRecentInteraction = (Date.now() - lastActivityRef.current) <= 45000;
+      const isMediaPlaying = isLearningMediaActive();
+
+      if (!hasRecentInteraction && !isMediaPlaying) {
+        // Brak realnych działań na stronie - nie naliczaj bezczynności
+        return;
+      }
 
       setPracticeSeconds(prev => {
         const next = prev + 1;
         tickCounter++;
 
-        // Zapis lokalny co 5 sekund
-        if (tickCounter % 5 === 0) {
+        // Zapis do localStorage co 10 sekund
+        if (tickCounter % 10 === 0) {
           try {
             localStorage.setItem(storageKey, String(next));
           } catch (e) {}
         }
 
-        // Zapis do backendu co 30 sekund
-        if (tickCounter % 30 === 0 && user?.token) {
+        // Zapis do backendu co 30 sekund lub przy każdej nowo ukończonej minucie
+        if ((tickCounter % 30 === 0 || next % 60 === 0) && user?.token) {
           fetch(`${API_BASE_URL}/api/user/daily-practice`, {
             method: 'POST',
             headers: {
@@ -112,6 +130,7 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
       window.removeEventListener('click', markActivity);
       window.removeEventListener('touchstart', markActivity);
       window.removeEventListener('scroll', markActivity);
+      document.removeEventListener('selectionchange', markActivity);
 
       try {
         localStorage.setItem(storageKey, String(practiceSecondsRef.current));
@@ -119,20 +138,13 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
     };
   }, [user?.token, storageKey]);
 
-  const currentPracticeMinutes = practiceSeconds / 60;
-  const practicePercentage = Math.min(100, Math.round((practiceSeconds / (DAILY_GOAL_MINUTES * 60)) * 100));
+  // Wyświetlanie z dokładnością do pełnej 1 minuty
+  const fullPracticeMinutes = Math.floor(practiceSeconds / 60);
+  const practicePercentage = Math.min(100, Math.round((fullPracticeMinutes / DAILY_GOAL_MINUTES) * 100));
 
-  let practiceMetaText = "";
-  if (practiceSeconds < 60) {
-    practiceMetaText = `${practiceSeconds}s of ${DAILY_GOAL_MINUTES} min today`;
-  } else if (currentPracticeMinutes < 10) {
-    practiceMetaText = `${currentPracticeMinutes.toFixed(1)} of ${DAILY_GOAL_MINUTES} min today`;
-  } else {
-    practiceMetaText = `${Math.floor(currentPracticeMinutes)} of ${DAILY_GOAL_MINUTES} min today`;
-  }
-
-  if (practicePercentage >= 100) {
-    practiceMetaText = `${Math.floor(currentPracticeMinutes)} of ${DAILY_GOAL_MINUTES} min today · Goal achieved!`;
+  let practiceMetaText = `${fullPracticeMinutes} of ${DAILY_GOAL_MINUTES} minutes today`;
+  if (fullPracticeMinutes >= DAILY_GOAL_MINUTES) {
+    practiceMetaText = `${fullPracticeMinutes} of ${DAILY_GOAL_MINUTES} minutes today · Goal completed`;
   }
 
   const toggleCollapse = () => {
