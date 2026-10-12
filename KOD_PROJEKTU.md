@@ -1,5 +1,5 @@
 # Kod Projektu AI-English-Buddy (Speakling)
-Wygenerowano: 2026-10-12 21:57:32
+Wygenerowano: 2026-10-12 22:05:10
 > Skondensowany eksport aktywnych plików produkcyjnych (bez plików testowych, mocków i kopii archiwalnych).
 
 ## Spis Treści
@@ -7325,6 +7325,16 @@ function App() {
     localStorage.setItem("buddy_current_view", view);
   };
 
+  const [openLiveSettingsTrigger, setOpenLiveSettingsTrigger] = useState(0);
+
+  const handleOpenLiveSettings = () => {
+    if (currentView !== 'dashboard') {
+      setCurrentView('dashboard');
+      localStorage.setItem("buddy_current_view", 'dashboard');
+    }
+    setOpenLiveSettingsTrigger(Date.now());
+  };
+
   const getPageTitle = () => {
     switch (currentView) {
       case 'dashboard': return 'Chat Live';
@@ -7363,6 +7373,7 @@ function App() {
           onOpenPaywall={openPaywall}
           selectedVoice={selectedVoice}
           onVoiceChange={handleVoiceChange}
+          onOpenLiveSettings={handleOpenLiveSettings}
           onLogout={handleLogout}
         />
         <div className="view-container">
@@ -7373,6 +7384,7 @@ function App() {
               subscription={subscription}
               onOpenPaywall={openPaywall}
               onSubscriptionUpdated={setSubscription}
+              openSettingsTrigger={openLiveSettingsTrigger}
             />
           ) : currentView === 'stories' ? (
             <SavedStories 
@@ -12668,7 +12680,7 @@ ${targetWordsFormatted ? `Pre-approved Target English Vocabulary:\n${targetWords
   return { systemInstruction, greetingPrompt: finalGreetingPrompt };
 }
 
-function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, onSubscriptionUpdated }) {
+function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, onSubscriptionUpdated, openSettingsTrigger }) {
   // Tryb rozmowy: 'live' (Gemini Multimodal Live) lub 'classic' (Whisper + OpenAI/DeepSeek + TTS)
   const [chatMode, setChatMode] = useState(() => {
     return localStorage.getItem("buddy_live_chat_mode") || "live";
@@ -12811,6 +12823,12 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   const [isScreenShareActive, setIsScreenShareActive] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  useEffect(() => {
+    if (openSettingsTrigger) {
+      setShowSettings(true);
+    }
+  }, [openSettingsTrigger]);
 
   // Stany dla Classic Mode
   const [isClassicRecording, setIsClassicRecording] = useState(false);
@@ -33984,6 +34002,7 @@ const TopBar = ({
   onOpenPaywall,
   selectedVoice = 'en-US-BrianNeural',
   onVoiceChange,
+  onOpenLiveSettings,
   onLogout
 }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -34185,6 +34204,18 @@ const TopBar = ({
               <div className="dropdown-divider" />
 
               {/* Opcje dodatkowe */}
+              {onOpenLiveSettings && (
+                <button 
+                  className="dropdown-action-item"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    onOpenLiveSettings();
+                  }}
+                >
+                  <span>Ustawienia Chat Live</span>
+                </button>
+              )}
+
               <button 
                 className="dropdown-action-item"
                 onClick={() => {

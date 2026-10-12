@@ -1,5 +1,5 @@
 # Speakling — Kompletny Moduł Subskrypcji, Paywalla i Limitów AI
-Wygenerowano: 2026-10-12 21:57:32
+Wygenerowano: 2026-10-12 22:05:10
 > Dedykowany, lekki pakiet kodu dla zewnętrznych modeli AI (ChatGPT, Claude, DeepSeek). Zawiera 100% logiki subskrypcji, Stripe, limitów minut Gemini Live i blokad paywalla bez obcinania.
 
 ## Spis Zawartości Pakietu
@@ -3109,6 +3109,7 @@ const TopBar = ({
   onOpenPaywall,
   selectedVoice = 'en-US-BrianNeural',
   onVoiceChange,
+  onOpenLiveSettings,
   onLogout
 }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -3310,6 +3311,18 @@ const TopBar = ({
               <div className="dropdown-divider" />
 
               {/* Opcje dodatkowe */}
+              {onOpenLiveSettings && (
+                <button 
+                  className="dropdown-action-item"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    onOpenLiveSettings();
+                  }}
+                >
+                  <span>Ustawienia Chat Live</span>
+                </button>
+              )}
+
               <button 
                 className="dropdown-action-item"
                 onClick={() => {
@@ -3977,6 +3990,16 @@ function App() {
     localStorage.setItem("buddy_current_view", view);
   };
 
+  const [openLiveSettingsTrigger, setOpenLiveSettingsTrigger] = useState(0);
+
+  const handleOpenLiveSettings = () => {
+    if (currentView !== 'dashboard') {
+      setCurrentView('dashboard');
+      localStorage.setItem("buddy_current_view", 'dashboard');
+    }
+    setOpenLiveSettingsTrigger(Date.now());
+  };
+
   const getPageTitle = () => {
     switch (currentView) {
       case 'dashboard': return 'Chat Live';
@@ -4015,6 +4038,7 @@ function App() {
           onOpenPaywall={openPaywall}
           selectedVoice={selectedVoice}
           onVoiceChange={handleVoiceChange}
+          onOpenLiveSettings={handleOpenLiveSettings}
           onLogout={handleLogout}
         />
         <div className="view-container">
@@ -4025,6 +4049,7 @@ function App() {
               subscription={subscription}
               onOpenPaywall={openPaywall}
               onSubscriptionUpdated={setSubscription}
+              openSettingsTrigger={openLiveSettingsTrigger}
             />
           ) : currentView === 'stories' ? (
             <SavedStories 

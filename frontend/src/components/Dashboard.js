@@ -368,7 +368,7 @@ ${targetWordsFormatted ? `Pre-approved Target English Vocabulary:\n${targetWords
   return { systemInstruction, greetingPrompt: finalGreetingPrompt };
 }
 
-function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, onSubscriptionUpdated }) {
+function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, onSubscriptionUpdated, openSettingsTrigger }) {
   // Tryb rozmowy: 'live' (Gemini Multimodal Live) lub 'classic' (Whisper + OpenAI/DeepSeek + TTS)
   const [chatMode, setChatMode] = useState(() => {
     return localStorage.getItem("buddy_live_chat_mode") || "live";
@@ -511,6 +511,12 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   const [isScreenShareActive, setIsScreenShareActive] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  useEffect(() => {
+    if (openSettingsTrigger) {
+      setShowSettings(true);
+    }
+  }, [openSettingsTrigger]);
 
   // Stany dla Classic Mode
   const [isClassicRecording, setIsClassicRecording] = useState(false);

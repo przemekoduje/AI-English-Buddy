@@ -284,6 +284,16 @@ function App() {
     localStorage.setItem("buddy_current_view", view);
   };
 
+  const [openLiveSettingsTrigger, setOpenLiveSettingsTrigger] = useState(0);
+
+  const handleOpenLiveSettings = () => {
+    if (currentView !== 'dashboard') {
+      setCurrentView('dashboard');
+      localStorage.setItem("buddy_current_view", 'dashboard');
+    }
+    setOpenLiveSettingsTrigger(Date.now());
+  };
+
   const getPageTitle = () => {
     switch (currentView) {
       case 'dashboard': return 'Chat Live';
@@ -322,6 +332,7 @@ function App() {
           onOpenPaywall={openPaywall}
           selectedVoice={selectedVoice}
           onVoiceChange={handleVoiceChange}
+          onOpenLiveSettings={handleOpenLiveSettings}
           onLogout={handleLogout}
         />
         <div className="view-container">
@@ -332,6 +343,7 @@ function App() {
               subscription={subscription}
               onOpenPaywall={openPaywall}
               onSubscriptionUpdated={setSubscription}
+              openSettingsTrigger={openLiveSettingsTrigger}
             />
           ) : currentView === 'stories' ? (
             <SavedStories 

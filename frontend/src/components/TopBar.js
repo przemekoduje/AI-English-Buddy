@@ -19,6 +19,7 @@ const TopBar = ({
   onOpenPaywall,
   selectedVoice = 'en-US-BrianNeural',
   onVoiceChange,
+  onOpenLiveSettings,
   onLogout
 }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -220,6 +221,18 @@ const TopBar = ({
               <div className="dropdown-divider" />
 
               {/* Opcje dodatkowe */}
+              {onOpenLiveSettings && (
+                <button 
+                  className="dropdown-action-item"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    onOpenLiveSettings();
+                  }}
+                >
+                  <span>Ustawienia Chat Live</span>
+                </button>
+              )}
+
               <button 
                 className="dropdown-action-item"
                 onClick={() => {
