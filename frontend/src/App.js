@@ -49,9 +49,34 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         setSubscription(data.subscription);
+      } else {
+        setSubscription(prev => prev || {
+          tier: 'starter',
+          status: 'free',
+          name: 'Starter (Free)',
+          can_access_mastery: false,
+          can_access_media: false,
+          can_access_industry_modes: false,
+          can_buy_topup: false,
+          minutes_remaining: 5.0,
+          live_minutes_limit: 5.0,
+          is_admin: false
+        });
       }
     } catch (e) {
       console.warn("Błąd pobierania subskrypcji:", e);
+      setSubscription(prev => prev || {
+        tier: 'starter',
+        status: 'free',
+        name: 'Starter (Free)',
+        can_access_mastery: false,
+        can_access_media: false,
+        can_access_industry_modes: false,
+        can_buy_topup: false,
+        minutes_remaining: 5.0,
+        live_minutes_limit: 5.0,
+        is_admin: false
+      });
     }
   };
 
@@ -335,6 +360,7 @@ function App() {
               onNavigateToDashboard={() => handleNavigate('dashboard')} 
               onNavigateToVocabulary={() => handleNavigate('notebook')}
               user={user}
+              isAdmin={isAdmin}
               generatedText={generatedText}
               setGeneratedText={setGeneratedText}
               currentStoryTitle={currentStoryTitle}

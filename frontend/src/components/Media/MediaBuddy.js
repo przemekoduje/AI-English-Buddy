@@ -114,7 +114,7 @@ const formatTime = (secs) => {
 };
 
 function MediaBuddy({ user, subscription, onOpenPaywall }) {
-  const isLocked = subscription && !subscription.can_access_media && !user?.is_admin;
+  const isLocked = !user?.is_admin && !subscription?.is_admin && !subscription?.can_access_media;
 
   useEffect(() => {
     if (isLocked && onOpenPaywall) {

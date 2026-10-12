@@ -254,6 +254,7 @@ function Workspace({
   onNavigateToDashboard,
   onNavigateToVocabulary,
   user,
+  isAdmin = false,
   generatedText,
   setGeneratedText,
   currentStoryTitle,
@@ -263,6 +264,9 @@ function Workspace({
   subscription,
   onOpenPaywall,
 }) {
+  const hasMasteryAccess = Boolean(user?.is_admin || isAdmin || subscription?.is_admin || subscription?.can_access_mastery);
+  const isMasteryLocked = !hasMasteryAccess;
+
   const [dismissedStoryWords, setDismissedStoryWords] = useState(new Set());
   const [showPracticeMode, setShowPracticeMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -2972,9 +2976,9 @@ function Workspace({
                 </p>
 
                 <button
-                  className={`buddy-voice-ai-btn ${subscription && !subscription.can_access_mastery && !user?.is_admin ? 'btn-pro-locked' : ''}`}
+                  className={`buddy-voice-ai-btn ${isMasteryLocked ? 'btn-pro-locked' : ''}`}
                   onClick={() => {
-                    if (subscription && !subscription.can_access_mastery && !user?.is_admin) {
+                    if (isMasteryLocked) {
                       if (onOpenPaywall) {
                         onOpenPaywall({ feature: 'mastery' });
                         return;
@@ -2990,7 +2994,7 @@ function Workspace({
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
                   </svg>
                   <span>Mastery Path · 3 steps</span>
-                  {subscription && !subscription.can_access_mastery && !user?.is_admin && (
+                  {isMasteryLocked && (
                     <span style={{
                       marginLeft: '6px',
                       background: 'rgba(255,255,255,0.25)',
@@ -3055,6 +3059,12 @@ function Workspace({
           <button
             className="chat-live-floating-btn"
             onClick={() => {
+              if (isMasteryLocked) {
+                if (onOpenPaywall) {
+                  onOpenPaywall({ feature: 'mastery' });
+                  return;
+                }
+              }
               handleStop();
               setShowPracticeMode(true);
             }}
@@ -3063,6 +3073,17 @@ function Workspace({
               <path d="M12 3v18M8 8v8M4 11v2M16 6v12M20 10v4" />
             </svg>
             <span>Chat Live</span>
+            {isMasteryLocked && (
+              <span style={{
+                marginLeft: '6px',
+                background: 'rgba(255,255,255,0.25)',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: 800,
+                letterSpacing: '0.05em'
+              }}>PRO</span>
+            )}
           </button>
 
           {storyCopiedToast && (
@@ -3079,6 +3100,7 @@ function Workspace({
           voices={voices}
           selectedVoiceURI={selectedVoiceURI}
           user={user}
+          onOpenPaywall={onOpenPaywall}
           onExit={() => setShowPracticeMode(false)}
           onLogActivity={(act) => setActivityLog(prev => [...prev, act])}
         />

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from '../../config';
 import "./PracticeMode.css";
 
-const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActivity }) => {
+const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActivity, onOpenPaywall }) => {
   const [phase, setPhase] = useState(1);
   const [subPhase, setSubPhase] = useState(1);
   const [masteryData, setMasteryData] = useState([]);
@@ -135,11 +135,21 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "X-Session-Token": user.token
+          "X-Session-Token": user?.token || ""
         },
         body: JSON.stringify({ text }),
       });
+      if (response.status === 403) {
+        if (onOpenPaywall) onOpenPaywall({ feature: 'mastery' });
+        if (onExit) onExit();
+        return;
+      }
       const data = await response.json();
+      if (data?.error === "PAYWALL_REQUIRED") {
+        if (onOpenPaywall) onOpenPaywall({ feature: 'mastery' });
+        if (onExit) onExit();
+        return;
+      }
       if (Array.isArray(data)) {
         setMasteryData(data);
         if (data.length > 0) {
@@ -343,10 +353,18 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       }
       const res = await fetch(`${API_BASE_URL}/api/mastery-evaluate`, { 
         method: "POST", 
-        headers: { "X-Session-Token": user.token },
+        headers: { "X-Session-Token": user?.token || "" },
         body: formData 
       });
+      if (res.status === 403) {
+        if (onOpenPaywall) onOpenPaywall({ feature: 'mastery' });
+        return;
+      }
       const result = await res.json();
+      if (result?.error === "PAYWALL_REQUIRED") {
+        if (onOpenPaywall) onOpenPaywall({ feature: 'mastery' });
+        return;
+      }
       setEvaluation(result);
 
       if (onLogActivity && result && typeof result.score !== 'undefined') {

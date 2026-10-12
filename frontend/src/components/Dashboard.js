@@ -446,7 +446,8 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   const handleExerciseTypeChange = (e) => {
     const newType = e.target.value;
     const selectedEx = EXERCISE_TYPES.find(ex => ex.id === newType);
-    if (selectedEx?.tierRequired === 'intensive' && subscription?.tier !== 'intensive' && !user?.is_admin) {
+    const isUserAdmin = Boolean(user?.is_admin || subscription?.is_admin);
+    if (selectedEx?.tierRequired === 'intensive' && subscription?.tier !== 'intensive' && !isUserAdmin) {
       if (onOpenPaywall) {
         onOpenPaywall({ feature: 'industry' });
         return;
@@ -690,7 +691,8 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   // ==========================================
 
   const startLiveSession = async (overrideOptions = {}) => {
-    if (subscription && subscription.minutes_remaining <= 0 && !user?.is_admin) {
+    const isUserAdmin = Boolean(user?.is_admin || subscription?.is_admin);
+    if (subscription && subscription.minutes_remaining <= 0 && !isUserAdmin) {
       if (onOpenPaywall) {
         onOpenPaywall({ feature: 'quota', reason: 'quota_exceeded' });
       }
