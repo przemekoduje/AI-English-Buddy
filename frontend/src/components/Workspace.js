@@ -341,6 +341,7 @@ function Workspace({
   const [isGeneratorCollapsed, setIsGeneratorCollapsed] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("Business");
   const [selectedLevel, setSelectedLevel] = useState("B2");
+  const [customStoryPrompt, setCustomStoryPrompt] = useState("");
   const [isGeneratingStory, setIsGeneratingStory] = useState(false);
   const [isAskingBuddy, setIsAskingBuddy] = useState(false);
 
@@ -1119,6 +1120,13 @@ function Workspace({
         "C1": "advanced",
         "C2": "advanced"
       };
+      let promptDetails = customStoryPrompt.trim();
+      if (!promptDetails) {
+        promptDetails = `Create an engaging, modern story tailored for ${selectedLevel} CEFR level about ${selectedCategory}.`;
+      } else {
+        promptDetails = `${promptDetails}. Tailored for ${selectedLevel} CEFR level, theme: ${selectedCategory}.`;
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/generate`, {
         method: "POST",
         headers: {
@@ -1127,7 +1135,7 @@ function Workspace({
         },
         body: JSON.stringify({
           topics: [selectedCategory],
-          customDetails: `Create an engaging, modern story tailored for ${selectedLevel} CEFR level about ${selectedCategory}.`,
+          customDetails: promptDetails,
           settings: {
             language_level: levelMap[selectedLevel] || "medium",
             length: "medium",
@@ -2957,6 +2965,25 @@ function Workspace({
                   <span>{isGeneratingStory ? "Generating..." : "Generate Story"}</span>
                 </button>
               </div>
+            </div>
+
+            <div className="create-story-prompt-wrapper">
+              <label htmlFor="create-story-prompt" className="create-story-prompt-label">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                </svg>
+                <span>Własny opis opowiadania (opcjonalnie):</span>
+              </label>
+              <textarea
+                id="create-story-prompt"
+                className="create-story-prompt-textarea"
+                value={customStoryPrompt}
+                onChange={(e) => setCustomStoryPrompt(e.target.value)}
+                placeholder="Np. Maya jest młodą projektantką w Cambridge. Opisz jej pierwszy dzień w pracy i rozmowę z wymagającym klientem..."
+                rows="3"
+                disabled={isGeneratingStory || isLoading}
+              />
             </div>
 
             <div className="create-story-footer-note">
