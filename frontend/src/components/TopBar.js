@@ -1,12 +1,100 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './TopBar.css';
+import { API_BASE_URL } from '../config';
 
-const TopBar = ({ title, user, subscription, onOpenPaywall }) => {
-  const userName = user?.name || (user?.email ? user.email.split('@')[0] : 'Anna Kowalska');
+const AVAILABLE_NARRATORS = [
+  { id: 'en-US-BrianNeural', name: 'Brian (US Męski — Naturalny 🌟)', flag: '🇺🇸', gender: 'male' },
+  { id: 'en-US-GuyNeural', name: 'Guy (US Męski — Ciepły)', flag: '🇺🇸', gender: 'male' },
+  { id: 'en-US-ChristopherNeural', name: 'Christopher (US Męski — Radiowy)', flag: '🇺🇸', gender: 'male' },
+  { id: 'en-US-JennyNeural', name: 'Jenny (US Damski — Przyjazny)', flag: '🇺🇸', gender: 'female' },
+  { id: 'en-US-AriaNeural', name: 'Aria (US Damski — Ekspresyjny)', flag: '🇺🇸', gender: 'female' },
+  { id: 'en-GB-RyanNeural', name: 'Ryan (UK Męski — Brytyjski)', flag: '🇬🇧', gender: 'male' },
+  { id: 'en-GB-SoniaNeural', name: 'Sonia (UK Damski — Brytyjski)', flag: '🇬🇧', gender: 'female' },
+];
+
+const TopBar = ({ 
+  title, 
+  user, 
+  subscription, 
+  onOpenPaywall,
+  selectedVoice = 'en-US-BrianNeural',
+  onVoiceChange,
+  onLogout
+}) => {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const dropdownRef = useRef(null);
+  const previewAudioRef = useRef(null);
+
+  const userName = user?.name || user?.full_name || (user?.email ? user.email.split('@')[0] : 'Użytkownik');
+  const userEmail = user?.email || '';
+  const userPhoto = user?.photoURL || user?.avatar_url || (typeof user?.picture === 'string' ? user?.picture : user?.picture?.data?.url) || user?.photo_url || null;
+  const avatarUrl = userPhoto || (userEmail ? `https://unavatar.io/${encodeURIComponent(userEmail)}?fallback=false` : null);
+  const userInitial = (userName || 'U').charAt(0).toUpperCase();
+
   const tier = subscription?.tier || 'starter';
   const remaining = subscription?.minutes_remaining !== undefined ? subscription.minutes_remaining : 5;
   const isProOrIntensive = tier === 'pro' || tier === 'intensive';
-  
+
+  // Zamknięcie rozwijanego menu po kliknięciu poza nim
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
+  const handlePreviewVoice = async (voiceToTest) => {
+    const v = voiceToTest || selectedVoice;
+    if (isPlayingPreview) {
+      if (previewAudioRef.current) {
+        try { previewAudioRef.current.pause(); } catch (e) {}
+        previewAudioRef.current = null;
+      }
+      setIsPlayingPreview(false);
+      return;
+    }
+
+    setIsPlayingPreview(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "Hello! I am your Speakling voice tutor. Ready to practice?",
+          voice: v
+        })
+      });
+      const data = await response.json();
+      if (data.audio_base64) {
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        previewAudioRef.current = audio;
+        audio.onended = () => {
+          setIsPlayingPreview(false);
+          previewAudioRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsPlayingPreview(false);
+          previewAudioRef.current = null;
+        };
+        await audio.play();
+      } else {
+        setIsPlayingPreview(false);
+      }
+    } catch (err) {
+      console.warn("Preview error:", err);
+      setIsPlayingPreview(false);
+    }
+  };
+
   return (
     <header className="mission-topbar">
       <div className="topbar-left">
@@ -37,12 +125,134 @@ const TopBar = ({ title, user, subscription, onOpenPaywall }) => {
           </svg>
         </button>
 
-        <div className="topbar-user-pill" onClick={() => onOpenPaywall && onOpenPaywall()} style={{ cursor: 'pointer' }} title="Profil i subskrypcja">
-          <span className="topbar-avatar">{userName.charAt(0).toUpperCase()}</span>
-          <span className="topbar-username">{userName}</span>
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+        {/* Menu profilu użytkownika z Settings & Głos lektora */}
+        <div className="topbar-user-wrapper" ref={dropdownRef}>
+          <div 
+            className={`topbar-user-pill ${isDropdownOpen ? 'active' : ''}`}
+            onClick={() => setIsDropdownOpen(prev => !prev)}
+            title="Kliknij, aby otworzyć ustawienia profilu i lektora"
+          >
+            {avatarUrl && !imgError ? (
+              <img 
+                src={avatarUrl} 
+                alt={userName} 
+                className="topbar-avatar topbar-avatar-img" 
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <span className="topbar-avatar">{userInitial}</span>
+            )}
+            <span className="topbar-username">{userName}</span>
+            <svg 
+              className={`topbar-chevron ${isDropdownOpen ? 'open' : ''}`} 
+              viewBox="0 0 24 24" 
+              width="14" 
+              height="14" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+
+          {/* Rozwijane menu z ustawieniami */}
+          {isDropdownOpen && (
+            <div className="topbar-user-dropdown animate-fade-in">
+              <div className="dropdown-user-header">
+                {avatarUrl && !imgError ? (
+                  <img 
+                    src={avatarUrl} 
+                    alt={userName} 
+                    className="dropdown-avatar-img" 
+                    onError={() => setImgError(true)}
+                  />
+                ) : (
+                  <span className="dropdown-avatar-initial">{userInitial}</span>
+                )}
+                <div className="dropdown-user-meta">
+                  <div className="dropdown-user-name">{userName}</div>
+                  {userEmail && <div className="dropdown-user-email">{userEmail}</div>}
+                  <span className={`dropdown-plan-badge ${isProOrIntensive ? 'badge-pro' : 'badge-free'}`}>
+                    {tier.toUpperCase()} PLAN
+                  </span>
+                </div>
+              </div>
+
+              <div className="dropdown-divider" />
+
+              {/* Sekcja Ustawienia Lektora */}
+              <div className="dropdown-settings-section">
+                <div className="dropdown-section-title">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#7c3aed" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+                  </svg>
+                  <span>Głos lektora (Narrator Voice)</span>
+                </div>
+                <div className="dropdown-section-desc">
+                  Stały lektor czytający teksty w całej aplikacji
+                </div>
+
+                <div className="dropdown-voice-selector">
+                  <select
+                    className="dropdown-voice-select"
+                    value={selectedVoice}
+                    onChange={(e) => {
+                      if (onVoiceChange) onVoiceChange(e.target.value);
+                    }}
+                  >
+                    {AVAILABLE_NARRATORS.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.flag} {v.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    className={`dropdown-voice-preview-btn ${isPlayingPreview ? 'playing' : ''}`}
+                    onClick={() => handlePreviewVoice(selectedVoice)}
+                    title="Posłuchaj próbki mowy"
+                  >
+                    {isPlayingPreview ? (
+                      <>⏹️ Stop</>
+                    ) : (
+                      <>🔊 Próbka</>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="dropdown-divider" />
+
+              {/* Opcje dodatkowe */}
+              <button 
+                className="dropdown-action-item"
+                onClick={() => {
+                  setIsDropdownOpen(false);
+                  if (onOpenPaywall) onOpenPaywall();
+                }}
+              >
+                <span className="dropdown-item-icon">💎</span>
+                <span>Zarządzaj subskrypcją i minutami</span>
+              </button>
+
+              {onLogout && (
+                <button 
+                  className="dropdown-action-item dropdown-logout-item"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    onLogout();
+                  }}
+                >
+                  <span className="dropdown-item-icon">🚪</span>
+                  <span>Wyloguj się</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>

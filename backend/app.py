@@ -1831,6 +1831,7 @@ def login():
             "token": token, 
             "email": email, 
             "full_name": user_data.get("full_name", ""),
+            "avatar_url": user_data.get("avatar_url") or user_data.get("photo_url") or user_data.get("picture"),
             "subscription": get_user_subscription(email)
         }), 200
     except Exception as e:
@@ -5246,30 +5247,20 @@ def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
     return generate_gtts_bytes(text_to_speak, voice_name)
 
 async def get_edge_audio_with_retry(text_to_speak, primary_voice="en-US-BrianNeural"):
-    voices_to_try = [primary_voice]
-    if "en-US" in primary_voice or "Brian" in primary_voice or "Guy" in primary_voice or "Neural" in primary_voice:
-        for alt_v in ["en-US-BrianNeural", "en-US-GuyNeural", "en-US-ChristopherNeural", "en-GB-RyanNeural"]:
-            if alt_v not in voices_to_try:
-                voices_to_try.append(alt_v)
-    elif "pl-PL" in primary_voice or "Marek" in primary_voice:
-        for alt_v in ["pl-PL-MarekNeural"]:
-            if alt_v not in voices_to_try:
-                voices_to_try.append(alt_v)
-
-    for v in voices_to_try:
-        for attempt in range(2):
-            try:
-                communicate = edge_tts.Communicate(text_to_speak, v)
-                audio_data = b""
-                async for chunk in communicate.stream():
-                    if chunk["type"] == "audio":
-                        audio_data += chunk["data"]
-                if audio_data and len(audio_data) > 100:
-                    print(f"Edge TTS succeeded with male voice '{v}' (attempt {attempt + 1})", flush=True)
-                    return audio_data
-            except Exception as e_edge:
-                print(f"Edge TTS error for voice '{v}' (attempt {attempt + 1}): {e_edge}", flush=True)
-                await asyncio.sleep(0.15)
+    # Stały, jednolity lektor w całej aplikacji — nie zmieniamy głosu w trakcie kolejnych zdań!
+    target_voice = primary_voice or "en-US-BrianNeural"
+    for attempt in range(3):
+        try:
+            communicate = edge_tts.Communicate(text_to_speak, target_voice)
+            audio_data = b""
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_data += chunk["data"]
+            if audio_data and len(audio_data) > 100:
+                return audio_data
+        except Exception as e_edge:
+            print(f"Edge TTS error for voice '{target_voice}' (attempt {attempt + 1}): {e_edge}", flush=True)
+            await asyncio.sleep(0.12)
                 
     return b""
 

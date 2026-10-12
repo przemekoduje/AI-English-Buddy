@@ -263,6 +263,8 @@ function Workspace({
   setCurrentStoryId,
   subscription,
   onOpenPaywall,
+  selectedVoice = 'en-US-BrianNeural',
+  onVoiceChange,
 }) {
   const hasMasteryAccess = Boolean(user?.is_admin || isAdmin || subscription?.is_admin || subscription?.can_access_mastery);
   const isMasteryLocked = !hasMasteryAccess;
@@ -273,7 +275,7 @@ function Workspace({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [suggestedTopics, setSuggestedTopics] = useState([]);
   const voices = PREMIUM_VOICES;
-  const [selectedVoiceURI, setSelectedVoiceURI] = useState('en-US-BrianNeural');
+  const selectedVoiceURI = selectedVoice || 'en-US-BrianNeural';
   const [speechRate, setSpeechRate] = useState(1.0);
   const [speechPitch, setSpeechPitch] = useState(1);
   const [notebookWords, setNotebookWords] = useState([]);

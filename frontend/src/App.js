@@ -28,6 +28,15 @@ function App() {
   });
 
   const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState(() => {
+    return localStorage.getItem("buddy_selected_voice") || "en-US-BrianNeural";
+  });
+
+  const handleVoiceChange = (newVoice) => {
+    if (!newVoice) return;
+    setSelectedVoice(newVoice);
+    localStorage.setItem("buddy_selected_voice", newVoice);
+  };
 
   const [subscription, setSubscription] = useState(() => {
     return user?.subscription || null;
@@ -309,6 +318,9 @@ function App() {
           user={user} 
           subscription={subscription}
           onOpenPaywall={openPaywall}
+          selectedVoice={selectedVoice}
+          onVoiceChange={handleVoiceChange}
+          onLogout={handleLogout}
         />
         <div className="view-container">
           {currentView === 'dashboard' ? (
@@ -367,6 +379,8 @@ function App() {
               setCurrentStoryId={setCurrentStoryId}
               subscription={subscription}
               onOpenPaywall={openPaywall}
+              selectedVoice={selectedVoice}
+              onVoiceChange={handleVoiceChange}
             />
           )}
         </div>
