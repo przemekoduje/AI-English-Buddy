@@ -149,7 +149,7 @@
 /* Floating Apple Player Controls */
 .apple-player-controls-floating {
   position: fixed;
-  top: 1.5rem;
+  top: 4.85rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
@@ -703,10 +703,10 @@
   width: 100%;
   max-width: 1360px;
   margin: 0 auto;
-  padding: 2rem 2rem 4rem;
+  padding: 1.25rem 2rem 4rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   animation: view-enter 0.35s ease-out;
   position: relative;
 }
@@ -907,6 +907,18 @@
   background: #2563eb;
   border-color: #2563eb;
   color: #ffffff;
+}
+
+.toolbar-pill-btn.toolbar-stop-btn {
+  border-color: #fecaca;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.toolbar-pill-btn.toolbar-stop-btn:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
 }
 
 .toolbar-icon-btn {
@@ -1639,13 +1651,14 @@
   border: 1px solid #e2e8f0;
   border-radius: 20px;
   padding: 1.35rem 1.65rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
-  max-height: 500px;
+  max-height: 800px;
+  flex-shrink: 0;
   opacity: 1;
   transform: translateY(0);
   overflow: hidden;
-  transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: max-height 0.35s ease, opacity 0.3s ease, margin 0.35s ease, padding 0.35s ease, transform 0.35s ease;
 }
 
 .workspace-create-story-card.collapsed {
@@ -1654,9 +1667,10 @@
   margin-bottom: 0;
   padding-top: 0;
   padding-bottom: 0;
-  border-width: 0;
-  transform: translateY(-12px);
+  border: none;
+  transform: translateY(-8px);
   pointer-events: none;
+  visibility: hidden;
 }
 
 .create-story-top-row {

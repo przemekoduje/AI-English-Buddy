@@ -976,6 +976,19 @@ function Workspace({
   const activeStoryText = generatedText || FIGMA_SAMPLE_TEXT;
   const activeStoryTitle = currentStoryTitle || FIGMA_SAMPLE_TITLE;
 
+  // Initialize sample story if empty on mount and reset scroll
+  useEffect(() => {
+    if (!generatedText) {
+      setGeneratedText(FIGMA_SAMPLE_TEXT);
+      if (!currentStoryTitle) setCurrentStoryTitle(FIGMA_SAMPLE_TITLE);
+    }
+    const container = document.querySelector('.view-container');
+    if (container) {
+      container.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+  }, []);
+
   // Auto-collapse top generator panel when user begins playback/reading
   useEffect(() => {
     if (isSpeaking && !isPaused) {
@@ -1142,26 +1155,7 @@ function Workspace({
     }
   };
 
-  // Auto-collapse top banner when reading starts or user scrolls down
-  useEffect(() => {
-    const handleScroll = (e) => {
-      const top = e?.target?.scrollTop ?? window.scrollY;
-      if (top > 70 && !isGeneratorCollapsed) {
-        setIsGeneratorCollapsed(true);
-      }
-    };
-    const viewContainer = document.querySelector('.view-container');
-    if (viewContainer) {
-      viewContainer.addEventListener("scroll", handleScroll, { passive: true });
-    }
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      if (viewContainer) {
-        viewContainer.removeEventListener("scroll", handleScroll);
-      }
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, [isGeneratorCollapsed]);
+
 
   const handleToggleBookmarkWord = async (word, translation, phonetic, pos, level) => {
     const isSaved = notebookWords.some(
@@ -2577,7 +2571,7 @@ function Workspace({
 
   return (
     <div className="workspace-layout">
-      {generatedText && (
+      {(generatedText || activeStoryText) && (
         <div
           ref={floatingPlayerRef}
           className={`apple-player-controls-floating ${isDraggingPlayer ? 'dragging' : ''}`}
@@ -2616,7 +2610,7 @@ function Workspace({
           <button
             className="player-btn player-stop-btn"
             onClick={handleStop}
-            disabled={!isSpeaking}
+            disabled={!isSpeaking && !isPaused}
             title="Zatrzymaj"
           >
             <svg viewBox="0 0 24 24" fill="currentColor">
@@ -2840,14 +2834,6 @@ function Workspace({
         </main>
       ) : (
         <div className="workspace-figma-container">
-          {/* Top Hero Section from Figma */}
-          <div className={`workspace-hero-header ${isGeneratorCollapsed ? "collapsed" : ""}`}>
-            <h1 className="workspace-hero-title">Make every word a discovery.</h1>
-            <p className="workspace-hero-subtitle">
-              Read something you enjoy. Build the English you’ll actually use.
-            </p>
-          </div>
-
           {/* Collapsible Panel: Create your next story */}
           <div className={`workspace-create-story-card ${isGeneratorCollapsed ? "collapsed" : ""}`}>
             <div className="create-story-top-row">
@@ -3025,6 +3011,19 @@ function Workspace({
                     </>
                   )}
                 </button>
+
+                {(isSpeaking || isPaused) && (
+                  <button
+                    className="toolbar-pill-btn toolbar-stop-btn"
+                    onClick={handleStop}
+                    title="Zatrzymaj czytanie"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <rect x="6" y="6" width="12" height="12" rx="2" />
+                    </svg>
+                    <span>Stop</span>
+                  </button>
+                )}
 
                 <button
                   className="toolbar-pill-btn"

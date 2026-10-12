@@ -304,14 +304,12 @@ function App() {
       />
       
       <main className="main-content">
-        {currentView !== 'workspace' && (
-          <TopBar 
-            title={getPageTitle()} 
-            user={user} 
-            subscription={subscription}
-            onOpenPaywall={openPaywall}
-          />
-        )}
+        <TopBar 
+          title={getPageTitle()} 
+          user={user} 
+          subscription={subscription}
+          onOpenPaywall={openPaywall}
+        />
         <div className="view-container">
           {currentView === 'dashboard' ? (
             <Dashboard 
