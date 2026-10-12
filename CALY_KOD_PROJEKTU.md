@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-12 20:34:13
+Wygenerowano: 2026-10-12 20:48:40
 
 ## Spis Treści
 1. `backend/app.py`
@@ -22932,6 +22932,16 @@ export default Auth;
   z-index: 999;
   display: flex;
   flex-direction: column;
+  transition: width 0.2s ease;
+}
+
+.tutor-camera-pip.screen-share {
+  width: 320px;
+}
+
+.tutor-camera-pip.screen-share .pip-video-feed {
+  height: 180px;
+  object-fit: contain;
 }
 
 .pip-header {
@@ -25115,6 +25125,7 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   // Stany specyficzne dla Gemini Live
   const [liveStatus, setLiveStatus] = useState("inactive"); // 'inactive' | 'connecting' | 'listening' | 'user-speaking' | 'speaking'
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isScreenShareActive, setIsScreenShareActive] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
 
@@ -25576,6 +25587,7 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
       geminiLiveRef.current = null;
     }
     setIsCameraActive(false);
+    setIsScreenShareActive(false);
     setLiveStatus("inactive");
 
     // Odświeżenie stanu subskrypcji po zakończeniu sesji
@@ -25602,6 +25614,10 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
         geminiLiveRef.current.stopCameraStream();
         setIsCameraActive(false);
       } else {
+        if (isScreenShareActive) {
+          geminiLiveRef.current.stopScreenStream();
+          setIsScreenShareActive(false);
+        }
         setIsCameraActive(true);
         // Poczekajmy na wyrenderowanie elementu video
         setTimeout(async () => {
@@ -25613,6 +25629,46 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
     } catch (err) {
       alert("Nie udało się uzyskać dostępu do kamery: " + err.message);
       setIsCameraActive(false);
+    }
+  };
+
+  const handleToggleScreenShare = async () => {
+    if (!isChatActive || !geminiLiveRef.current) {
+      setIsScreenShareActive(!isScreenShareActive);
+      return;
+    }
+
+    try {
+      if (isScreenShareActive) {
+        geminiLiveRef.current.stopScreenStream();
+        setIsScreenShareActive(false);
+      } else {
+        if (isCameraActive) {
+          geminiLiveRef.current.stopCameraStream();
+          setIsCameraActive(false);
+        }
+        setIsScreenShareActive(true);
+        setTimeout(async () => {
+          if (videoElementRef.current && geminiLiveRef.current) {
+            try {
+              await geminiLiveRef.current.startScreenStream(videoElementRef.current, () => {
+                setIsScreenShareActive(false);
+              });
+              geminiLiveRef.current.sendTextMessage(
+                "I am now sharing my screen with you. Please look at what is shown on my screen and feel free to comment, ask questions, or help me practice English based on what you see!"
+              );
+            } catch (streamErr) {
+              console.warn("Screen share cancelled or failed:", streamErr);
+              setIsScreenShareActive(false);
+            }
+          }
+        }, 150);
+      }
+    } catch (err) {
+      if (err.name !== 'NotAllowedError') {
+        alert("Nie udało się udostępnić ekranu: " + err.message);
+      }
+      setIsScreenShareActive(false);
     }
   };
 
@@ -26261,13 +26317,13 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                 </svg>
               </button>
-              <button className="dock-btn" onClick={handleToggleCamera} title="Camera">
+              <button className={`dock-btn ${isCameraActive ? 'active' : ''}`} onClick={handleToggleCamera} title={isCameraActive ? "Wyłącz kamerę" : "Kamera"}>
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
                   <polygon points="23 7 16 12 23 17 23 7" />
                   <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
                 </svg>
               </button>
-              <button className="dock-btn" title="Share screen">
+              <button className={`dock-btn ${isScreenShareActive ? 'active' : ''}`} onClick={handleToggleScreenShare} title={isScreenShareActive ? "Zatrzymaj udostępnianie ekranu" : "Udostępnij ekran"}>
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="2" y="3" width="20" height="14" rx="2" />
                   <line x1="8" y1="21" x2="16" y2="21" />
@@ -26533,12 +26589,18 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
         </div>
       </section>
 
-      {/* Multimodal Camera PIP Window */}
-      {isCameraActive && (
-        <div className="tutor-camera-pip glass-panel animate-zoom">
+      {/* Multimodal Camera & Screen Share PIP Window */}
+      {(isCameraActive || isScreenShareActive) && (
+        <div className={`tutor-camera-pip glass-panel animate-zoom ${isScreenShareActive ? 'screen-share' : ''}`}>
           <div className="pip-header">
-            <span className="pip-badge">Multimodal Vision</span>
-            <button className="pip-close-btn" onClick={handleToggleCamera}>✕</button>
+            <span className="pip-badge">{isScreenShareActive ? "Screen Share" : "Multimodal Vision"}</span>
+            <button
+              className="pip-close-btn"
+              onClick={isScreenShareActive ? handleToggleScreenShare : handleToggleCamera}
+              title={isScreenShareActive ? "Zatrzymaj udostępnianie ekranu" : "Wyłącz kamerę"}
+            >
+              ✕
+            </button>
           </div>
           <video
             ref={videoElementRef}
@@ -26547,7 +26609,11 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
             playsInline
             muted
           />
-          <div className="pip-footer">The tutor is analyzing your camera feed in real time.</div>
+          <div className="pip-footer">
+            {isScreenShareActive
+              ? "The tutor is watching your shared screen in real time."
+              : "The tutor is analyzing your camera feed in real time."}
+          </div>
         </div>
       )}
 
@@ -65927,7 +65993,7 @@ export class GeminiLiveClient {
     }
   }
 
-  stopCameraStream() {
+  stopVideoStream() {
     if (this.videoFrameInterval) {
       clearInterval(this.videoFrameInterval);
       this.videoFrameInterval = null;
@@ -65940,6 +66006,106 @@ export class GeminiLiveClient {
       this.videoElement.srcObject = null;
       this.videoElement = null;
     }
+  }
+
+  stopCameraStream() {
+    this.stopVideoStream();
+  }
+
+  stopScreenStream() {
+    this.stopVideoStream();
+  }
+
+  /**
+   * Multimodal Vision: Udostępnianie ekranu (Screen Sharing) w czasie rzeczywistym
+   */
+  async startScreenStream(videoElement, onStopCallback) {
+    try {
+      this.stopVideoStream();
+
+      this.videoStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          cursor: "always",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { max: 5 }
+        },
+        audio: false
+      });
+
+      const videoTrack = this.videoStream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          this.stopVideoStream();
+          if (typeof onStopCallback === 'function') {
+            onStopCallback();
+          }
+        };
+      }
+
+      this.videoElement = videoElement;
+      if (this.videoElement) {
+        this.videoElement.srcObject = this.videoStream;
+        this.videoElement.play().catch(e => console.warn("Video play error:", e));
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 576;
+      const ctx = canvas.getContext('2d');
+
+      // Wysyłamy klatkę co 1000ms do Gemini Multimodal Live API
+      this.videoFrameInterval = setInterval(() => {
+        if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        if (!this.videoElement || this.videoElement.readyState < 2) return;
+
+        ctx.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+        const base64Data = dataUrl.split(',')[1];
+
+        if (base64Data) {
+          const videoFrameMessage = {
+            realtimeInput: {
+              mediaChunks: [
+                {
+                  mimeType: "image/jpeg",
+                  data: base64Data
+                }
+              ]
+            }
+          };
+          this.sendJson(videoFrameMessage);
+        }
+      }, 1000);
+
+      return true;
+    } catch (err) {
+      console.error("[GeminiLive] Błąd udostępniania ekranu:", err);
+      throw err;
+    }
+  }
+
+  /**
+   * Wysłanie wiadomości tekstowej w trakcie aktywnej sesji Gemini Live
+   */
+  sendTextMessage(text) {
+    if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    const clientTurn = {
+      clientContent: {
+        turns: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: text
+              }
+            ]
+          }
+        ],
+        turnComplete: true
+      }
+    };
+    this.sendJson(clientTurn);
   }
 
   /**

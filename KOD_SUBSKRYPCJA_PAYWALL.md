@@ -1,5 +1,5 @@
 # Speakling — Kompletny Moduł Subskrypcji, Paywalla i Limitów AI
-Wygenerowano: 2026-10-12 20:34:13
+Wygenerowano: 2026-10-12 20:48:40
 > Dedykowany, lekki pakiet kodu dla zewnętrznych modeli AI (ChatGPT, Claude, DeepSeek). Zawiera 100% logiki subskrypcji, Stripe, limitów minut Gemini Live i blokad paywalla bez obcinania.
 
 ## Spis Zawartości Pakietu
@@ -2719,7 +2719,7 @@ export class GeminiLiveClient {
     }
   }
 
-  stopCameraStream() {
+  stopVideoStream() {
     if (this.videoFrameInterval) {
       clearInterval(this.videoFrameInterval);
       this.videoFrameInterval = null;
@@ -2732,6 +2732,106 @@ export class GeminiLiveClient {
       this.videoElement.srcObject = null;
       this.videoElement = null;
     }
+  }
+
+  stopCameraStream() {
+    this.stopVideoStream();
+  }
+
+  stopScreenStream() {
+    this.stopVideoStream();
+  }
+
+  /**
+   * Multimodal Vision: Udostępnianie ekranu (Screen Sharing) w czasie rzeczywistym
+   */
+  async startScreenStream(videoElement, onStopCallback) {
+    try {
+      this.stopVideoStream();
+
+      this.videoStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          cursor: "always",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { max: 5 }
+        },
+        audio: false
+      });
+
+      const videoTrack = this.videoStream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          this.stopVideoStream();
+          if (typeof onStopCallback === 'function') {
+            onStopCallback();
+          }
+        };
+      }
+
+      this.videoElement = videoElement;
+      if (this.videoElement) {
+        this.videoElement.srcObject = this.videoStream;
+        this.videoElement.play().catch(e => console.warn("Video play error:", e));
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 576;
+      const ctx = canvas.getContext('2d');
+
+      // Wysyłamy klatkę co 1000ms do Gemini Multimodal Live API
+      this.videoFrameInterval = setInterval(() => {
+        if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        if (!this.videoElement || this.videoElement.readyState < 2) return;
+
+        ctx.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+        const base64Data = dataUrl.split(',')[1];
+
+        if (base64Data) {
+          const videoFrameMessage = {
+            realtimeInput: {
+              mediaChunks: [
+                {
+                  mimeType: "image/jpeg",
+                  data: base64Data
+                }
+              ]
+            }
+          };
+          this.sendJson(videoFrameMessage);
+        }
+      }, 1000);
+
+      return true;
+    } catch (err) {
+      console.error("[GeminiLive] Błąd udostępniania ekranu:", err);
+      throw err;
+    }
+  }
+
+  /**
+   * Wysłanie wiadomości tekstowej w trakcie aktywnej sesji Gemini Live
+   */
+  sendTextMessage(text) {
+    if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    const clientTurn = {
+      clientContent: {
+        turns: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: text
+              }
+            ]
+          }
+        ],
+        turnComplete: true
+      }
+    };
+    this.sendJson(clientTurn);
   }
 
   /**
