@@ -4,6 +4,7 @@ import "./VocabularyView.css";
 import Flashcards from "../Flashcards";
 import WordExplanationModal from "../Notebook/WordExplanationModal";
 import PronunciationPracticeModal from "../Notebook/PronunciationPracticeModal";
+import learningCharactersImg from "../../assets/learning-characters.png";
 
 // Helper to determine CEFR level if not present
 const getEstimatedCEFRLevel = (word = "") => {
@@ -587,34 +588,43 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
       {/* ── Hero Section ────────────────────────────────────────── */}
       <div className="vocab-figma-hero">
         <div className="hero-text-block">
+          <span className="hero-category-tag">LEARNING TOGETHER</span>
           <h2 className="hero-heading">Make new words stay.</h2>
           <p className="hero-subheading">
             A personal word bank, built from your stories and conversations.
           </p>
-        </div>
-        <div className="hero-action-block">
-          <button
-            className="study-due-btn"
-            onClick={() => setShowFlashcards(true)}
-            disabled={enrichedWords.length === 0}
-          >
-            {/* Cards stack icon */}
-            <svg
-              className="btn-card-icon"
-              viewBox="0 0 24 24"
-              width="18"
-              height="18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <div className="hero-action-block">
+            <button
+              className="study-due-btn"
+              onClick={() => setShowFlashcards(true)}
+              disabled={enrichedWords.length === 0}
             >
-              <rect x="3" y="3" width="14" height="14" rx="2" />
-              <path d="M7 21h14a2 2 0 0 0 2-2V7" />
-            </svg>
-            <span>Study {dueCount > 0 ? `${dueCount} due words` : "due words"}</span>
-          </button>
+              {/* Cards stack icon */}
+              <svg
+                className="btn-card-icon"
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="3" width="14" height="14" rx="2" />
+                <path d="M7 21h14a2 2 0 0 0 2-2V7" />
+              </svg>
+              <span>Study {dueCount > 0 ? `${dueCount} due words` : "due words"}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="hero-illustration-block">
+          <img
+            src={learningCharactersImg}
+            alt="Learning characters"
+            className="hero-characters-img"
+          />
         </div>
       </div>
 
@@ -622,21 +632,21 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
       <div className="vocab-figma-stats-grid">
         {/* Card 1: Saved words */}
         <div className="figma-stat-card">
-          <div className="stat-card-top">
-            <span className="stat-card-label">Saved words</span>
+          <span className="stat-card-label">Saved words</span>
+          <div className="stat-card-bottom">
             <div className="stat-card-icon icon-bookmark">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#2563eb" strokeWidth="2">
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
               </svg>
             </div>
+            <div className="stat-card-number">{totalSavedCount}</div>
           </div>
-          <div className="stat-card-number">{totalSavedCount}</div>
         </div>
 
         {/* Card 2: Due for review */}
         <div className="figma-stat-card">
-          <div className="stat-card-top">
-            <span className="stat-card-label">Due for review</span>
+          <span className="stat-card-label">Due for review</span>
+          <div className="stat-card-bottom">
             <div className="stat-card-icon icon-layers">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#d97706" strokeWidth="2">
                 <polygon points="12 2 2 7 12 12 22 7 12 2" />
@@ -644,22 +654,22 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                 <polyline points="2 12 12 17 22 12" />
               </svg>
             </div>
+            <div className="stat-card-number">{dueCount}</div>
           </div>
-          <div className="stat-card-number">{dueCount}</div>
         </div>
 
         {/* Card 3: Words you know */}
         <div className="figma-stat-card">
-          <div className="stat-card-top">
-            <span className="stat-card-label">Words you know</span>
+          <span className="stat-card-label">Words you know</span>
+          <div className="stat-card-bottom">
             <div className="stat-card-icon icon-check">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#10b981" strokeWidth="2">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                 <polyline points="22 4 12 14.01 9 11.01" />
               </svg>
             </div>
+            <div className="stat-card-number">{knownCount}</div>
           </div>
-          <div className="stat-card-number">{knownCount}</div>
         </div>
       </div>
 
