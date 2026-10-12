@@ -632,6 +632,7 @@ function Workspace({
       setGeneratedText(part.text);
       setCurrentStoryTitle(part.title);
       setCurrentStoryId(part.id);
+      setDismissedStoryWords(new Set());
     }
   };
 
@@ -1120,57 +1121,144 @@ function Workspace({
         "C1": "advanced",
         "C2": "advanced"
       };
-      let promptDetails = customStoryPrompt.trim();
-      if (!promptDetails) {
-        promptDetails = `Create an engaging, modern story tailored for ${selectedLevel} CEFR level about ${selectedCategory}.`;
-      } else {
-        promptDetails = `${promptDetails}. Tailored for ${selectedLevel} CEFR level, theme: ${selectedCategory}.`;
-      }
 
-      const response = await fetch(`${API_BASE_URL}/api/generate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-Token": user?.token || ""
-        },
-        body: JSON.stringify({
-          topics: [selectedCategory],
-          customDetails: promptDetails,
-          settings: {
-            language_level: levelMap[selectedLevel] || "medium",
-            length: "medium",
-            is_factual: false,
-            genre: selectedCategory.toLowerCase(),
-            focus_area: "none"
+      if (isContinuing) {
+        let rootStoryId = loadedRootId || currentStoryId;
+        if (!rootStoryId && generatedText) {
+          const savedStory = await saveStoryToDb(currentStoryTitle || "Part 1", generatedText);
+          if (savedStory && savedStory.id) {
+            rootStoryId = savedStory.id;
+            setLoadedRootId(savedStory.id);
+            setCurrentStoryId(savedStory.id);
+            if (storyParts.length === 0) {
+              setStoryParts([{
+                id: savedStory.id,
+                title: currentStoryTitle || "Part 1",
+                text: generatedText,
+                part_number: 1
+              }]);
+            }
           }
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok || (data && data.error)) {
-        alert(data?.error || data?.details || "Wystąpił błąd podczas generowania opowiadania.");
-        return;
-      }
-      if (data && data[0] && data[0].generated_text) {
-        setGeneratedText(data[0].generated_text);
-        const title = data[0].title || `${selectedCategory} Story`;
-        setCurrentStoryTitle(title);
-        const savedStory = await saveStoryToDb(title, data[0].generated_text);
-        if (savedStory && savedStory.id) {
+        }
+
+        let promptDetails = customStoryPrompt.trim();
+        if (!promptDetails) {
+          promptDetails = `Continue the story logically following the events of the previous parts. Maintain the characters and narrative arc, tailored for ${selectedLevel} CEFR level, theme: ${selectedCategory}.`;
+        } else {
+          promptDetails = `${promptDetails}. Tailored for ${selectedLevel} CEFR level, theme: ${selectedCategory}. Continue logically from previous parts.`;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/generate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || ""
+          },
+          body: JSON.stringify({
+            topics: [selectedCategory],
+            customDetails: promptDetails,
+            settings: {
+              language_level: levelMap[selectedLevel] || "medium",
+              length: "medium",
+              is_factual: false,
+              genre: selectedCategory.toLowerCase(),
+              focus_area: "none"
+            },
+            parent_id: rootStoryId
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok || (data && data.error)) {
+          alert(data?.error || data?.details || "Wystąpił błąd podczas generowania kontynuacji opowiadania.");
+          return;
+        }
+
+        if (data && data[0] && data[0].generated_text) {
+          const nextPartNum = storyParts.length + 1;
           const newPart = {
-            id: savedStory.id,
+            id: data[0].story_id,
+            title: data[0].title || `Part ${nextPartNum}`,
+            text: data[0].generated_text,
+            part_number: nextPartNum
+          };
+
+          const updatedParts = [...storyParts, newPart];
+          setStoryParts(updatedParts);
+          setActivePartIndex(updatedParts.length - 1);
+
+          setGeneratedText(newPart.text);
+          setCurrentStoryTitle(newPart.title);
+          setCurrentStoryId(newPart.id);
+
+          setDismissedStoryWords(new Set());
+          setReadSentenceIndices(new Set());
+          setCurrentChunkIndex(-1);
+          setCustomStoryPrompt("");
+          setIsContinuing(false);
+          setIsGeneratorCollapsed(true);
+        }
+      } else {
+        let promptDetails = customStoryPrompt.trim();
+        if (!promptDetails) {
+          promptDetails = `Create an engaging, modern story tailored for ${selectedLevel} CEFR level about ${selectedCategory}.`;
+        } else {
+          promptDetails = `${promptDetails}. Tailored for ${selectedLevel} CEFR level, theme: ${selectedCategory}.`;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/generate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Token": user?.token || ""
+          },
+          body: JSON.stringify({
+            topics: [selectedCategory],
+            customDetails: promptDetails,
+            settings: {
+              language_level: levelMap[selectedLevel] || "medium",
+              length: "medium",
+              is_factual: false,
+              genre: selectedCategory.toLowerCase(),
+              focus_area: "none"
+            }
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok || (data && data.error)) {
+          alert(data?.error || data?.details || "Wystąpił błąd podczas generowania opowiadania.");
+          return;
+        }
+
+        if (data && data[0] && data[0].generated_text) {
+          const title = data[0].title || `${selectedCategory} Story`;
+          const storyId = data[0].story_id;
+
+          const newPart = {
+            id: storyId,
             title: title,
             text: data[0].generated_text,
             part_number: 1
           };
+
           setStoryParts([newPart]);
           setActivePartIndex(0);
-          setLoadedRootId(savedStory.id);
-          setCurrentStoryId(savedStory.id);
+          setLoadedRootId(storyId);
+          setCurrentStoryId(storyId);
+          setGeneratedText(data[0].generated_text);
+          setCurrentStoryTitle(title);
+
+          setDismissedStoryWords(new Set());
+          setReadSentenceIndices(new Set());
+          setCurrentChunkIndex(-1);
+          setCustomStoryPrompt("");
+          setIsContinuing(false);
+          setIsGeneratorCollapsed(true);
         }
-        setIsGeneratorCollapsed(true);
       }
     } catch (err) {
-      console.error("Błąd generowania historii z banera Figma:", err);
+      console.error("Błąd generowania historii:", err);
       alert("Nie udało się wygenerować opowiadania. Sprawdź połączenie z internetem lub spróbuj ponownie.");
     } finally {
       setIsGeneratingStory(false);
@@ -1387,7 +1475,7 @@ function Workspace({
     for (let offset = 0; offset < count; offset++) {
       const targetIdx = startIndex + offset;
       if (targetIdx >= 0 && targetIdx < textChunks.length && textChunks[targetIdx]) {
-        prefetchSentenceAudio(textChunks[targetIdx], voice).catch(() => {});
+        prefetchSentenceAudio(textChunks[targetIdx], voice).catch(() => { });
       }
     }
   }, [textChunks, selectedVoiceURI, prefetchSentenceAudio]);
@@ -2784,10 +2872,127 @@ function Workspace({
         </div>
       )}
 
-      {isContinuing ? (
-        <main className="workspace-main">
-          {storyParts.length > 0 && (
-            <div className="chapter-tabs">
+      <div className="workspace-figma-container">
+        {/* Collapsible Panel: Create your next story / Continue your story */}
+        <div className={`workspace-create-story-card ${isGeneratorCollapsed ? "collapsed" : ""}`}>
+          <div className="create-story-top-row">
+            <div className="create-story-title-group">
+              <h2 className="create-story-heading">
+                {isContinuing
+                  ? `Continue your story ${storyParts.length > 0 ? `(Part ${storyParts.length + 1})` : ""}`
+                  : "Create your next story"}
+              </h2>
+              {isContinuing && (
+                <button
+                  type="button"
+                  className="create-story-cancel-btn"
+                  onClick={() => {
+                    setIsContinuing(false);
+                    setCustomStoryPrompt("");
+                  }}
+                  title="Wróć do tworzenia nowego opowiadania"
+                >
+                  Anuluj kontynuację
+                </button>
+              )}
+            </div>
+            <div className="create-story-top-actions">
+              <button
+                type="button"
+                className="create-story-collapse-btn"
+                onClick={() => setIsGeneratorCollapsed(true)}
+                title="Zwiń panel i zacznij czytać"
+              >
+                <span>Zwiń do czytania</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="create-story-controls-row">
+            <div className="create-story-chips">
+              {["Business", "Daily Life", "Travel", "Tech"].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`create-story-chip ${selectedCategory === cat ? "active" : ""}`}
+                  onClick={() => setSelectedCategory(cat)}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="create-story-right-controls">
+              <div className="create-story-level-select-wrapper">
+                <select
+                  className="create-story-level-select"
+                  value={selectedLevel}
+                  onChange={(e) => setSelectedLevel(e.target.value)}
+                >
+                  {["A1", "A2", "B1", "B2", "C1", "C2"].map((lvl) => (
+                    <option key={lvl} value={lvl}>{lvl}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                className="create-story-generate-btn"
+                onClick={handleGenerateFigmaStory}
+                disabled={isGeneratingStory || isLoading}
+              >
+                <span>
+                  {isGeneratingStory || isLoading
+                    ? (isContinuing ? "Tworzę kontynuację..." : "Tworzę opowiadanie...")
+                    : (isContinuing
+                        ? (storyParts.length > 0 ? `Wygeneruj część ${storyParts.length + 1}` : "Kontynuuj opowiadanie")
+                        : "Create a story"
+                      )
+                  }
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="create-story-prompt-wrapper">
+            <label htmlFor="create-story-prompt" className="create-story-prompt-label">
+              {isContinuing ? "Co ma się wydarzyć w kolejnej części? (opcjonalnie):" : "Własny opis opowiadania (opcjonalnie):"}
+            </label>
+            <textarea
+              id="create-story-prompt"
+              className="create-story-prompt-textarea"
+              value={customStoryPrompt}
+              onChange={(e) => setCustomStoryPrompt(e.target.value)}
+              placeholder={isContinuing
+                ? "Np. Alex poznaje przewodnika, dociera do tajemniczego miejsca, dochodzi do niespodziewanego zwrotu akcji..."
+                : "Np. Maya jest młodą projektantką w Cambridge. Opisz jej pierwszy dzień w pracy i rozmowę z wymagającym klientem..."}
+              rows="3"
+              disabled={isGeneratingStory || isLoading}
+            />
+          </div>
+
+          <div className="create-story-footer-note">
+            CEFR levels: A1 • A2 • B1 • B2 • C1 • C2. Stories are tailored to your selected level.
+          </div>
+        </div>
+
+        {/* Sleek expandable pill when collapsed */}
+        {isGeneratorCollapsed && (
+          <div className="workspace-collapsed-bar">
+            <button
+              type="button"
+              className="workspace-open-generator-pill"
+              onClick={() => setIsGeneratorCollapsed(false)}
+              title="Otwórz generator opowieści"
+            >
+              <span>{isContinuing ? `Continue your story (Part ${storyParts.length + 1})` : `Create your next story (${selectedCategory} · ${selectedLevel})`}</span>
+            </button>
+          </div>
+        )}
+
+        <div className="workspace-figma-top-bar">
+          {(storyParts.length > 0 || generatedText) && (
+            <div className="chapter-tabs" style={{ margin: 0 }}>
               {storyParts.map((part, index) => (
                 <button
                   key={part.id}
@@ -2802,236 +3007,15 @@ function Workspace({
                 onClick={() => {
                   handleStop();
                   setIsContinuing(true);
+                  setIsGeneratorCollapsed(false);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
               >
                 + Continue Story
               </button>
             </div>
           )}
-
-          <div className="story-generator continuation-panel">
-            {isLoading ? (
-              <div className="generation-progress-overlay">
-                <div className="gen-progress-card">
-                  <div className="gen-progress-ring-wrapper">
-                    <svg className="gen-progress-ring" viewBox="0 0 120 120">
-                      <circle
-                        className="gen-progress-ring-track"
-                        cx="60" cy="60" r="50"
-                        fill="none" strokeWidth="8"
-                      />
-                      <circle
-                        className="gen-progress-ring-fill"
-                        cx="60" cy="60" r="50"
-                        fill="none" strokeWidth="8"
-                        strokeDasharray={`${2 * Math.PI * 50}`}
-                        strokeDashoffset={`${2 * Math.PI * 50 * (1 - genProgress / 100)}`}
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <div className="gen-progress-pct">{Math.round(genProgress)}%</div>
-                  </div>
-                  <div className="gen-progress-label">{genPhaseLabel}</div>
-                  <div className="gen-progress-title">Tworzę kontynuację Twojej opowieści</div>
-                  <div className="gen-progress-subtitle">To może potrwać do 30 sekund...</div>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="generator-header">
-                  <h2>Continue Story</h2>
-                  <p>Tell the AI what should happen next in Part {storyParts.length + 1} of this story.</p>
-                </div>
-
-                <div className="topic-grid">
-                  {suggestedTopics.map((topic) => {
-                    const isSelected = selectedContinuationTopics.includes(topic);
-                    return (
-                      <button
-                        key={topic}
-                        onClick={() => {
-                          setSelectedContinuationTopics(prev =>
-                            prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]
-                          );
-                        }}
-                        className={`topic-chip ${isSelected ? "selected" : ""}`}
-                        disabled={isLoading}
-                      >
-                        <span className="topic-chip-icon">{getTopicIcon(topic)}</span>
-                        <span className="topic-chip-text">{topic}</span>
-                        {isSelected && <span className="topic-chip-check">✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="details-composer">
-                  <textarea
-                    value={continuationDetails}
-                    onChange={(e) => setContinuationDetails(e.target.value)}
-                    placeholder="Describe what happens next (e.g. Alex meets a new friend, finds a key, goes to the forest...)"
-                    rows="4"
-                    disabled={isLoading}
-                  />
-                </div>
-
-                <div className="continuation-actions">
-                  <button
-                    onClick={handleGenerateContinuation}
-                    disabled={isLoading}
-                    className="generate-story-btn"
-                  >
-                    {isLoading ? "Generating sequel..." : `Generate Part ${storyParts.length + 1}`}
-                  </button>
-                  <button
-                    onClick={() => setIsContinuing(false)}
-                    disabled={isLoading}
-                    className="cancel-continuation-btn"
-                    style={{ marginLeft: '12px', padding: '12px 24px', borderRadius: '8px', border: '1px solid var(--border)', fontFamily: 'var(--font-main)', fontWeight: '600', cursor: 'pointer' }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </main>
-      ) : (
-        <div className="workspace-figma-container">
-          {/* Collapsible Panel: Create your next story */}
-          <div className={`workspace-create-story-card ${isGeneratorCollapsed ? "collapsed" : ""}`}>
-            <div className="create-story-top-row">
-              <div className="create-story-title-group">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="create-story-sparkle">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </svg>
-                <h2 className="create-story-heading">Create your next story</h2>
-              </div>
-              <div className="create-story-top-actions">
-                <span className="create-story-badge">AI story generator</span>
-                <button
-                  type="button"
-                  className="create-story-collapse-btn"
-                  onClick={() => setIsGeneratorCollapsed(true)}
-                  title="Zwiń panel i zacznij czytać"
-                >
-                  <span>Zwiń do czytania</span>
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="18 15 12 9 6 15" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div className="create-story-controls-row">
-              <div className="create-story-chips">
-                {["Business", "Daily Life", "Travel", "Tech"].map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    className={`create-story-chip ${selectedCategory === cat ? "active" : ""}`}
-                    onClick={() => setSelectedCategory(cat)}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-
-              <div className="create-story-right-controls">
-                <div className="create-story-level-select-wrapper">
-                  <select
-                    className="create-story-level-select"
-                    value={selectedLevel}
-                    onChange={(e) => setSelectedLevel(e.target.value)}
-                  >
-                    {["A1", "A2", "B1", "B2", "C1", "C2"].map((lvl) => (
-                      <option key={lvl} value={lvl}>{lvl}</option>
-                    ))}
-                  </select>
-                  <svg className="level-select-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </div>
-
-                <button
-                  type="button"
-                  className="create-story-generate-btn"
-                  onClick={handleGenerateFigmaStory}
-                  disabled={isGeneratingStory || isLoading}
-                >
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                  <span>{isGeneratingStory ? "Generating..." : "Generate Story"}</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="create-story-prompt-wrapper">
-              <label htmlFor="create-story-prompt" className="create-story-prompt-label">
-                Własny opis opowiadania (opcjonalnie):
-              </label>
-              <textarea
-                id="create-story-prompt"
-                className="create-story-prompt-textarea"
-                value={customStoryPrompt}
-                onChange={(e) => setCustomStoryPrompt(e.target.value)}
-                placeholder="Np. Maya jest młodą projektantką w Cambridge. Opisz jej pierwszy dzień w pracy i rozmowę z wymagającym klientem..."
-                rows="3"
-                disabled={isGeneratingStory || isLoading}
-              />
-            </div>
-
-            <div className="create-story-footer-note">
-              CEFR levels: A1 • A2 • B1 • B2 • C1 • C2. Stories are tailored to your selected level.
-            </div>
-          </div>
-
-          {/* Sleek expandable pill when collapsed */}
-          {isGeneratorCollapsed && (
-            <div className="workspace-collapsed-bar">
-              <button
-                type="button"
-                className="workspace-open-generator-pill"
-                onClick={() => setIsGeneratorCollapsed(false)}
-                title="Otwórz generator opowieści"
-              >
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </svg>
-                <span>✨ Create your next story ({selectedCategory} · {selectedLevel})</span>
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-            </div>
-          )}
-
-          <div className="workspace-figma-top-bar">
-
-            {storyParts.length > 0 && (
-              <div className="chapter-tabs" style={{ margin: 0 }}>
-                {storyParts.map((part, index) => (
-                  <button
-                    key={part.id}
-                    className={`chapter-tab ${!isContinuing && activePartIndex === index ? "active" : ""}`}
-                    onClick={() => handleSelectPart(index)}
-                  >
-                    Part {part.part_number || index + 1}
-                  </button>
-                ))}
-                <button
-                  className={`chapter-tab continue-tab ${isContinuing ? "active" : ""}`}
-                  onClick={() => {
-                    handleStop();
-                    setIsContinuing(true);
-                  }}
-                >
-                  + Continue Story
-                </button>
-              </div>
-            )}
-          </div>
+        </div>
 
           <div className="workspace-figma-grid">
             {/* LEFT COLUMN: Story Reading Card */}
@@ -3406,7 +3390,6 @@ function Workspace({
             </div>
           )}
         </div>
-      )}
 
       {showPracticeMode && (
         <PracticeMode
