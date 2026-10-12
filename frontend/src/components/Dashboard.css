@@ -1667,31 +1667,7 @@
   box-sizing: border-box;
 }
 
-.figma-settings-fab {
-  position: fixed;
-  top: 16px;
-  right: 280px;
-  z-index: 60;
-}
 
-.fab-btn {
-  background: var(--surface);
-  border: 1px solid var(--gray-200);
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--gray-600);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.fab-btn:hover {
-  background: var(--gray-100);
-  color: var(--gray-900);
-}
 
 .chat-live-header-section {
   margin-bottom: 1.75rem;

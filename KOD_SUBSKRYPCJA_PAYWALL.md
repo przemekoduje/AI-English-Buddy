@@ -1,5 +1,5 @@
 # Speakling — Kompletny Moduł Subskrypcji, Paywalla i Limitów AI
-Wygenerowano: 2026-10-12 19:35:57
+Wygenerowano: 2026-10-12 19:43:25
 > Dedykowany, lekki pakiet kodu dla zewnętrznych modeli AI (ChatGPT, Claude, DeepSeek). Zawiera 100% logiki subskrypcji, Stripe, limitów minut Gemini Live i blokad paywalla bez obcinania.
 
 ## Spis Zawartości Pakietu
