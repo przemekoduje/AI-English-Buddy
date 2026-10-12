@@ -3192,126 +3192,9 @@ function Workspace({
               </div>
             </article>
 
-            {/* RIGHT COLUMN: 3 Figma Cards */}
+            {/* RIGHT COLUMN: 3 Cards (Words in this story -> Your learning buddy -> Small steps count) */}
             <aside className="workspace-figma-sidebar">
-              {/* Card 1: Your learning buddy (top & primary in Figma) */}
-              <div className="learning-buddy-card">
-                <div className="buddy-card-header">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="buddy-sparkle-icon">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                  <h3>Your learning buddy</h3>
-                </div>
-                <p className="buddy-card-desc">
-                  Make this story your own. Ask a question or practise it out loud.
-                </p>
-
-                <button
-                  className={`buddy-voice-ai-btn ${isMasteryLocked ? 'btn-pro-locked' : ''}`}
-                  onClick={() => {
-                    if (isMasteryLocked) {
-                      if (onOpenPaywall) {
-                        onOpenPaywall({ feature: 'mastery' });
-                        return;
-                      }
-                    }
-                    handleStop();
-                    setShowPracticeMode(true);
-                  }}
-                  title="Practice with Voice AI"
-                >
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
-                  </svg>
-                  <span>Practice with Voice AI</span>
-                  {isMasteryLocked && (
-                    <span style={{
-                      marginLeft: '6px',
-                      background: 'rgba(255,255,255,0.25)',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      fontSize: '10px',
-                      fontWeight: 800,
-                      letterSpacing: '0.05em'
-                    }}>PRO</span>
-                  )}
-                </button>
-
-                <div className="buddy-divider" />
-
-                <div className="buddy-try-asking-section">
-                  <span className="practice-section-label">TRY ASKING</span>
-                  <div className="buddy-practice-chips">
-                    <button
-                      className="buddy-practice-chip"
-                      onClick={() => handleAskBuddy('Explain "speak up"')}
-                    >
-                      Explain "speak up"
-                    </button>
-                    <button
-                      className="buddy-practice-chip"
-                      onClick={() => handleAskBuddy('Summarise this story')}
-                    >
-                      Summarise this story
-                    </button>
-                  </div>
-                </div>
-
-                <form className="buddy-ask-form" onSubmit={handleAskBuddySubmit}>
-                  <div className="buddy-ask-input-wrap">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <input
-                      type="text"
-                      className="buddy-ask-input"
-                      placeholder="Ask about the story..."
-                      value={buddyQuestion}
-                      onChange={(e) => setBuddyQuestion(e.target.value)}
-                      disabled={isAskingBuddy}
-                    />
-                    <button
-                      type="submit"
-                      className="buddy-ask-send-btn"
-                      disabled={!buddyQuestion.trim() || isAskingBuddy}
-                      title="Wyślij pytanie"
-                    >
-                      {isAskingBuddy ? (
-                        <span className="buddy-ask-spinner" />
-                      ) : (
-                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="22" y1="2" x2="11" y2="13" />
-                          <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </form>
-
-                {buddyAnswer && (
-                  <div className="buddy-inline-answer-box">
-                    <div className="buddy-inline-answer-text">{buddyAnswer}</div>
-                    <div className="buddy-inline-answer-actions">
-                      <button
-                        className="buddy-answer-speak-btn"
-                        onClick={() => handleSpeakWord(buddyAnswer)}
-                        title="Posłuchaj odpowiedzi"
-                      >
-                        🔊 Posłuchaj
-                      </button>
-                      <button
-                        className="buddy-answer-close-btn"
-                        onClick={() => setBuddyAnswer("")}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Card 2: Words in this story */}
+              {/* Card 1: Words in this story (TOP) */}
               <div className="story-words-card">
                 <div className="story-words-header">
                   <h3>Words in this story</h3>
@@ -3400,6 +3283,85 @@ function Workspace({
                   </svg>
                   <span>Open vocabulary</span>
                 </button>
+              </div>
+
+              {/* Card 2: Your learning buddy */}
+              <div className="learning-buddy-card">
+                <div className="buddy-card-header">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="buddy-sparkle-icon">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                  <h3>Your learning buddy</h3>
+                </div>
+                <p className="buddy-card-desc">
+                  Make this story your own. Practice with Mastery Path or train your vocabulary.
+                </p>
+
+                <button
+                  className={`buddy-voice-ai-btn ${isMasteryLocked ? 'btn-pro-locked' : ''}`}
+                  onClick={() => {
+                    if (isMasteryLocked) {
+                      if (onOpenPaywall) {
+                        onOpenPaywall({ feature: 'mastery' });
+                        return;
+                      }
+                    }
+                    handleStop();
+                    setShowPracticeMode(true);
+                  }}
+                  title="Mastery Path — 3 steps to master this story"
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+                  </svg>
+                  <span>Mastery Path · 3 steps</span>
+                  {isMasteryLocked && (
+                    <span style={{
+                      marginLeft: '6px',
+                      background: 'rgba(255,255,255,0.25)',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      letterSpacing: '0.05em'
+                    }}>PRO</span>
+                  )}
+                </button>
+
+                <div className="buddy-practice-section">
+                  <span className="practice-section-label">PRACTICE TOOLS</span>
+                  <div className="buddy-practice-chips">
+                    <button
+                      className="buddy-practice-chip"
+                      onClick={handleOpenFlashcards}
+                      title="Practice vocabulary with flashcards"
+                    >
+                      Flashcards
+                    </button>
+                    <button
+                      className="buddy-practice-chip"
+                      onClick={handleOpenExercises}
+                      title="AI vocabulary translation quiz"
+                    >
+                      Vocabulary quiz
+                    </button>
+                    <button
+                      className="buddy-practice-chip"
+                      onClick={handleOpenSummary}
+                      title="Generate AI session summary"
+                    >
+                      Session summary
+                    </button>
+                    <button
+                      className="buddy-practice-chip"
+                      onClick={handleOpenEmail}
+                      title="Export vocabulary to your email"
+                    >
+                      Export to email
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Card 3: Small steps count */}
