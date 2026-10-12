@@ -3205,9 +3205,6 @@ function Workspace({
 
                 <div className="story-words-list">
                   {keyStoryWords.map((item, idx) => {
-                    const isSaved = notebookWords.some(
-                      w => (w.original || w.word || "").toLowerCase() === (item.word || "").toLowerCase()
-                    );
                     const meta = getWordMeta(item.word);
                     const pos = item.pos || meta.pos || "word";
                     const level = item.level || meta.level || "B2";
@@ -3235,20 +3232,9 @@ function Workspace({
                               </svg>
                             </button>
                             <button
-                              className={`story-word-bookmark-btn ${isSaved ? "saved" : ""}`}
-                              onClick={() => handleToggleBookmarkWord(item.word, translation, meta.phonetic, pos, level)}
-                              title={isSaved ? "Zapisano w Twoim słowniku" : "Zapisz do Twojego słownika"}
-                            >
-                              <svg viewBox="0 0 24 24" width="16" height="16" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-                                {!isSaved && <line x1="12" y1="8" x2="12" y2="14" />}
-                                {!isSaved && <line x1="9" y1="11" x2="15" y2="11" />}
-                              </svg>
-                            </button>
-                            <button
                               className="story-word-delete-btn"
                               onClick={() => handleDeleteStoryWord(item.word)}
-                              title="Usuń słowo ze słownika"
+                              title="Usuń słowo z listy"
                             >
                               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="3 6 5 6 21 6" />
