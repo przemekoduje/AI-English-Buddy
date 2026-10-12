@@ -1,5 +1,5 @@
 # Cały Kod Projektu AI-English-Buddy
-Wygenerowano: 2026-10-12 20:48:40
+Wygenerowano: 2026-10-12 21:20:27
 
 ## Spis Treści
 1. `backend/app.py`
@@ -6432,15 +6432,10 @@ def log_live_usage():
         quantity=duration_seconds
     )
 
-    # Aktualizacja zużytych minut w subskrypcji użytkownika
-    if duration_seconds > 0 and user_email:
-        added_minutes = duration_seconds / 60.0
-        sub = get_user_subscription(user_email)
-        new_used = round(sub.get("live_minutes_used", 0.0) + added_minutes, 2)
-        update_user_subscription(user_email, {"live_minutes_used": new_used})
-        updated_sub = get_user_subscription(user_email)
-    else:
-        updated_sub = get_user_subscription(user_email)
+    # log-usage rejestruje wydatek tokenowy w api_usage (monitor kosztów),
+    # natomiast czas subskrypcji użytkownika jest precyzyjnie śledzony w czasie rzeczywistym
+    # przez endpoint /api/subscription/track-live-time.
+    sub = get_user_subscription(user_email)
 
     return jsonify({
         "success": True,
@@ -6449,9 +6444,9 @@ def log_live_usage():
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "duration_seconds": duration_seconds,
-        "minutes_used": updated_sub.get("live_minutes_used", 0),
-        "minutes_remaining": updated_sub.get("minutes_remaining", 0),
-        "quota_exceeded": updated_sub.get("minutes_remaining", 0) <= 0
+        "minutes_used": sub.get("live_minutes_used", 0),
+        "minutes_remaining": sub.get("minutes_remaining", 0),
+        "quota_exceeded": sub.get("minutes_remaining", 0) <= 0
     }), 200
 
 
@@ -25559,7 +25554,11 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
         clientConfig.wsUrl = vertexData.ws_url;
       }
 
-      // Inicjalizacja klienta WebSocket
+      // Inicjalizacja klienta WebSocket (bezpieczne zamknięcie poprzedniej sesji jeśli istniała)
+      if (geminiLiveRef.current) {
+        geminiLiveRef.current.cleanup();
+        geminiLiveRef.current = null;
+      }
       const client = new GeminiLiveClient(clientConfig);
       geminiLiveRef.current = client;
       await client.connect();
@@ -65082,6 +65081,7 @@ export class GeminiLiveClient {
     this.sessionCompletionTokens = 0;
     this.maxSeenTokens = 0;
     this.usageReported = false;
+    this.lastTrackedSeconds = 0;
 
     // Bufor aktualnej wypowiedzi lektora
     this.currentBotTurnText = '';
@@ -65125,7 +65125,13 @@ export class GeminiLiveClient {
         this.onStatusChange('listening');
 
         // Rozpoczęcie trackera twardego limitu czasu sesji
-        if (this.quotaTicker) clearInterval(this.quotaTicker);
+        if (this.quotaTicker) {
+          clearInterval(this.quotaTicker);
+          this.quotaTicker = null;
+        }
+        this.sessionStartTime = Date.now();
+        this.lastTrackedSeconds = 0;
+
         this.quotaTicker = setInterval(async () => {
           if (!this.isConnected || !this.sessionStartTime || this.isDestroyed) return;
           const elapsedSec = Math.round((Date.now() - this.sessionStartTime) / 1000);
@@ -65149,8 +65155,10 @@ export class GeminiLiveClient {
             }
           }
 
-          // Co 30 sekund synchronizuj z backendem
-          if (elapsedSec > 0 && elapsedSec % 30 === 0) {
+          // Co 30 sekund synchronizuj z backendem wyłącznie nowo upłynięte sekundy
+          if (elapsedSec - this.lastTrackedSeconds >= 30) {
+            const secondsToTrack = elapsedSec - this.lastTrackedSeconds;
+            this.lastTrackedSeconds = elapsedSec;
             try {
               const res = await fetch(`${this.apiBaseUrl}/api/subscription/track-live-time`, {
                 method: 'POST',
@@ -65159,7 +65167,7 @@ export class GeminiLiveClient {
                   'X-Session-Token': this.sessionToken || ''
                 },
                 body: JSON.stringify({
-                  duration_seconds: 30,
+                  duration_seconds: secondsToTrack,
                   user_email: this.userEmail
                 })
               });
@@ -66236,11 +66244,35 @@ export class GeminiLiveClient {
    * Pełne sprzątanie zasobów
    */
   cleanup() {
+    if (this.isDestroyed) return;
     this.isDestroyed = true;
     if (this.quotaTicker) {
       clearInterval(this.quotaTicker);
       this.quotaTicker = null;
     }
+
+    // Dosyłamy pozostałe, niesynchronizowane sekundy z sesji (np. ostatnie 12 sekund)
+    if (this.sessionStartTime) {
+      const elapsedSec = Math.round((Date.now() - this.sessionStartTime) / 1000);
+      const remainingSeconds = elapsedSec - (this.lastTrackedSeconds || 0);
+      if (remainingSeconds >= 2) {
+        this.lastTrackedSeconds = elapsedSec;
+        try {
+          fetch(`${this.apiBaseUrl}/api/subscription/track-live-time`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Session-Token': this.sessionToken || ''
+            },
+            body: JSON.stringify({
+              duration_seconds: remainingSeconds,
+              user_email: this.userEmail
+            })
+          }).catch(() => {});
+        } catch (eTrack) {}
+      }
+    }
+
     this.reportSessionUsage();
     this.isConnected = false;
 
@@ -77567,6 +77599,19 @@ export class GeminiLiveClient {
           user_email: this.userEmail
         })
       });
+
+      // Śledzenie limitu minut subskrypcji
+      if (durationSeconds > 0) {
+        await fetch(`${this.apiBaseUrl}/api/subscription/track-live-time`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            duration_seconds: durationSeconds,
+            user_email: this.userEmail
+          })
+        }).catch(() => {});
+      }
+
       console.log(`[GeminiLive Mobile] Zużycie zapisane: ${durationSeconds}s`);
     } catch (e) {
       console.warn("[GeminiLive Mobile] Błąd raportowania zużycia:", e);

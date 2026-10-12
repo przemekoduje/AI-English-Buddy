@@ -78,6 +78,7 @@ export class GeminiLiveClient {
     this.sessionCompletionTokens = 0;
     this.maxSeenTokens = 0;
     this.usageReported = false;
+    this.lastTrackedSeconds = 0;
 
     // Bufor aktualnej wypowiedzi lektora
     this.currentBotTurnText = '';
@@ -121,7 +122,13 @@ export class GeminiLiveClient {
         this.onStatusChange('listening');
 
         // Rozpoczęcie trackera twardego limitu czasu sesji
-        if (this.quotaTicker) clearInterval(this.quotaTicker);
+        if (this.quotaTicker) {
+          clearInterval(this.quotaTicker);
+          this.quotaTicker = null;
+        }
+        this.sessionStartTime = Date.now();
+        this.lastTrackedSeconds = 0;
+
         this.quotaTicker = setInterval(async () => {
           if (!this.isConnected || !this.sessionStartTime || this.isDestroyed) return;
           const elapsedSec = Math.round((Date.now() - this.sessionStartTime) / 1000);
@@ -145,8 +152,10 @@ export class GeminiLiveClient {
             }
           }
 
-          // Co 30 sekund synchronizuj z backendem
-          if (elapsedSec > 0 && elapsedSec % 30 === 0) {
+          // Co 30 sekund synchronizuj z backendem wyłącznie nowo upłynięte sekundy
+          if (elapsedSec - this.lastTrackedSeconds >= 30) {
+            const secondsToTrack = elapsedSec - this.lastTrackedSeconds;
+            this.lastTrackedSeconds = elapsedSec;
             try {
               const res = await fetch(`${this.apiBaseUrl}/api/subscription/track-live-time`, {
                 method: 'POST',
@@ -155,7 +164,7 @@ export class GeminiLiveClient {
                   'X-Session-Token': this.sessionToken || ''
                 },
                 body: JSON.stringify({
-                  duration_seconds: 30,
+                  duration_seconds: secondsToTrack,
                   user_email: this.userEmail
                 })
               });
@@ -1232,11 +1241,35 @@ export class GeminiLiveClient {
    * Pełne sprzątanie zasobów
    */
   cleanup() {
+    if (this.isDestroyed) return;
     this.isDestroyed = true;
     if (this.quotaTicker) {
       clearInterval(this.quotaTicker);
       this.quotaTicker = null;
     }
+
+    // Dosyłamy pozostałe, niesynchronizowane sekundy z sesji (np. ostatnie 12 sekund)
+    if (this.sessionStartTime) {
+      const elapsedSec = Math.round((Date.now() - this.sessionStartTime) / 1000);
+      const remainingSeconds = elapsedSec - (this.lastTrackedSeconds || 0);
+      if (remainingSeconds >= 2) {
+        this.lastTrackedSeconds = elapsedSec;
+        try {
+          fetch(`${this.apiBaseUrl}/api/subscription/track-live-time`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Session-Token': this.sessionToken || ''
+            },
+            body: JSON.stringify({
+              duration_seconds: remainingSeconds,
+              user_email: this.userEmail
+            })
+          }).catch(() => {});
+        } catch (eTrack) {}
+      }
+    }
+
     this.reportSessionUsage();
     this.isConnected = false;
 

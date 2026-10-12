@@ -942,7 +942,11 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
         clientConfig.wsUrl = vertexData.ws_url;
       }
 
-      // Inicjalizacja klienta WebSocket
+      // Inicjalizacja klienta WebSocket (bezpieczne zamknięcie poprzedniej sesji jeśli istniała)
+      if (geminiLiveRef.current) {
+        geminiLiveRef.current.cleanup();
+        geminiLiveRef.current = null;
+      }
       const client = new GeminiLiveClient(clientConfig);
       geminiLiveRef.current = client;
       await client.connect();

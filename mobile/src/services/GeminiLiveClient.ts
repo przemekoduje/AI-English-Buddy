@@ -799,6 +799,19 @@ export class GeminiLiveClient {
           user_email: this.userEmail
         })
       });
+
+      // Śledzenie limitu minut subskrypcji
+      if (durationSeconds > 0) {
+        await fetch(`${this.apiBaseUrl}/api/subscription/track-live-time`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            duration_seconds: durationSeconds,
+            user_email: this.userEmail
+          })
+        }).catch(() => {});
+      }
+
       console.log(`[GeminiLive Mobile] Zużycie zapisane: ${durationSeconds}s`);
     } catch (e) {
       console.warn("[GeminiLive Mobile] Błąd raportowania zużycia:", e);
