@@ -2969,11 +2969,7 @@ function Workspace({
 
             <div className="create-story-prompt-wrapper">
               <label htmlFor="create-story-prompt" className="create-story-prompt-label">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                </svg>
-                <span>Własny opis opowiadania (opcjonalnie):</span>
+                Własny opis opowiadania (opcjonalnie):
               </label>
               <textarea
                 id="create-story-prompt"
@@ -3209,14 +3205,8 @@ function Workspace({
                 <div className="story-words-list">
                   {keyStoryWords.length === 0 ? (
                     <div className="story-words-empty">
-                      <div className="story-words-empty-icon">
-                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                        </svg>
-                      </div>
                       <div className="story-words-empty-title">Brak zapisanych słówek</div>
-                      <div className="story-words-empty-sub">Kliknij dowolne słowo w tekście, aby poznać znaczenie i dodać je do podręcznego słownika.</div>
+                      <div className="story-words-empty-sub">Kliknij słowo w tekście, aby sprawdzić znaczenie i dodać je do listy.</div>
                     </div>
                   ) : (
                     keyStoryWords.map((item, idx) => {

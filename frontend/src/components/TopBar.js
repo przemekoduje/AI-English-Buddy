@@ -186,11 +186,7 @@ const TopBar = ({
               {/* Sekcja Ustawienia Lektora */}
               <div className="dropdown-settings-section">
                 <div className="dropdown-section-title">
-                  <svg className="dropdown-section-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-                    <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
-                  </svg>
-                  <span>Głos lektora (Narrator Voice)</span>
+                  Głos lektora (Narrator Voice)
                 </div>
                 <div className="dropdown-section-desc">
                   Stały lektor czytający teksty w całej aplikacji
@@ -216,22 +212,7 @@ const TopBar = ({
                     onClick={() => handlePreviewVoice(selectedVoice)}
                     title="Posłuchaj próbki głosu"
                   >
-                    {isPlayingPreview ? (
-                      <>
-                        <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
-                          <rect x="5" y="5" width="14" height="14" rx="2" />
-                        </svg>
-                        <span>Stop</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                        </svg>
-                        <span>Próbka</span>
-                      </>
-                    )}
+                    {isPlayingPreview ? 'Stop' : 'Próbka'}
                   </button>
                 </div>
               </div>
@@ -246,14 +227,6 @@ const TopBar = ({
                   if (onOpenPaywall) onOpenPaywall();
                 }}
               >
-                <svg className="dropdown-action-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="m4.93 4.93 4.24 4.24" />
-                  <path d="m14.83 9.17 4.24-4.24" />
-                  <path d="m14.83 14.83 4.24 4.24" />
-                  <path d="m9.17 14.83-4.24 4.24" />
-                  <circle cx="12" cy="12" r="4" />
-                </svg>
                 <span>Zarządzaj subskrypcją i minutami</span>
               </button>
 
@@ -265,11 +238,6 @@ const TopBar = ({
                     onLogout();
                   }}
                 >
-                  <svg className="dropdown-action-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                    <polyline points="16 17 21 12 16 7" />
-                    <line x1="21" y1="12" x2="9" y2="12" />
-                  </svg>
                   <span>Wyloguj się</span>
                 </button>
               )}

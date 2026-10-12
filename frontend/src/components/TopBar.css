@@ -369,16 +369,10 @@
 .dropdown-section-title {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
   font-family: var(--font-display, 'Outfit', sans-serif);
   font-size: 0.8125rem;
   font-weight: 600;
   color: #0f172a;
-}
-
-.dropdown-section-icon {
-  color: #64748b;
-  flex-shrink: 0;
 }
 
 .dropdown-section-desc {
@@ -463,8 +457,7 @@
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.55rem 0.65rem;
+  padding: 0.65rem 0.75rem;
   background: transparent;
   border: none;
   border-radius: 8px;
@@ -480,16 +473,6 @@
 
 .dropdown-action-item:hover {
   background: #f8fafc;
-  color: #0f172a;
-}
-
-.dropdown-action-svg {
-  color: #64748b;
-  flex-shrink: 0;
-  transition: color 0.15s ease;
-}
-
-.dropdown-action-item:hover .dropdown-action-svg {
   color: #0f172a;
 }
 
