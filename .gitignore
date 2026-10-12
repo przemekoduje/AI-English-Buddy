@@ -44,3 +44,4 @@ firebase.temp.json
 
 # Agents config with local secrets
 .agents/mcp_config.json
+.agents/plugins/**/mcp_config.json

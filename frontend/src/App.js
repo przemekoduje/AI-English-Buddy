@@ -19,8 +19,8 @@ import PaywallModal from './components/Paywall/PaywallModal';
 function App() {
   const [currentView, setCurrentView] = useState(() => {
     const savedView = localStorage.getItem("buddy_current_view");
-    if (savedView) return savedView;
-    return 'dashboard';
+    if (savedView && savedView !== 'dashboard') return savedView;
+    return 'workspace';
   });
   const [user, setUser] = useState(() => {
     const stored = localStorage.getItem("buddy_user");

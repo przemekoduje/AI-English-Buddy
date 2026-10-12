@@ -335,6 +335,13 @@ function Workspace({
   const [inlineWordData, setInlineWordData] = useState(null);
   const [showInlineSentenceTrans, setShowInlineSentenceTrans] = useState(false);
 
+  // Create your next story banner states (Figma top card)
+  const [isGeneratorCollapsed, setIsGeneratorCollapsed] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("Business");
+  const [selectedLevel, setSelectedLevel] = useState("B2");
+  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
+  const [isAskingBuddy, setIsAskingBuddy] = useState(false);
+
   const currentAudioRef = useRef(null);
   const contextMenuRef = useRef(null);
   const activeSelectionRangeRef = useRef(null);
@@ -966,10 +973,20 @@ function Workspace({
     prevExplanationWordRef.current = explanationWord;
   }, [explanationWord]);
 
+  const activeStoryText = generatedText || FIGMA_SAMPLE_TEXT;
+  const activeStoryTitle = currentStoryTitle || FIGMA_SAMPLE_TITLE;
+
+  // Auto-collapse top generator panel when user begins playback/reading
   useEffect(() => {
-    if (generatedText) {
+    if (isSpeaking && !isPaused) {
+      setIsGeneratorCollapsed(true);
+    }
+  }, [isSpeaking, isPaused]);
+
+  useEffect(() => {
+    if (activeStoryText) {
       const abbreviations = /\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Co|Corp|Inc|Ltd|e\.g|i\.e|vs|a\.m|p\.m)\.$/i;
-      let markedText = generatedText.replace(/([.?!]["')\]]*)\s+/g, (match, p1, offset, string) => {
+      let markedText = activeStoryText.replace(/([.?!]["')\]]*)\s+/g, (match, p1, offset, string) => {
         const beforeText = string.substring(0, offset + 1);
         if (abbreviations.test(beforeText)) {
           return match;
@@ -985,7 +1002,7 @@ function Workspace({
       setTextChunks([]);
       setCurrentChunkIndex(-1);
     }
-  }, [generatedText]);
+  }, [activeStoryText]);
 
 
   const saveStoryToDb = async (title, text) => {
@@ -1061,6 +1078,128 @@ function Workspace({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleGenerateFigmaStory = async () => {
+    handleStop();
+    setIsGeneratingStory(true);
+    try {
+      const levelMap = {
+        "A1": "simple",
+        "A2": "simple",
+        "B1": "medium",
+        "B2": "medium",
+        "C1": "advanced",
+        "C2": "advanced"
+      };
+      const response = await fetch(`${API_BASE_URL}/api/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Token": user?.token || ""
+        },
+        body: JSON.stringify({
+          topics: [selectedCategory],
+          customDetails: `Create an engaging, modern story tailored for ${selectedLevel} CEFR level about ${selectedCategory}.`,
+          settings: {
+            language_level: levelMap[selectedLevel] || "medium",
+            length: "medium",
+            is_factual: false,
+            genre: selectedCategory.toLowerCase(),
+            focus_area: "none"
+          }
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || (data && data.error)) {
+        alert(data?.error || data?.details || "Wystąpił błąd podczas generowania opowiadania.");
+        return;
+      }
+      if (data && data[0] && data[0].generated_text) {
+        setGeneratedText(data[0].generated_text);
+        const title = data[0].title || `${selectedCategory} Story`;
+        setCurrentStoryTitle(title);
+        const savedStory = await saveStoryToDb(title, data[0].generated_text);
+        if (savedStory && savedStory.id) {
+          const newPart = {
+            id: savedStory.id,
+            title: title,
+            text: data[0].generated_text,
+            part_number: 1
+          };
+          setStoryParts([newPart]);
+          setActivePartIndex(0);
+          setLoadedRootId(savedStory.id);
+          setCurrentStoryId(savedStory.id);
+        }
+        setIsGeneratorCollapsed(true);
+      }
+    } catch (err) {
+      console.error("Błąd generowania historii z banera Figma:", err);
+      alert("Nie udało się wygenerować opowiadania. Sprawdź połączenie z internetem lub spróbuj ponownie.");
+    } finally {
+      setIsGeneratingStory(false);
+    }
+  };
+
+  // Auto-collapse top banner when reading starts or user scrolls down
+  useEffect(() => {
+    const handleScroll = (e) => {
+      const top = e?.target?.scrollTop ?? window.scrollY;
+      if (top > 70 && !isGeneratorCollapsed) {
+        setIsGeneratorCollapsed(true);
+      }
+    };
+    const viewContainer = document.querySelector('.view-container');
+    if (viewContainer) {
+      viewContainer.addEventListener("scroll", handleScroll, { passive: true });
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      if (viewContainer) {
+        viewContainer.removeEventListener("scroll", handleScroll);
+      }
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [isGeneratorCollapsed]);
+
+  const handleToggleBookmarkWord = async (word, translation, phonetic, pos, level) => {
+    const isSaved = notebookWords.some(
+      w => (w.original || w.word || "").toLowerCase() === (word || "").toLowerCase()
+    );
+    if (isSaved) {
+      setNotebookWords(prev => prev.filter(
+        w => (w.original || w.word || "").toLowerCase() !== (word || "").toLowerCase()
+      ));
+      try {
+        await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(word)}`, {
+          method: "DELETE",
+          headers: { "X-Session-Token": user?.token || "" }
+        });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+      } catch (e) {
+        console.error("Błąd usuwania słówka:", e);
+      }
+    } else {
+      const trans = translation || word;
+      const newEntry = { original: word, translated: trans, phonetic, pos, level };
+      setNotebookWords(prev => [newEntry, ...prev]);
+      try {
+        await fetch(`${API_BASE_URL}/api/vocabulary`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
+          body: JSON.stringify({ original: word, translated: trans, story_id: currentStoryId })
+        });
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+      } catch (err) {
+        console.error("Błąd zapisywania słówka:", err);
+      }
+    }
+  };
+
+  const handleAskBuddySubmit = (e) => {
+    e.preventDefault();
+    handleAskBuddy(buddyQuestion);
   };
 
   const generateDefaultText = async () => {
@@ -1280,7 +1419,8 @@ function Workspace({
   speakChunkRef.current = speakChunk;
 
   const handlePlayback = () => {
-    if (!generatedText || textChunks.length === 0) return;
+    if (!activeStoryText || textChunks.length === 0) return;
+    setIsGeneratorCollapsed(true);
     if (currentAudioRef.current) {
       if (isPausedRef.current || currentAudioRef.current.paused) {
         currentAudioRef.current.play().catch(() => { });
@@ -1321,6 +1461,7 @@ function Workspace({
   };
 
   const handlePlaySentence = (index, single = false) => {
+    setIsGeneratorCollapsed(true);
     if (isSpeaking && currentChunkIndex === index && playSingle === single) {
       handlePlayback();
     } else {
@@ -1439,6 +1580,7 @@ function Workspace({
   };
 
   const handleWordClick = async (word, wordId, element, sentenceContext) => {
+    setIsGeneratorCollapsed(true);
     pauseAudioForTooltip();
 
     const layoutEl = document.querySelector('.workspace-layout');
@@ -1878,10 +2020,11 @@ function Workspace({
     const q = (queryText || buddyQuestion || "").trim();
     if (!q) return;
     setIsBuddyLoading(true);
+    setIsAskingBuddy(true);
     setBuddyAnswer("");
     try {
       const formData = new FormData();
-      formData.append("story_text", generatedText || "");
+      formData.append("story_text", activeStoryText || "");
       formData.append("transcription", q);
       formData.append("history", JSON.stringify([]));
 
@@ -1903,6 +2046,7 @@ function Workspace({
       setBuddyAnswer("Błąd połączenia z asystentem AI.");
     } finally {
       setIsBuddyLoading(false);
+      setIsAskingBuddy(false);
     }
   };
 
@@ -1950,7 +2094,7 @@ function Workspace({
 
   // Auto-init inline card on 'adapt' when Maya's story is loaded
   useEffect(() => {
-    if (generatedText && generatedText.includes("Maya knew she would need to adapt")) {
+    if (activeStoryText && activeStoryText.includes("Maya knew she would need to adapt")) {
       const meta = VOCABULARY_INFO.adapt;
       setInlineWordData({
         word: "adapt",
@@ -1963,11 +2107,11 @@ function Workspace({
         paragraphIndex: 1
       });
     }
-  }, [generatedText]);
+  }, [activeStoryText]);
 
   const paragraphs = useMemo(() => {
-    if (!generatedText) return [];
-    const raw = generatedText.split(/\n+/).map(p => p.trim()).filter(Boolean);
+    if (!activeStoryText) return [];
+    const raw = activeStoryText.split(/\n+/).map(p => p.trim()).filter(Boolean);
     if (raw.length <= 1 && raw[0] && raw[0].length > 400) {
       const sents = raw[0].split(/(?<=[.!?])\s+/);
       const grouped = [];
@@ -1977,7 +2121,7 @@ function Workspace({
       return grouped;
     }
     return raw;
-  }, [generatedText]);
+  }, [activeStoryText]);
 
   // Map each paragraph to its constituent sentence chunks with exact textChunks indices
   const paragraphSentences = useMemo(() => {
@@ -2033,12 +2177,12 @@ function Workspace({
   }, [currentChunkIndex, isSpeaking, isPaused]);
 
   const storyLevel = useMemo(() => {
-    if (!generatedText) return "B2";
-    return calculateCEFRLevel(generatedText, currentStoryTitle) || "B2";
-  }, [generatedText, currentStoryTitle]);
+    if (!activeStoryText) return "B2";
+    return calculateCEFRLevel(activeStoryText, activeStoryTitle) || "B2";
+  }, [activeStoryText, activeStoryTitle]);
 
   const storyCategory = useMemo(() => {
-    const combined = `${currentStoryTitle || ""} ${generatedText || ""}`.toLowerCase();
+    const combined = `${activeStoryTitle || ""} ${activeStoryText || ""}`.toLowerCase();
     if (combined.includes("office") || combined.includes("business") || combined.includes("job") || combined.includes("routine") || combined.includes("colleague")) {
       return "Business";
     }
@@ -2052,12 +2196,12 @@ function Workspace({
       return "Health";
     }
     return "General";
-  }, [currentStoryTitle, generatedText]);
+  }, [activeStoryTitle, activeStoryText]);
 
   const wordCount = useMemo(() => {
-    if (!generatedText) return 0;
-    return generatedText.trim().split(/\s+/).filter(Boolean).length;
-  }, [generatedText]);
+    if (!activeStoryText) return 0;
+    return activeStoryText.trim().split(/\s+/).filter(Boolean).length;
+  }, [activeStoryText]);
 
   const readingTime = useMemo(() => {
     return Math.max(1, Math.ceil(wordCount / 130));
@@ -2082,8 +2226,8 @@ function Workspace({
   };
 
   const keyStoryWords = useMemo(() => {
-    if (!generatedText) return [];
-    const textLower = generatedText.toLowerCase();
+    if (!activeStoryText) return [];
+    const textLower = activeStoryText.toLowerCase();
     const matched = [];
     const targetWords = ["adapt", "supportive", "clarify", "routine", "confidence", "curious", "unfamiliar", "progress", "beginning"];
 
@@ -2582,18 +2726,7 @@ function Workspace({
         </div>
       )}
 
-      {!generatedText ? (
-        <main className="workspace-main">
-          <StoryGenerator
-            onGenerate={generateStory}
-            onGenerateDefault={generateDefaultText}
-            onPasteText={pasteStory}
-            isLoading={isLoading}
-            suggestedTopics={suggestedTopics}
-            user={user}
-          />
-        </main>
-      ) : isContinuing ? (
+      {isContinuing ? (
         <main className="workspace-main">
           {storyParts.length > 0 && (
             <div className="chapter-tabs">
@@ -2707,18 +2840,109 @@ function Workspace({
         </main>
       ) : (
         <div className="workspace-figma-container">
+          {/* Top Hero Section from Figma */}
+          <div className={`workspace-hero-header ${isGeneratorCollapsed ? "collapsed" : ""}`}>
+            <h1 className="workspace-hero-title">Make every word a discovery.</h1>
+            <p className="workspace-hero-subtitle">
+              Read something you enjoy. Build the English you’ll actually use.
+            </p>
+          </div>
+
+          {/* Collapsible Panel: Create your next story */}
+          <div className={`workspace-create-story-card ${isGeneratorCollapsed ? "collapsed" : ""}`}>
+            <div className="create-story-top-row">
+              <div className="create-story-title-group">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="create-story-sparkle">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+                <h2 className="create-story-heading">Create your next story</h2>
+              </div>
+              <div className="create-story-top-actions">
+                <span className="create-story-badge">AI story generator</span>
+                <button
+                  type="button"
+                  className="create-story-collapse-btn"
+                  onClick={() => setIsGeneratorCollapsed(true)}
+                  title="Zwiń panel i zacznij czytać"
+                >
+                  <span>Zwiń do czytania</span>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="18 15 12 9 6 15" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="create-story-controls-row">
+              <div className="create-story-chips">
+                {["Business", "Daily Life", "Travel", "Tech"].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    className={`create-story-chip ${selectedCategory === cat ? "active" : ""}`}
+                    onClick={() => setSelectedCategory(cat)}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              <div className="create-story-right-controls">
+                <div className="create-story-level-select-wrapper">
+                  <select
+                    className="create-story-level-select"
+                    value={selectedLevel}
+                    onChange={(e) => setSelectedLevel(e.target.value)}
+                  >
+                    {["A1", "A2", "B1", "B2", "C1", "C2"].map((lvl) => (
+                      <option key={lvl} value={lvl}>{lvl}</option>
+                    ))}
+                  </select>
+                  <svg className="level-select-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </div>
+
+                <button
+                  type="button"
+                  className="create-story-generate-btn"
+                  onClick={handleGenerateFigmaStory}
+                  disabled={isGeneratingStory || isLoading}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                  <span>{isGeneratingStory ? "Generating..." : "Generate Story"}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="create-story-footer-note">
+              CEFR levels: A1 • A2 • B1 • B2 • C1 • C2. Stories are tailored to your selected level.
+            </div>
+          </div>
+
+          {/* Sleek expandable pill when collapsed */}
+          {isGeneratorCollapsed && (
+            <div className="workspace-collapsed-bar">
+              <button
+                type="button"
+                className="workspace-open-generator-pill"
+                onClick={() => setIsGeneratorCollapsed(false)}
+                title="Otwórz generator opowieści"
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+                <span>✨ Create your next story ({selectedCategory} · {selectedLevel})</span>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           <div className="workspace-figma-top-bar">
-            <button
-              onClick={handleBackButtonClick}
-              className="workspace-back-pill-btn"
-              title="Wróć do wyboru tematów / utwórz nową historię"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="19" y1="12" x2="5" y2="12"></line>
-                <polyline points="12 19 5 12 12 5"></polyline>
-              </svg>
-              <span>Nowa opowieść</span>
-            </button>
 
             {storyParts.length > 0 && (
               <div className="chapter-tabs" style={{ margin: 0 }}>
@@ -2891,7 +3115,124 @@ function Workspace({
 
             {/* RIGHT COLUMN: 3 Figma Cards */}
             <aside className="workspace-figma-sidebar">
-              {/* Card 1: Words in this story (top & always visible) */}
+              {/* Card 1: Your learning buddy (top & primary in Figma) */}
+              <div className="learning-buddy-card">
+                <div className="buddy-card-header">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="buddy-sparkle-icon">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                  <h3>Your learning buddy</h3>
+                </div>
+                <p className="buddy-card-desc">
+                  Make this story your own. Ask a question or practise it out loud.
+                </p>
+
+                <button
+                  className={`buddy-voice-ai-btn ${isMasteryLocked ? 'btn-pro-locked' : ''}`}
+                  onClick={() => {
+                    if (isMasteryLocked) {
+                      if (onOpenPaywall) {
+                        onOpenPaywall({ feature: 'mastery' });
+                        return;
+                      }
+                    }
+                    handleStop();
+                    setShowPracticeMode(true);
+                  }}
+                  title="Practice with Voice AI"
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+                  </svg>
+                  <span>Practice with Voice AI</span>
+                  {isMasteryLocked && (
+                    <span style={{
+                      marginLeft: '6px',
+                      background: 'rgba(255,255,255,0.25)',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      letterSpacing: '0.05em'
+                    }}>PRO</span>
+                  )}
+                </button>
+
+                <div className="buddy-divider" />
+
+                <div className="buddy-try-asking-section">
+                  <span className="practice-section-label">TRY ASKING</span>
+                  <div className="buddy-practice-chips">
+                    <button
+                      className="buddy-practice-chip"
+                      onClick={() => handleAskBuddy('Explain "speak up"')}
+                    >
+                      Explain "speak up"
+                    </button>
+                    <button
+                      className="buddy-practice-chip"
+                      onClick={() => handleAskBuddy('Summarise this story')}
+                    >
+                      Summarise this story
+                    </button>
+                  </div>
+                </div>
+
+                <form className="buddy-ask-form" onSubmit={handleAskBuddySubmit}>
+                  <div className="buddy-ask-input-wrap">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <input
+                      type="text"
+                      className="buddy-ask-input"
+                      placeholder="Ask about the story..."
+                      value={buddyQuestion}
+                      onChange={(e) => setBuddyQuestion(e.target.value)}
+                      disabled={isAskingBuddy}
+                    />
+                    <button
+                      type="submit"
+                      className="buddy-ask-send-btn"
+                      disabled={!buddyQuestion.trim() || isAskingBuddy}
+                      title="Wyślij pytanie"
+                    >
+                      {isAskingBuddy ? (
+                        <span className="buddy-ask-spinner" />
+                      ) : (
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="22" y1="2" x2="11" y2="13" />
+                          <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </form>
+
+                {buddyAnswer && (
+                  <div className="buddy-inline-answer-box">
+                    <div className="buddy-inline-answer-text">{buddyAnswer}</div>
+                    <div className="buddy-inline-answer-actions">
+                      <button
+                        className="buddy-answer-speak-btn"
+                        onClick={() => handleSpeakWord(buddyAnswer)}
+                        title="Posłuchaj odpowiedzi"
+                      >
+                        🔊 Posłuchaj
+                      </button>
+                      <button
+                        className="buddy-answer-close-btn"
+                        onClick={() => setBuddyAnswer("")}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Card 2: Words in this story */}
               <div className="story-words-card">
                 <div className="story-words-header">
                   <h3>Words in this story</h3>
@@ -2902,6 +3243,14 @@ function Workspace({
 
                 <div className="story-words-list">
                   {keyStoryWords.map((item, idx) => {
+                    const isSaved = notebookWords.some(
+                      w => (w.original || w.word || "").toLowerCase() === (item.word || "").toLowerCase()
+                    );
+                    const meta = getWordMeta(item.word);
+                    const pos = item.pos || meta.pos || "word";
+                    const level = item.level || meta.level || "B2";
+                    const translation = item.translation || meta.pl || "";
+
                     return (
                       <div key={item.word || idx} className="story-word-item">
                         <div className="story-word-item-top">
@@ -2924,6 +3273,17 @@ function Workspace({
                               </svg>
                             </button>
                             <button
+                              className={`story-word-bookmark-btn ${isSaved ? "saved" : ""}`}
+                              onClick={() => handleToggleBookmarkWord(item.word, translation, meta.phonetic, pos, level)}
+                              title={isSaved ? "Zapisano w Twoim słowniku" : "Zapisz do Twojego słownika"}
+                            >
+                              <svg viewBox="0 0 24 24" width="16" height="16" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                                {!isSaved && <line x1="12" y1="8" x2="12" y2="14" />}
+                                {!isSaved && <line x1="9" y1="11" x2="15" y2="11" />}
+                              </svg>
+                            </button>
+                            <button
                               className="story-word-delete-btn"
                               onClick={() => handleDeleteStoryWord(item.word)}
                               title="Usuń słowo ze słownika"
@@ -2938,7 +3298,7 @@ function Workspace({
                           </div>
                         </div>
                         <div className="story-word-item-sub">
-                          <span>{item.translation}</span>
+                          <span>{translation ? `${translation} · ` : ""}{pos} · {level}</span>
                         </div>
                       </div>
                     );
@@ -2961,85 +3321,6 @@ function Workspace({
                   </svg>
                   <span>Open vocabulary</span>
                 </button>
-              </div>
-
-              {/* Card 2: Your learning buddy */}
-              <div className="learning-buddy-card">
-                <div className="buddy-card-header">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="buddy-sparkle-icon">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                  <h3>Your learning buddy</h3>
-                </div>
-                <p className="buddy-card-desc">
-                  Make this story your own. Practice with Mastery Path or train your vocabulary.
-                </p>
-
-                <button
-                  className={`buddy-voice-ai-btn ${isMasteryLocked ? 'btn-pro-locked' : ''}`}
-                  onClick={() => {
-                    if (isMasteryLocked) {
-                      if (onOpenPaywall) {
-                        onOpenPaywall({ feature: 'mastery' });
-                        return;
-                      }
-                    }
-                    handleStop();
-                    setShowPracticeMode(true);
-                  }}
-                  title="Mastery Path — 3 steps to master this story"
-                >
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
-                  </svg>
-                  <span>Mastery Path · 3 steps</span>
-                  {isMasteryLocked && (
-                    <span style={{
-                      marginLeft: '6px',
-                      background: 'rgba(255,255,255,0.25)',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      fontSize: '10px',
-                      fontWeight: 800,
-                      letterSpacing: '0.05em'
-                    }}>PRO</span>
-                  )}
-                </button>
-
-                <div className="buddy-practice-section">
-                  <span className="practice-section-label">PRACTICE TOOLS</span>
-                  <div className="buddy-practice-chips">
-                    <button
-                      className="buddy-practice-chip"
-                      onClick={handleOpenFlashcards}
-                      title="Practice vocabulary with flashcards"
-                    >
-                      Flashcards
-                    </button>
-                    <button
-                      className="buddy-practice-chip"
-                      onClick={handleOpenExercises}
-                      title="AI vocabulary translation quiz"
-                    >
-                      Vocabulary quiz
-                    </button>
-                    <button
-                      className="buddy-practice-chip"
-                      onClick={handleOpenSummary}
-                      title="Generate AI session summary"
-                    >
-                      Session summary
-                    </button>
-                    <button
-                      className="buddy-practice-chip"
-                      onClick={handleOpenEmail}
-                      title="Export vocabulary to your email"
-                    >
-                      Export to email
-                    </button>
-                  </div>
-                </div>
               </div>
 
               {/* Card 3: Small steps count */}
