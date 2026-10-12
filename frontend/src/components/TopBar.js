@@ -3,13 +3,13 @@ import './TopBar.css';
 import { API_BASE_URL } from '../config';
 
 const AVAILABLE_NARRATORS = [
-  { id: 'en-US-BrianNeural', name: 'Brian (US Męski — Naturalny 🌟)', flag: '🇺🇸', gender: 'male' },
-  { id: 'en-US-GuyNeural', name: 'Guy (US Męski — Ciepły)', flag: '🇺🇸', gender: 'male' },
-  { id: 'en-US-ChristopherNeural', name: 'Christopher (US Męski — Radiowy)', flag: '🇺🇸', gender: 'male' },
-  { id: 'en-US-JennyNeural', name: 'Jenny (US Damski — Przyjazny)', flag: '🇺🇸', gender: 'female' },
-  { id: 'en-US-AriaNeural', name: 'Aria (US Damski — Ekspresyjny)', flag: '🇺🇸', gender: 'female' },
-  { id: 'en-GB-RyanNeural', name: 'Ryan (UK Męski — Brytyjski)', flag: '🇬🇧', gender: 'male' },
-  { id: 'en-GB-SoniaNeural', name: 'Sonia (UK Damski — Brytyjski)', flag: '🇬🇧', gender: 'female' },
+  { id: 'en-US-BrianNeural', name: 'Brian (US — Natural)' },
+  { id: 'en-US-GuyNeural', name: 'Guy (US — Warm)' },
+  { id: 'en-US-ChristopherNeural', name: 'Christopher (US — Radio)' },
+  { id: 'en-US-JennyNeural', name: 'Jenny (US — Friendly)' },
+  { id: 'en-US-AriaNeural', name: 'Aria (US — Expressive)' },
+  { id: 'en-GB-RyanNeural', name: 'Ryan (UK — British)' },
+  { id: 'en-GB-SoniaNeural', name: 'Sonia (UK — British)' },
 ];
 
 const TopBar = ({ 
@@ -186,9 +186,9 @@ const TopBar = ({
               {/* Sekcja Ustawienia Lektora */}
               <div className="dropdown-settings-section">
                 <div className="dropdown-section-title">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#7c3aed" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+                  <svg className="dropdown-section-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+                    <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
                   </svg>
                   <span>Głos lektora (Narrator Voice)</span>
                 </div>
@@ -206,7 +206,7 @@ const TopBar = ({
                   >
                     {AVAILABLE_NARRATORS.map(v => (
                       <option key={v.id} value={v.id}>
-                        {v.flag} {v.name}
+                        {v.name}
                       </option>
                     ))}
                   </select>
@@ -214,12 +214,23 @@ const TopBar = ({
                   <button
                     className={`dropdown-voice-preview-btn ${isPlayingPreview ? 'playing' : ''}`}
                     onClick={() => handlePreviewVoice(selectedVoice)}
-                    title="Posłuchaj próbki mowy"
+                    title="Posłuchaj próbki głosu"
                   >
                     {isPlayingPreview ? (
-                      <>⏹️ Stop</>
+                      <>
+                        <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+                          <rect x="5" y="5" width="14" height="14" rx="2" />
+                        </svg>
+                        <span>Stop</span>
+                      </>
                     ) : (
-                      <>🔊 Próbka</>
+                      <>
+                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                        </svg>
+                        <span>Próbka</span>
+                      </>
                     )}
                   </button>
                 </div>
@@ -235,7 +246,14 @@ const TopBar = ({
                   if (onOpenPaywall) onOpenPaywall();
                 }}
               >
-                <span className="dropdown-item-icon">💎</span>
+                <svg className="dropdown-action-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="m4.93 4.93 4.24 4.24" />
+                  <path d="m14.83 9.17 4.24-4.24" />
+                  <path d="m14.83 14.83 4.24 4.24" />
+                  <path d="m9.17 14.83-4.24 4.24" />
+                  <circle cx="12" cy="12" r="4" />
+                </svg>
                 <span>Zarządzaj subskrypcją i minutami</span>
               </button>
 
@@ -247,7 +265,11 @@ const TopBar = ({
                     onLogout();
                   }}
                 >
-                  <span className="dropdown-item-icon">🚪</span>
+                  <svg className="dropdown-action-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
                   <span>Wyloguj się</span>
                 </button>
               )}
