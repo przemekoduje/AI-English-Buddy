@@ -2175,8 +2175,8 @@
 
 .starters-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.15rem;
   width: 100%;
 }
 
@@ -2198,10 +2198,51 @@
   border-color: #1a73e8;
 }
 
+.starter-card.active {
+  border-color: #1a73e8;
+  background: #f8fbff;
+  box-shadow: 0 4px 16px rgba(26, 115, 232, 0.12);
+}
+
 .starter-card-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.starter-category-pill {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1a73e8;
+  background: #e8f0fe;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.starter-active-pill {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #0d652d;
+  background: #e6f4ea;
+  border: 1px solid #ceead6;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ready-current-mode-badge {
+  display: inline-block;
+  margin-top: 0.75rem;
+  margin-bottom: 0.35rem;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #1a73e8;
+  background: #f1f5fe;
+  border-radius: 999px;
+  border: 1px solid #d2e3fc;
 }
 
 .starter-icon-wrap.blue {

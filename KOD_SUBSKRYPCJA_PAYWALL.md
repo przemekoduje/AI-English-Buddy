@@ -1,5 +1,5 @@
 # Speakling — Kompletny Moduł Subskrypcji, Paywalla i Limitów AI
-Wygenerowano: 2026-10-12 20:00:47
+Wygenerowano: 2026-10-12 20:34:13
 > Dedykowany, lekki pakiet kodu dla zewnętrznych modeli AI (ChatGPT, Claude, DeepSeek). Zawiera 100% logiki subskrypcji, Stripe, limitów minut Gemini Live i blokad paywalla bez obcinania.
 
 ## Spis Zawartości Pakietu
@@ -640,6 +640,9 @@ def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
 # 5. TWARDY LIMIT MINUT DLA GEMINI LIVE ORB (KOD 403)
 # (Z pliku backend/app.py: /api/live/token)
 # ========================================================
+    duration_seconds = float(req_data.get("duration_seconds", 0) or 0)
+
+    # Jeśli Gemini nie zwróciło tokenów w ramce WebSocket, estymujemy z czasu sesji
     if prompt_tokens == 0 and completion_tokens == 0 and duration_seconds > 0:
         prompt_tokens = int(duration_seconds * 16)
         completion_tokens = int(duration_seconds * 20)
@@ -664,9 +667,6 @@ def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
     else:
         updated_sub = get_user_subscription(user_email)
 
-    return jsonify({
-        "success": True,
-        "service": service,
 
 
 ```

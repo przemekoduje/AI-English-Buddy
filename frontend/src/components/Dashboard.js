@@ -183,7 +183,36 @@ export function extractStoryTargetWords(story, userSavedVocab = []) {
   return result;
 }
 
-export function buildTutorPrompts(story, exerciseType, userSavedVocab = []) {
+export function buildTutorPrompts(story, exerciseType, userSavedVocab = [], activeStarterId = "small-talk") {
+  if (activeStarterId === "small-talk") {
+    return {
+      systemInstruction: `You are Speakling, an enthusiastic, friendly and warm native English tutor.
+Your goal is to conduct a natural, relaxed, and engaging spoken English conversation with a student learning English.
+MODE: SMALL TALK, BIG PROGRESS (Everyday English · A2-B1).
+- Conduct a natural, friendly everyday English small talk conversation.
+- Ask about the student's day, daily routine, weekend plans, hobbies, favorite food, weather, or simple everyday feelings.
+- Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, always giving the student plenty of speaking time.
+- Speak with a natural, friendly native tone. Speak only in English.
+- If the student makes a grammatical slip, gently model the natural phrasing in your response while keeping the conversation flowing smoothly.
+- Show genuine curiosity and warmth.`,
+      greetingPrompt: `Hello! Please greet me warmly in English as my friendly tutor in 1-2 natural, spoken sentences. Enthusiastically invite me to have a quick small talk to practice everyday English today, and ask me how my day is going or what I've been doing so far.`
+    };
+  }
+
+  if (activeStarterId === "krakow") {
+    return {
+      systemInstruction: `You are Speakling, an enthusiastic, friendly and warm native English tutor and travel advisor.
+Your goal is to practice a travel and trip-planning conversation with a student learning English.
+MODE: A WEEKEND IN KRAKÓW (Travel & Planning · B1).
+- The student is planning a weekend trip to Kraków, Poland (or exploring the city).
+- Discuss itinerary ideas, visiting the historic Main Market Square, Wawel Castle, Kazimierz Jewish quarter, trying local food, asking for hotel recommendations, or giving travel directions.
+- Keep your spoken responses concise (1-2 sentences at a time), interactive, and encouraging.
+- Speak with a natural, friendly tone. Speak only in English.
+- Offer useful travel expressions and natural vocabulary when appropriate.`,
+      greetingPrompt: `Hello! Greet me warmly as my English tutor. Enthusiastically propose that we practice English by planning an exciting weekend in Kraków together, and ask me what kind of places, sights, or activities I'd love to explore in Kraków in 1-2 friendly sentences.`
+    };
+  }
+
   if (!story) {
     return {
       systemInstruction: "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone. Speak only in English.",
@@ -369,6 +398,9 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   // Konfiguracja serwera
   const [serverConfig, setServerConfig] = useState(null);
 
+  // Domyślny tryb rozmowy / aktywna zakładka na dolnym pasku (domyślnie Small talk, big progress)
+  const [activeStarterId, setActiveStarterId] = useState("small-talk");
+
   // Wybór czytanki (Stories) oraz typu ćwiczenia z lektorem
   const [userStories, setUserStories] = useState([]);
   const [userVocabulary, setUserVocabulary] = useState([]);
@@ -436,6 +468,7 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   const handleStorySelectChange = (e) => {
     const newId = e.target.value;
     setSelectedStoryId(newId);
+    setActiveStarterId("story-practice");
     localStorage.setItem("buddy_selected_story_id", newId);
     if (newId && exerciseType === "free") {
       setExerciseType("story_discussion");
@@ -453,6 +486,7 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
         return;
       }
     }
+    setActiveStarterId("story-practice");
     setExerciseType(newType);
     localStorage.setItem("buddy_exercise_type", newType);
   };
@@ -713,8 +747,9 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
     const activeKey = (overrideOptions.apiKey !== undefined ? overrideOptions.apiKey : customApiKey).trim();
 
     try {
+      const starterIdToUse = overrideOptions.starterId || activeStarterId;
       const currentStory = allStories.find((s) => s.id === selectedStoryId) || null;
-      const { systemInstruction: contextualInstruction, greetingPrompt: contextualGreeting } = buildTutorPrompts(currentStory, exerciseType, userVocabulary);
+      const { systemInstruction: contextualInstruction, greetingPrompt: contextualGreeting } = buildTutorPrompts(currentStory, exerciseType, userVocabulary, starterIdToUse);
 
       let clientConfig = {
         provider: activeProvider,
@@ -941,11 +976,11 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
       fetch(`${API_BASE_URL}/api/subscription/status`, {
         headers: { "X-Session-Token": user.token }
       })
-      .then(res => res.json())
-      .then(data => {
-        if (data.subscription) onSubscriptionUpdated(data.subscription);
-      })
-      .catch(() => {});
+        .then(res => res.json())
+        .then(data => {
+          if (data.subscription) onSubscriptionUpdated(data.subscription);
+        })
+        .catch(() => { });
     }
   };
 
@@ -1216,10 +1251,18 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
       formData.append("audio", audioBlob, "user_speech.webm");
       formData.append("history", JSON.stringify(historyForApi));
       formData.append("voice", "en-US-BrianNeural");
-      if (selectedStory) {
+      if (activeStarterId === 'story-practice' && selectedStory) {
         formData.append("story_title", selectedStory.title || "");
         formData.append("story_text", selectedStory.text || "");
         formData.append("exercise_type", exerciseType || "");
+      } else if (activeStarterId === 'krakow') {
+        formData.append("story_title", "A weekend in Kraków");
+        formData.append("story_text", "Planning a weekend trip to Kraków: sightseeing the Main Market Square, Wawel Castle, Kazimierz, travel directions, hotel recommendations, and dining.");
+        formData.append("exercise_type", "travel_roleplay");
+      } else {
+        formData.append("story_title", "Small talk, big progress");
+        formData.append("story_text", "Casual everyday English small talk about daily routines, hobbies, weather, feelings, work/study, and plans.");
+        formData.append("exercise_type", "small_talk");
       }
       if (localTranscriptRef.current) {
         formData.append("transcription", localTranscriptRef.current);
@@ -1464,10 +1507,21 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   const isSplitLayout = isChatActive;
   const userName = user?.name || (user?.email ? user.email.split('@')[0] : 'Anna');
 
-  const handleStarterCardClick = (storyId, topicTitle) => {
-    setSelectedStoryId(storyId);
+  const handleStarterCardClick = (starterId) => {
+    setActiveStarterId(starterId);
     if (!isChatActive) {
-      handleOrbClick();
+      if (starterId === "story-practice") {
+        if (activeStarterId === "story-practice") {
+          startLiveSession({ starterId });
+        }
+      } else {
+        startLiveSession({ starterId });
+      }
+    } else {
+      handleEndSession();
+      setTimeout(() => {
+        startLiveSession({ starterId });
+      }, 350);
     }
   };
 
@@ -1483,16 +1537,7 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
       )}
 
       {/* Header Section from Figma */}
-      <header className="chat-live-header-section">
-        <h1 className="chat-live-title">
-          {isChatActive ? `You’re doing great, ${userName}.` : 'A little practice. A lot of confidence.'}
-        </h1>
-        <p className="chat-live-subtitle">
-          {isChatActive
-            ? 'Keep going. Your buddy is listening — there’s no rush.'
-            : 'A patient AI buddy for everyday English. Find your voice at your own pace.'}
-        </p>
-      </header>
+
 
       {/* Main Experience Grid */}
       {!isChatActive ? (
@@ -1501,7 +1546,7 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
           <div className="card-top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="badge-purple-pill">Gemini Live · Voice practice</span>
             {subscription && (
-              <span 
+              <span
                 className="topbar-plan-pill plan-pill-premium"
                 onClick={() => onOpenPaywall && onOpenPaywall()}
                 title="Pula minut w Twoim planie (kliknij aby uaktualnić)"
@@ -1531,7 +1576,17 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
               </button>
             </div>
 
-            <p className="ready-stage-hint">Try: "Let’s talk about my first week at a new job."</p>
+            <div className="ready-current-mode-badge">
+              Mode: {activeStarterId === 'krakow' ? 'A weekend in Kraków' : activeStarterId === 'story-practice' ? `Story Practice (${selectedStory?.title || 'Story'})` : 'Small talk, big progress'}
+            </div>
+
+            <p className="ready-stage-hint">
+              {activeStarterId === 'krakow'
+                ? 'Try: "What are the must-see sights for a weekend in Kraków?"'
+                : activeStarterId === 'story-practice'
+                ? `Story: "${selectedStory?.title || 'Story Practice'}" · ${currentExerciseObj?.name || 'Discussion'}`
+                : 'Try: "Let’s talk about how my day went today."'}
+            </p>
 
             <button type="button" className="btn-figma-start-primary" onClick={handleOrbClick}>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -1558,7 +1613,7 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
                 Connected · Gemini Live
               </span>
               {subscription && (
-                <span 
+                <span
                   className="topbar-plan-pill plan-pill-premium"
                   onClick={() => onOpenPaywall && onOpenPaywall()}
                   style={{ cursor: 'pointer', margin: 0 }}
@@ -1728,34 +1783,95 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
       <section className="chat-live-starters-section">
         <div className="starters-header-row">
           <h3 className="starters-section-title">
-            {isChatActive ? 'Continue the conversation' : 'Not sure where to begin?'}
+            {isChatActive ? 'Continue the conversation' : 'Choose conversation mode'}
           </h3>
-          <span className="starters-section-sub">Choose a conversation starter or customized story topic</span>
+          <span className="starters-section-sub">
+            {isChatActive ? 'Click to switch conversation topic' : 'Default: Small talk · or select a tailored scenario'}
+          </span>
         </div>
 
         <div className="starters-grid">
-          {/* Card 1: Rozmowa o czytance (Story & Exercise Configurator) */}
-          <div className="starter-card config-starter-card">
+          {/* Tab 1: Small talk, big progress (DEFAULT) */}
+          <div
+            className={`starter-card ${activeStarterId === 'small-talk' ? 'active' : ''}`}
+            onClick={() => handleStarterCardClick('small-talk')}
+          >
             <div className="starter-card-top">
-              <div className="starter-icon-wrap blue">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                </svg>
-              </div>
-              {selectedStory && (
-                <button
-                  type="button"
-                  className="starter-preview-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowStoryPreview(true);
-                  }}
-                  title="View story text"
-                >
-                  View text
-                </button>
+              <span className="starter-category-pill">Daily Life · A2</span>
+              {activeStarterId === 'small-talk' && (
+                <span className="starter-active-pill">Selected</span>
               )}
+            </div>
+            <h4 className="starter-title">Small talk, big progress</h4>
+            <p className="starter-desc">Share the little things in your day and practice everyday English naturally.</p>
+            <div className="starter-card-bottom-row">
+              <span className="starter-badge">Everyday English</span>
+              <span
+                className="starter-arrow"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleStarterCardClick('small-talk');
+                }}
+                title="Start conversation"
+              >
+                ↗
+              </span>
+            </div>
+          </div>
+
+          {/* Tab 2: A weekend in Kraków */}
+          <div
+            className={`starter-card ${activeStarterId === 'krakow' ? 'active' : ''}`}
+            onClick={() => handleStarterCardClick('krakow')}
+          >
+            <div className="starter-card-top">
+              <span className="starter-category-pill">Travel · B1</span>
+              {activeStarterId === 'krakow' && (
+                <span className="starter-active-pill">Selected</span>
+              )}
+            </div>
+            <h4 className="starter-title">A weekend in Kraków</h4>
+            <p className="starter-desc">Plan a trip, ask for directions, and explore the city together.</p>
+            <div className="starter-card-bottom-row">
+              <span className="starter-badge">Travel & Roleplay</span>
+              <span
+                className="starter-arrow"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleStarterCardClick('krakow');
+                }}
+                title="Start conversation"
+              >
+                ↗
+              </span>
+            </div>
+          </div>
+
+          {/* Tab 3: Story Practice (Stories & Exercise Configurator) */}
+          <div
+            className={`starter-card config-starter-card ${activeStarterId === 'story-practice' ? 'active' : ''}`}
+            onClick={() => handleStarterCardClick('story-practice')}
+          >
+            <div className="starter-card-top">
+              <span className="starter-category-pill">Reading · Custom</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                {activeStarterId === 'story-practice' && (
+                  <span className="starter-active-pill">Selected</span>
+                )}
+                {selectedStory && (
+                  <button
+                    type="button"
+                    className="starter-preview-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowStoryPreview(true);
+                    }}
+                    title="View story text"
+                  >
+                    View text
+                  </button>
+                )}
+              </div>
             </div>
 
             <h4 className="starter-title">Story Practice</h4>
@@ -1794,62 +1910,18 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
               </div>
             </div>
 
-            <div className="starter-card-bottom-row" onClick={() => handleOrbClick()}>
+            <div
+              className="starter-card-bottom-row"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStarterCardClick('story-practice');
+              }}
+            >
               <span className="starter-badge purple">
                 {currentExerciseObj ? currentExerciseObj.badge : 'Stories'}
               </span>
               <span className="starter-arrow">↗</span>
             </div>
-          </div>
-
-          {/* Starter Card 1 */}
-          <div className="starter-card" onClick={() => handleStarterCardClick('sample-job-interview', 'A new beginning')}>
-            <div className="starter-card-top">
-              <div className="starter-icon-wrap blue">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-                </svg>
-              </div>
-              <span className="starter-arrow">↗</span>
-            </div>
-            <h4 className="starter-title">A new beginning</h4>
-            <p className="starter-desc">Talk about your first week at work.</p>
-            <span className="starter-badge">Business · B2</span>
-          </div>
-
-          {/* Starter Card 2 */}
-          <div className="starter-card" onClick={() => handleStarterCardClick('sample-jfk-airport', 'A weekend in Kraków')}>
-            <div className="starter-card-top">
-              <div className="starter-icon-wrap blue">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3.5c-.5-.5-2.5 0-4 1.5L13.5 8.5l-8.2-1.8c-.5-.1-.9.1-1.2.4L3 8.3c-.3.3-.3.9 0 1.2l5.4 3.6L6 15.5l-2.4-.6c-.4-.1-.8.1-1 .4l-.6.6c-.2.2-.2.6 0 .8l2.4 1.8 1.8 2.4c.2.2.6.2.8 0l.6-.6c.3-.2.5-.6.4-1L7.5 18l2.4-2.4 3.6 5.4c.3.3.9.3 1.2 0l1.2-1.1c.3-.3.5-.7.4-1.2z" />
-                </svg>
-              </div>
-              <span className="starter-arrow">↗</span>
-            </div>
-            <h4 className="starter-title">A weekend in Kraków</h4>
-            <p className="starter-desc">Plan a trip and ask for directions.</p>
-            <span className="starter-badge">Travel · B1</span>
-          </div>
-
-          {/* Starter Card 3 */}
-          <div className="starter-card" onClick={() => handleStarterCardClick('sample-coffee-blend', 'Small talk, big progress')}>
-            <div className="starter-card-top">
-              <div className="starter-icon-wrap blue">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
-                  <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
-                  <line x1="6" y1="1" x2="6" y2="4" />
-                  <line x1="10" y1="1" x2="10" y2="4" />
-                  <line x1="14" y1="1" x2="14" y2="4" />
-                </svg>
-              </div>
-              <span className="starter-arrow">↗</span>
-            </div>
-            <h4 className="starter-title">Small talk, big progress</h4>
-            <p className="starter-desc">Share the little things in your day.</p>
-            <span className="starter-badge">Daily Life · A2</span>
           </div>
         </div>
       </section>

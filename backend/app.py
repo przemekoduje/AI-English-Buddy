@@ -5937,8 +5937,11 @@ def chat_free():
     """
 
     if story_title and story_text:
-        exercise_guide = "General discussion and speaking practice about the story."
-        if exercise_type == 'vocabulary_quiz':
+        if exercise_type == 'small_talk':
+            exercise_guide = "CASUAL EVERYDAY SMALL TALK: Conduct a relaxed, warm everyday English conversation. Ask about the student's day, routine, hobbies, weather, and feelings. Keep turns short (1-2 sentences) and encouraging."
+        elif exercise_type == 'travel_roleplay':
+            exercise_guide = "TRAVEL & TRIP PLANNING: Roleplay and discuss planning a trip to Kraków. Practice travel vocabulary, asking for directions, sightseeing spots, and recommendations. Keep turns concise (1-2 sentences)."
+        elif exercise_type == 'vocabulary_quiz':
             exercise_guide = "VOCABULARY PRACTICE & QUIZ: Focus exclusively on testing and practicing key ENGLISH vocabulary, idioms, and phrases taken directly from this story (or saved notebook vocabulary). Always state target terms in ENGLISH. Progress sequentially through target words turn by turn. Do NOT quiz Polish words or outside text."
         elif exercise_type == 'story_discussion':
             exercise_guide = "STORY DISCUSSION & KNOWLEDGE CHECK: Discuss ONLY the plot, character decisions, turning points, and themes present in this story. Demonstrate full mastery of story facts. If asked what the story is about, summarize the story facts."
