@@ -151,6 +151,29 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
   const [isTranslatingSegment, setIsTranslatingSegment] = useState(false);
   const [isSegmentSaved, setIsSegmentSaved] = useState(false);
 
+  // Challenge Mode: Blur original text on pause to practice translation
+  const [blurChallengeEnabled, setBlurChallengeEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("speakling_media_blur_challenge") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [revealedSegments, setRevealedSegments] = useState({});
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("speakling_media_blur_challenge", blurChallengeEnabled ? "true" : "false");
+    } catch {}
+  }, [blurChallengeEnabled]);
+
+  const toggleRevealSegment = (idx) => {
+    setRevealedSegments((prev) => ({
+      ...prev,
+      [idx]: !prev[idx]
+    }));
+  };
+
   const [customUrl, setCustomUrl] = useState("");
   const [isLoadingCustom, setIsLoadingCustom] = useState(false);
   const [customError, setCustomError] = useState("");
@@ -726,6 +749,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
       // Clear translation state when playing so stale data never leaks
       setSegmentTranslation("");
       setIsTranslatingSegment(false);
+      setRevealedSegments({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, activeSegmentIndex]);
@@ -1956,31 +1980,54 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
             </div>
 
             <div className="synced-transcript-controls">
-              <button
-                type="button"
-                className={`transcript-toggle-pill ${showBilingual ? "active" : ""}`}
-                onClick={() => setShowBilingual(prev => !prev)}
-              >
-                {showBilingual ? "English + Polski" : "Tylko angielski"}
-              </button>
+              <div className="transcript-controls-left">
+                <button
+                  type="button"
+                  className={`transcript-toggle-pill ${showBilingual ? "active" : ""}`}
+                  onClick={() => setShowBilingual(prev => !prev)}
+                >
+                  {showBilingual ? "English + Polski" : "Tylko angielski"}
+                </button>
 
-              <button
-                type="button"
-                className={`transcript-toggle-pill ${autoScrollEnabled ? "active" : ""}`}
-                onClick={() => setAutoScrollEnabled(prev => !prev)}
+                <button
+                  type="button"
+                  className={`transcript-toggle-pill ${autoScrollEnabled ? "active" : ""}`}
+                  onClick={() => setAutoScrollEnabled(prev => !prev)}
+                >
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {autoScrollEnabled ? (
+                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                    ) : (
+                      <>
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                      </>
+                    )}
+                  </svg>
+                  Auto-scroll {autoScrollEnabled ? "on" : "off"}
+                </button>
+              </div>
+
+              {/* Przesuwny przełącznik — Tryb Wyzwania (Blur oryginału) */}
+              <div
+                className="transcript-switch-wrap"
+                title="Włącz tryb wyzwania: po zatrzymaniu wideo tekst angielski zostanie rozmyty, a widoczne będzie tłumaczenie, aby poćwiczyć własne tłumaczenie"
               >
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  {autoScrollEnabled ? (
-                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                  ) : (
-                    <>
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                    </>
-                  )}
-                </svg>
-                Auto-scroll {autoScrollEnabled ? "on" : "off"}
-              </button>
+                <span className="transcript-switch-label" onClick={() => setBlurChallengeEnabled(prev => !prev)}>
+                  <span className="switch-icon-target">🎯</span>
+                  Blur oryginału
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={blurChallengeEnabled}
+                  className={`ios-switch-toggle ${blurChallengeEnabled ? "active" : ""}`}
+                  onClick={() => setBlurChallengeEnabled(prev => !prev)}
+                  title={blurChallengeEnabled ? "Wyłącz blur oryginału" : "Włącz blur oryginału"}
+                >
+                  <span className="ios-switch-thumb" />
+                </button>
+              </div>
             </div>
 
             <div className="synced-transcript-list" ref={transcriptListRef}>
@@ -1989,6 +2036,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
                   const isActive = activeSegmentIndex === idx;
                   const segTime = formatTime(seg.start);
                   const translation = translationsCache[idx] || (isActive ? segmentTranslation : "");
+                  const isOriginalBlurred = Boolean(blurChallengeEnabled && isActive && !isPlaying && !revealedSegments[idx]);
+
                   return (
                     <div
                       key={idx}
@@ -2029,11 +2078,52 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
                         </div>
                       </div>
 
-                      <p className="synced-english-text">
-                        {renderInteractiveText(seg.text, idx)}
-                      </p>
+                      <div className="synced-english-wrapper">
+                        <p
+                          className={`synced-english-text ${isOriginalBlurred ? "is-blurred" : ""}`}
+                          onClick={isOriginalBlurred ? (e) => {
+                            e.stopPropagation();
+                            toggleRevealSegment(idx);
+                          } : undefined}
+                          title={isOriginalBlurred ? "Kliknij, aby odkryć oryginał i sprawdzić się" : undefined}
+                        >
+                          {renderInteractiveText(seg.text, idx)}
+                        </p>
 
-                      {showBilingual && isActive && !isPlaying && (
+                        {isOriginalBlurred && (
+                          <button
+                            type="button"
+                            className="blur-reveal-btn animate-fade-in"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleRevealSegment(idx);
+                            }}
+                            title="Odkryj oryginalny tekst po angielsku"
+                          >
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                            <span>Kliknij, aby odkryć oryginał (Sprawdź się)</span>
+                          </button>
+                        )}
+
+                        {blurChallengeEnabled && isActive && !isPlaying && revealedSegments[idx] && (
+                          <button
+                            type="button"
+                            className="blur-revealed-indicator"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleRevealSegment(idx);
+                            }}
+                            title="Kliknij, aby ukryć ponownie"
+                          >
+                            ✓ Odkryto · ukryj ponownie
+                          </button>
+                        )}
+                      </div>
+
+                      {(showBilingual || blurChallengeEnabled) && isActive && !isPlaying && (
                         <p className="synced-polish-text animate-fade-in">
                           {isTranslatingSegment ? (
                             <span className="translation-loading">Tłumaczenie fragmentu...</span>
