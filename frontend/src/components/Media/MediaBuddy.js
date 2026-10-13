@@ -722,6 +722,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
   useEffect(() => {
     if (!isPlaying && activeSegmentIndex !== -1) {
       translateActiveSegment(activeSegmentIndex);
+    } else if (isPlaying) {
+      // Clear translation state when playing so stale data never leaks
+      setSegmentTranslation("");
+      setIsTranslatingSegment(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, activeSegmentIndex]);
@@ -732,12 +736,14 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
 
     if (translationsCache[index]) {
       setSegmentTranslation(translationsCache[index]);
+      setIsTranslatingSegment(false);
       return;
     }
 
     if (latestSegmentIndexRef.current === index && isTranslatingSegment) return;
 
     latestSegmentIndexRef.current = index;
+    setSegmentTranslation(""); // Reset so previous segment's translation never appears
     setIsTranslatingSegment(true);
     setIsSegmentSaved(false);
 
@@ -848,14 +854,15 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
 
   const handleSaveSegmentPhrase = async () => {
     const segment = currentVideo.transcript?.[activeSegmentIndex];
-    if (!segment || !segmentTranslation) return;
+    const trans = translationsCache[activeSegmentIndex] || segmentTranslation;
+    if (!segment || !trans) return;
     try {
       const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
         body: JSON.stringify({
           original: segment.text,
-          translated: segmentTranslation,
+          translated: trans,
           story_id: `standup_phrase_${currentVideo.id}`
         })
       });
@@ -1904,12 +1911,18 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
                   {activeSegmentIndex !== -1 ? (
                     <div>
                       <p className="active-phrase-en">"{currentVideo.transcript[activeSegmentIndex]?.text}"</p>
-                      <p className="active-phrase-pl">{segmentTranslation || "Tłumaczenie w toku..."}</p>
+                      <p className="active-phrase-pl">
+                        {isPlaying ? (
+                          <span className="translation-paused-hint">Zatrzymaj wideo, aby zobaczyć tłumaczenie fragmentu.</span>
+                        ) : (
+                          isTranslatingSegment ? "Tłumaczenie w toku..." : ((translationsCache[activeSegmentIndex] || segmentTranslation) || "Brak tłumaczenia")
+                        )}
+                      </p>
                       <button
                         type="button"
                         className="btn-save-inline"
                         onClick={handleSaveSegmentPhrase}
-                        disabled={isSegmentSaved}
+                        disabled={isSegmentSaved || isPlaying}
                       >
                         {isSegmentSaved ? "Zapisano frazę! ✓" : "Zapisz frazę do słownika (+)"}
                       </button>
@@ -1985,7 +1998,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
                     >
                       <div className="synced-segment-top-row">
                         <span className={`synced-time-badge ${isActive ? "active-time" : ""}`}>
-                          {isActive ? `${segTime} · Playing now` : segTime}
+                          {isActive ? (isPlaying ? `${segTime} · Playing now` : `${segTime} · Paused`) : segTime}
                         </span>
                         <div className="synced-segment-actions">
                           <button
@@ -2020,9 +2033,13 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
                         {renderInteractiveText(seg.text, idx)}
                       </p>
 
-                      {showBilingual && (
-                        <p className="synced-polish-text">
-                          {translation || <span className="translation-empty">Kliknij zdanie, aby zobaczyć tłumaczenie</span>}
+                      {showBilingual && isActive && !isPlaying && (
+                        <p className="synced-polish-text animate-fade-in">
+                          {isTranslatingSegment ? (
+                            <span className="translation-loading">Tłumaczenie fragmentu...</span>
+                          ) : (
+                            translation || <span className="translation-empty">Brak tłumaczenia</span>
+                          )}
                         </p>
                       )}
                     </div>
