@@ -4,7 +4,174 @@ import "./MediaBuddy.css";
 import PronunciationPracticeModal from "../Notebook/PronunciationPracticeModal";
 import WordExplanationModal from "../Notebook/WordExplanationModal";
 import transcriptsData from "./transcripts.json";
-import { ensureCompleteSentences } from "./sentenceGrouping";
+import { ensureCompleteSentences, splitBlockIntoSentences } from "./sentenceGrouping";
+
+const SAMPLE_VIDEOS = [
+  {
+    title: "Buddhist Meditations (Podcast)",
+    id: "_U5J8JlJq2Y",
+    url: "https://www.youtube.com/watch?v=_U5J8JlJq2Y"
+  },
+  {
+    title: "Mark Zuckerberg - Meta AI",
+    id: "DbfejwP1d3c",
+    url: "https://www.youtube.com/watch?v=DbfejwP1d3c"
+  },
+  {
+    title: "Steve Jobs - Stanford 2005",
+    id: "UF8uR6Z6KLc",
+    url: "https://www.youtube.com/watch?v=UF8uR6Z6KLc"
+  }
+];
+
+const formatTimestamp = (secs) => {
+  if (isNaN(secs) || secs < 0) return "00:00:00,000";
+  const hours = Math.floor(secs / 3600);
+  const minutes = Math.floor((secs % 3600) / 60);
+  const seconds = Math.floor(secs % 60);
+  const milliseconds = Math.floor((secs % 1) * 1000);
+  const h = String(hours).padStart(2, "0");
+  const m = String(minutes).padStart(2, "0");
+  const s = String(seconds).padStart(2, "0");
+  const ms = String(milliseconds).padStart(3, "0");
+  return `${h}:${m}:${s},${ms}`;
+};
+
+const formatShortTime = (secs) => {
+  if (isNaN(secs) || secs < 0) return "00:00";
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+};
+
+const downloadSrtFile = (segments, title) => {
+  if (!segments || segments.length === 0) return;
+  const srtContent = segments.map((seg, idx) => {
+    return `${idx + 1}\n${formatTimestamp(seg.start)} --> ${formatTimestamp(seg.end)}\n${seg.text}\n`;
+  }).join("\n");
+  const blob = new Blob([srtContent], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const safeTitle = (title || "subtitles").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+  a.download = `${safeTitle}.srt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+const parseSubtitlesOrTranscript = (rawText) => {
+  if (!rawText || !rawText.trim()) return [];
+  const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+
+  // 1. SRT / VTT cue pattern
+  const srtPattern = /(?:(\d+):)?(\d{1,2}):(\d{2})[,\.](\d+)\s*-->\s*(?:(\d+):)?(\d{1,2}):(\d{2})[,\.](\d+)/;
+  if (text.includes("-->")) {
+    const lines = text.split("\n");
+    const entries = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      const match = line.match(srtPattern);
+      if (match) {
+        const [, sh1, sm1, ss1, sms1, sh2, sm2, ss2, sms2] = match;
+        const h1 = sh1 ? parseInt(sh1, 10) : 0;
+        const start = +(h1 * 3600 + parseInt(sm1, 10) * 60 + parseInt(ss1, 10) + parseInt(sms1, 10) / Math.pow(10, sms1.length)).toFixed(2);
+        const h2 = sh2 ? parseInt(sh2, 10) : 0;
+        const end = +(h2 * 3600 + parseInt(sm2, 10) * 60 + parseInt(ss2, 10) + parseInt(sms2, 10) / Math.pow(10, sms2.length)).toFixed(2);
+
+        i++;
+        const textLines = [];
+        while (i < lines.length && lines[i].trim() && !lines[i].match(srtPattern)) {
+          const clean = lines[i].replace(/<[^>]+>/g, "").trim();
+          if (clean && !clean.match(/^\d+$/)) {
+            textLines.push(clean);
+          }
+          i++;
+        }
+        const cueText = textLines.join(" ").trim();
+        if (cueText) {
+          entries.push({ start, end, text: cueText });
+        }
+      } else {
+        i++;
+      }
+    }
+    if (entries.length > 0) return entries;
+  }
+
+  // 2. YouTube transcript copy-paste format
+  const tsToSec = (str) => {
+    const parts = str.split(":").map(Number);
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return 0;
+  };
+
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const tsRegex = /^(\d{1,2}:)?\d{1,2}:\d{2}$/;
+  const temp = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (tsRegex.test(line)) {
+      const ts = tsToSec(line);
+      i++;
+      const parts = [];
+      while (i < lines.length && !tsRegex.test(lines[i])) {
+        const firstWord = lines[i].split(" ")[0];
+        if (tsRegex.test(firstWord)) break;
+        parts.push(lines[i]);
+        i++;
+      }
+      const segmentText = parts.join(" ").trim();
+      if (segmentText) {
+        temp.push({ start: ts, text: segmentText });
+      }
+    } else {
+      const match = line.match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)$/);
+      if (match) {
+        const ts = tsToSec(match[1]);
+        temp.push({ start: ts, text: match[2].trim() });
+      }
+      i++;
+    }
+  }
+
+  if (temp.length > 0) {
+    temp.sort((a, b) => a.start - b.start);
+    return temp.map((item, idx) => {
+      let end = idx < temp.length - 1 ? temp[idx + 1].start : item.start + 4.0;
+      if (end <= item.start) end = item.start + 3.0;
+      return {
+        start: +item.start.toFixed(2),
+        end: +end.toFixed(2),
+        text: item.text
+      };
+    });
+  }
+
+  // 3. Fallback: plain un-timestamped text/script
+  const sentences = splitBlockIntoSentences(text);
+  if (sentences.length > 0) {
+    let curTime = 0.0;
+    return sentences.map((s) => {
+      const wordsCount = s.split(/\s+/).length;
+      const duration = Math.max(2.5, +(wordsCount * 0.45).toFixed(2));
+      const seg = {
+        start: +curTime.toFixed(2),
+        end: +(curTime + duration).toFixed(2),
+        text: s
+      };
+      curTime += duration;
+      return seg;
+    });
+  }
+
+  return [];
+};
 
 const CURATED_VIDEOS = [
   {
@@ -224,6 +391,16 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   const [isVideoGalleryOpen, setIsVideoGalleryOpen] = useState(false);
   const [showBilingual, setShowBilingual] = useState(true);
   const [showAddMediaModal, setShowAddMediaModal] = useState(false);
+  const [addMediaTab, setAddMediaTab] = useState("youtube"); // 'youtube' | 'paste' | 'file'
+  const [modalVideoUrl, setModalVideoUrl] = useState("");
+  const [isExtractingSubtitles, setIsExtractingSubtitles] = useState(false);
+  const [extractionError, setExtractionError] = useState("");
+  const [extractedData, setExtractedData] = useState(null);
+  const [manualPastedText, setManualPastedText] = useState("");
+  const [manualTargetVideoId, setManualTargetVideoId] = useState("");
+  const [manualCustomTitle, setManualCustomTitle] = useState("");
+  const [uploadedFileStatus, setUploadedFileStatus] = useState(null);
+  const fileInputRef = useRef(null);
   const [showSummary, setShowSummary] = useState(false);
   const [showPhrases, setShowPhrases] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
@@ -1476,106 +1653,196 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     }
   };
 
-  const handleLoadCustomVideo = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    const videoId = extractVideoId(customUrl);
-    if (!videoId || videoId.length !== 11) {
-      setCustomError("Nieprawidłowy adres URL lub ID wideo (musi mieć 11 znaków).");
+  const handleOpenAddMediaModal = () => {
+    setExtractionError("");
+    setExtractedData(null);
+    setUploadedFileStatus(null);
+    setModalVideoUrl(customUrl || "");
+    setShowAddMediaModal(true);
+  };
+
+  const handleExtractFromYouTube = async (urlInput) => {
+    const rawUrl = urlInput || modalVideoUrl || customUrl;
+    if (!rawUrl || !rawUrl.trim()) {
+      setExtractionError("Wprowadź adres URL filmu YouTube lub identyfikator wideo.");
       return;
     }
-    await fetchAndLoadVideo(videoId);
-  };
-
-  const timeToSeconds = (timeStr) => {
-    if (!timeStr) return 0;
-    const parts = timeStr.split(',');
-    const hms = parts[0];
-    const ms = parts[1] || '000';
-    const timeParts = hms.split(':');
-    let h = 0, m = 0, s = 0;
-    if (timeParts.length === 3) {
-      h = parseInt(timeParts[0], 10);
-      m = parseInt(timeParts[1], 10);
-      s = parseInt(timeParts[2], 10);
-    } else if (timeParts.length === 2) {
-      m = parseInt(timeParts[0], 10);
-      s = parseInt(timeParts[1], 10);
+    const videoId = extractVideoId(rawUrl);
+    if (!videoId) {
+      setExtractionError("Nieprawidłowy adres URL filmu YouTube.");
+      return;
     }
-    return (h * 3600) + (m * 60) + s + (parseInt(ms, 10) / 1000);
-  };
 
-  const parseSrt = (srtText) => {
-    const segments = [];
-    const blocks = srtText.trim().replace(/\r\n/g, '\n').split(/\n\s*\n/);
-    blocks.forEach(block => {
-      const lines = block.split('\n');
-      let timeLineIdx = -1;
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].includes('-->')) {
-          timeLineIdx = i;
-          break;
-        }
-      }
-      if (timeLineIdx !== -1 && lines.length > timeLineIdx + 1) {
-        const timeLine = lines[timeLineIdx];
-        const times = timeLine.split('-->').map(t => t.trim());
-        if (times.length === 2) {
-          const start = timeToSeconds(times[0]);
-          const end = timeToSeconds(times[1]);
-          const text = lines.slice(timeLineIdx + 1).join(' ').replace(/<[^>]+>/g, '').trim();
-          if (text) {
-            segments.push({ start, end, text });
+    setIsExtractingSubtitles(true);
+    setExtractionError("");
+    setExtractedData(null);
+
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/media/subtitles/extract`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(user?.token ? { "X-Session-Token": user.token } : {})
+        },
+        body: JSON.stringify({
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          video_id: videoId,
+          user_email: user?.email
+        })
+      });
+
+      const data = await resp.json();
+
+      if (resp.ok && data.segments && data.segments.length > 0) {
+        setExtractedData({
+          videoId: data.video_id,
+          youtubeUrl: data.youtube_url || `https://www.youtube.com/watch?v=${data.video_id}`,
+          title: data.title || `Wideo YouTube (${data.video_id})`,
+          segments: data.segments,
+          stats: data.stats || {
+            sentence_count: data.segments.length,
+            word_count: data.segments.reduce((acc, s) => acc + (s.text || "").split(/\s+/).length, 0),
+            duration: data.segments[data.segments.length - 1]?.end || 0
           }
-        }
+        });
+      } else {
+        setExtractionError(data.error || "Nie udało się pobrać napisów dla tego filmu.");
       }
-    });
-    return segments;
+    } catch (err) {
+      console.error("Extraction error:", err);
+      setExtractionError("Wystąpił problem z połączeniem podczas pobierania transkrypcji.");
+    } finally {
+      setIsExtractingSubtitles(false);
+    }
   };
 
-  const handleSrtUpload = (e) => {
-    const file = e.target.files[0];
+  const handleApplyExtractedVideo = (videoInfo) => {
+    const dataToApply = videoInfo || extractedData;
+    if (!dataToApply || !dataToApply.videoId) return;
+
+    const formatted = ensureCompleteSentences(dataToApply.segments);
+    const newVid = {
+      id: `custom_${dataToApply.videoId}`,
+      title: dataToApply.title || `Wideo (${dataToApply.videoId})`,
+      youtubeId: dataToApply.videoId,
+      transcript: formatted
+    };
+
+    const savedTime = getInitialVideoTime(newVid, user);
+    targetSeekTimeRef.current = savedTime;
+    setSegmentBlurOverrides({});
+
+    setCustomVideos(prev => {
+      const filtered = prev.filter(v => v.youtubeId !== dataToApply.videoId);
+      return [newVid, ...filtered];
+    });
+
+    saveCustomVideoToCloud(newVid);
+    setCurrentVideo(newVid);
+    setCustomUrl("");
+    setModalVideoUrl("");
+    setExtractedData(null);
+    setShowAddMediaModal(false);
+    setIsVideoGalleryOpen(false);
+  };
+
+  const handleApplyManualText = () => {
+    if (!manualPastedText || !manualPastedText.trim()) {
+      setExtractionError("Wklej tekst transkrypcji lub napisy.");
+      return;
+    }
+    const parsed = parseSubtitlesOrTranscript(manualPastedText);
+    if (!parsed || parsed.length === 0) {
+      setExtractionError("Nie udało się rozpoznać formatu napisów ani tekstu.");
+      return;
+    }
+
+    const targetVidId = extractVideoId(manualTargetVideoId) || currentVideo?.youtubeId || "custom_video";
+    const targetTitle = manualCustomTitle.trim() || currentVideo?.title || `Własne napisy (${targetVidId})`;
+    const formatted = ensureCompleteSentences(parsed);
+
+    const newVid = {
+      id: `custom_${targetVidId}`,
+      title: targetTitle,
+      youtubeId: targetVidId,
+      transcript: formatted
+    };
+
+    setCustomVideos(prev => {
+      const filtered = prev.filter(v => v.id !== newVid.id);
+      return [newVid, ...filtered];
+    });
+
+    saveCustomVideoToCloud(newVid);
+    setCurrentVideo(newVid);
+    setManualPastedText("");
+    setManualTargetVideoId("");
+    setManualCustomTitle("");
+    setExtractionError("");
+    setShowAddMediaModal(false);
+    setIsVideoGalleryOpen(false);
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files && e.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const srtText = evt.target.result;
-      const parsed = parseSrt(srtText);
-      if (parsed.length > 0) {
-        const formatted = ensureCompleteSentences(parsed);
-        setCurrentVideo(prev => ({ ...prev, transcript: formatted }));
-        setCustomVideos(prev =>
-          prev.map(v => v.id === currentVideo.id ? { ...v, transcript: formatted } : v)
-        );
-        saveCustomVideoToCloud({ ...currentVideo, transcript: formatted });
-        setCustomError("");
-        setShowAddMediaModal(false);
+      const content = evt.target.result;
+      const parsed = parseSubtitlesOrTranscript(content);
+      if (parsed && parsed.length > 0) {
+        setUploadedFileStatus({
+          name: file.name,
+          segmentsCount: parsed.length,
+          parsedSegments: parsed
+        });
+        setExtractionError("");
       } else {
-        setCustomError("Plik SRT jest pusty lub ma nieprawidłowy format.");
+        setExtractionError("Plik nie zawiera rozpoznawalnych napisów ani zdań.");
       }
     };
     reader.readAsText(file);
     e.target.value = null;
   };
 
-  const handlePastedSrt = () => {
-    if (!pastedSrt.trim()) return;
-    if (pastedSrt.includes('-->')) {
-      const parsed = parseSrt(pastedSrt);
-      if (parsed.length > 0) {
-        const formatted = ensureCompleteSentences(parsed);
-        setCurrentVideo(prev => ({ ...prev, transcript: formatted }));
-        setCustomVideos(prev =>
-          prev.map(v => v.id === currentVideo.id ? { ...v, transcript: formatted } : v)
-        );
-        saveCustomVideoToCloud({ ...currentVideo, transcript: formatted });
-        setPastedSrt("");
-        setCustomError("");
-        setShowAddMediaModal(false);
-      } else {
-        setCustomError("Nie rozpoznano prawidłowego formatu SRT.");
-      }
-    } else {
-      setCustomError("Tekst musi być w formacie SRT (np. '00:00:01,000 --> 00:00:04,000').");
+  const handleApplyUploadedFile = () => {
+    if (!uploadedFileStatus || !uploadedFileStatus.parsedSegments) return;
+    const formatted = ensureCompleteSentences(uploadedFileStatus.parsedSegments);
+    const targetVidId = extractVideoId(manualTargetVideoId) || currentVideo?.youtubeId || "uploaded_file";
+    const targetTitle = manualCustomTitle.trim() || uploadedFileStatus.name.replace(/\.[^/.]+$/, "") || currentVideo?.title;
+
+    const newVid = {
+      id: `custom_${targetVidId}`,
+      title: targetTitle,
+      youtubeId: targetVidId,
+      transcript: formatted
+    };
+
+    setCustomVideos(prev => {
+      const filtered = prev.filter(v => v.id !== newVid.id);
+      return [newVid, ...filtered];
+    });
+
+    saveCustomVideoToCloud(newVid);
+    setCurrentVideo(newVid);
+    setUploadedFileStatus(null);
+    setExtractionError("");
+    setShowAddMediaModal(false);
+    setIsVideoGalleryOpen(false);
+  };
+
+  const handleLoadCustomVideo = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const videoId = extractVideoId(customUrl);
+    if (!videoId) {
+      setCustomError("Nieprawidłowy adres URL lub ID wideo.");
+      return;
     }
+    setModalVideoUrl(customUrl);
+    setAddMediaTab("youtube");
+    setShowAddMediaModal(true);
+    handleExtractFromYouTube(customUrl);
   };
 
   const handleCopyTranscript = () => {
@@ -1616,7 +1883,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           <button
             type="button"
             className="btn-add-media"
-            onClick={() => setShowAddMediaModal(true)}
+            onClick={handleOpenAddMediaModal}
             title="Dodaj własne wideo lub napisy"
           >
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -1669,26 +1936,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
             Audio
           </button>
 
-          {onNavigate && (
-            <button
-              type="button"
-              className="toolbar-pill-btn subtitle-studio-pill-btn"
-              onClick={() => onNavigate('subtitle-studio')}
-              title="Otwórz Subtitle Studio - pobieracz i edytor napisów"
-              style={{
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.25))',
-                borderColor: 'rgba(168, 85, 247, 0.45)',
-                color: '#d8b4fe'
-              }}
-            >
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                <path d="M7 8h10" />
-                <path d="M7 12h6" />
-              </svg>
-              Subtitle Studio
-            </button>
-          )}
+
 
           <form onSubmit={handleLoadCustomVideo} className="toolbar-input-wrapper">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="input-link-icon">
@@ -2416,54 +2664,321 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         </div>
       </div>
 
-      {/* Add Media Modal */}
+      {/* Enhanced Add Media & Subtitle Studio Modal */}
       {showAddMediaModal && (
         <div className="media-modal-backdrop animate-fade-in" onClick={() => setShowAddMediaModal(false)}>
-          <div className="media-modal-card glass-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="media-modal-card glass-panel enhanced-add-media-card" onClick={(e) => e.stopPropagation()}>
             <div className="media-modal-header">
-              <h3>Dodaj własne media</h3>
-              <button type="button" className="drawer-close-btn" onClick={() => setShowAddMediaModal(false)}>✕</button>
+              <div className="media-modal-title-wrap">
+                <div className="media-modal-icon-badge">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="media-modal-title-row">
+                    <h3>Dodaj wideo i napisy</h3>
+                    <span className="add-media-ai-badge">AI Subtitles</span>
+                  </div>
+                  <p className="media-modal-subtitle">
+                    Automatycznie pobieraj napisy z YouTube (bez blokad) lub dodaj własną transkrypcję.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="drawer-close-btn"
+                onClick={() => setShowAddMediaModal(false)}
+                title="Zamknij"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Mode Tabs */}
+            <div className="add-media-tabs">
+              <button
+                type="button"
+                className={`add-media-tab-btn ${addMediaTab === "youtube" ? "active" : ""}`}
+                onClick={() => { setAddMediaTab("youtube"); setExtractionError(""); }}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+                YouTube (Auto-napisy)
+              </button>
+              <button
+                type="button"
+                className={`add-media-tab-btn ${addMediaTab === "paste" ? "active" : ""}`}
+                onClick={() => { setAddMediaTab("paste"); setExtractionError(""); }}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                </svg>
+                Wklej tekst / napisy
+              </button>
+              <button
+                type="button"
+                className={`add-media-tab-btn ${addMediaTab === "file" ? "active" : ""}`}
+                onClick={() => { setAddMediaTab("file"); setExtractionError(""); }}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                  <polyline points="13 2 13 9 20 9" />
+                </svg>
+                Wgraj plik (.srt/.vtt)
+              </button>
             </div>
 
             <div className="media-modal-body">
-              <div className="modal-input-group">
-                <label>Link do YouTube:</label>
-                <form onSubmit={handleLoadCustomVideo} className="modal-form-row">
-                  <input
-                    type="text"
-                    className="modal-input"
-                    placeholder="https://www.youtube.com/watch?v=..."
-                    value={customUrl}
-                    onChange={(e) => setCustomUrl(e.target.value)}
-                  />
-                  <button type="submit" className="modal-action-btn" disabled={isLoadingCustom}>
-                    Załaduj
+              {/* TAB 1: YOUTUBE */}
+              {addMediaTab === "youtube" && (
+                <div className="add-media-tab-content">
+                  <div className="modal-input-group">
+                    <label>Wklej link do wideo z YouTube:</label>
+                    <div className="modal-form-row">
+                      <input
+                        type="text"
+                        className="modal-input"
+                        placeholder="https://www.youtube.com/watch?v=_U5J8JlJq2Y lub ID filmu"
+                        value={modalVideoUrl}
+                        onChange={(e) => {
+                          setModalVideoUrl(e.target.value);
+                          setCustomUrl(e.target.value);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleExtractFromYouTube();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="modal-action-btn primary"
+                        disabled={isExtractingSubtitles || !modalVideoUrl.trim()}
+                        onClick={() => handleExtractFromYouTube()}
+                      >
+                        {isExtractingSubtitles ? "Pobieranie..." : "Pobierz napisy"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Sample Video Pills */}
+                  <div className="add-media-samples">
+                    <span className="samples-label">Wypróbuj przykład:</span>
+                    <div className="samples-pills-row">
+                      {SAMPLE_VIDEOS.map((sample) => (
+                        <button
+                          key={sample.id}
+                          type="button"
+                          className="sample-pill-btn"
+                          onClick={() => {
+                            setModalVideoUrl(sample.url);
+                            setCustomUrl(sample.url);
+                            handleExtractFromYouTube(sample.url);
+                          }}
+                        >
+                          {sample.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Loading State */}
+                  {isExtractingSubtitles && (
+                    <div className="add-media-loading-card animate-fade-in">
+                      <div className="add-media-spinner"></div>
+                      <div>
+                        <strong>Pobieranie napisów przez proxy i dopasowywanie zdań...</strong>
+                        <p>Omijamy blokady datacenter YouTube i semantycznie formatujemy zdania do nauki.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error State */}
+                  {extractionError && !isExtractingSubtitles && (
+                    <div className="add-media-error-card animate-fade-in">
+                      <div className="error-icon">⚠️</div>
+                      <div className="error-details">
+                        <strong>{extractionError}</strong>
+                        <p>Jeśli film nie posiada angielskich napisów na YouTube, możesz wkleić transkrypcję ręcznie:</p>
+                        <button
+                          type="button"
+                          className="error-action-btn"
+                          onClick={() => {
+                            setAddMediaTab("paste");
+                            setManualTargetVideoId(extractVideoId(modalVideoUrl) || "");
+                          }}
+                        >
+                          Przejdź do wklejania transkrypcji →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Extracted Success Preview Card */}
+                  {extractedData && !isExtractingSubtitles && (
+                    <div className="add-media-preview-card animate-fade-in">
+                      <div className="preview-header-row">
+                        <img
+                          src={`https://img.youtube.com/vi/${extractedData.videoId}/mqdefault.jpg`}
+                          alt="Thumbnail"
+                          className="preview-thumbnail"
+                        />
+                        <div className="preview-meta">
+                          <span className="preview-ready-badge">✓ Napisy gotowe</span>
+                          <h4 className="preview-title">{extractedData.title}</h4>
+                          <span className="preview-url">{extractedData.youtubeUrl}</span>
+                        </div>
+                      </div>
+
+                      {/* Stats Grid */}
+                      <div className="add-media-stats-grid">
+                        <div className="stat-card">
+                          <span className="stat-val">{extractedData.stats?.sentence_count || extractedData.segments.length}</span>
+                          <span className="stat-lbl">Zdań do nauki</span>
+                        </div>
+                        <div className="stat-card">
+                          <span className="stat-val">{extractedData.stats?.word_count || 0}</span>
+                          <span className="stat-lbl">Słów</span>
+                        </div>
+                        <div className="stat-card">
+                          <span className="stat-val">{formatShortTime(extractedData.stats?.duration || 0)}</span>
+                          <span className="stat-lbl">Czas filmu</span>
+                        </div>
+                        <div className="stat-card">
+                          <span className="stat-val">{extractedData.stats?.words_per_minute || 0}</span>
+                          <span className="stat-lbl">Słów / min</span>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="preview-action-row">
+                        <button
+                          type="button"
+                          className="btn-start-learning"
+                          onClick={() => handleApplyExtractedVideo()}
+                        >
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                          </svg>
+                          Rozpocznij naukę z tym filmem
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-download-srt"
+                          onClick={() => downloadSrtFile(extractedData.segments, extractedData.title)}
+                          title="Pobierz plik .srt"
+                        >
+                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                          Pobierz .SRT
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: PASTE TRANSCRIPT / TEXT */}
+              {addMediaTab === "paste" && (
+                <div className="add-media-tab-content">
+                  <div className="modal-input-group">
+                    <label>Link do wideo YouTube (opcjonalnie):</label>
+                    <input
+                      type="text"
+                      className="modal-input"
+                      placeholder={currentVideo ? `Domyślnie bieżący film: ${currentVideo.title}` : "https://www.youtube.com/watch?v=..."}
+                      value={manualTargetVideoId}
+                      onChange={(e) => setManualTargetVideoId(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="modal-input-group">
+                    <label>Wklej napisy, transkrypcję lub skrypt:</label>
+                    <textarea
+                      className="modal-textarea enhanced-textarea"
+                      placeholder={"Obsługuje każdy format:\n• Plik SRT (00:00:01,000 --> 00:00:04,000 Hello)\n• Format VTT\n• Transkrypcję skopiowaną z YouTube (0:00 Hello everyone...)\n• Zwykły artykuł lub tekst (automatycznie podzielimy na zdania)"}
+                      value={manualPastedText}
+                      onChange={(e) => setManualPastedText(e.target.value)}
+                      rows={7}
+                    />
+                  </div>
+
+                  {extractionError && (
+                    <div className="add-media-error-card small animate-fade-in">
+                      <span>⚠️ {extractionError}</span>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    className="modal-action-btn full primary-large"
+                    disabled={!manualPastedText.trim()}
+                    onClick={handleApplyManualText}
+                  >
+                    Zastosuj napisy i rozpocznij naukę
                   </button>
-                </form>
-              </div>
+                </div>
+              )}
 
-              <div className="modal-divider"><span>lub napisy</span></div>
+              {/* TAB 3: FILE UPLOAD */}
+              {addMediaTab === "file" && (
+                <div className="add-media-tab-content">
+                  <div className="modal-input-group">
+                    <label>Powiąż z filmem YouTube (opcjonalnie):</label>
+                    <input
+                      type="text"
+                      className="modal-input"
+                      placeholder={currentVideo ? `Bieżący film: ${currentVideo.title}` : "https://www.youtube.com/watch?v=..."}
+                      value={manualTargetVideoId}
+                      onChange={(e) => setManualTargetVideoId(e.target.value)}
+                    />
+                  </div>
 
-              <div className="modal-input-group">
-                <label>Wgraj plik z napisami (.srt):</label>
-                <label className="modal-file-upload-label">
-                  Wybierz plik .srt z dysku
-                  <input type="file" accept=".srt" onChange={handleSrtUpload} style={{ display: 'none' }} />
-                </label>
-              </div>
+                  <div className="file-dropzone-box" onClick={() => fileInputRef.current && fileInputRef.current.click()}>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".srt,.vtt,.txt"
+                      onChange={handleFileUpload}
+                      style={{ display: "none" }}
+                    />
+                    <div className="dropzone-icon">📁</div>
+                    <strong>Kliknij, aby wybrać plik .srt, .vtt lub .txt</strong>
+                    <span>lub przeciągnij plik tutaj</span>
+                  </div>
 
-              <div className="modal-input-group">
-                <label>Wklej tekst SRT:</label>
-                <textarea
-                  value={pastedSrt}
-                  onChange={(e) => setPastedSrt(e.target.value)}
-                  placeholder="1&#10;00:00:01,000 --> 00:00:04,000&#10;Hello world..."
-                  className="modal-textarea"
-                />
-                <button type="button" className="modal-action-btn full" onClick={handlePastedSrt}>
-                  Zastosuj wklejone napisy
-                </button>
-              </div>
+                  {uploadedFileStatus && (
+                    <div className="uploaded-file-summary animate-fade-in">
+                      <div className="summary-info">
+                        <span className="file-name">📄 {uploadedFileStatus.name}</span>
+                        <span className="segments-badge">{uploadedFileStatus.segmentsCount} zdań rozpoznano</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="modal-action-btn full primary-large"
+                        onClick={handleApplyUploadedFile}
+                      >
+                        Zastosuj ten plik i rozpocznij naukę
+                      </button>
+                    </div>
+                  )}
+
+                  {extractionError && (
+                    <div className="add-media-error-card small animate-fade-in">
+                      <span>⚠️ {extractionError}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
