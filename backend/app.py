@@ -77,8 +77,11 @@ except Exception as e:
             data = self.mock_db.read_doc(self.collection_path, self.id)
             return MockDocumentSnapshot(self.id, data)
 
-        def set(self, data):
-            self.mock_db.write_doc(self.collection_path, self.id, data)
+        def set(self, data, merge=False):
+            if merge and self.mock_db.read_doc(self.collection_path, self.id):
+                self.mock_db.update_doc(self.collection_path, self.id, data)
+            else:
+                self.mock_db.write_doc(self.collection_path, self.id, data)
 
         def update(self, data):
             self.mock_db.update_doc(self.collection_path, self.id, data)
@@ -3079,6 +3082,173 @@ def debug_youtube_transcript():
     debug_info["client_results"] = client_results
     
     return jsonify(debug_info)
+
+
+def get_user_email_from_request():
+    email = get_user_from_request()
+    if email:
+        return email
+    token = request.headers.get("X-Session-Token")
+    if token and 'db' in globals() and db is not None:
+        try:
+            session_ref = db.collection('sessions').document(token).get()
+            if session_ref.exists:
+                session_data = session_ref.to_dict() or {}
+                if session_data.get("email"):
+                    return session_data.get("email")
+        except Exception:
+            pass
+    if request.args.get("user_email"):
+        return request.args.get("user_email")
+    req_data = request.get_json(silent=True) or {}
+    if req_data.get("user_email"):
+        return req_data.get("user_email")
+    return None
+
+
+@app.route("/api/media/custom-videos", methods=['GET', 'POST'])
+def handle_custom_videos():
+    user_email = get_user_email_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    if request.method == 'GET':
+        try:
+            docs = db.collection('user_custom_videos').where('user_email', '==', user_email).stream()
+            videos = []
+            for doc in docs:
+                data = doc.to_dict() or {}
+                if 'updated_at' in data and data['updated_at']:
+                    if hasattr(data['updated_at'], 'isoformat'):
+                        data['updated_at'] = data['updated_at'].isoformat()
+                    else:
+                        data['updated_at'] = str(data['updated_at'])
+                videos.append(data)
+            videos.sort(key=lambda v: str(v.get('updated_at') or v.get('created_at') or ''), reverse=True)
+            return jsonify({"videos": videos}), 200
+        except Exception as e:
+            print(f"Błąd pobierania custom_videos: {e}", flush=True)
+            return jsonify({"error": str(e)}), 500
+
+    if request.method == 'POST':
+        try:
+            req_data = request.get_json(silent=True) or {}
+            video_id = req_data.get("id")
+            if not video_id:
+                return jsonify({"error": "Brak video_id"}), 400
+
+            safe_email = re.sub(r'[^a-zA-Z0-9_.-]', '_', user_email)
+            safe_vid = re.sub(r'[^a-zA-Z0-9_.-]', '_', str(video_id))
+            doc_id = f"{safe_email}_{safe_vid}"
+
+            now_iso = datetime.utcnow().isoformat() + "Z"
+            timestamp_val = firestore.SERVER_TIMESTAMP if ('firestore' in globals() and firestore and hasattr(firestore, 'SERVER_TIMESTAMP')) else now_iso
+
+            video_data = {
+                "id": video_id,
+                "user_email": user_email,
+                "title": req_data.get("title") or f"Wideo {video_id}",
+                "youtubeId": req_data.get("youtubeId") or req_data.get("youtube_id"),
+                "transcript": req_data.get("transcript") or [],
+                "updated_at": timestamp_val
+            }
+            db.collection('user_custom_videos').document(doc_id).set(video_data)
+            
+            response_video = dict(video_data)
+            response_video["updated_at"] = now_iso
+            return jsonify({"success": True, "video": response_video}), 200
+        except Exception as e:
+            print(f"Błąd zapisu custom_videos: {e}", flush=True)
+            return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/media/custom-videos/<path:video_id>", methods=['DELETE'])
+def delete_custom_video(video_id):
+    user_email = get_user_email_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    try:
+        safe_email = re.sub(r'[^a-zA-Z0-9_.-]', '_', user_email)
+        safe_vid = re.sub(r'[^a-zA-Z0-9_.-]', '_', str(video_id))
+        doc_id = f"{safe_email}_{safe_vid}"
+        db.collection('user_custom_videos').document(doc_id).delete()
+
+        try:
+            docs = db.collection('user_custom_videos').where('user_email', '==', user_email).where('id', '==', video_id).stream()
+            for doc in docs:
+                db.collection('user_custom_videos').document(doc.id).delete()
+        except Exception:
+            pass
+
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        print(f"Błąd usuwania custom_video: {e}", flush=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/media/state", methods=['GET', 'POST'])
+def handle_media_user_state():
+    user_email = get_user_email_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    safe_email = re.sub(r'[^a-zA-Z0-9_.-]', '_', user_email)
+    doc_id = safe_email
+
+    if request.method == 'GET':
+        try:
+            doc = db.collection('user_media_state').document(doc_id).get()
+            if doc.exists:
+                data = doc.to_dict() or {}
+                return jsonify({
+                    "video_progress": data.get("video_progress") or {},
+                    "last_video_id": data.get("last_video_id"),
+                    "last_youtube_id": data.get("last_youtube_id")
+                }), 200
+            else:
+                return jsonify({
+                    "video_progress": {},
+                    "last_video_id": None,
+                    "last_youtube_id": None
+                }), 200
+        except Exception as e:
+            print(f"Błąd pobierania media_state: {e}", flush=True)
+            return jsonify({"error": str(e)}), 500
+
+    if request.method == 'POST':
+        try:
+            req_data = request.get_json(silent=True) or {}
+            new_progress = req_data.get("video_progress") or {}
+            last_vid = req_data.get("last_video_id")
+            last_yt = req_data.get("last_youtube_id")
+
+            existing_doc = db.collection('user_media_state').document(doc_id).get()
+            merged_progress = {}
+            existing_last_vid = None
+            existing_last_yt = None
+            if existing_doc.exists:
+                existing_data = existing_doc.to_dict() or {}
+                merged_progress = existing_data.get("video_progress") or {}
+                existing_last_vid = existing_data.get("last_video_id")
+                existing_last_yt = existing_data.get("last_youtube_id")
+
+            merged_progress.update(new_progress)
+
+            timestamp_val = firestore.SERVER_TIMESTAMP if ('firestore' in globals() and firestore and hasattr(firestore, 'SERVER_TIMESTAMP')) else datetime.utcnow().isoformat()
+
+            state_data = {
+                "user_email": user_email,
+                "video_progress": merged_progress,
+                "last_video_id": last_vid or existing_last_vid,
+                "last_youtube_id": last_yt or existing_last_yt,
+                "updated_at": timestamp_val
+            }
+            db.collection('user_media_state').document(doc_id).set(state_data)
+            return jsonify({"success": True}), 200
+        except Exception as e:
+            print(f"Błąd zapisu media_state: {e}", flush=True)
+            return jsonify({"error": str(e)}), 500
 
 
 

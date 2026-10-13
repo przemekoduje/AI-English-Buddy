@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { API_BASE_URL } from "../../config";
 import "./MediaBuddy.css";
 import PronunciationPracticeModal from "../Notebook/PronunciationPracticeModal";
@@ -113,9 +113,24 @@ const formatTime = (secs) => {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 };
 
-const loadSavedCustomVideos = () => {
+const getUserKey = (user) => {
+  if (user?.email) {
+    return user.email.toLowerCase().replace(/[^a-z0-9_.-]/g, '_');
+  }
+  return user?.token ? 'auth_user' : 'guest';
+};
+
+const loadSavedCustomVideos = (user) => {
+  const userKey = getUserKey(user);
   try {
-    const saved = localStorage.getItem("media_buddy_custom_videos");
+    let saved = localStorage.getItem(`media_buddy_custom_videos_${userKey}`);
+    if (!saved && userKey !== 'guest') {
+      const legacy = localStorage.getItem("media_buddy_custom_videos");
+      if (legacy) {
+        saved = legacy;
+        localStorage.setItem(`media_buddy_custom_videos_${userKey}`, legacy);
+      }
+    }
     if (!saved) return [];
     const parsed = JSON.parse(saved);
     return parsed.map((v) => ({
@@ -128,11 +143,12 @@ const loadSavedCustomVideos = () => {
   }
 };
 
-const getInitialVideo = () => {
+const getInitialVideo = (user) => {
+  const userKey = getUserKey(user);
   try {
-    const savedId = localStorage.getItem("media_buddy_last_video_id");
-    const savedYoutubeId = localStorage.getItem("media_buddy_last_youtube_id");
-    const customList = loadSavedCustomVideos();
+    let savedId = localStorage.getItem(`media_buddy_last_video_id_${userKey}`) || (userKey === 'guest' ? localStorage.getItem("media_buddy_last_video_id") : null);
+    let savedYoutubeId = localStorage.getItem(`media_buddy_last_youtube_id_${userKey}`) || (userKey === 'guest' ? localStorage.getItem("media_buddy_last_youtube_id") : null);
+    const customList = loadSavedCustomVideos(user);
     const allAvailable = [...CURATED_VIDEOS, ...customList];
 
     if (savedId || savedYoutubeId) {
@@ -143,7 +159,7 @@ const getInitialVideo = () => {
     }
 
     // Fallback: check most recently watched in media_buddy_video_progress
-    const savedProgress = localStorage.getItem("media_buddy_video_progress");
+    const savedProgress = localStorage.getItem(`media_buddy_video_progress_${userKey}`) || (userKey === 'guest' ? localStorage.getItem("media_buddy_video_progress") : null);
     if (savedProgress) {
       const prog = JSON.parse(savedProgress);
       const ids = Object.keys(prog);
@@ -160,15 +176,17 @@ const getInitialVideo = () => {
   return CURATED_VIDEOS[0];
 };
 
-const getInitialVideoTime = (video) => {
+const getInitialVideoTime = (video, user) => {
+  const userKey = getUserKey(user);
   try {
     if (!video) return 0;
-    const directTime = localStorage.getItem(`media_buddy_last_time_${video.id}`)
-      || (video.youtubeId ? localStorage.getItem(`media_buddy_last_time_${video.youtubeId}`) : null);
+    const directTime = localStorage.getItem(`media_buddy_last_time_${userKey}_${video.id}`)
+      || (video.youtubeId ? localStorage.getItem(`media_buddy_last_time_${userKey}_${video.youtubeId}`) : null)
+      || (userKey === 'guest' ? (localStorage.getItem(`media_buddy_last_time_${video.id}`) || (video.youtubeId ? localStorage.getItem(`media_buddy_last_time_${video.youtubeId}`) : null)) : null);
     if (directTime && !isNaN(parseFloat(directTime))) {
       return Math.max(0, parseFloat(directTime));
     }
-    const savedProgress = localStorage.getItem("media_buddy_video_progress");
+    const savedProgress = localStorage.getItem(`media_buddy_video_progress_${userKey}`) || (userKey === 'guest' ? localStorage.getItem("media_buddy_video_progress") : null);
     if (savedProgress) {
       const prog = JSON.parse(savedProgress);
       const time = prog[video.id]?.currentTime || (video.youtubeId ? prog[video.youtubeId]?.currentTime : undefined);
@@ -183,6 +201,7 @@ const getInitialVideoTime = (video) => {
 };
 
 function MediaBuddy({ user, subscription, onOpenPaywall }) {
+  const userKey = useMemo(() => getUserKey(user), [user]);
   const isLocked = !user?.is_admin && !subscription?.is_admin && !subscription?.can_access_media;
 
   useEffect(() => {
@@ -191,8 +210,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     }
   }, [isLocked]);
 
-  const [currentVideo, setCurrentVideo] = useState(() => getInitialVideo());
-  const initialTime = useMemo(() => getInitialVideoTime(currentVideo), []);
+  const [currentVideo, setCurrentVideo] = useState(() => getInitialVideo(user));
+  const initialTime = useMemo(() => getInitialVideoTime(currentVideo, user), [currentVideo, user]);
   const [currentTime, setCurrentTime] = useState(initialTime);
   const targetSeekTimeRef = useRef(initialTime);
   const [videoDuration, setVideoDuration] = useState(0);
@@ -267,11 +286,11 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     }));
   }, []);
 
-  const [customVideos, setCustomVideos] = useState(() => loadSavedCustomVideos());
+  const [customVideos, setCustomVideos] = useState(() => loadSavedCustomVideos(user));
 
   const [videoProgress, setVideoProgress] = useState(() => {
     try {
-      const saved = localStorage.getItem("media_buddy_video_progress");
+      const saved = localStorage.getItem(`media_buddy_video_progress_${userKey}`) || (userKey === 'guest' ? localStorage.getItem("media_buddy_video_progress") : null);
       return saved ? JSON.parse(saved) : {};
     } catch (e) {
       console.error("Failed to load video progress from localStorage", e);
@@ -477,22 +496,171 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     return list;
   }, [allVideos, videoProgress, unwatchedSortOrder]);
 
-  // Sync customVideos to localStorage
+  // Sync customVideos to user-scoped localStorage
   useEffect(() => {
     try {
-      localStorage.setItem("media_buddy_custom_videos", JSON.stringify(customVideos));
+      localStorage.setItem(`media_buddy_custom_videos_${userKey}`, JSON.stringify(customVideos));
     } catch (e) {
       console.error("Failed to save custom videos to localStorage", e);
     }
-  }, [customVideos]);
+  }, [customVideos, userKey]);
+
+  // Cloud sync helpers
+  const saveCustomVideoToCloud = useCallback((vid) => {
+    if (!user || (!user.token && !user.email) || !vid) return;
+    const headers = { "Content-Type": "application/json" };
+    if (user.token) headers["X-Session-Token"] = user.token;
+    fetch(`${API_BASE_URL}/api/media/custom-videos`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ ...vid, user_email: user.email })
+    }).catch(err => console.warn("Cloud video save error:", err));
+  }, [user]);
+
+  const deleteCustomVideoFromCloud = useCallback((videoId) => {
+    if (!user || (!user.token && !user.email) || !videoId) return;
+    const headers = {};
+    if (user.token) headers["X-Session-Token"] = user.token;
+    const emailParam = user.email ? `?user_email=${encodeURIComponent(user.email)}` : "";
+    fetch(`${API_BASE_URL}/api/media/custom-videos/${encodeURIComponent(videoId)}${emailParam}`, {
+      method: "DELETE",
+      headers
+    }).catch(err => console.warn("Cloud video delete error:", err));
+  }, [user]);
+
+  const pendingCloudSyncRef = useRef(null);
+  const cloudSyncTimerRef = useRef(null);
+
+  const flushProgressToCloud = useCallback(() => {
+    if (!pendingCloudSyncRef.current || !user || (!user.token && !user.email)) return;
+    const payload = pendingCloudSyncRef.current;
+    pendingCloudSyncRef.current = null;
+    if (cloudSyncTimerRef.current) {
+      clearTimeout(cloudSyncTimerRef.current);
+      cloudSyncTimerRef.current = null;
+    }
+
+    const headers = { "Content-Type": "application/json" };
+    if (user.token) headers["X-Session-Token"] = user.token;
+    fetch(`${API_BASE_URL}/api/media/state`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ ...payload, user_email: user.email })
+    }).catch(err => console.warn("Failed to sync progress to cloud:", err));
+  }, [user]);
+
+  const scheduleProgressToCloud = useCallback((activeVid, time, dur) => {
+    if (!activeVid || !user || (!user.token && !user.email)) return;
+    const curProgress = {
+      [activeVid.id]: {
+        lastWatched: Date.now(),
+        currentTime: time,
+        duration: dur,
+        progressPercent: dur > 0 ? (time / dur) * 100 : 0
+      }
+    };
+    pendingCloudSyncRef.current = {
+      video_progress: curProgress,
+      last_video_id: activeVid.id,
+      last_youtube_id: activeVid.youtubeId || null
+    };
+
+    if (!cloudSyncTimerRef.current) {
+      cloudSyncTimerRef.current = setTimeout(() => {
+        cloudSyncTimerRef.current = null;
+        flushProgressToCloud();
+      }, 5000);
+    }
+  }, [user, flushProgressToCloud]);
+
+  // Cloud Sync on Mount or User Change
+  useEffect(() => {
+    const activeKey = getUserKey(user);
+    const localVideos = loadSavedCustomVideos(user);
+    setCustomVideos(localVideos);
+    try {
+      const saved = localStorage.getItem(`media_buddy_video_progress_${activeKey}`);
+      if (saved) {
+        setVideoProgress(JSON.parse(saved));
+      }
+    } catch (e) {}
+
+    if (!user || (!user.token && !user.email)) return;
+
+    let isMounted = true;
+    const fetchCloudData = async () => {
+      try {
+        const headers = {};
+        if (user.token) headers["X-Session-Token"] = user.token;
+        const emailParam = user.email ? `?user_email=${encodeURIComponent(user.email)}` : "";
+
+        // 1. Pobierz własne filmy z bazy danych
+        const vidRes = await fetch(`${API_BASE_URL}/api/media/custom-videos${emailParam}`, { headers });
+        if (vidRes.ok && isMounted) {
+          const vidData = await vidRes.json();
+          if (Array.isArray(vidData.videos)) {
+            const cloudVideos = vidData.videos.map(v => ({
+              ...v,
+              transcript: ensureCompleteSentences(v.transcript)
+            }));
+            if (cloudVideos.length > 0) {
+              setCustomVideos(cloudVideos);
+              localStorage.setItem(`media_buddy_custom_videos_${activeKey}`, JSON.stringify(cloudVideos));
+            } else if (localVideos.length > 0) {
+              // Migracja: jeśli w chmurze jeszcze nic nie ma, przenieś lokalnie zapisane filmy tego profilu
+              for (const v of localVideos) {
+                try {
+                  await fetch(`${API_BASE_URL}/api/media/custom-videos`, {
+                    method: "POST",
+                    headers: { ...headers, "Content-Type": "application/json" },
+                    body: JSON.stringify({ ...v, user_email: user.email })
+                  });
+                } catch (err) {}
+              }
+            }
+          }
+        }
+
+        // 2. Pobierz postęp i ostatnio odtwarzany film z chmury
+        const stateRes = await fetch(`${API_BASE_URL}/api/media/state${emailParam}`, { headers });
+        if (stateRes.ok && isMounted) {
+          const stateData = await stateRes.json();
+          if (stateData.video_progress && Object.keys(stateData.video_progress).length > 0) {
+            setVideoProgress(prev => {
+              const merged = { ...prev, ...stateData.video_progress };
+              localStorage.setItem(`media_buddy_video_progress_${activeKey}`, JSON.stringify(merged));
+              return merged;
+            });
+          }
+          if (stateData.last_video_id) {
+            localStorage.setItem(`media_buddy_last_video_id_${activeKey}`, stateData.last_video_id);
+            if (stateData.last_youtube_id) {
+              localStorage.setItem(`media_buddy_last_youtube_id_${activeKey}`, stateData.last_youtube_id);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Błąd synchronizacji Media Buddy z chmurą:", err);
+      }
+    };
+
+    fetchCloudData();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   const handleDeleteCustomVideo = (e, videoId) => {
     e.stopPropagation();
     const updated = customVideos.filter((v) => v.id !== videoId);
     setCustomVideos(updated);
+    try {
+      localStorage.setItem(`media_buddy_custom_videos_${userKey}`, JSON.stringify(updated));
+    } catch (err) {}
     if (currentVideo.id === videoId) {
       setCurrentVideo(CURATED_VIDEOS[0]);
     }
+    deleteCustomVideoFromCloud(videoId);
   };
 
   // Modals & Refs
@@ -589,13 +757,13 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     if (time === undefined || isNaN(time) || time < 0) return;
 
     try {
-      localStorage.setItem("media_buddy_last_video_id", activeVid.id);
+      localStorage.setItem(`media_buddy_last_video_id_${userKey}`, activeVid.id);
       if (activeVid.youtubeId) {
-        localStorage.setItem("media_buddy_last_youtube_id", activeVid.youtubeId);
+        localStorage.setItem(`media_buddy_last_youtube_id_${userKey}`, activeVid.youtubeId);
       }
-      localStorage.setItem(`media_buddy_last_time_${activeVid.id}`, String(time));
+      localStorage.setItem(`media_buddy_last_time_${userKey}_${activeVid.id}`, String(time));
       if (activeVid.youtubeId) {
-        localStorage.setItem(`media_buddy_last_time_${activeVid.youtubeId}`, String(time));
+        localStorage.setItem(`media_buddy_last_time_${userKey}_${activeVid.youtubeId}`, String(time));
       }
     } catch (e) {
       console.error("Failed to save last time", e);
@@ -612,12 +780,14 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
         }
       };
       try {
-        localStorage.setItem("media_buddy_video_progress", JSON.stringify(nextProgress));
+        localStorage.setItem(`media_buddy_video_progress_${userKey}`, JSON.stringify(nextProgress));
       } catch (e) {
         console.error("Failed to save progress", e);
       }
       return nextProgress;
     });
+
+    scheduleProgressToCloud(activeVid, time, dur);
   };
 
   const ensurePlayerPlaceholder = () => {
@@ -773,8 +943,15 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
           saveProgress(time, duration);
         }
       }
+      flushProgressToCloud();
     }
   };
+
+  useEffect(() => {
+    return () => {
+      flushProgressToCloud();
+    };
+  }, [flushProgressToCloud]);
 
   useEffect(() => {
     window.__speakling_is_media_playing = isPlaying;
@@ -797,9 +974,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     currentVideoRef.current = currentVideo;
     if (currentVideo?.id) {
       try {
-        localStorage.setItem("media_buddy_last_video_id", currentVideo.id);
+        localStorage.setItem(`media_buddy_last_video_id_${userKey}`, currentVideo.id);
         if (currentVideo.youtubeId) {
-          localStorage.setItem("media_buddy_last_youtube_id", currentVideo.youtubeId);
+          localStorage.setItem(`media_buddy_last_youtube_id_${userKey}`, currentVideo.youtubeId);
         }
       } catch (e) {}
     }
@@ -809,7 +986,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
       return;
     }
 
-    const resumeTime = getInitialVideoTime(currentVideo) || 0;
+    const resumeTime = getInitialVideoTime(currentVideo, user) || 0;
     if (window.YT && window.YT.Player) {
       switchVideo(currentVideo.youtubeId, resumeTime, true);
     }
@@ -1235,7 +1412,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
           transcript: ensureCompleteSentences(staticTranscript)
         };
 
-        const savedTime = getInitialVideoTime(staticVid);
+        const savedTime = getInitialVideoTime(staticVid, user);
         targetSeekTimeRef.current = savedTime;
         setSegmentBlurOverrides({});
 
@@ -1243,6 +1420,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
           const filtered = prev.filter(v => v.youtubeId !== videoId);
           return [staticVid, ...filtered];
         });
+        saveCustomVideoToCloud(staticVid);
         setCurrentVideo(staticVid);
         setCustomUrl("");
         setIsLoadingCustom(false);
@@ -1282,7 +1460,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
         transcript: newTranscript.length > 0 ? ensureCompleteSentences(newTranscript) : []
       };
 
-      const savedTime = getInitialVideoTime(newCustomVid);
+      const savedTime = getInitialVideoTime(newCustomVid, user);
       targetSeekTimeRef.current = savedTime;
       setSegmentBlurOverrides({});
 
@@ -1290,6 +1468,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
         const filtered = prev.filter(v => v.youtubeId !== videoId);
         return [newCustomVid, ...filtered];
       });
+      saveCustomVideoToCloud(newCustomVid);
       setCurrentVideo(newCustomVid);
       setCustomUrl("");
       setIsLoadingCustom(false);
@@ -1366,6 +1545,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
         setCustomVideos(prev =>
           prev.map(v => v.id === currentVideo.id ? { ...v, transcript: formatted } : v)
         );
+        saveCustomVideoToCloud({ ...currentVideo, transcript: formatted });
         setCustomError("");
         setShowAddMediaModal(false);
       } else {
@@ -1386,6 +1566,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
         setCustomVideos(prev =>
           prev.map(v => v.id === currentVideo.id ? { ...v, transcript: formatted } : v)
         );
+        saveCustomVideoToCloud({ ...currentVideo, transcript: formatted });
         setPastedSrt("");
         setCustomError("");
         setShowAddMediaModal(false);
