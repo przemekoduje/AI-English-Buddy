@@ -2800,29 +2800,175 @@ def semantic_group_transcript(entries):
     return aggregate_transcript(grouped_results)
 
 
-def parse_srt(srt_text):
-    import re
+def parse_transcript_text(content, ext=''):
+    import json, html, re, xml.etree.ElementTree as ET
     entries = []
-    srt_text = srt_text.replace('\r\n', '\n').replace('\r', '\n')
-    blocks = re.split(r'\n\s*\n', srt_text.strip())
-    for block in blocks:
-        lines = [l.strip() for l in block.split('\n') if l.strip()]
-        if len(lines) >= 3:
-            # Pierwsza linia to indeks, druga to czas, kolejne to tekst
-            time_line = lines[1]
-            text_lines = lines[2:]
-            match = re.match(r'(\d+):(\d+):(\d+)[,\.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,\.](\d+)', time_line)
-            if match:
-                sh, sm, ss, sms, eh, em, es, ems = map(int, match.groups())
-                start = sh * 3600 + sm * 60 + ss + sms / 1000.0
-                end = eh * 3600 + em * 60 + es + ems / 1000.0
-                text = " ".join(text_lines).strip()
-                entries.append({
-                    "start": round(start, 2),
-                    "end": round(end, 2),
-                    "text": text
-                })
+    content = (content or "").strip()
+    if not content:
+        return entries
+
+    # 1. JSON3
+    if content.startswith('{') and ('events' in content or 'wireMagic' in content):
+        try:
+            data = json.loads(content)
+            for ev in data.get('events', []):
+                if 'segs' in ev and 'tStartMs' in ev:
+                    start = round(ev['tStartMs'] / 1000.0, 2)
+                    dur = round(ev.get('dDurationMs', 0) / 1000.0, 2)
+                    end = round(start + dur, 2)
+                    text = ''.join(s.get('utf8', '') for s in ev['segs']).replace('\n', ' ').strip()
+                    if text and text != '\n':
+                        entries.append({'start': start, 'end': end, 'text': text})
+            if entries:
+                return entries
+        except Exception:
+            pass
+
+    # 2. XML / srv1 / srv2 / srv3 / ttml
+    if content.startswith('<'):
+        try:
+            root = ET.fromstring(content)
+            for text_tag in root.findall('.//text'):
+                start = round(float(text_tag.get('start', 0)), 2)
+                dur = round(float(text_tag.get('dur', 0)), 2)
+                end = round(start + dur, 2)
+                text = html.unescape(text_tag.text or '').replace('\n', ' ').strip()
+                if text:
+                    entries.append({'start': start, 'end': end, 'text': text})
+            if entries:
+                return entries
+        except Exception:
+            pass
+
+    # 3. VTT / SRT
+    cue_pattern = re.compile(r'(?:(\d+):)?(\d{1,2}):(\d{2})[,\.](\d+)\s*-->\s*(?:(\d+):)?(\d{1,2}):(\d{2})[,\.](\d+)')
+    lines = content.replace('\r\n', '\n').split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        match = cue_pattern.search(line)
+        if match:
+            sh1, sm1, ss1, sms1, sh2, sm2, ss2, sms2 = match.groups()
+            h1 = int(sh1) if sh1 else 0
+            start = round(h1 * 3600 + int(sm1) * 60 + int(ss1) + int(sms1) / (10 ** len(sms1)), 2)
+            h2 = int(sh2) if sh2 else 0
+            end = round(h2 * 3600 + int(sm2) * 60 + int(ss2) + int(sms2) / (10 ** len(sms2)), 2)
+            i += 1
+            text_lines = []
+            while i < len(lines) and lines[i].strip() and not cue_pattern.search(lines[i]):
+                clean = re.sub(r'<[^>]+>', '', lines[i].strip())
+                if clean:
+                    text_lines.append(clean)
+                i += 1
+            text = ' '.join(text_lines).strip()
+            if text:
+                entries.append({'start': start, 'end': end, 'text': text})
+        else:
+            i += 1
+
     return entries
+
+
+def parse_srt(srt_text):
+    return parse_transcript_text(srt_text, ext='srt')
+
+
+def fetch_youtube_captions_robust(video_id):
+    """
+    Pobiera napisy angielskie (manualne lub automatyczne) z YouTube
+    z ominięciem blokad Cloud Run / datacenter IP dzięki klientom mobilnym w yt-dlp.
+    """
+    formatted = []
+    video_title = None
+
+    # 1. yt-dlp z klientami ios/android/mweb
+    try:
+        import yt_dlp
+        ydl_opts = {
+            'skip_download': True,
+            'quiet': True,
+            'no_warnings': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'ios', 'mweb']
+                }
+            }
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            if info.get("title"):
+                video_title = info.get("title")
+
+            subtitles = info.get('subtitles', {}) or {}
+            auto_captions = info.get('automatic_captions', {}) or {}
+
+            en_candidates = []
+            for pool in [subtitles, auto_captions]:
+                for code in ['en', 'en-orig', 'en-US', 'en-GB', 'a.en']:
+                    if code in pool:
+                        en_candidates.append(pool[code])
+                for code, tracks in pool.items():
+                    if code.startswith('en') and tracks not in en_candidates:
+                        en_candidates.append(tracks)
+
+            for track_list in en_candidates:
+                if formatted:
+                    break
+                for preferred_ext in ['json3', 'srv1', 'vtt', 'srt']:
+                    track = next((t for t in track_list if t.get('ext') == preferred_ext and t.get('url')), None)
+                    if not track and preferred_ext == 'srv1':
+                        track = next((t for t in track_list if 'srv' in t.get('ext', '') and t.get('url')), None)
+                    if track:
+                        try:
+                            res = requests.get(track['url'], headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}, timeout=12)
+                            if res.ok and res.text:
+                                parsed = parse_transcript_text(res.text, ext=track.get('ext', ''))
+                                if parsed:
+                                    formatted = parsed
+                                    print(f"fetch_youtube_captions_robust: pobrano {len(formatted)} segmentów ({preferred_ext}) dla {video_id}", flush=True)
+                                    break
+                        except Exception as req_err:
+                            print(f"Błąd pobierania napisów {preferred_ext}: {req_err}", flush=True)
+    except Exception as ytdlp_err:
+        print(f"fetch_youtube_captions_robust yt-dlp error dla {video_id}: {ytdlp_err}", flush=True)
+
+    # 2. youtube-transcript-api fallback
+    if not formatted:
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            api = YouTubeTranscriptApi()
+            transcript = api.fetch(video_id, languages=['en', 'en-US', 'en-GB'])
+            for entry in transcript:
+                start = round(entry.start, 2)
+                duration = round(entry.duration, 2)
+                end = round(start + duration, 2)
+                text = entry.text.replace('\n', ' ').strip()
+                if text:
+                    formatted.append({"start": start, "end": end, "text": text})
+            if formatted:
+                print(f"fetch_youtube_captions_robust: pobrano z youtube-transcript-api ({len(formatted)} segm.)", flush=True)
+        except Exception as yt_api_err:
+            print(f"fetch_youtube_captions_robust youtube-transcript-api error: {yt_api_err}", flush=True)
+
+    # 3. pytubefix fallback
+    if not formatted:
+        try:
+            from pytubefix import YouTube
+            url = f"https://youtube.com/watch?v={video_id}"
+            yt = YouTube(url, client='WEB')
+            caption = yt.captions.get('en') or yt.captions.get('a.en')
+            if not caption:
+                for c_code in yt.captions:
+                    if c_code.startswith('en') or c_code.endswith('.en'):
+                        caption = yt.captions[c_code]
+                        break
+            if caption:
+                srt_data = caption.generate_srt_captions()
+                formatted = parse_transcript_text(srt_data, ext='srt')
+        except Exception as py_err:
+            print(f"fetch_youtube_captions_robust pytubefix error: {py_err}", flush=True)
+
+    return formatted, video_title
 
 def parse_manual_transcript(raw_text):
     import re
@@ -3022,8 +3168,14 @@ def get_youtube_transcript():
                 print(f"Successfully fetched automatic segments using pytubefix fallback.", flush=True)
         except Exception as py_err:
             print(f"pytubefix fallback failed for {video_id}: {py_err}", flush=True)
-
     if not formatted:
+        print(f"Falling back to fetch_youtube_captions_robust for video {video_id}...", flush=True)
+        robust_subs, robust_title = fetch_youtube_captions_robust(video_id)
+        if robust_subs:
+            formatted = robust_subs
+            if robust_title and video_title == f"Wideo YouTube ({video_id})":
+                video_title = robust_title
+
         return jsonify({
             "error": "Nie udało się pobrać transkrypcji dla tego filmu. Upewnij się, że film posiada angielskie napisy."
         }), 500
@@ -3094,66 +3246,9 @@ def extract_subtitles_endpoint():
     except Exception as e:
         print(f"Error fetching title for {video_id}: {e}")
 
-    formatted = []
-    # 1. yt-dlp manual subtitles
-    try:
-        import yt_dlp
-        ydl_opts = {
-            'skip_download': True,
-            'writesub': True,
-            'subtitleslangs': ['en'],
-            'quiet': True,
-            'no_warnings': True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-            if video_title == f"Wideo YouTube ({video_id})" and info.get("title"):
-                video_title = info.get("title")
-            subtitles = info.get('subtitles', {})
-            manual_en_key = next((k for k in subtitles.keys() if k.startswith('en')), None)
-            if manual_en_key:
-                en_subs = subtitles[manual_en_key]
-                srt_url = next((s.get('url') for s in en_subs if s.get('ext') in ['srt', 'vtt']), None)
-                if srt_url:
-                    sub_res = requests.get(srt_url, timeout=10)
-                    if sub_res.ok:
-                        formatted = parse_srt(sub_res.text)
-    except Exception as e:
-        print(f"Subtitle Studio: yt-dlp error: {e}", flush=True)
-
-    # 2. youtube-transcript-api fallback
-    if not formatted:
-        try:
-            from youtube_transcript_api import YouTubeTranscriptApi
-            api = YouTubeTranscriptApi()
-            transcript = api.fetch(video_id, languages=['en'])
-            for entry in transcript:
-                start = round(entry.start, 2)
-                duration = round(entry.duration, 2)
-                end = round(start + duration, 2)
-                text = entry.text.replace('\n', ' ').strip()
-                if text:
-                    formatted.append({"start": start, "end": end, "text": text})
-        except Exception as e:
-            print(f"Subtitle Studio: youtube-transcript-api error: {e}", flush=True)
-
-    # 3. pytubefix fallback
-    if not formatted:
-        try:
-            from pytubefix import YouTube
-            url = f"https://youtube.com/watch?v={video_id}"
-            yt = YouTube(url, client='WEB')
-            caption = yt.captions.get('en') or yt.captions.get('a.en')
-            if not caption:
-                for c_code in yt.captions:
-                    if c_code.startswith('en') or c_code.endswith('.en'):
-                        caption = yt.captions[c_code]
-                        break
-            if caption:
-                srt_data = caption.generate_srt_captions()
-                formatted = parse_srt(srt_data)
-        except Exception as py_err:
-            print(f"Subtitle Studio: pytubefix error: {py_err}", flush=True)
+    formatted, fetched_title = fetch_youtube_captions_robust(video_id)
+    if fetched_title and video_title == f"Wideo YouTube ({video_id})":
+        video_title = fetched_title
 
     if not formatted:
         return jsonify({

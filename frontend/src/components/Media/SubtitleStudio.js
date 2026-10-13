@@ -42,6 +42,108 @@ const formatShortTime = (secs) => {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
+const extractYouTubeId = (url) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return match && match[2].length === 11 ? match[2] : null;
+};
+
+const parseSubtitlesOrTranscript = (rawText) => {
+  if (!rawText || !rawText.trim()) return [];
+  const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+
+  // 1. SRT / VTT cue pattern
+  const srtPattern = /(?:(\d+):)?(\d{1,2}):(\d{2})[,\.](\d+)\s*-->\s*(?:(\d+):)?(\d{1,2}):(\d{2})[,\.](\d+)/;
+  if (text.includes("-->")) {
+    const lines = text.split("\n");
+    const entries = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      const match = line.match(srtPattern);
+      if (match) {
+        const [, sh1, sm1, ss1, sms1, sh2, sm2, ss2, sms2] = match;
+        const h1 = sh1 ? parseInt(sh1, 10) : 0;
+        const start = +(h1 * 3600 + parseInt(sm1, 10) * 60 + parseInt(ss1, 10) + parseInt(sms1, 10) / Math.pow(10, sms1.length)).toFixed(2);
+        const h2 = sh2 ? parseInt(sh2, 10) : 0;
+        const end = +(h2 * 3600 + parseInt(sm2, 10) * 60 + parseInt(ss2, 10) + parseInt(sms2, 10) / Math.pow(10, sms2.length)).toFixed(2);
+
+        i++;
+        const textLines = [];
+        while (i < lines.length && lines[i].trim() && !lines[i].match(srtPattern)) {
+          const clean = lines[i].replace(/<[^>]+>/g, "").trim();
+          if (clean && !clean.match(/^\d+$/)) {
+            textLines.push(clean);
+          }
+          i++;
+        }
+        const cueText = textLines.join(" ").trim();
+        if (cueText) {
+          entries.push({ start, end, text: cueText });
+        }
+      } else {
+        i++;
+      }
+    }
+    if (entries.length > 0) return entries;
+  }
+
+  // 2. YouTube transcript copy-paste format
+  const tsToSec = (str) => {
+    const parts = str.split(":").map(Number);
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return 0;
+  };
+
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const tsRegex = /^(\d{1,2}:)?\d{1,2}:\d{2}$/;
+  const temp = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (tsRegex.test(line)) {
+      const ts = tsToSec(line);
+      i++;
+      const parts = [];
+      while (i < lines.length && !tsRegex.test(lines[i])) {
+        const firstWord = lines[i].split(" ")[0];
+        if (tsRegex.test(firstWord)) break;
+        parts.push(lines[i]);
+        i++;
+      }
+      const segmentText = parts.join(" ").trim();
+      if (segmentText) {
+        temp.push({ start: ts, text: segmentText });
+      }
+    } else {
+      const match = line.match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)$/);
+      if (match) {
+        const ts = tsToSec(match[1]);
+        temp.push({ start: ts, text: match[2].trim() });
+      }
+      i++;
+    }
+  }
+
+  if (temp.length > 0) {
+    temp.sort((a, b) => a.start - b.start);
+    return temp.map((item, idx) => {
+      let end = idx < temp.length - 1 ? temp[idx + 1].start : item.start + 4.0;
+      if (end <= item.start) end = item.start + 3.0;
+      return {
+        start: +item.start.toFixed(2),
+        end: +end.toFixed(2),
+        text: item.text
+      };
+    });
+  }
+
+  return [];
+};
+
 function SubtitleStudio({ user, subscription, onOpenPaywall, onNavigate }) {
   const isLocked = !user?.is_admin && !subscription?.is_admin && !subscription?.can_access_media;
 
@@ -55,6 +157,12 @@ function SubtitleStudio({ user, subscription, onOpenPaywall, onNavigate }) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [videoData, setVideoData] = useState(null);
+
+  // Manual import / Paste modal state
+  const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
+  const [pastedText, setPastedText] = useState("");
+  const [customVideoUrl, setCustomVideoUrl] = useState("");
+  const fileInputRef = useRef(null);
   
   // Segmentation modes: 'linguistic' | 'ai' | 'raw'
   const [segmentMode, setSegmentMode] = useState("linguistic");
@@ -167,6 +275,112 @@ function SubtitleStudio({ user, subscription, onOpenPaywall, onNavigate }) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleProcessPastedText = () => {
+    if (!pastedText.trim()) return;
+
+    const parsed = parseSubtitlesOrTranscript(pastedText);
+    if (!parsed || parsed.length === 0) {
+      alert("Nie udało się rozpoznać znaczników czasu w tekście. Upewnij się, że tekst zawiera czasy (np. format '0:05 Tekst' z YouTube lub format .srt/.vtt).");
+      return;
+    }
+
+    const targetUrl = customVideoUrl.trim() || inputUrl.trim();
+    const vidId = extractYouTubeId(targetUrl) || (targetUrl.length === 11 ? targetUrl : null);
+
+    const linguistic = ensureCompleteSentences(parsed);
+    const totalDuration = linguistic[linguistic.length - 1]?.end || 0;
+    const totalWords = linguistic.reduce((acc, s) => acc + (s.text ? s.text.trim().split(/\s+/).length : 0), 0);
+    const wordsPerMin = totalDuration > 0 ? Math.round(totalWords / (totalDuration / 60)) : 0;
+
+    const title = vidId ? `YouTube (${vidId})` : "Wklejona transkrypcja";
+    const newVideoData = {
+      video_id: vidId || "custom",
+      youtube_url: vidId ? `https://www.youtube.com/watch?v=${vidId}` : "",
+      title: title,
+      raw_segments: parsed,
+      segments: linguistic,
+      stats: {
+        sentence_count: linguistic.length,
+        word_count: totalWords,
+        duration: totalDuration,
+        words_per_minute: wordsPerMin
+      }
+    };
+
+    setVideoData(newVideoData);
+    setRawSegments(parsed);
+    setLinguisticSegments(linguistic);
+    setSegmentMode("linguistic");
+    setErrorMessage("");
+    setIsPasteModalOpen(false);
+    setPastedText("");
+
+    showToast(`Dopasowano ${linguistic.length} logicznych zdań!`);
+
+    if (vidId) {
+      setInputUrl(targetUrl);
+      setTimeout(() => {
+        initYouTubePlayer(vidId);
+      }, 150);
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result;
+      if (typeof content === "string") {
+        const parsed = parseSubtitlesOrTranscript(content);
+        if (!parsed || parsed.length === 0) {
+          alert("Nie udało się rozpoznać formatu napisów w pliku. Upewnij się, że to plik .srt lub .vtt.");
+          return;
+        }
+
+        const targetUrl = inputUrl.trim();
+        const vidId = extractYouTubeId(targetUrl) || (targetUrl.length === 11 ? targetUrl : null);
+
+        const linguistic = ensureCompleteSentences(parsed);
+        const totalDuration = linguistic[linguistic.length - 1]?.end || 0;
+        const totalWords = linguistic.reduce((acc, s) => acc + (s.text ? s.text.trim().split(/\s+/).length : 0), 0);
+        const wordsPerMin = totalDuration > 0 ? Math.round(totalWords / (totalDuration / 60)) : 0;
+
+        const title = file.name.replace(/\.[^/.]+$/, "");
+        const newVideoData = {
+          video_id: vidId || "custom",
+          youtube_url: vidId ? `https://www.youtube.com/watch?v=${vidId}` : "",
+          title: title,
+          raw_segments: parsed,
+          segments: linguistic,
+          stats: {
+            sentence_count: linguistic.length,
+            word_count: totalWords,
+            duration: totalDuration,
+            words_per_minute: wordsPerMin
+          }
+        };
+
+        setVideoData(newVideoData);
+        setRawSegments(parsed);
+        setLinguisticSegments(linguistic);
+        setSegmentMode("linguistic");
+        setErrorMessage("");
+
+        showToast(`Wgrano ${file.name} (${linguistic.length} zdań)!`);
+
+        if (vidId) {
+          setTimeout(() => {
+            initYouTubePlayer(vidId);
+          }, 150);
+        }
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   // Initialize YouTube Iframe
@@ -490,6 +704,46 @@ function SubtitleStudio({ user, subscription, onOpenPaywall, onNavigate }) {
           </button>
         </div>
 
+        {/* Manual Import Tools: Paste & Upload */}
+        <div className="studio-manual-actions">
+          <span className="manual-actions-label">Alternatywnie:</span>
+          <button
+            type="button"
+            className="studio-manual-action-btn paste-btn"
+            onClick={() => {
+              setCustomVideoUrl(inputUrl);
+              setIsPasteModalOpen(true);
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+            </svg>
+            Wklej transkrypcję / napisy
+          </button>
+
+          <button
+            type="button"
+            className="studio-manual-action-btn upload-btn"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Wgraj plik (.srt / .vtt)
+          </button>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: "none" }}
+            accept=".srt,.vtt,.txt"
+            onChange={handleFileUpload}
+          />
+        </div>
+
         {/* Sample video chips */}
         <div className="studio-samples">
           <span className="samples-label">Wypróbuj przykłady:</span>
@@ -509,13 +763,57 @@ function SubtitleStudio({ user, subscription, onOpenPaywall, onNavigate }) {
         </div>
 
         {errorMessage && (
-          <div className="studio-error-banner">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <span>{errorMessage}</span>
+          <div className="studio-error-card">
+            <div className="error-header-row">
+              <div className="error-icon-box">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <div className="error-meta">
+                <h4 className="error-card-title">YouTube nie udostępnił napisów automatycznie</h4>
+                <p className="error-card-desc">{errorMessage}</p>
+              </div>
+            </div>
+
+            <div className="error-guide">
+              <div className="guide-title">💡 Jak pobrać napisy w 5 sekund bezpośrednio z YouTube:</div>
+              <ol className="guide-steps">
+                <li>
+                  Otwórz ten film na YouTube{" "}
+                  {inputUrl && (
+                    <a href={inputUrl} target="_blank" rel="noopener noreferrer" className="guide-link">
+                      (kliknij tutaj, aby otworzyć)
+                    </a>
+                  )}.
+                </li>
+                <li>Pod filmem kliknij <strong>„... Więcej”</strong> (lub pod opisem) ➔ <strong>„Pokaż transkrypcję”</strong>.</li>
+                <li>W otwartym panelu YouTube zaznacz tekst transkrypcji i skopiuj (<kbd>Ctrl+C</kbd> / <kbd>Cmd+C</kbd>).</li>
+                <li>Kliknij poniżej <strong>„Wklej transkrypcję teraz”</strong> — silnik sam dokona podziału na logiczne zdania i zsynchronizuje wideo!</li>
+              </ol>
+            </div>
+
+            <div className="error-actions-row">
+              <button
+                type="button"
+                className="error-btn-primary"
+                onClick={() => {
+                  setCustomVideoUrl(inputUrl);
+                  setIsPasteModalOpen(true);
+                }}
+              >
+                📋 Wklej transkrypcję teraz
+              </button>
+              <button
+                type="button"
+                className="error-btn-secondary"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                📂 Wgraj plik .srt / .vtt
+              </button>
+            </div>
           </div>
         )}
       </header>
@@ -764,6 +1062,75 @@ function SubtitleStudio({ user, subscription, onOpenPaywall, onNavigate }) {
             <p>Dla filmów z automatycznymi napisami bez kropek możesz jednym kliknięciem zrekonstruować interpunkcję przez Gemini AI.</p>
           </div>
         </section>
+      )}
+      {/* Paste Transcript Modal */}
+      {isPasteModalOpen && (
+        <div className="studio-modal-backdrop" onClick={() => setIsPasteModalOpen(false)}>
+          <div className="studio-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="studio-modal-header">
+              <div className="modal-title-group">
+                <span className="modal-icon">📋</span>
+                <h3 className="modal-title">Wklej transkrypcję lub napisy</h3>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setIsPasteModalOpen(false)}
+                aria-label="Zamknij"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="studio-modal-body">
+              <div className="modal-info-box">
+                <p>
+                  Obsługiwany jest każdy format: <strong>skopiowana transkrypcja z YouTube</strong> (z minutami np. <code>0:05 Zdanie...</code>) lub format <strong>.SRT / .VTT</strong>.
+                </p>
+              </div>
+
+              <div className="modal-form-group">
+                <label className="modal-label">Link YouTube lub ID wideo (do synchronizacji z odtwarzaczem):</label>
+                <input
+                  type="text"
+                  className="modal-input"
+                  placeholder="np. https://www.youtube.com/watch?v=_U5J8JlJq2Y..."
+                  value={customVideoUrl}
+                  onChange={(e) => setCustomVideoUrl(e.target.value)}
+                />
+              </div>
+
+              <div className="modal-form-group">
+                <label className="modal-label">Tekst transkrypcji / napisów:</label>
+                <textarea
+                  className="modal-textarea"
+                  rows={9}
+                  placeholder={`Wklej tutaj tekst skopiowany z YouTube lub napisy, np:\n0:02 And today I am in conversation with Gen Kelsang...\n0:05 He has been studying Buddhism for many years...\n\nLUB format SRT:\n1\n00:00:02,440 --> 00:00:05,440\nAnd today I am in conversation...`}
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="studio-modal-footer">
+              <button
+                type="button"
+                className="modal-btn-cancel"
+                onClick={() => setIsPasteModalOpen(false)}
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                className="modal-btn-submit"
+                disabled={!pastedText.trim()}
+                onClick={handleProcessPastedText}
+              >
+                ✨ Przetwórz i dopasuj zdania
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
