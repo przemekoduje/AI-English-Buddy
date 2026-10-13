@@ -620,8 +620,19 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     });
   };
 
+  const ensurePlayerPlaceholder = () => {
+    let el = document.getElementById("youtube-player");
+    if (!el && playerWrapperRef.current) {
+      el = document.createElement("div");
+      el.id = "youtube-player";
+      el.className = "youtube-iframe";
+      playerWrapperRef.current.appendChild(el);
+    }
+    return el;
+  };
+
   // YouTube Player setup
-  const createPlayer = (videoId, autoPlay = true) => {
+  const createPlayer = (videoId, autoPlay = false, seekTime = 0) => {
     if (playerRef.current) {
       try {
         playerRef.current.destroy();
@@ -631,6 +642,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
       playerRef.current = null;
     }
 
+    ensurePlayerPlaceholder();
+    const startSeconds = Math.max(0, Math.floor(seekTime || 0));
+
     try {
       playerRef.current = new window.YT.Player("youtube-player", {
         height: "100%",
@@ -638,9 +652,11 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
         videoId: videoId,
         playerVars: {
           autoplay: autoPlay ? 1 : 0,
+          start: startSeconds > 0 ? startSeconds : undefined,
           origin: window.location.origin,
           enablejsapi: 1,
-          modestbranding: 1
+          modestbranding: 1,
+          rel: 0
         },
         events: {
           onReady: () => {
@@ -648,13 +664,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
               const dur = playerRef.current.getDuration();
               if (dur > 0) setVideoDuration(dur);
             }
-            const seekTime = targetSeekTimeRef.current;
-            if (seekTime > 0 && playerRef.current && typeof playerRef.current.seekTo === "function") {
-              playerRef.current.seekTo(seekTime, true);
-              setCurrentTime(seekTime);
-              if (!autoPlay && typeof playerRef.current.pauseVideo === "function") {
-                playerRef.current.pauseVideo();
-              }
+            if (startSeconds > 0) {
+              setCurrentTime(startSeconds);
             }
           },
           onStateChange: (event) => {
@@ -667,18 +678,38 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     }
   };
 
+  const switchVideo = (videoId, seekTime = 0, autoPlay = true) => {
+    const startSeconds = Math.max(0, Math.floor(seekTime || 0));
+    if (playerRef.current && typeof playerRef.current.loadVideoById === "function") {
+      if (autoPlay) {
+        playerRef.current.loadVideoById({
+          videoId: videoId,
+          startSeconds: startSeconds
+        });
+      } else {
+        playerRef.current.cueVideoById({
+          videoId: videoId,
+          startSeconds: startSeconds
+        });
+      }
+    } else {
+      createPlayer(videoId, autoPlay, seekTime);
+    }
+  };
+
   useEffect(() => {
-    if (!window.YT) {
+    const resumeTime = getInitialVideoTime(currentVideo);
+    if (!window.YT || !window.YT.Player) {
       const tag = document.createElement("script");
       tag.src = "https://www.youtube.com/iframe_api";
       const firstScriptTag = document.getElementsByTagName("script")[0];
       firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
       window.onYouTubeIframeAPIReady = () => {
-        createPlayer(currentVideo.youtubeId, false);
+        createPlayer(currentVideo.youtubeId, false, resumeTime);
       };
     } else {
-      createPlayer(currentVideo.youtubeId, false);
+      createPlayer(currentVideo.youtubeId, false, resumeTime);
     }
 
     const handleBeforeUnload = () => {
@@ -708,7 +739,6 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
   const handlePlayerStateChange = (state) => {
     if (state === 1) { // PLAYING
       setIsPlaying(true);
-      targetSeekTimeRef.current = 0;
       clearTrackingTimer();
       timerRef.current = setInterval(() => {
         if (playerRef.current && typeof playerRef.current.getCurrentTime === "function") {
@@ -739,9 +769,6 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
           saveProgress(time, duration);
         }
       }
-      if (targetSeekTimeRef.current > 0 && playerRef.current && typeof playerRef.current.seekTo === "function") {
-        playerRef.current.seekTo(targetSeekTimeRef.current, true);
-      }
     }
   };
 
@@ -764,16 +791,16 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
       } catch (e) {}
     }
 
-    if (window.YT && window.YT.Player) {
-      createPlayer(currentVideo.youtubeId, !isInitialMount.current);
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
     }
 
-    const resumeTime = isInitialMount.current
-      ? targetSeekTimeRef.current
-      : (getInitialVideoTime(currentVideo) || 0);
+    const resumeTime = getInitialVideoTime(currentVideo) || 0;
+    if (window.YT && window.YT.Player) {
+      switchVideo(currentVideo.youtubeId, resumeTime, true);
+    }
 
-    targetSeekTimeRef.current = resumeTime;
-    isInitialMount.current = false;
     setCurrentTime(resumeTime);
     setActiveSegmentIndex(-1);
     setIsPlaying(false);
