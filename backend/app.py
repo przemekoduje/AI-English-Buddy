@@ -2287,6 +2287,78 @@ ENGLISH_ABBREVIATIONS = {
     'jun.', 'jul.', 'aug.', 'sept.', 'oct.', 'nov.', 'dec.', 'a.m.', 'p.m.', 'no.', 'vol.'
 }
 
+# Słowa, które BEZWZGLĘDNIE NIE MOGĄ zakończyć zdania (nawet jeśli transkrypcja zawiera tam kropkę)
+STRICT_DANGLING_END_WORDS = {
+    'a', 'an', 'the', 'my', 'your', 'his', 'her', 'its', 'our', 'their',
+    'every', 'each', 'either', 'neither', 'another',
+    'of', 'to', 'for', 'with', 'at', 'from', 'into', 'onto', 'towards', 'toward',
+    'upon', 'during', 'without', 'between', 'among', 'throughout', 'despite', 'unto',
+    'and', 'but', 'or', 'nor', 'because', 'although', 'whereas', 'unless',
+    'until', 'since', 'whether', 'than',
+    'which', 'whom', 'whose'
+}
+
+# Słowa, które w mowie bez interpunkcji wskazują na trwający, niedokończony fragment myśli
+UNPUNCTUATED_DANGLING_WORDS = STRICT_DANGLING_END_WORDS | {
+    'this', 'that', 'these', 'those', 'some', 'any', 'no',
+    'in', 'on', 'by', 'about', 'as', 'like', 'through', 'after', 'over', 'out',
+    'against', 'before', 'under', 'around', 'behind', 'across', 'within', 'besides',
+    'so', 'if', 'while', 'though', 'even',
+    'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'having', 'do', 'does', 'did',
+    'will', 'would', 'shall', 'should', 'can', 'could', 'may', 'might', 'must',
+    "haven't", "hasn't", "hadn't", "isn't", "aren't", "wasn't", "weren't",
+    "don't", "doesn't", "didn't", "won't", "wouldn't", "can't", "cannot",
+    "couldn't", "shouldn't", "mightn't", "mustn't",
+    "'s", "'re", "'ve", "'d", "'ll", "'m",
+    'what', 'whatever', 'whoever', 'where', 'when', 'why', 'how',
+    'very', 'too', 'quite', 'more', 'most', 'such', 'really', 'extremely', 'pretty', 'fairly', 'just', 'only'
+}
+
+DANGLING_PHRASES = [
+    'such as', 'as well as', 'due to', 'because of', 'in order to',
+    'so that', 'as if', 'as though', 'going to', 'want to', 'have to',
+    'has to', 'had to', 'used to', 'out of', 'instead of', 'according to',
+    'based on', 'prior to', 'next to', 'up to'
+]
+
+ENGLISH_SENTENCE_STARTERS = {
+    'so', 'and', 'but', 'because', 'or', 'well', 'now', 'then', 'also', 'actually',
+    'in fact', 'plus', 'anyway', 'meanwhile', 'however', 'if', 'when', 'while',
+    'although', 'though', 'since', 'after', 'before', 'unless', 'until', 'as',
+    'i', 'you', 'we', 'they', 'he', 'she', 'it', 'there', 'that', 'this', 'these',
+    'those', 'what', 'why', 'how', 'where', 'who', 'which', 'you know', 'i mean',
+    'right', 'okay', 'sure', 'yeah', 'yes', 'no'
+}
+
+def has_strict_dangling_end(text):
+    if not text:
+        return False
+    stripped = re.sub(r'[.,!?;:"\'’”\]]+$', '', text.strip()).strip()
+    if not stripped:
+        return False
+    lower = stripped.lower()
+    for phrase in DANGLING_PHRASES:
+        if lower.endswith(phrase):
+            return True
+    words = lower.split()
+    last_word = re.sub(r"[^a-z0-9']", "", words[-1]) if words else ""
+    return last_word in STRICT_DANGLING_END_WORDS
+
+def has_unpunctuated_dangling_end(text):
+    if not text:
+        return False
+    stripped = re.sub(r'[.,!?;:"\'’”\]]+$', '', text.strip()).strip()
+    if not stripped:
+        return False
+    lower = stripped.lower()
+    for phrase in DANGLING_PHRASES:
+        if lower.endswith(phrase):
+            return True
+    words = lower.split()
+    last_word = re.sub(r"[^a-z0-9']", "", words[-1]) if words else ""
+    return last_word in UNPUNCTUATED_DANGLING_WORDS
+
 def is_sentence_end_backend(text):
     if not text:
         return False
@@ -2300,19 +2372,41 @@ def is_sentence_end_backend(text):
         return False
     if stripped[-1] in ('.', '?', '!'):
         words = stripped.split()
-        if words and words[-1].lower() in ENGLISH_ABBREVIATIONS:
+        if not words:
+            return False
+        last_word = re.sub(r"[^a-z0-9.']", "", words[-1].lower())
+        clean_word = last_word.rstrip('.')
+        if last_word in ENGLISH_ABBREVIATIONS or clean_word in ENGLISH_ABBREVIATIONS:
+            return False
+        if clean_word in STRICT_DANGLING_END_WORDS:
+            return False
+        if has_strict_dangling_end(stripped[:-1]):
             return False
         return True
     return False
 
-ENGLISH_SENTENCE_STARTERS = {
-    'so', 'and', 'but', 'because', 'or', 'well', 'now', 'then', 'also', 'actually',
-    'in fact', 'plus', 'anyway', 'meanwhile', 'however', 'if', 'when', 'while',
-    'although', 'though', 'since', 'after', 'before', 'unless', 'until', 'as',
-    'i', 'you', 'we', 'they', 'he', 'she', 'it', 'there', 'that', 'this', 'these',
-    'those', 'what', 'why', 'how', 'where', 'who', 'which', 'you know', 'i mean',
-    'right', 'okay', 'sure', 'yeah', 'yes', 'no'
-}
+def format_continuation_backend(seg_text, prev_text=""):
+    if not seg_text:
+        return ""
+    words = seg_text.split()
+    if not words:
+        return seg_text
+    first_word = words[0]
+    
+    if prev_text:
+        prev_words = prev_text.strip().rstrip('\"\'’”)]').split()
+        if prev_words:
+            last_prev = prev_words[-1].lower()
+            if last_prev in ENGLISH_ABBREVIATIONS or last_prev.rstrip('.') in ENGLISH_ABBREVIATIONS:
+                return seg_text
+
+    if first_word in ("I", "I'm", "I've", "I'll", "I'd") or first_word.startswith("I'"):
+        return seg_text
+    if len(first_word) > 1 and first_word.isupper() and first_word.isalnum():
+        return seg_text
+        
+    lowered_first = first_word[:1].lower() + first_word[1:]
+    return seg_text.replace(first_word, lowered_first, 1)
 
 def split_long_unpunctuated_clause_backend(text):
     if not text:
@@ -2339,8 +2433,10 @@ def split_long_unpunctuated_clause_backend(text):
             next_word = re.sub(r"[^a-z']", "", (words[i + 1] or "").lower())
             next_two = (next_word + " " + re.sub(r"[^a-z']", "", (words[i + 2] or "").lower())) if i + 2 < len(words) else ""
             is_starter = next_word in ENGLISH_SENTENCE_STARTERS or next_two in ENGLISH_SENTENCE_STARTERS
+            curr_last = re.sub(r"[^a-z']", "", (words[i] or "").lower())
+            is_curr_dangling = curr_last in UNPUNCTUATED_DANGLING_WORDS
 
-            if (count >= 10 and is_starter) or count >= 18:
+            if not is_curr_dangling and ((count >= 10 and is_starter) or count >= 18):
                 sent = " ".join(curr_words).strip()
                 sent = sent[:1].upper() + sent[1:]
                 if not re.search(r'[.?!]["\'’”\)]?$', sent):
@@ -2354,7 +2450,7 @@ def split_long_unpunctuated_clause_backend(text):
             prev = results[-1]
             if prev.endswith('.'):
                 prev = prev[:-1]
-            results[-1] = f"{prev} {sent}."
+            results[-1] = f"{prev} {format_continuation_backend(sent, prev)}."
         else:
             sent = sent[:1].upper() + sent[1:]
             if not re.search(r'[.?!]["\'’”\)]?$', sent):
@@ -2379,12 +2475,9 @@ def split_into_complete_sentences_backend(text):
         curr = ""
         for m in matches:
             candidate = (curr + " " + m).strip() if curr else m.strip()
-            stripped = candidate.rstrip('\"\'’”)]')
-            if stripped and stripped[-1] in ('.', '?', '!'):
-                words = stripped.split()
-                if words and words[-1].lower() in ENGLISH_ABBREVIATIONS:
-                    curr = candidate
-                    continue
+            if not is_sentence_end_backend(candidate):
+                curr = candidate
+                continue
             raw_pieces.append(candidate)
             curr = ""
         if curr:
@@ -2448,26 +2541,28 @@ def aggregate_transcript(entries):
             current_entry = {
                 "start": start,
                 "end": end,
-                "text": text
+                "text": text,
+                "word_count": len(text.split())
             }
         else:
             prev_text = current_entry['text']
-            prev_words = prev_text.split()
-            prev_word_count = len(prev_words)
+            prev_word_count = current_entry.get('word_count', len(prev_text.split()))
             gap = start - current_entry['end']
-            next_first_word = text.split()[0].lower() if text.split() else ""
+            next_first_word = re.sub(r"[^a-z']", "", text.split()[0].lower()) if text.split() else ""
             ends_with_punc = is_sentence_end_backend(prev_text)
+            is_strict_dangling = has_strict_dangling_end(prev_text)
+            is_unpunc_dangling = has_unpunctuated_dangling_end(prev_text)
             
             should_split = False
-            if ends_with_punc:
+            if ends_with_punc and not is_strict_dangling:
                 should_split = True
-            elif gap >= 0.5 and prev_word_count >= 6:
+            elif not is_unpunc_dangling and gap >= 1.2 and prev_word_count >= 6:
                 should_split = True
-            elif prev_word_count >= 12 and next_first_word in ENGLISH_SENTENCE_STARTERS:
+            elif not is_unpunc_dangling and prev_word_count >= 12 and next_first_word in ENGLISH_SENTENCE_STARTERS:
                 should_split = True
-            elif prev_word_count >= 18:
+            elif not is_unpunc_dangling and prev_word_count >= 18:
                 should_split = True
-            elif (current_entry['end'] - current_entry['start']) >= 8.5 and prev_word_count >= 8:
+            elif not is_unpunc_dangling and (current_entry['end'] - current_entry['start']) >= 9.0 and prev_word_count >= 8:
                 should_split = True
                 
             if should_split:
@@ -2480,15 +2575,20 @@ def aggregate_transcript(entries):
                 current_entry = {
                     "start": start,
                     "end": end,
-                    "text": text
+                    "text": text,
+                    "word_count": len(text.split())
                 }
             else:
                 current_entry['end'] = max(current_entry['end'], end)
-                # Check for hyphenated end or apostrophes
-                if prev_text.endswith('-') or text.startswith('\''):
-                    current_entry['text'] = prev_text + text
+                clean_prev = current_entry['text'].strip()
+                if is_strict_dangling:
+                    clean_prev = re.sub(r'[.,;:]+$', '', clean_prev)
+                cont_text = format_continuation_backend(text, clean_prev) if (not ends_with_punc or is_strict_dangling) else text
+                if clean_prev.endswith('-') or cont_text.startswith('\''):
+                    current_entry['text'] = clean_prev + cont_text
                 else:
-                    current_entry['text'] = prev_text + " " + text
+                    current_entry['text'] = clean_prev + " " + cont_text
+                current_entry['word_count'] = len(current_entry['text'].split())
 
     if current_entry:
         sent = current_entry['text'].strip()
@@ -2507,7 +2607,7 @@ def aggregate_transcript(entries):
             final_aggregated.append({
                 "start": round(item['start'], 2),
                 "end": round(item['end'], 2),
-                "text": item['text'].strip()
+                "text": (sents[0] if sents else item['text']).strip()
             })
         else:
             total_chars = sum(len(s) for s in sents)
@@ -2525,8 +2625,24 @@ def aggregate_transcript(entries):
                     "text": s.strip()
                 })
                 c_start = c_end
+
+    # Finałowy pass zszywający (stitching) - zabezpieczenie przed wiszącymi fragmentami
+    stitched = []
+    for i in range(len(final_aggregated)):
+        curr = final_aggregated[i]
+        if i < len(final_aggregated) - 1 and has_strict_dangling_end(curr['text']):
+            next_seg = final_aggregated[i + 1]
+            clean_curr = re.sub(r'[.,;:]+$', '', curr['text'])
+            next_text = format_continuation_backend(next_seg['text'], clean_curr)
+            final_aggregated[i + 1] = {
+                "start": curr['start'],
+                "end": next_seg['end'],
+                "text": f"{clean_curr} {next_text}"
+            }
+        else:
+            stitched.append(curr)
         
-    return final_aggregated
+    return stitched
 
 def semantic_group_transcript(entries):
     if not entries:
