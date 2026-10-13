@@ -739,6 +739,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
   const handlePlayerStateChange = (state) => {
     if (state === 1) { // PLAYING
       setIsPlaying(true);
+      window.__speakling_is_media_playing = true;
+      document.body.dataset.mediaPlaying = "true";
       clearTrackingTimer();
       timerRef.current = setInterval(() => {
         if (playerRef.current && typeof playerRef.current.getCurrentTime === "function") {
@@ -760,6 +762,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
       }, 100);
     } else {
       setIsPlaying(false);
+      window.__speakling_is_media_playing = false;
+      document.body.dataset.mediaPlaying = "false";
       clearTrackingTimer();
       if (playerRef.current && typeof playerRef.current.getCurrentTime === "function") {
         const time = playerRef.current.getCurrentTime();
@@ -771,6 +775,15 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
       }
     }
   };
+
+  useEffect(() => {
+    window.__speakling_is_media_playing = isPlaying;
+    document.body.dataset.mediaPlaying = isPlaying ? "true" : "false";
+    return () => {
+      window.__speakling_is_media_playing = false;
+      document.body.dataset.mediaPlaying = "false";
+    };
+  }, [isPlaying]);
 
   const clearTrackingTimer = () => {
     if (timerRef.current) {

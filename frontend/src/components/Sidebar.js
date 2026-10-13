@@ -75,8 +75,15 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
       lastActivityRef.current = Date.now();
     };
 
+    const INACTIVITY_TIMEOUT_SECONDS = 8;
+
     const isLearningMediaActive = () => {
-      // Sprawdź czy trwa odtwarzanie nagrania lektora lub wideo edukacyjnego
+      // 1. Sprawdź czy trwa odtwarzanie wideo w Media Buddy (YouTube)
+      if (window.__speakling_is_media_playing || document.body?.dataset?.mediaPlaying === "true") {
+        return true;
+      }
+
+      // 2. Sprawdź czy trwa odtwarzanie nagrania lektora lub wideo edukacyjnego
       const mediaList = document.querySelectorAll('audio, video');
       for (const m of mediaList) {
         if (!m.paused && !m.ended && m.currentTime > 0) return true;
@@ -96,7 +103,7 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
       const isHidden = document.hidden;
       const secSinceLastAction = Math.floor((Date.now() - lastActivityRef.current) / 1000);
       const isMediaPlaying = isLearningMediaActive();
-      const hasRecentInteraction = secSinceLastAction <= 45;
+      const hasRecentInteraction = secSinceLastAction <= INACTIVITY_TIMEOUT_SECONDS;
 
       if (isEffectiveAdmin) {
         if (isHidden) {
@@ -109,19 +116,19 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
           setAdminTickingInfo({
             isTicking: true,
             status: 'media',
-            reason: 'Naliczanie (audio/wideo aktywne)'
+            reason: 'Naliczanie: wideo/audio włączone'
           });
         } else if (hasRecentInteraction) {
           setAdminTickingInfo({
             isTicking: true,
             status: 'active',
-            reason: `Naliczanie (ruch ${secSinceLastAction}s temu)`
+            reason: `Naliczanie: interakcja (${secSinceLastAction}s / max 8s)`
           });
         } else {
           setAdminTickingInfo({
             isTicking: false,
             status: 'idle',
-            reason: `Wstrzymano: brak aktywności (${secSinceLastAction}s > 45s)`
+            reason: `Wstrzymano: brak aktywności (${secSinceLastAction}s > 8s)`
           });
         }
       }
@@ -131,7 +138,7 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
 
       // 2. Sprawdzamy czy użytkownik faktycznie wykonuje zajęcia lub słucha/ogląda materiał
       if (!hasRecentInteraction && !isMediaPlaying) {
-        // Brak realnych działań na stronie - nie naliczaj bezczynności
+        // Brak realnych działań na stronie i brak odtwarzanego materiału - nie naliczaj bezczynności
         return;
       }
 
