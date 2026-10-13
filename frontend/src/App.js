@@ -10,6 +10,7 @@ import VocabularyView from './components/Vocabulary/VocabularyView';
 import VocabularyDrawer from './components/Vocabulary/VocabularyDrawer';
 import TranslatorDrawer from './components/Translator/TranslatorDrawer';
 import MediaBuddy from './components/Media/MediaBuddy';
+import SubtitleStudio from './components/Media/SubtitleStudio';
 import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 import AdminDashboard from './components/Admin/AdminDashboard';
@@ -372,6 +373,14 @@ function App() {
               user={user}
               subscription={subscription}
               onOpenPaywall={openPaywall}
+              onNavigate={handleNavigate}
+            />
+          ) : currentView === 'subtitle-studio' ? (
+            <SubtitleStudio 
+              user={user}
+              subscription={subscription}
+              onOpenPaywall={openPaywall}
+              onNavigate={handleNavigate}
             />
           ) : currentView === 'admin' ? (
             <AdminDashboard 

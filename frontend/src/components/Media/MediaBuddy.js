@@ -200,7 +200,7 @@ const getInitialVideoTime = (video, user) => {
   return 0;
 };
 
-function MediaBuddy({ user, subscription, onOpenPaywall }) {
+function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   const userKey = useMemo(() => getUserKey(user), [user]);
   const isLocked = !user?.is_admin && !subscription?.is_admin && !subscription?.can_access_media;
 
@@ -1668,6 +1668,27 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
             </svg>
             Audio
           </button>
+
+          {onNavigate && (
+            <button
+              type="button"
+              className="toolbar-pill-btn subtitle-studio-pill-btn"
+              onClick={() => onNavigate('subtitle-studio')}
+              title="Otwórz Subtitle Studio - pobieracz i edytor napisów"
+              style={{
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.25))',
+                borderColor: 'rgba(168, 85, 247, 0.45)',
+                color: '#d8b4fe'
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                <path d="M7 8h10" />
+                <path d="M7 12h6" />
+              </svg>
+              Subtitle Studio
+            </button>
+          )}
 
           <form onSubmit={handleLoadCustomVideo} className="toolbar-input-wrapper">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="input-link-icon">

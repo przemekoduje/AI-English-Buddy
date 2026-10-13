@@ -3043,6 +3043,209 @@ def get_youtube_transcript():
             "transcript": aggregate_transcript(formatted)
         })
 
+
+def extract_youtube_id(url_or_id):
+    if not url_or_id:
+        return ""
+    url_or_id = str(url_or_id).strip()
+    if len(url_or_id) == 11 and re.match(r'^[a-zA-Z0-9_-]{11}$', url_or_id):
+        return url_or_id
+    patterns = [
+        r'(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})',
+        r'(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})',
+        r'(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})',
+        r'(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})',
+        r'(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([a-zA-Z0-9_-]{11})',
+        r'[?&]v=([a-zA-Z0-9_-]{11})'
+    ]
+    for p in patterns:
+        m = re.search(p, url_or_id)
+        if m:
+            return m.group(1)
+    return ""
+
+
+@app.route("/api/media/subtitles/extract", methods=['GET', 'POST'])
+def extract_subtitles_endpoint():
+    user_email = get_user_email_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    sub = get_user_subscription(user_email)
+    if not is_admin(user_email) and not sub.get("can_access_media"):
+        return jsonify({
+            "error": "PAYWALL_REQUIRED",
+            "feature": "media",
+            "message": "Narzędzie Subtitle Studio jest dostępne w pakiecie Pro i Intensive. Uaktualnij subskrypcję, aby pobierać napisy z filmów!"
+        }), 403
+
+    req_data = request.get_json(silent=True) or {}
+    url_input = req_data.get("url") or request.args.get("url") or req_data.get("video_id") or request.args.get("video_id")
+    video_id = extract_youtube_id(url_input)
+    if not video_id:
+        return jsonify({"error": "Nieprawidłowy adres URL lub ID filmu YouTube."}), 400
+
+    video_title = f"Wideo YouTube ({video_id})"
+    try:
+        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+        res = requests.get(oembed_url, timeout=5)
+        if res.ok:
+            video_title = res.json().get("title", video_title)
+    except Exception as e:
+        print(f"Error fetching title for {video_id}: {e}")
+
+    formatted = []
+    # 1. yt-dlp manual subtitles
+    try:
+        import yt_dlp
+        ydl_opts = {
+            'skip_download': True,
+            'writesub': True,
+            'subtitleslangs': ['en'],
+            'quiet': True,
+            'no_warnings': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            if video_title == f"Wideo YouTube ({video_id})" and info.get("title"):
+                video_title = info.get("title")
+            subtitles = info.get('subtitles', {})
+            manual_en_key = next((k for k in subtitles.keys() if k.startswith('en')), None)
+            if manual_en_key:
+                en_subs = subtitles[manual_en_key]
+                srt_url = next((s.get('url') for s in en_subs if s.get('ext') in ['srt', 'vtt']), None)
+                if srt_url:
+                    sub_res = requests.get(srt_url, timeout=10)
+                    if sub_res.ok:
+                        formatted = parse_srt(sub_res.text)
+    except Exception as e:
+        print(f"Subtitle Studio: yt-dlp error: {e}", flush=True)
+
+    # 2. youtube-transcript-api fallback
+    if not formatted:
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            api = YouTubeTranscriptApi()
+            transcript = api.fetch(video_id, languages=['en'])
+            for entry in transcript:
+                start = round(entry.start, 2)
+                duration = round(entry.duration, 2)
+                end = round(start + duration, 2)
+                text = entry.text.replace('\n', ' ').strip()
+                if text:
+                    formatted.append({"start": start, "end": end, "text": text})
+        except Exception as e:
+            print(f"Subtitle Studio: youtube-transcript-api error: {e}", flush=True)
+
+    # 3. pytubefix fallback
+    if not formatted:
+        try:
+            from pytubefix import YouTube
+            url = f"https://youtube.com/watch?v={video_id}"
+            yt = YouTube(url, client='WEB')
+            caption = yt.captions.get('en') or yt.captions.get('a.en')
+            if not caption:
+                for c_code in yt.captions:
+                    if c_code.startswith('en') or c_code.endswith('.en'):
+                        caption = yt.captions[c_code]
+                        break
+            if caption:
+                srt_data = caption.generate_srt_captions()
+                formatted = parse_srt(srt_data)
+        except Exception as py_err:
+            print(f"Subtitle Studio: pytubefix error: {py_err}", flush=True)
+
+    if not formatted:
+        return jsonify({
+            "error": "Ten film nie posiada angielskich napisów na YouTube. Możesz wkleić lub wgrać własny plik .srt."
+        }), 404
+
+    try:
+        aggregated = semantic_group_transcript(formatted)
+    except Exception:
+        aggregated = aggregate_transcript(formatted)
+
+    total_duration = aggregated[-1]["end"] if aggregated else 0
+    total_words = sum(len(s.get("text", "").split()) for s in aggregated)
+    words_per_min = round((total_words / (total_duration / 60))) if total_duration > 0 else 0
+
+    return jsonify({
+        "video_id": video_id,
+        "youtube_url": f"https://www.youtube.com/watch?v={video_id}",
+        "title": video_title,
+        "raw_segments": formatted,
+        "segments": aggregated,
+        "stats": {
+            "sentence_count": len(aggregated),
+            "word_count": total_words,
+            "duration": total_duration,
+            "words_per_minute": words_per_min
+        }
+    }), 200
+
+
+@app.route("/api/media/subtitles/refine-ai", methods=['POST'])
+def refine_subtitles_ai():
+    user_email = get_user_email_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
+    sub = get_user_subscription(user_email)
+    if not is_admin(user_email) and not sub.get("can_access_media"):
+        return jsonify({"error": "PAYWALL_REQUIRED", "message": "Funkcja dostępna w planie Pro/Intensive"}), 403
+
+    req_data = request.get_json(silent=True) or {}
+    segments = req_data.get("segments") or []
+    if not segments:
+        return jsonify({"error": "Brak segmentów do przetworzenia."}), 400
+
+    segments_to_process = segments[:150]
+
+    system_prompt = (
+        "You are an expert English subtitle master and linguist.\n"
+        "You will receive an array of consecutive audio transcript segments with start and end times from a video.\n"
+        "Your task is to fix punctuation (periods, commas, question marks, apostrophes), capitalization, and logical sentence division.\n\n"
+        "STRICT RULES:\n"
+        "1. DO NOT change or hallucinate spoken words. Keep the exact words spoken by the speaker.\n"
+        "2. Fix capitalization, sentence-ending punctuation (., ?, !), and commas.\n"
+        "3. Every output segment must represent a complete, logical English sentence or thought.\n"
+        "4. Keep the 'start' timestamp of the first word and 'end' timestamp of the last word in each sentence.\n"
+        "5. Output ONLY valid JSON: [{\"start\": float, \"end\": float, \"text\": string}]."
+    )
+
+    user_prompt = f"Transcript segments to refine:\n{json.dumps(segments_to_process, ensure_ascii=False)}"
+
+    try:
+        response = track_chat_completion(
+            user_email=user_email,
+            feature="subtitles_refine_ai",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.2
+        )
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        elif content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+
+        parsed = json.loads(content)
+        if isinstance(parsed, dict) and "segments" in parsed:
+            parsed = parsed["segments"]
+        if isinstance(parsed, list):
+            final_segments = parsed + segments[150:]
+            return jsonify({"success": True, "segments": final_segments}), 200
+    except Exception as e:
+        print(f"Error in refine_subtitles_ai: {e}", flush=True)
+        return jsonify({"error": f"Błąd przetwarzania AI: {e}"}), 500
+
+    return jsonify({"error": "Nie udało się przetworzyć napisów przez AI."}), 500
+
 @app.route("/api/media/transcript/debug", methods=['GET'])
 def debug_youtube_transcript():
     user_email = get_user_from_request()
