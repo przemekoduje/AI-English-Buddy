@@ -2876,10 +2876,70 @@ def parse_srt(srt_text):
 def fetch_youtube_captions_robust(video_id):
     """
     Pobiera napisy angielskie (manualne lub automatyczne) z YouTube
-    z ominięciem blokad Cloud Run / datacenter IP dzięki klientom mobilnym w yt-dlp.
+    z ominięciem blokad Cloud Run / datacenter IP dzięki dedykowanemu RapidAPI proxy
+    oraz klientom mobilnym w yt-dlp.
     """
     formatted = []
     video_title = None
+
+    # 0. RapidAPI YouTube Transcript (100% odporne na blokady datacenter Cloud Run)
+    rapidapi_key = os.getenv("RAPIDAPI_KEY")
+    rapidapi_host = os.getenv("RAPIDAPI_YOUTUBE_HOST", "youtube-transcript3.p.rapidapi.com")
+    if rapidapi_key:
+        try:
+            print(f"fetch_youtube_captions_robust: pobieranie napisów przez RapidAPI ({rapidapi_host}) dla {video_id}...", flush=True)
+            url = f"https://{rapidapi_host}/api/transcript-with-url"
+            headers = {
+                "x-rapidapi-key": rapidapi_key,
+                "x-rapidapi-host": rapidapi_host
+            }
+            # Próba 1: lang=en
+            resp = requests.get(
+                url,
+                headers=headers,
+                params={"url": f"https://www.youtube.com/watch?v={video_id}", "lang": "en"},
+                timeout=15
+            )
+            data = resp.json() if resp.ok else {}
+            transcript_list = data.get("transcript") if isinstance(data, dict) else None
+
+            # Próba 2: bez lang jeśli pierwsze zapytanie było puste
+            if not transcript_list:
+                resp_any = requests.get(
+                    url,
+                    headers=headers,
+                    params={"url": f"https://www.youtube.com/watch?v={video_id}"},
+                    timeout=15
+                )
+                data_any = resp_any.json() if resp_any.ok else {}
+                raw_list = data_any.get("transcript") if isinstance(data_any, dict) else None
+                if isinstance(raw_list, list):
+                    en_items = [it for it in raw_list if str(it.get("lang", "")).startswith("en")]
+                    transcript_list = en_items if en_items else raw_list
+
+            if isinstance(transcript_list, list) and len(transcript_list) > 0:
+                import html
+                for item in transcript_list:
+                    raw_text = item.get("text", "")
+                    text = html.unescape(raw_text).replace('\n', ' ').strip()
+                    if not text:
+                        continue
+                    try:
+                        start = round(float(item.get("offset", 0)), 2)
+                        duration = round(float(item.get("duration", 0)), 2)
+                        end = round(start + duration, 2)
+                    except (ValueError, TypeError):
+                        continue
+                    formatted.append({
+                        "start": start,
+                        "end": end,
+                        "text": text
+                    })
+                if formatted:
+                    print(f"fetch_youtube_captions_robust: RapidAPI pobrało {len(formatted)} segmentów dla {video_id}", flush=True)
+                    return formatted, video_title
+        except Exception as rapid_err:
+            print(f"fetch_youtube_captions_robust RapidAPI error dla {video_id}: {rapid_err}", flush=True)
 
     # 1. yt-dlp z klientami ios/android/mweb
     try:
@@ -3070,115 +3130,14 @@ def get_youtube_transcript():
     except Exception as e:
         print(f"Error fetching title for {video_id}: {e}")
 
-    formatted = []
+    formatted, fetched_title = fetch_youtube_captions_robust(video_id)
+    if fetched_title and video_title == f"Wideo YouTube ({video_id})":
+        video_title = fetched_title
 
-    # 1. First, check if there are manual (human-uploaded) English subtitles using yt-dlp
-    try:
-        print(f"Checking for manual English subtitles using yt-dlp for video {video_id}...", flush=True)
-        import yt_dlp
-        ydl_opts = {
-            'skip_download': True,
-            'writesub': True,
-            'subtitleslangs': ['en'],
-            'quiet': True,
-            'no_warnings': True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-            
-            if video_title == f"Wideo YouTube ({video_id})":
-                video_title = info.get("title", video_title)
-                
-            subtitles = info.get('subtitles', {})
-            manual_en_key = None
-            for key in subtitles.keys():
-                if key.startswith('en'):
-                    manual_en_key = key
-                    break
-                    
-            if manual_en_key:
-                en_subs = subtitles[manual_en_key]
-                srt_url = None
-                ext = None
-                for sub_format in en_subs:
-                    if sub_format.get('ext') == 'srt':
-                        srt_url = sub_format.get('url')
-                        ext = 'srt'
-                        break
-                if not srt_url:
-                    for sub_format in en_subs:
-                        if sub_format.get('ext') in ['srt', 'vtt']:
-                            srt_url = sub_format.get('url')
-                            ext = sub_format.get('ext')
-                            break
-                            
-                if srt_url:
-                    sub_response = requests.get(srt_url, timeout=10)
-                    if sub_response.ok:
-                        formatted = parse_srt(sub_response.text)
-                        print(f"Successfully fetched manual subtitles using yt-dlp.", flush=True)
-                    else:
-                        print(f"Failed to download manual subtitles from URL.", flush=True)
-            else:
-                print(f"No manual English subtitles found for {video_id}.", flush=True)
-    except Exception as e:
-        print(f"Error checking manual subtitles with yt-dlp: {e}", flush=True)
-
-
-
-    # 3. Last fallback to youtube-transcript-api (automatic captions) if Whisper failed or API key missing
     if not formatted:
-        try:
-            print(f"Whisper pipeline failed/unavailable. Falling back to youtube-transcript-api for automatic captions...", flush=True)
-            from youtube_transcript_api import YouTubeTranscriptApi
-            api = YouTubeTranscriptApi()
-            transcript = api.fetch(video_id, languages=['en'])
-            
-            for entry in transcript:
-                start = round(entry.start, 2)
-                duration = round(entry.duration, 2)
-                end = round(start + duration, 2)
-                text = entry.text.replace('\n', ' ').strip()
-                if text:
-                    formatted.append({
-                        "start": start,
-                        "end": end,
-                        "text": text
-                    })
-            print(f"Successfully fetched automatic segments using youtube-transcript-api fallback.", flush=True)
-        except Exception as e:
-            print(f"youtube-transcript-api fallback failed for {video_id}: {e}", flush=True)
-
-    # 4. Final safety fallback to pytubefix (automatic captions)
-    if not formatted:
-        try:
-            print(f"Falling back to pytubefix for video {video_id}...", flush=True)
-            from pytubefix import YouTube
-            url = f"https://youtube.com/watch?v={video_id}"
-            yt = YouTube(url, client='WEB')
-            caption = yt.captions.get('en') or yt.captions.get('a.en')
-            if not caption:
-                for c_code in yt.captions:
-                    if c_code.startswith('en') or c_code.endswith('.en'):
-                        caption = yt.captions[c_code]
-                        break
-            if caption:
-                srt_data = caption.generate_srt_captions()
-                formatted = parse_srt(srt_data)
-                print(f"Successfully fetched automatic segments using pytubefix fallback.", flush=True)
-        except Exception as py_err:
-            print(f"pytubefix fallback failed for {video_id}: {py_err}", flush=True)
-    if not formatted:
-        print(f"Falling back to fetch_youtube_captions_robust for video {video_id}...", flush=True)
-        robust_subs, robust_title = fetch_youtube_captions_robust(video_id)
-        if robust_subs:
-            formatted = robust_subs
-            if robust_title and video_title == f"Wideo YouTube ({video_id})":
-                video_title = robust_title
-
         return jsonify({
-            "error": "Nie udało się pobrać transkrypcji dla tego filmu. Upewnij się, że film posiada angielskie napisy."
-        }), 500
+            "error": "Nie udało się pobrać transkrypcji dla tego filmu. Upewnij się, że film posiada angielskie napisy na YouTube."
+        }), 404
 
     try:
         aggregated = semantic_group_transcript(formatted)
