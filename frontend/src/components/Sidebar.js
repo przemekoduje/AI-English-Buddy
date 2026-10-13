@@ -19,6 +19,18 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
   const todayStr = getTodayStr();
   const storageKey = `speakling_practice_${user?.email || 'guest'}_${todayStr}`;
 
+  const isEffectiveAdmin = Boolean(
+    isAdmin || 
+    subscription?.is_admin || 
+    (user?.email && (user.email.includes('przemyslaw') || user.email.includes('przemokoduje')))
+  );
+
+  const [adminTickingInfo, setAdminTickingInfo] = useState({
+    isTicking: true,
+    status: 'active',
+    reason: 'Aktywne liczenie co 1s'
+  });
+
   const [practiceSeconds, setPracticeSeconds] = useState(() => {
     try {
       const val = localStorage.getItem(storageKey);
@@ -81,13 +93,43 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
 
     let tickCounter = 0;
     const interval = setInterval(() => {
+      const isHidden = document.hidden;
+      const secSinceLastAction = Math.floor((Date.now() - lastActivityRef.current) / 1000);
+      const isMediaPlaying = isLearningMediaActive();
+      const hasRecentInteraction = secSinceLastAction <= 45;
+
+      if (isEffectiveAdmin) {
+        if (isHidden) {
+          setAdminTickingInfo({
+            isTicking: false,
+            status: 'hidden',
+            reason: 'Wstrzymano (karta w tle)'
+          });
+        } else if (isMediaPlaying) {
+          setAdminTickingInfo({
+            isTicking: true,
+            status: 'media',
+            reason: 'Naliczanie (audio/wideo aktywne)'
+          });
+        } else if (hasRecentInteraction) {
+          setAdminTickingInfo({
+            isTicking: true,
+            status: 'active',
+            reason: `Naliczanie (ruch ${secSinceLastAction}s temu)`
+          });
+        } else {
+          setAdminTickingInfo({
+            isTicking: false,
+            status: 'idle',
+            reason: `Wstrzymano: brak aktywności (${secSinceLastAction}s > 45s)`
+          });
+        }
+      }
+
       // 1. Karta musi być aktywna/widoczna
-      if (document.hidden) return;
+      if (isHidden) return;
 
       // 2. Sprawdzamy czy użytkownik faktycznie wykonuje zajęcia lub słucha/ogląda materiał
-      const hasRecentInteraction = (Date.now() - lastActivityRef.current) <= 45000;
-      const isMediaPlaying = isLearningMediaActive();
-
       if (!hasRecentInteraction && !isMediaPlaying) {
         // Brak realnych działań na stronie - nie naliczaj bezczynności
         return;
@@ -136,7 +178,7 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
         localStorage.setItem(storageKey, String(practiceSecondsRef.current));
       } catch (e) {}
     };
-  }, [user?.token, storageKey]);
+  }, [user?.token, storageKey, isEffectiveAdmin]);
 
   // Wyświetlanie z dokładnością do pełnej 1 minuty
   const fullPracticeMinutes = Math.floor(practiceSeconds / 60);
@@ -290,20 +332,59 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
 
       <div className="sidebar-footer">
         {!isCollapsed && (
-          <div className="daily-practice-card">
+          <div className={`daily-practice-card ${isEffectiveAdmin ? 'admin-mode-card' : ''}`}>
             <div className="practice-card-header">
               <span className="practice-card-title">Your daily practice</span>
+              {isEffectiveAdmin && (
+                <span className="admin-practice-badge" title="Dokładny podgląd co do sekundy w trybie administratora">
+                  ADMIN ⏱️
+                </span>
+              )}
             </div>
-            <p className="practice-card-sub">
-              {practicePercentage >= 100 ? "Great job! Daily goal achieved." : "A little English, every day."}
-            </p>
+
+            {isEffectiveAdmin ? (
+              <div className="admin-practice-timer-box">
+                <div className="admin-timer-row">
+                  <span className="admin-timer-digits">
+                    {String(Math.floor(practiceSeconds / 60)).padStart(2, '0')}:{String(practiceSeconds % 60).padStart(2, '0')}
+                  </span>
+                  <span className="admin-timer-goal">/ {DAILY_GOAL_MINUTES}:00 ({practiceSeconds}s)</span>
+                  <span className="admin-timer-pct">
+                    {Math.min(100, (practiceSeconds / (DAILY_GOAL_MINUTES * 60)) * 100).toFixed(1)}%
+                  </span>
+                </div>
+                <div className={`admin-timer-status ${adminTickingInfo.isTicking ? 'ticking' : 'paused'}`}>
+                  <span className="admin-timer-dot"></span>
+                  <span className="admin-timer-reason">{adminTickingInfo.reason}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="practice-card-sub">
+                {practicePercentage >= 100 ? "Great job! Daily goal achieved." : "A little English, every day."}
+              </p>
+            )}
+
             <div className="practice-progress-bar">
               <div 
                 className="practice-progress-fill" 
-                style={{ width: `${Math.max(practiceSeconds > 0 ? 3 : 0, practicePercentage)}%` }}
+                style={{ 
+                  width: `${Math.max(
+                    practiceSeconds > 0 ? 3 : 0, 
+                    isEffectiveAdmin ? Math.min(100, (practiceSeconds / (DAILY_GOAL_MINUTES * 60)) * 100) : practicePercentage
+                  )}%` 
+                }}
               ></div>
             </div>
-            <span className="practice-card-meta">{practiceMetaText}</span>
+
+            <span className="practice-card-meta">
+              {isEffectiveAdmin ? (
+                <>
+                  {fullPracticeMinutes} z {DAILY_GOAL_MINUTES} min · do +1 min: {60 - (practiceSeconds % 60)}s
+                </>
+              ) : (
+                practiceMetaText
+              )}
+            </span>
           </div>
         )}
 
