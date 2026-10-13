@@ -113,6 +113,75 @@ const formatTime = (secs) => {
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 };
 
+const loadSavedCustomVideos = () => {
+  try {
+    const saved = localStorage.getItem("media_buddy_custom_videos");
+    if (!saved) return [];
+    const parsed = JSON.parse(saved);
+    return parsed.map((v) => ({
+      ...v,
+      transcript: ensureCompleteSentences(v.transcript)
+    }));
+  } catch (e) {
+    console.error("Failed to load custom videos from localStorage", e);
+    return [];
+  }
+};
+
+const getInitialVideo = () => {
+  try {
+    const savedId = localStorage.getItem("media_buddy_last_video_id");
+    const savedYoutubeId = localStorage.getItem("media_buddy_last_youtube_id");
+    const customList = loadSavedCustomVideos();
+    const allAvailable = [...CURATED_VIDEOS, ...customList];
+
+    if (savedId || savedYoutubeId) {
+      const match = allAvailable.find(
+        (v) => (savedId && v.id === savedId) || (savedYoutubeId && v.youtubeId === savedYoutubeId)
+      );
+      if (match) return match;
+    }
+
+    // Fallback: check most recently watched in media_buddy_video_progress
+    const savedProgress = localStorage.getItem("media_buddy_video_progress");
+    if (savedProgress) {
+      const prog = JSON.parse(savedProgress);
+      const ids = Object.keys(prog);
+      if (ids.length > 0) {
+        ids.sort((a, b) => (prog[b]?.lastWatched || 0) - (prog[a]?.lastWatched || 0));
+        const recentId = ids[0];
+        const match = allAvailable.find((v) => v.id === recentId || v.youtubeId === recentId);
+        if (match) return match;
+      }
+    }
+  } catch (e) {
+    console.error("Error retrieving initial video", e);
+  }
+  return CURATED_VIDEOS[0];
+};
+
+const getInitialVideoTime = (video) => {
+  try {
+    if (!video) return 0;
+    const directTime = localStorage.getItem(`media_buddy_last_time_${video.id}`)
+      || (video.youtubeId ? localStorage.getItem(`media_buddy_last_time_${video.youtubeId}`) : null);
+    if (directTime && !isNaN(parseFloat(directTime))) {
+      return Math.max(0, parseFloat(directTime));
+    }
+    const savedProgress = localStorage.getItem("media_buddy_video_progress");
+    if (savedProgress) {
+      const prog = JSON.parse(savedProgress);
+      const time = prog[video.id]?.currentTime || (video.youtubeId ? prog[video.youtubeId]?.currentTime : undefined);
+      if (time && !isNaN(time)) {
+        return Math.max(0, time);
+      }
+    }
+  } catch (e) {
+    console.error("Error retrieving initial video time", e);
+  }
+  return 0;
+};
+
 function MediaBuddy({ user, subscription, onOpenPaywall }) {
   const isLocked = !user?.is_admin && !subscription?.is_admin && !subscription?.can_access_media;
 
@@ -122,8 +191,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     }
   }, [isLocked]);
 
-  const [currentVideo, setCurrentVideo] = useState(CURATED_VIDEOS[0]);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentVideo, setCurrentVideo] = useState(() => getInitialVideo());
+  const initialTime = useMemo(() => getInitialVideoTime(currentVideo), []);
+  const [currentTime, setCurrentTime] = useState(initialTime);
+  const targetSeekTimeRef = useRef(initialTime);
   const [videoDuration, setVideoDuration] = useState(0);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -196,20 +267,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     }));
   }, []);
 
-  const [customVideos, setCustomVideos] = useState(() => {
-    try {
-      const saved = localStorage.getItem("media_buddy_custom_videos");
-      if (!saved) return [];
-      const parsed = JSON.parse(saved);
-      return parsed.map((v) => ({
-        ...v,
-        transcript: ensureCompleteSentences(v.transcript)
-      }));
-    } catch (e) {
-      console.error("Failed to load custom videos from localStorage", e);
-      return [];
-    }
-  });
+  const [customVideos, setCustomVideos] = useState(() => loadSavedCustomVideos());
 
   const [videoProgress, setVideoProgress] = useState(() => {
     try {
@@ -523,6 +581,45 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     return 150;
   }, [videoDuration, currentVideo]);
 
+  // Save playback progress and last active video
+  const saveProgress = (time, duration) => {
+    const activeVid = currentVideoRef.current;
+    if (!activeVid) return;
+    const dur = duration || videoDuration || 0;
+    if (time === undefined || isNaN(time) || time < 0) return;
+
+    try {
+      localStorage.setItem("media_buddy_last_video_id", activeVid.id);
+      if (activeVid.youtubeId) {
+        localStorage.setItem("media_buddy_last_youtube_id", activeVid.youtubeId);
+      }
+      localStorage.setItem(`media_buddy_last_time_${activeVid.id}`, String(time));
+      if (activeVid.youtubeId) {
+        localStorage.setItem(`media_buddy_last_time_${activeVid.youtubeId}`, String(time));
+      }
+    } catch (e) {
+      console.error("Failed to save last time", e);
+    }
+
+    setVideoProgress(prev => {
+      const nextProgress = {
+        ...prev,
+        [activeVid.id]: {
+          lastWatched: Date.now(),
+          currentTime: time,
+          duration: dur,
+          progressPercent: dur > 0 ? (time / dur) * 100 : 0
+        }
+      };
+      try {
+        localStorage.setItem("media_buddy_video_progress", JSON.stringify(nextProgress));
+      } catch (e) {
+        console.error("Failed to save progress", e);
+      }
+      return nextProgress;
+    });
+  };
+
   // YouTube Player setup
   const createPlayer = (videoId, autoPlay = true) => {
     if (playerRef.current) {
@@ -551,6 +648,14 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
               const dur = playerRef.current.getDuration();
               if (dur > 0) setVideoDuration(dur);
             }
+            const seekTime = targetSeekTimeRef.current;
+            if (seekTime > 0 && playerRef.current && typeof playerRef.current.seekTo === "function") {
+              playerRef.current.seekTo(seekTime, true);
+              setCurrentTime(seekTime);
+              if (!autoPlay && typeof playerRef.current.pauseVideo === "function") {
+                playerRef.current.pauseVideo();
+              }
+            }
           },
           onStateChange: (event) => {
             handlePlayerStateChange(event.data);
@@ -576,7 +681,17 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
       createPlayer(currentVideo.youtubeId, false);
     }
 
+    const handleBeforeUnload = () => {
+      if (playerRef.current && typeof playerRef.current.getCurrentTime === "function") {
+        const time = playerRef.current.getCurrentTime();
+        const dur = typeof playerRef.current.getDuration === "function" ? playerRef.current.getDuration() : 0;
+        saveProgress(time, dur);
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       clearTrackingTimer();
       if (playerRef.current) {
         try {
@@ -593,6 +708,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
   const handlePlayerStateChange = (state) => {
     if (state === 1) { // PLAYING
       setIsPlaying(true);
+      targetSeekTimeRef.current = 0;
       clearTrackingTimer();
       timerRef.current = setInterval(() => {
         if (playerRef.current && typeof playerRef.current.getCurrentTime === "function") {
@@ -605,35 +721,27 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
           }
 
           const currentSecond = Math.floor(time);
-          if (currentSecond !== lastSavedSecondRef.current && typeof playerRef.current.getDuration === "function") {
+          if (currentSecond !== lastSavedSecondRef.current) {
             lastSavedSecondRef.current = currentSecond;
-            const duration = playerRef.current.getDuration();
-            const activeVid = currentVideoRef.current;
-            if (duration > 0 && activeVid) {
-              setVideoProgress(prev => {
-                const nextProgress = {
-                  ...prev,
-                  [activeVid.id]: {
-                    lastWatched: Date.now(),
-                    currentTime: time,
-                    duration: duration,
-                    progressPercent: (time / duration) * 100
-                  }
-                };
-                try {
-                  localStorage.setItem("media_buddy_video_progress", JSON.stringify(nextProgress));
-                } catch (e) {
-                  console.error("Failed to save progress", e);
-                }
-                return nextProgress;
-              });
-            }
+            const duration = typeof playerRef.current.getDuration === "function" ? playerRef.current.getDuration() : 0;
+            saveProgress(time, duration);
           }
         }
       }, 100);
     } else {
       setIsPlaying(false);
       clearTrackingTimer();
+      if (playerRef.current && typeof playerRef.current.getCurrentTime === "function") {
+        const time = playerRef.current.getCurrentTime();
+        const duration = typeof playerRef.current.getDuration === "function" ? playerRef.current.getDuration() : 0;
+        if (!isNaN(time) && time > 0) {
+          setCurrentTime(time);
+          saveProgress(time, duration);
+        }
+      }
+      if (targetSeekTimeRef.current > 0 && playerRef.current && typeof playerRef.current.seekTo === "function") {
+        playerRef.current.seekTo(targetSeekTimeRef.current, true);
+      }
     }
   };
 
@@ -647,11 +755,26 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
   // Switch video
   useEffect(() => {
     currentVideoRef.current = currentVideo;
+    if (currentVideo?.id) {
+      try {
+        localStorage.setItem("media_buddy_last_video_id", currentVideo.id);
+        if (currentVideo.youtubeId) {
+          localStorage.setItem("media_buddy_last_youtube_id", currentVideo.youtubeId);
+        }
+      } catch (e) {}
+    }
+
     if (window.YT && window.YT.Player) {
       createPlayer(currentVideo.youtubeId, !isInitialMount.current);
     }
+
+    const resumeTime = isInitialMount.current
+      ? targetSeekTimeRef.current
+      : (getInitialVideoTime(currentVideo) || 0);
+
+    targetSeekTimeRef.current = resumeTime;
     isInitialMount.current = false;
-    setCurrentTime(0);
+    setCurrentTime(resumeTime);
     setActiveSegmentIndex(-1);
     setIsPlaying(false);
     setSelectedWord("");
@@ -708,6 +831,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     if (playerRef.current && typeof playerRef.current.seekTo === "function") {
       playerRef.current.seekTo(targetTime, true);
       setCurrentTime(targetTime);
+      saveProgress(targetTime, totalDuration);
     }
   };
 
@@ -827,6 +951,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
         playerRef.current.pauseVideo();
         setCurrentTime(seg.start);
         setActiveSegmentIndex(index);
+        saveProgress(seg.start, totalDuration);
       }
     } else {
       if (activeSegmentIndex === index) {
@@ -835,6 +960,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
         setCurrentTime(seg.start);
         setActiveSegmentIndex(index);
         setIsPlaying(false);
+        saveProgress(seg.start, totalDuration);
       }
     }
   };
@@ -1019,6 +1145,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
   // Video Selection with ANIMATED COLLAPSE
   const handleSelectVideo = (vid) => {
     const formattedTranscript = ensureCompleteSentences(vid.transcript);
+    const savedTime = getInitialVideoTime(vid);
+    targetSeekTimeRef.current = savedTime;
+    setSegmentBlurOverrides({});
     setIsLoadingCustom(true);
     setTimeout(() => {
       setCurrentVideo({
@@ -1066,6 +1195,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
           transcript: ensureCompleteSentences(staticTranscript)
         };
 
+        const savedTime = getInitialVideoTime(staticVid);
+        targetSeekTimeRef.current = savedTime;
+        setSegmentBlurOverrides({});
+
         setCustomVideos(prev => {
           const filtered = prev.filter(v => v.youtubeId !== videoId);
           return [staticVid, ...filtered];
@@ -1108,6 +1241,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
         youtubeId: videoId,
         transcript: newTranscript.length > 0 ? ensureCompleteSentences(newTranscript) : []
       };
+
+      const savedTime = getInitialVideoTime(newCustomVid);
+      targetSeekTimeRef.current = savedTime;
+      setSegmentBlurOverrides({});
 
       setCustomVideos(prev => {
         const filtered = prev.filter(v => v.youtubeId !== videoId);
