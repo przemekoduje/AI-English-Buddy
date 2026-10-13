@@ -2284,25 +2284,25 @@ def explain_joke():
 ENGLISH_ABBREVIATIONS = {
     'mr.', 'mrs.', 'ms.', 'dr.', 'prof.', 'sr.', 'jr.', 'vs.', 'e.g.', 'i.e.',
     'etc.', 'st.', 'u.s.', 'u.k.', 'gen.', 'gov.', 'jan.', 'feb.', 'mar.', 'apr.',
-    'jun.', 'jul.', 'aug.', 'sept.', 'oct.', 'nov.', 'dec.', 'a.m.', 'p.m.', 'no.', 'vol.'
+    'jun.', 'jul.', 'aug.', 'sept.', 'oct.', 'nov.', 'dec.', 'a.m.', 'p.m.', 'no.', 'vol.', 'ai.', 'ceo.'
 }
 
 # Słowa, które BEZWZGLĘDNIE NIE MOGĄ zakończyć zdania (nawet jeśli transkrypcja zawiera tam kropkę)
 STRICT_DANGLING_END_WORDS = {
     'a', 'an', 'the', 'my', 'your', 'his', 'her', 'its', 'our', 'their',
-    'every', 'each', 'either', 'neither', 'another',
+    'every', 'each', 'either', 'neither', 'another', 'whose',
     'of', 'to', 'for', 'with', 'at', 'from', 'into', 'onto', 'towards', 'toward',
     'upon', 'during', 'without', 'between', 'among', 'throughout', 'despite', 'unto',
     'and', 'but', 'or', 'nor', 'because', 'although', 'whereas', 'unless',
     'until', 'since', 'whether', 'than',
-    'which', 'whom', 'whose'
+    'which', 'whom'
 }
 
 # Słowa, które w mowie bez interpunkcji wskazują na trwający, niedokończony fragment myśli
 UNPUNCTUATED_DANGLING_WORDS = STRICT_DANGLING_END_WORDS | {
     'this', 'that', 'these', 'those', 'some', 'any', 'no',
     'in', 'on', 'by', 'about', 'as', 'like', 'through', 'after', 'over', 'out',
-    'against', 'before', 'under', 'around', 'behind', 'across', 'within', 'besides',
+    'against', 'before', 'under', 'around', 'behind', 'across', 'within', 'besides', 'via', 'per',
     'so', 'if', 'while', 'though', 'even',
     'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being',
     'have', 'has', 'had', 'having', 'do', 'does', 'did',
@@ -2310,26 +2310,57 @@ UNPUNCTUATED_DANGLING_WORDS = STRICT_DANGLING_END_WORDS | {
     "haven't", "hasn't", "hadn't", "isn't", "aren't", "wasn't", "weren't",
     "don't", "doesn't", "didn't", "won't", "wouldn't", "can't", "cannot",
     "couldn't", "shouldn't", "mightn't", "mustn't",
-    "'s", "'re", "'ve", "'d", "'ll", "'m",
-    'what', 'whatever', 'whoever', 'where', 'when', 'why', 'how',
-    'very', 'too', 'quite', 'more', 'most', 'such', 'really', 'extremely', 'pretty', 'fairly', 'just', 'only'
+    "'s", "'re", "'ve", "'d", "'ll", "'m", 'gonna', 'wanna', 'gotta',
+    'what', 'whatever', 'whoever', 'where', 'when', 'why', 'how', 'who',
+    'very', 'too', 'quite', 'more', 'most', 'such', 'really', 'extremely', 'pretty', 'fairly', 'just', 'only',
+    'many', 'much', 'few', 'fewer', 'several', 'all', 'both', 'lot', 'lots', 'tons', 'plenty', 'couple',
+    'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'first', 'second', 'third',
+    'big', 'small', 'good', 'bad', 'great', 'new', 'old', 'real', 'different', 'important', 'main',
+    'huge', 'major', 'key', 'hard', 'easy', 'high', 'low', 'early', 'late', 'whole', 'entire',
+    'specific', 'general', 'strong', 'clear', 'long', 'short', 'positive', 'negative', 'human', 'social',
+    'financial', 'economic', 'political', 'personal', 'open', 'free', 'true', 'certain', 'sure', 'same',
+    'able', 'likely', 'little', 'large', 'deep', 'simple', 'difficult', 'fine', 'nice',
+    'cyber', 'online', 'digital', 'meta', 'tech',
+    'talking', 'talk', 'making', 'make', 'made', 'think', 'thinking', 'looking', 'look', 'going',
+    'feel', 'feeling', 'call', 'calling', 'said', 'say', 'saying'
 }
 
 DANGLING_PHRASES = [
     'such as', 'as well as', 'due to', 'because of', 'in order to',
     'so that', 'as if', 'as though', 'going to', 'want to', 'have to',
     'has to', 'had to', 'used to', 'out of', 'instead of', 'according to',
-    'based on', 'prior to', 'next to', 'up to'
+    'based on', 'prior to', 'next to', 'up to', 'kind of', 'sort of',
+    'type of', 'a lot of', 'lots of', 'part of', 'in terms of', 'more of',
+    'less of', 'you know', 'i mean', 'as long as', 'make sure', 'making sure',
+    'made sure', 'point of view', 'focus on', 'rely on', 'depend on',
+    'talking about', 'talk about', 'think about', 'thinking about',
+    'stands for', 'stand for', 'as opposed to', 'on top of', 'ahead of', 'in front of'
 ]
+
+NON_STARTER_WORDS = {
+    'stands', 'stand', 'stood', 'leads', 'lead', 'led', 'connect', 'connects', 'connected',
+    'creates', 'create', 'created', 'means', 'mean', 'meant', 'requires', 'require',
+    'depends', 'depend', 'shows', 'show', 'showed', 'works', 'work', 'worked',
+    'helps', 'help', 'helped', 'allows', 'allow', 'allowed', 'makes', 'make', 'made',
+    'gives', 'give', 'gave', 'takes', 'take', 'took', 'brings', 'bring', 'brought',
+    'about', 'sure', 'know', 'possible', 'widely', 'than', 'opposed', 'including'
+}
 
 ENGLISH_SENTENCE_STARTERS = {
     'so', 'and', 'but', 'because', 'or', 'well', 'now', 'then', 'also', 'actually',
     'in fact', 'plus', 'anyway', 'meanwhile', 'however', 'if', 'when', 'while',
-    'although', 'though', 'since', 'after', 'before', 'unless', 'until', 'as',
+    'although', 'though', 'since', 'after', 'before', 'unless', 'until',
     'i', 'you', 'we', 'they', 'he', 'she', 'it', 'there', 'that', 'this', 'these',
-    'those', 'what', 'why', 'how', 'where', 'who', 'which', 'you know', 'i mean',
-    'right', 'okay', 'sure', 'yeah', 'yes', 'no'
+    'those', 'what', 'why', 'how', 'where', 'who', 'right', 'okay', 'sure', 'yeah', 'yes', 'no'
 }
+
+def clean_backend_text(text):
+    if not text:
+        return ""
+    text = re.sub(r'>>+', '', text)
+    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r'[,;:\-]+([.?!])', r'\1', text)
+    return text.strip()
 
 def has_strict_dangling_end(text):
     if not text:
@@ -2338,7 +2369,7 @@ def has_strict_dangling_end(text):
     if not stripped:
         return False
     lower = stripped.lower()
-    for phrase in DANGLING_PHRASES:
+    for phrase in ['such as', 'due to', 'because of', 'in order to', 'out of', 'instead of']:
         if lower.endswith(phrase):
             return True
     words = lower.split()
@@ -2414,8 +2445,9 @@ def split_long_unpunctuated_clause_backend(text):
     words = text.strip().split()
     if not words:
         return []
-    if len(words) <= 20:
-        s = " ".join(words)
+    if len(words) <= 22:
+        s = clean_backend_text(" ".join(words))
+        s = re.sub(r'[,;:\-]+$', '', s).strip()
         s = s[:1].upper() + s[1:]
         if not re.search(r'[.?!]["\'’”\)]?$', s):
             s += "."
@@ -2429,15 +2461,17 @@ def split_long_unpunctuated_clause_backend(text):
         count = len(curr_words)
         remaining = len(words) - (i + 1)
 
-        if count >= 10 and remaining >= 4:
+        if count >= 12 and remaining >= 5:
             next_word = re.sub(r"[^a-z']", "", (words[i + 1] or "").lower())
             next_two = (next_word + " " + re.sub(r"[^a-z']", "", (words[i + 2] or "").lower())) if i + 2 < len(words) else ""
             is_starter = next_word in ENGLISH_SENTENCE_STARTERS or next_two in ENGLISH_SENTENCE_STARTERS
+            is_invalid = next_word in NON_STARTER_WORDS
             curr_last = re.sub(r"[^a-z']", "", (words[i] or "").lower())
             is_curr_dangling = curr_last in UNPUNCTUATED_DANGLING_WORDS
 
-            if not is_curr_dangling and ((count >= 10 and is_starter) or count >= 18):
-                sent = " ".join(curr_words).strip()
+            if not is_curr_dangling and not is_invalid and ((count >= 12 and is_starter) or count >= 20):
+                sent = clean_backend_text(" ".join(curr_words))
+                sent = re.sub(r'[,;:\-]+$', '', sent).strip()
                 sent = sent[:1].upper() + sent[1:]
                 if not re.search(r'[.?!]["\'’”\)]?$', sent):
                     sent += "."
@@ -2445,7 +2479,8 @@ def split_long_unpunctuated_clause_backend(text):
                 curr_words = []
 
     if curr_words:
-        sent = " ".join(curr_words).strip()
+        sent = clean_backend_text(" ".join(curr_words))
+        sent = re.sub(r'[,;:\-]+$', '', sent).strip()
         if results and len(curr_words) < 5:
             prev = results[-1]
             if prev.endswith('.'):
@@ -2489,10 +2524,11 @@ def split_into_complete_sentences_backend(text):
     final_sentences = []
     for piece in raw_pieces:
         words = piece.split()
-        if len(words) > 20:
+        if len(words) > 24:
             final_sentences.extend(split_long_unpunctuated_clause_backend(piece))
         else:
-            s = piece.strip()
+            s = clean_backend_text(piece)
+            s = re.sub(r'[,;:\-]+$', '', s).strip()
             s = s[:1].upper() + s[1:]
             if not re.search(r'[.?!]["\'’”\)]?$', s):
                 s += "."
@@ -2503,145 +2539,167 @@ def split_into_complete_sentences_backend(text):
 def aggregate_transcript(entries):
     if not entries:
         return []
-        
-    aggregated = []
-    current_entry = None
 
+    # Faza 1: Preprocessing segmentów
+    preprocessed = []
     for entry in entries:
-        text = entry['text'].strip()
-        start = entry['start']
-        end = entry['end']
-        
+        text = entry.get('text', '').strip()
+        start = entry.get('start', 0.0)
+        end = entry.get('end', 0.0)
         if not text:
             continue
-            
-        # Check if the segment is just a sound effect / laughter / applause
-        is_sound_effect = (
-            (text.startswith('(') and text.endswith(')')) or 
-            (text.startswith('[') and text.endswith(']'))
-        )
         
-        if is_sound_effect:
-            if current_entry:
-                sent = current_entry['text'].strip()
-                sent = sent[:1].upper() + sent[1:]
-                if not re.search(r'[.?!]["\'’”\)]?$', sent):
-                    sent += "."
-                current_entry['text'] = sent
-                aggregated.append(current_entry)
-                current_entry = None
-            aggregated.append({
-                "start": start,
-                "end": end,
-                "text": text
-            })
+        is_speaker = '>>' in text
+        cleaned_text = clean_backend_text(text)
+        if not cleaned_text:
             continue
 
-        if current_entry is None:
-            current_entry = {
-                "start": start,
-                "end": end,
-                "text": text,
-                "word_count": len(text.split())
-            }
-        else:
-            prev_text = current_entry['text']
-            prev_word_count = current_entry.get('word_count', len(prev_text.split()))
-            gap = start - current_entry['end']
-            next_first_word = re.sub(r"[^a-z']", "", text.split()[0].lower()) if text.split() else ""
-            ends_with_punc = is_sentence_end_backend(prev_text)
-            is_strict_dangling = has_strict_dangling_end(prev_text)
-            is_unpunc_dangling = has_unpunctuated_dangling_end(prev_text)
-            
-            should_split = False
-            if ends_with_punc and not is_strict_dangling:
-                should_split = True
-            elif not is_unpunc_dangling and gap >= 1.2 and prev_word_count >= 6:
-                should_split = True
-            elif not is_unpunc_dangling and prev_word_count >= 12 and next_first_word in ENGLISH_SENTENCE_STARTERS:
-                should_split = True
-            elif not is_unpunc_dangling and prev_word_count >= 18:
-                should_split = True
-            elif not is_unpunc_dangling and (current_entry['end'] - current_entry['start']) >= 9.0 and prev_word_count >= 8:
-                should_split = True
-                
-            if should_split:
-                sent = current_entry['text'].strip()
-                sent = sent[:1].upper() + sent[1:]
-                if not re.search(r'[.?!]["\'’”\)]?$', sent):
-                    sent += "."
-                current_entry['text'] = sent
-                aggregated.append(current_entry)
-                current_entry = {
-                    "start": start,
-                    "end": end,
-                    "text": text,
-                    "word_count": len(text.split())
-                }
-            else:
-                current_entry['end'] = max(current_entry['end'], end)
-                clean_prev = current_entry['text'].strip()
-                if is_strict_dangling:
-                    clean_prev = re.sub(r'[.,;:]+$', '', clean_prev)
-                cont_text = format_continuation_backend(text, clean_prev) if (not ends_with_punc or is_strict_dangling) else text
-                if clean_prev.endswith('-') or cont_text.startswith('\''):
-                    current_entry['text'] = clean_prev + cont_text
-                else:
-                    current_entry['text'] = clean_prev + " " + cont_text
-                current_entry['word_count'] = len(current_entry['text'].split())
-
-    if current_entry:
-        sent = current_entry['text'].strip()
-        sent = sent[:1].upper() + sent[1:]
-        if not re.search(r'[.?!]["\'’”\)]?$', sent):
-            sent += "."
-        current_entry['text'] = sent
-        aggregated.append(current_entry)
-
-    # Druga faza: upewnienie się, że każdy segment to dokładnie jedno pełne zdanie.
-    # Wielo-zdaniowe bloki dzielimy z proporcjonalnymi znacznikami czasu.
-    final_aggregated = []
-    for item in aggregated:
-        sents = split_into_complete_sentences_backend(item['text'])
-        if len(sents) <= 1:
-            final_aggregated.append({
-                "start": round(item['start'], 2),
-                "end": round(item['end'], 2),
-                "text": (sents[0] if sents else item['text']).strip()
-            })
-        else:
-            total_chars = sum(len(s) for s in sents)
-            if total_chars == 0:
-                final_aggregated.append(item)
-                continue
-            duration = max(0.0, item['end'] - item['start'])
-            c_start = item['start']
-            for s in sents:
-                frac = len(s) / total_chars
-                c_end = round(c_start + frac * duration, 2)
-                final_aggregated.append({
+        # Szukanie zdań wewnątrz pojedynczego segmentu
+        pattern = r'(.+?[.?!][\"\'’”\)]?)(?:\s+(?=[A-Z0-9\"\'“\(])|$)'
+        matches = [m.strip() for m in re.findall(pattern, cleaned_text) if m.strip()]
+        if len(matches) > 1:
+            total_len = sum(len(m) for m in matches)
+            dur = max(0.0, end - start)
+            c_start = start
+            for idx, m in enumerate(matches):
+                frac = len(m) / total_len if total_len > 0 else 1.0 / len(matches)
+                c_end = end if idx == len(matches) - 1 else round(c_start + frac * dur, 2)
+                preprocessed.append({
                     "start": round(c_start, 2),
-                    "end": c_end,
-                    "text": s.strip()
+                    "end": round(c_end, 2),
+                    "text": m,
+                    "is_speaker": is_speaker if idx == 0 else False
                 })
                 c_start = c_end
+        else:
+            preprocessed.append({
+                "start": round(start, 2),
+                "end": round(end, 2),
+                "text": cleaned_text,
+                "is_speaker": is_speaker
+            })
 
-    # Finałowy pass zszywający (stitching) - zabezpieczenie przed wiszącymi fragmentami
-    stitched = []
-    for i in range(len(final_aggregated)):
-        curr = final_aggregated[i]
-        if i < len(final_aggregated) - 1 and has_strict_dangling_end(curr['text']):
-            next_seg = final_aggregated[i + 1]
-            clean_curr = re.sub(r'[.,;:]+$', '', curr['text'])
-            next_text = format_continuation_backend(next_seg['text'], clean_curr)
-            final_aggregated[i + 1] = {
-                "start": curr['start'],
-                "end": next_seg['end'],
-                "text": f"{clean_curr} {next_text}"
+    # Faza 2: Łączenie z lingwistycznymi regułami
+    cards = []
+    curr = None
+
+    for seg in preprocessed:
+        if curr is None:
+            curr = {
+                "start": seg["start"],
+                "end": seg["end"],
+                "text": seg["text"],
+                "word_count": len(seg["text"].split()),
+                "is_speaker": seg["is_speaker"]
+            }
+            continue
+
+        prev_text = curr["text"]
+        prev_words = curr["word_count"]
+        gap = seg["start"] - curr["end"]
+        words_in_seg = seg["text"].split()
+        next_first_word = re.sub(r"[^a-z']", "", words_in_seg[0].lower()) if words_in_seg else ""
+        next_two_words = " ".join([re.sub(r"[^a-z']", "", w.lower()) for w in words_in_seg[:2]]) if len(words_in_seg) >= 2 else next_first_word
+        ends_punc = is_sentence_end_backend(prev_text)
+        is_dangling = has_unpunctuated_dangling_end(prev_text)
+        is_strict_dangling = has_strict_dangling_end(prev_text)
+        is_invalid_starter = next_first_word in NON_STARTER_WORDS
+        is_as_modifier = (next_first_word == "as" and (len(words_in_seg) < 2 or re.sub(r"[^a-z']", "", words_in_seg[1].lower()) not in {"we", "i", "you", "they", "he", "she", "it"}))
+
+        should_split = False
+        if seg.get("is_speaker"):
+            should_split = True
+        elif ends_punc and not is_strict_dangling:
+            should_split = True
+        elif not is_dangling and not is_invalid_starter and not is_as_modifier:
+            if gap >= 0.8 and prev_words >= 7:
+                should_split = True
+            elif prev_words >= 12 and (next_first_word in ENGLISH_SENTENCE_STARTERS or next_two_words in ENGLISH_SENTENCE_STARTERS):
+                should_split = True
+            elif prev_words >= 22:
+                should_split = True
+
+        carry_over_word = ""
+        if not should_split and prev_words >= 14 and (next_first_word in ENGLISH_SENTENCE_STARTERS or next_two_words in ENGLISH_SENTENCE_STARTERS):
+            m_conj = re.search(r'\s+(and|but|so|or)\s*$', prev_text, re.IGNORECASE)
+            if m_conj:
+                carry_over_word = m_conj.group(1)
+                should_split = True
+
+        if should_split:
+            s = curr["text"].strip()
+            if carry_over_word:
+                last_idx = s.rfind(carry_over_word)
+                if last_idx != -1:
+                    s = s[:last_idx].strip()
+            s = clean_backend_text(s)
+            s = re.sub(r'[,;:\-]+$', '', s).strip()
+            s = s[:1].upper() + s[1:]
+            if not re.search(r'[.?!]["\'’”\)]?$', s):
+                s += "."
+            curr["text"] = s
+            cards.append(curr)
+
+            start_text = seg["text"]
+            if carry_over_word:
+                cap_conj = carry_over_word.capitalize()
+                start_text = f"{cap_conj} {start_text}"
+            curr = {
+                "start": seg["start"],
+                "end": seg["end"],
+                "text": start_text,
+                "word_count": len(start_text.split()),
+                "is_speaker": seg["is_speaker"]
             }
         else:
-            stitched.append(curr)
-        
+            curr["end"] = max(curr["end"], seg["end"])
+            clean_prev = curr["text"].strip()
+            if is_strict_dangling:
+                clean_prev = re.sub(r'[.,;:]+$', '', clean_prev)
+            cont_text = format_continuation_backend(seg["text"], clean_prev) if (not ends_punc or is_strict_dangling) else seg["text"]
+            if clean_prev.endswith('-') or cont_text.startswith('\''):
+                curr["text"] = clean_prev + cont_text
+            else:
+                curr["text"] = clean_prev + " " + cont_text
+            curr["word_count"] = len(curr["text"].split())
+
+    if curr:
+        s = clean_backend_text(curr["text"])
+        s = re.sub(r'[,;:\-]+$', '', s).strip()
+        s = s[:1].upper() + s[1:]
+        if not re.search(r'[.?!]["\'’”\)]?$', s):
+            s += "."
+        curr["text"] = s
+        cards.append(curr)
+
+    # Faza 3: Stitching sierot i wiszących fraz
+    stitched = []
+    for i in range(len(cards)):
+        c = cards[i]
+        words = c["text"].split()
+        if len(words) <= 2 and i < len(cards) - 1 and not cards[i + 1].get("is_speaker"):
+            cards[i + 1]["start"] = c["start"]
+            prefix = re.sub(r'[.?!]+$', '', c["text"]).strip()
+            next_first = cards[i + 1]["text"][:1].lower() + cards[i + 1]["text"][1:]
+            cards[i + 1]["text"] = f"{prefix}, {next_first}"
+        elif i < len(cards) - 1 and has_strict_dangling_end(c["text"]):
+            next_seg = cards[i + 1]
+            clean_curr = re.sub(r'[.,;:]+$', '', c["text"])
+            next_text = format_continuation_backend(next_seg["text"], clean_curr)
+            cards[i + 1] = {
+                "start": c["start"],
+                "end": next_seg["end"],
+                "text": f"{clean_curr} {next_text}",
+                "word_count": len(f"{clean_curr} {next_text}".split()),
+                "is_speaker": c.get("is_speaker", False)
+            }
+        else:
+            stitched.append({
+                "start": round(c["start"], 2),
+                "end": round(c["end"], 2),
+                "text": c["text"]
+            })
+
     return stitched
 
 def semantic_group_transcript(entries):
