@@ -1529,6 +1529,15 @@
   color: #2563eb;
 }
 
+.synced-action-icon-btn.blur-btn:hover {
+  color: #6366f1;
+}
+
+.synced-action-icon-btn.blur-btn.active {
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.14);
+}
+
 .synced-action-icon-btn.mic:hover {
   color: #10b981;
 }
@@ -1552,58 +1561,13 @@
 .synced-english-text.is-blurred {
   filter: blur(5.5px);
   user-select: none;
-  cursor: pointer;
-  opacity: 0.85;
+  cursor: default;
+  opacity: 0.82;
 }
 
 .synced-english-text.is-blurred:hover {
-  filter: blur(4.5px);
-  opacity: 0.95;
-}
-
-.blur-reveal-btn {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: #eff6ff;
-  border: 1px dashed #3b82f6;
-  border-radius: 8px;
-  padding: 0.32rem 0.75rem;
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: #1d4ed8;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
-}
-
-.blur-reveal-btn:hover {
-  background: #dbeafe;
-  border-color: #2563eb;
-  color: #1e40af;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.16);
-}
-
-.blur-revealed-indicator {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  color: #16a34a;
-  font-weight: 600;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  transition: color 0.15s ease;
-}
-
-.blur-revealed-indicator:hover {
-  text-decoration: underline;
-  color: #15803d;
+  filter: blur(5px);
+  opacity: 0.88;
 }
 
 .media-interactive-word {

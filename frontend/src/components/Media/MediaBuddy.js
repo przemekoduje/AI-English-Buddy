@@ -151,7 +151,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
   const [isTranslatingSegment, setIsTranslatingSegment] = useState(false);
   const [isSegmentSaved, setIsSegmentSaved] = useState(false);
 
-  // Challenge Mode: Blur original text on pause to practice translation
+  // Challenge Mode: Blur original text to practice translation
   const [blurChallengeEnabled, setBlurChallengeEnabled] = useState(() => {
     try {
       return localStorage.getItem("speakling_media_blur_challenge") === "true";
@@ -159,7 +159,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
       return false;
     }
   });
-  const [revealedSegments, setRevealedSegments] = useState({});
+  // Individual sentence blur overrides: { [idx]: boolean }
+  const [segmentBlurOverrides, setSegmentBlurOverrides] = useState({});
 
   useEffect(() => {
     try {
@@ -167,11 +168,21 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
     } catch { }
   }, [blurChallengeEnabled]);
 
-  const toggleRevealSegment = (idx) => {
-    setRevealedSegments((prev) => ({
+  const toggleSegmentBlur = (e, idx, isActive) => {
+    e.stopPropagation();
+    const currentlyBlurred = segmentBlurOverrides[idx] !== undefined
+      ? segmentBlurOverrides[idx]
+      : Boolean(blurChallengeEnabled && isActive && !isPlaying);
+
+    const willBeBlurred = !currentlyBlurred;
+    setSegmentBlurOverrides((prev) => ({
       ...prev,
-      [idx]: !prev[idx]
+      [idx]: willBeBlurred
     }));
+
+    if (willBeBlurred && !translationsCache[idx]) {
+      translateActiveSegment(idx);
+    }
   };
 
   const [customUrl, setCustomUrl] = useState("");
@@ -749,7 +760,6 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
       // Clear translation state when playing so stale data never leaks
       setSegmentTranslation("");
       setIsTranslatingSegment(false);
-      setRevealedSegments({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, activeSegmentIndex]);
@@ -1888,7 +1898,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
                 className="transcript-switch-wrap"
                 title="Włącz tryb wyzwania: po zatrzymaniu wideo tekst angielski zostanie rozmyty, a widoczne będzie tłumaczenie, aby poćwiczyć własne tłumaczenie"
               >
-                <span className="transcript-switch-label" onClick={() => setBlurChallengeEnabled(prev => !prev)}>
+                <span className="transcript-switch-label" onClick={() => {
+                  setBlurChallengeEnabled(prev => !prev);
+                  setSegmentBlurOverrides({});
+                }}>
                   <span className="switch-icon-target">🎯</span>
                   Blur oryginału
                 </span>
@@ -1897,7 +1910,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
                   role="switch"
                   aria-checked={blurChallengeEnabled}
                   className={`ios-switch-toggle ${blurChallengeEnabled ? "active" : ""}`}
-                  onClick={() => setBlurChallengeEnabled(prev => !prev)}
+                  onClick={() => {
+                    setBlurChallengeEnabled(prev => !prev);
+                    setSegmentBlurOverrides({});
+                  }}
                   title={blurChallengeEnabled ? "Wyłącz blur oryginału" : "Włącz blur oryginału"}
                 >
                   <span className="ios-switch-thumb" />
@@ -1911,7 +1927,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
                   const isActive = activeSegmentIndex === idx;
                   const segTime = formatTime(seg.start);
                   const translation = translationsCache[idx] || (isActive ? segmentTranslation : "");
-                  const isOriginalBlurred = Boolean(blurChallengeEnabled && isActive && !isPlaying && !revealedSegments[idx]);
+                  const isOriginalBlurred = segmentBlurOverrides[idx] !== undefined
+                    ? segmentBlurOverrides[idx]
+                    : Boolean(blurChallengeEnabled && isActive && !isPlaying);
 
                   return (
                     <div
@@ -1937,6 +1955,24 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
                           </button>
                           <button
                             type="button"
+                            className={`synced-action-icon-btn blur-btn ${isOriginalBlurred ? "active" : ""}`}
+                            onClick={(e) => toggleSegmentBlur(e, idx, isActive)}
+                            title={isOriginalBlurred ? "Odkryj oryginał (usuń blur)" : "Zamaż oryginał (Blur)"}
+                          >
+                            {isOriginalBlurred ? (
+                              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                                <line x1="1" y1="1" x2="23" y2="23" />
+                              </svg>
+                            ) : (
+                              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            )}
+                          </button>
+                          <button
+                            type="button"
                             className="synced-action-icon-btn mic"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1956,51 +1992,14 @@ function MediaBuddy({ user, subscription, onOpenPaywall }) {
                       <div className="synced-english-wrapper">
                         <p
                           className={`synced-english-text ${isOriginalBlurred ? "is-blurred" : ""}`}
-                          onClick={isOriginalBlurred ? (e) => {
-                            e.stopPropagation();
-                            toggleRevealSegment(idx);
-                          } : undefined}
-                          title={isOriginalBlurred ? "Kliknij, aby odkryć oryginał i sprawdzić się" : undefined}
                         >
                           {renderInteractiveText(seg.text, idx)}
                         </p>
-
-                        {isOriginalBlurred && (
-                          <button
-                            type="button"
-                            className="blur-reveal-btn animate-fade-in"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleRevealSegment(idx);
-                            }}
-                            title="Odkryj oryginalny tekst po angielsku"
-                          >
-                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                              <circle cx="12" cy="12" r="3" />
-                            </svg>
-                            <span>Kliknij, aby odkryć oryginał (Sprawdź się)</span>
-                          </button>
-                        )}
-
-                        {blurChallengeEnabled && isActive && !isPlaying && revealedSegments[idx] && (
-                          <button
-                            type="button"
-                            className="blur-revealed-indicator"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleRevealSegment(idx);
-                            }}
-                            title="Kliknij, aby ukryć ponownie"
-                          >
-                            ✓ Odkryto · ukryj ponownie
-                          </button>
-                        )}
                       </div>
 
-                      {(showBilingual || blurChallengeEnabled) && isActive && !isPlaying && (
+                      {((showBilingual || blurChallengeEnabled || isOriginalBlurred) && ((isActive && !isPlaying) || (isOriginalBlurred && !isPlaying))) && (
                         <p className="synced-polish-text animate-fade-in">
-                          {isTranslatingSegment ? (
+                          {isTranslatingSegment && isActive ? (
                             <span className="translation-loading">Tłumaczenie fragmentu...</span>
                           ) : (
                             translation || <span className="translation-empty">Brak tłumaczenia</span>
