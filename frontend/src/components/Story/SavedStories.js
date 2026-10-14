@@ -546,8 +546,52 @@ const SavedStories = ({ user, subscription, onOpenPaywall, onSelectStory, onStar
   };
 
   const loadStories = useCallback(async () => {
-    if (isStarterUser) {
-      setLoading(true);
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/stories`, {
+        headers: { "X-Session-Token": user.token }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setStories(data);
+        } else {
+          const demoList = DEMO_STORIES.map(demo => ({
+            id: demo.id,
+            title: demo.title,
+            text: demo.text,
+            level: demo.level,
+            cefr_level: demo.level,
+            category: demo.category,
+            topics: demo.topics,
+            read_progress: parseInt(localStorage.getItem(`buddy_story_progress_${demo.id}`) || "0", 10),
+            coverImage: demo.coverImage || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80",
+            isDemo: true
+          }));
+          setStories(demoList);
+        }
+      } else {
+        const demoList = DEMO_STORIES.map(demo => ({
+          id: demo.id,
+          title: demo.title,
+          text: demo.text,
+          level: demo.level,
+          cefr_level: demo.level,
+          category: demo.category,
+          topics: demo.topics,
+          read_progress: parseInt(localStorage.getItem(`buddy_story_progress_${demo.id}`) || "0", 10),
+          coverImage: demo.coverImage || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80",
+          isDemo: true
+        }));
+        setStories(demoList);
+      }
+    } catch (err) {
+      console.error("Błąd podczas wczytywania historii:", err);
       const demoList = DEMO_STORIES.map(demo => ({
         id: demo.id,
         title: demo.title,
@@ -561,30 +605,10 @@ const SavedStories = ({ user, subscription, onOpenPaywall, onSelectStory, onStar
         isDemo: true
       }));
       setStories(demoList);
-      setLoading(false);
-      return;
-    }
-
-    if (!user) return;
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/stories`, {
-        headers: { "X-Session-Token": user.token }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStories(data);
-      } else {
-        setError("Nie udało się pobrać zapisanych historii.");
-      }
-    } catch (err) {
-      console.error("Błąd podczas wczytywania historii:", err);
-      setError("Nie udało się połączyć z serwerem.");
     } finally {
       setLoading(false);
     }
-  }, [user, isStarterUser]);
+  }, [user]);
 
   useEffect(() => {
     loadStories();
@@ -793,21 +817,35 @@ const SavedStories = ({ user, subscription, onOpenPaywall, onSelectStory, onStar
         </div>
         <button
           type="button"
-          className="create-story-btn"
+          className={`create-story-btn ${!isPlatformAdmin ? "pro-locked" : ""}`}
           onClick={() => {
-            if (isStarterUser) {
+            if (!isPlatformAdmin) {
               if (onOpenPaywall) onOpenPaywall({ feature: 'create_custom_story' });
               return;
             }
             if (onCreateStory) onCreateStory();
             else if (onSelectStory) onSelectStory("", "", null);
           }}
+          title={!isPlatformAdmin ? "Tworzenie własnych historii AI wymaga pakietu PRO" : "Stwórz nową historię AI"}
         >
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          <span>Create a story</span>
+          {!isPlatformAdmin ? (
+            <>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              <span>Create a story</span>
+              <span className="create-story-pro-tag">PRO</span>
+            </>
+          ) : (
+            <>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span>Create a story</span>
+            </>
+          )}
         </button>
       </header>
 
