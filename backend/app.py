@@ -1526,12 +1526,14 @@ def create_stripe_checkout_session():
         else:
             customer_kwargs["customer_email"] = user_email
 
+        is_embedded = req_data.get("embedded", True)
+
         if plan == "topup_60":
             # Jednorazowa paczka 60 minut (29 zł)
-            session = stripe.checkout.Session.create(
-                mode="payment",
+            session_kwargs = {
+                "mode": "payment",
                 **customer_kwargs,
-                line_items=[{
+                "line_items": [{
                     "price_data": {
                         "currency": "pln",
                         "product_data": {
@@ -1542,14 +1544,20 @@ def create_stripe_checkout_session():
                     },
                     "quantity": 1
                 }],
-                metadata={
+                "metadata": {
                     "user_email": user_email,
                     "plan": "topup_60",
                     "extra_minutes": "60"
-                },
-                success_url=f"{return_url}?payment=success&topup=60&session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=f"{return_url}?payment=cancelled"
-            )
+                }
+            }
+            if is_embedded:
+                session_kwargs["ui_mode"] = "embedded_page"
+                session_kwargs["return_url"] = f"{return_url}?payment=success&topup=60&session_id={{CHECKOUT_SESSION_ID}}"
+            else:
+                session_kwargs["success_url"] = f"{return_url}?payment=success&topup=60&session_id={{CHECKOUT_SESSION_ID}}"
+                session_kwargs["cancel_url"] = f"{return_url}?payment=cancelled"
+
+            session = stripe.checkout.Session.create(**session_kwargs)
         else:
             # Subskrypcja z 7-dniowym darmowym okresem próbnym (wymagana autoryzacja karty)
             target_plan = plan if plan in ["pro", "intensive"] else "pro"
@@ -1567,12 +1575,12 @@ def create_stripe_checkout_session():
             if not has_used_trial:
                 sub_params["trial_period_days"] = 7
 
-            session = stripe.checkout.Session.create(
-                mode="subscription",
+            session_kwargs = {
+                "mode": "subscription",
                 **customer_kwargs,
-                payment_method_collection="always",
-                subscription_data=sub_params,
-                line_items=[{
+                "payment_method_collection": "always",
+                "subscription_data": sub_params,
+                "line_items": [{
                     "price_data": {
                         "currency": "pln",
                         "product_data": {
@@ -1588,17 +1596,25 @@ def create_stripe_checkout_session():
                     },
                     "quantity": 1
                 }],
-                metadata={
+                "metadata": {
                     "user_email": user_email,
                     "plan": target_plan
-                },
-                success_url=f"{return_url}?payment=success&plan={target_plan}&session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=f"{return_url}?payment=cancelled"
-            )
+                }
+            }
+            if is_embedded:
+                session_kwargs["ui_mode"] = "embedded_page"
+                session_kwargs["return_url"] = f"{return_url}?payment=success&plan={target_plan}&session_id={{CHECKOUT_SESSION_ID}}"
+            else:
+                session_kwargs["success_url"] = f"{return_url}?payment=success&plan={target_plan}&session_id={{CHECKOUT_SESSION_ID}}"
+                session_kwargs["cancel_url"] = f"{return_url}?payment=cancelled"
+
+            session = stripe.checkout.Session.create(**session_kwargs)
 
         return jsonify({
+            "client_secret": session.client_secret,
             "checkout_url": session.url,
-            "session_id": session.id
+            "session_id": session.id,
+            "publishable_key": os.getenv("STRIPE_PUBLISHABLE_KEY", STRIPE_PUBLISHABLE_KEY).strip()
         }), 200
 
     except Exception as e:

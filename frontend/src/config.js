@@ -15,3 +15,6 @@ export const getApiBaseUrl = () => {
 
 export const API_BASE_URL = getApiBaseUrl();
 
+export const STRIPE_PUBLISHABLE_KEY =
+  process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY ||
+  'pk_test_51UQUViEvr5fdmAgWFbwgVcCm14xZwO6Re6F9oN6yafLc0Jem1kmNBiwAx7fFgoQM3zTO4Tm2dL9qjckHKMN6lW0s00PXyJf6YY';
