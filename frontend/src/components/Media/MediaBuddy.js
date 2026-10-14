@@ -260,8 +260,9 @@ const getUserKey = (user) => {
   return user?.token ? 'auth_user' : 'guest';
 };
 
-const loadSavedCustomVideos = (user) => {
-  const isPlatformAdmin = Boolean(
+const loadSavedCustomVideos = (user, subscription) => {
+  const isSimulatingUser = subscription?.admin_preview_role && subscription?.admin_preview_role !== 'admin';
+  const isPlatformAdmin = !isSimulatingUser && Boolean(
     user?.is_admin ||
     user?.email === 'przemek.rakotny@gmail.com' ||
     user?.email === 'przemokoduje@gmail.com'
@@ -283,8 +284,9 @@ const loadSavedCustomVideos = (user) => {
   }
 };
 
-const getInitialVideo = (user) => {
-  const isPlatformAdmin = Boolean(
+const getInitialVideo = (user, subscription) => {
+  const isSimulatingUser = subscription?.admin_preview_role && subscription?.admin_preview_role !== 'admin';
+  const isPlatformAdmin = !isSimulatingUser && Boolean(
     user?.is_admin ||
     user?.email === 'przemek.rakotny@gmail.com' ||
     user?.email === 'przemokoduje@gmail.com'
@@ -350,7 +352,8 @@ const getInitialVideoTime = (video, user) => {
 
 function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   const userKey = useMemo(() => getUserKey(user), [user]);
-  const isPlatformAdmin = Boolean(
+  const isSimulatingUser = subscription?.admin_preview_role && subscription?.admin_preview_role !== 'admin';
+  const isPlatformAdmin = !isSimulatingUser && Boolean(
     user?.is_admin ||
     subscription?.is_admin ||
     user?.email === 'przemek.rakotny@gmail.com' ||
@@ -358,7 +361,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   );
   const isStarterUser = !isPlatformAdmin && (!subscription || subscription.tier === 'starter' || subscription.status === 'expired');
 
-  const [currentVideo, setCurrentVideo] = useState(() => getInitialVideo(user));
+  const [currentVideo, setCurrentVideo] = useState(() => getInitialVideo(user, subscription));
   const initialTime = useMemo(() => getInitialVideoTime(currentVideo, user), [currentVideo, user]);
   const [currentTime, setCurrentTime] = useState(initialTime);
   const targetSeekTimeRef = useRef(initialTime);
@@ -542,7 +545,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return [];
   });
 
@@ -568,7 +571,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           const userKey = user?.email || user?.uid || "guest";
           localStorage.setItem(`media_buddy_notebook_words_${userKey}_${currentVideo.youtubeId}`, JSON.stringify(updated));
         }
-      } catch (e) {}
+      } catch (e) { }
       return updated;
     });
   }, [currentVideo, user, getLocalStorageWordsKey]);
@@ -602,7 +605,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                 const userKey = user?.email || user?.uid || "guest";
                 localStorage.setItem(`media_buddy_notebook_words_${userKey}_${currentVideo.youtubeId}`, JSON.stringify(merged));
               }
-            } catch (e) {}
+            } catch (e) { }
             return merged;
           });
         }
@@ -624,7 +627,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           setNotebookWords(parsed);
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     fetchNotebookWords();
 
@@ -849,7 +852,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       if (userKey && userKey !== 'guest') {
         try {
           localStorage.removeItem(`media_buddy_custom_videos_${userKey}`);
-        } catch (e) {}
+        } catch (e) { }
       }
       return;
     }
@@ -861,7 +864,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       if (saved) {
         setVideoProgress(JSON.parse(saved));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     if (!user || (!user.token && !user.email)) return;
 
@@ -893,7 +896,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                     headers: { ...headers, "Content-Type": "application/json" },
                     body: JSON.stringify({ ...v, user_email: user.email })
                   });
-                } catch (err) {}
+                } catch (err) { }
               }
             }
           }
@@ -934,7 +937,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     setCustomVideos(updated);
     try {
       localStorage.setItem(`media_buddy_custom_videos_${userKey}`, JSON.stringify(updated));
-    } catch (err) {}
+    } catch (err) { }
     if (currentVideo.id === videoId) {
       setCurrentVideo(CURATED_VIDEOS[0]);
     }
@@ -983,8 +986,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       const scrollContainer = targetElement.closest(".view-container") || document.querySelector(".view-container");
 
       const elementRect = targetElement.getBoundingClientRect();
-      const headerBottom = topbar 
-        ? topbar.getBoundingClientRect().bottom 
+      const headerBottom = topbar
+        ? topbar.getBoundingClientRect().bottom
         : (scrollContainer ? scrollContainer.getBoundingClientRect().top : 0);
       const currentGapBelowHeader = elementRect.top - headerBottom;
 
@@ -1318,7 +1321,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         if (currentVideo.youtubeId) {
           localStorage.setItem(`media_buddy_last_youtube_id_${userKey}`, currentVideo.youtubeId);
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (isInitialMount.current) {
@@ -1694,7 +1697,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           const userKey = user?.email || user?.uid || "guest";
           localStorage.setItem(`media_buddy_notebook_words_${userKey}_${currentVideo.youtubeId}`, JSON.stringify(updated));
         }
-      } catch (e) {}
+      } catch (e) { }
       return updated;
     });
 
@@ -2954,7 +2957,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                 onClick={() => { setAddMediaTab("youtube"); setExtractionError(""); }}
               >
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
                 </svg>
                 YouTube (Auto-napisy)
               </button>
@@ -3113,7 +3116,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                           onClick={() => handleApplyExtractedVideo()}
                         >
                           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                            <polygon points="5 3 19 12 5 21 5 3"/>
+                            <polygon points="5 3 19 12 5 21 5 3" />
                           </svg>
                           Rozpocznij naukę z tym filmem
                         </button>

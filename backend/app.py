@@ -1072,6 +1072,47 @@ def admin_verify():
     return jsonify({"is_admin": True}), 200
 
 
+@app.route("/api/admin/set-preview-role", methods=['POST'])
+def admin_set_preview_role():
+    """Umożliwia administratorowi natychmiastowe przełączenie widoku aplikacji na rolę: starter, pro, intensive lub admin."""
+    user_email = get_user_from_request()
+    if not user_email or not is_admin(user_email):
+        return jsonify({"error": "Brak uprawnień administratora"}), 403
+
+    req_data = request.get_json(silent=True) or {}
+    role = req_data.get("role", "admin").lower().strip()
+    if role not in ["admin", "starter", "pro", "intensive"]:
+        return jsonify({"error": "Nieprawidłowa rola testowa"}), 400
+
+    update_user_subscription(user_email, {
+        "admin_preview_role": role
+    })
+
+    return jsonify({
+        "success": True,
+        "message": f"Pomyślnie przełączono tryb podglądu na: {role}",
+        "subscription": get_user_subscription(user_email)
+    }), 200
+
+
+@app.route("/api/admin/reset-minutes", methods=['POST'])
+def admin_reset_minutes():
+    """Zeruje licznik wykorzystanych minut Live Orb dla administratora do celów testowych."""
+    user_email = get_user_from_request()
+    if not user_email or not is_admin(user_email):
+        return jsonify({"error": "Brak uprawnień administratora"}), 403
+
+    update_user_subscription(user_email, {
+        "live_minutes_used": 0.0
+    })
+
+    return jsonify({
+        "success": True,
+        "message": "Zresetowano wykorzystane minuty do 0.0 min",
+        "subscription": get_user_subscription(user_email)
+    }), 200
+
+
 @app.route("/api/admin/stats", methods=['GET'])
 def admin_stats():
     user_email = get_user_from_request()
@@ -1249,16 +1290,34 @@ def get_user_subscription(email):
         print(f"Błąd odczytu subskrypcji dla {email}: {e}")
 
     sub_data = user_data.get('subscription') or {}
-    tier = sub_data.get('tier') or ('intensive' if admin else 'starter')
+
+    # Tryb symulacji roli przez administratora (np. testowanie Starter / Pro / Intensive)
+    preview_role = sub_data.get('admin_preview_role')  # 'starter', 'pro', 'intensive' lub 'admin'/None
+    effective_admin = admin and (not preview_role or preview_role == 'admin')
+
+    if admin and preview_role and preview_role in SUBSCRIPTION_PLANS:
+        tier = preview_role
+    else:
+        tier = sub_data.get('tier') or ('intensive' if admin else 'starter')
+
     if tier not in SUBSCRIPTION_PLANS:
         tier = 'starter'
 
     plan = SUBSCRIPTION_PLANS[tier]
-    status = sub_data.get('status') or ('active' if admin else 'free')
 
-    # Sprawdzenie czy 7-dniowy okres próbny nie wygasł
+    if admin and preview_role:
+        if preview_role == 'starter':
+            status = 'free'
+        elif preview_role in ['pro', 'intensive']:
+            status = 'trialing' if not sub_data.get('stripe_subscription_id') else 'active'
+        else:
+            status = 'active'
+    else:
+        status = sub_data.get('status') or ('active' if effective_admin else 'free')
+
+    # Sprawdzenie czy 7-dniowy okres próbny nie wygasł (tylko w normalnym trybie)
     trial_ends_at = sub_data.get('trial_ends_at')
-    if status == 'trialing' and trial_ends_at:
+    if status == 'trialing' and trial_ends_at and not (admin and preview_role):
         try:
             t_end = datetime.fromisoformat(trial_ends_at) if isinstance(trial_ends_at, str) else trial_ends_at
             if datetime.utcnow() > t_end and not sub_data.get('stripe_subscription_id'):
@@ -1271,8 +1330,10 @@ def get_user_subscription(email):
     live_minutes_used = float(sub_data.get('live_minutes_used', 0.0))
     extra_live_minutes = float(sub_data.get('extra_live_minutes', 0.0))
 
-    if admin and tier == 'intensive':
+    if effective_admin and tier == 'intensive':
         live_minutes_limit = 99999.0
+    elif admin and preview_role:
+        live_minutes_limit = float(plan['live_minutes_limit'])
     else:
         live_minutes_limit = float(sub_data.get('live_minutes_limit', plan['live_minutes_limit']))
 
@@ -1289,17 +1350,19 @@ def get_user_subscription(email):
         "extra_live_minutes": round(extra_live_minutes, 2),
         "minutes_remaining": minutes_remaining,
         "total_minutes_allowed": round(total_allowed, 2),
-        "can_access_mastery": plan["can_access_mastery"] or admin,
-        "can_access_media": plan["can_access_media"] or admin,
-        "can_access_industry_modes": plan["can_access_industry_modes"] or admin,
-        "can_buy_topup": plan["can_buy_topup"] or admin,
+        "can_access_mastery": plan["can_access_mastery"] or effective_admin,
+        "can_access_media": plan["can_access_media"] or effective_admin,
+        "can_access_industry_modes": plan["can_access_industry_modes"] or effective_admin,
+        "can_buy_topup": plan["can_buy_topup"] or effective_admin,
         "trial_ends_at": str(trial_ends_at) if trial_ends_at else None,
         "has_used_trial": bool(sub_data.get('has_used_trial', False)),
         "current_period_end": str(sub_data.get('current_period_end', '')),
         "stripe_customer_id": sub_data.get('stripe_customer_id'),
         "has_stripe_subscription": bool(sub_data.get('stripe_subscription_id')),
         "processed_sessions": sub_data.get('processed_sessions') or [],
-        "is_admin": admin
+        "is_admin": admin,
+        "effective_admin": effective_admin,
+        "admin_preview_role": preview_role or 'admin'
     }
 
 

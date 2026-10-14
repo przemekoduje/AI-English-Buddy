@@ -267,7 +267,8 @@ function Workspace({
   selectedVoice = 'en-US-BrianNeural',
   onVoiceChange,
 }) {
-  const isPlatformAdmin = Boolean(
+  const isSimulatingUser = subscription?.admin_preview_role && subscription?.admin_preview_role !== 'admin';
+  const isPlatformAdmin = !isSimulatingUser && Boolean(
     isAdmin ||
     user?.is_admin ||
     subscription?.is_admin ||

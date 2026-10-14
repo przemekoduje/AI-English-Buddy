@@ -379,6 +379,8 @@ function App() {
           ) : currentView === 'admin' ? (
             <AdminDashboard 
               user={user}
+              subscription={subscription}
+              onSubscriptionUpdated={(updatedSub) => setSubscription(updatedSub)}
             />
           ) : currentView === 'help-feedback' ? (
             <HelpFeedback 
@@ -407,6 +409,46 @@ function App() {
           )}
         </div>
       </main>
+
+      {/* Pływający wskaźnik trybu symulacji dla administratora */}
+      {isAdmin && subscription?.admin_preview_role && subscription?.admin_preview_role !== 'admin' && (
+        <div className="admin-floating-simulator-pill animate-fade-in">
+          <span className="pill-dot" />
+          <span className="pill-label">
+            Tryb testowy: <strong>{subscription.admin_preview_role.toUpperCase()}</strong>
+          </span>
+          <button 
+            type="button" 
+            className="pill-action-btn"
+            onClick={() => handleNavigate('admin')}
+          >
+            Zmień w panelu
+          </button>
+          <button 
+            type="button" 
+            className="pill-action-btn pill-btn-exit"
+            onClick={async () => {
+              try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/set-preview-role`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-Session-Token': user?.token || ''
+                  },
+                  body: JSON.stringify({ role: 'admin' })
+                });
+                const data = await res.json();
+                if (data.subscription) setSubscription(data.subscription);
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+          >
+            ✕ Wyłącz
+          </button>
+        </div>
+      )}
+
       {externalFlashcardsWords.length > 0 && (
         <div className="flashcards-fullpage-overlay">
           <div className="flashcards-wrapper-modal glass-panel">

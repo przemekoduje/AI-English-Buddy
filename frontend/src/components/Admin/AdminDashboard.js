@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../../config';
 import './AdminDashboard.css';
 
-const AdminDashboard = ({ user }) => {
+const AdminDashboard = ({ user, subscription, onSubscriptionUpdated = () => {} }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -12,6 +12,60 @@ const AdminDashboard = ({ user }) => {
   const [dateFilter, setDateFilter] = useState('all_time');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Stan symulatora roli dla administratora
+  const currentPreview = subscription?.admin_preview_role || 'admin';
+  const [roleUpdating, setRoleUpdating] = useState(false);
+  const [statusMsg, setStatusMsg] = useState(null);
+
+  const handleSetRole = async (targetRole) => {
+    setRoleUpdating(true);
+    setStatusMsg(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/set-preview-role`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Token': user?.token || ''
+        },
+        body: JSON.stringify({ role: targetRole })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Błąd przełączania roli');
+      setStatusMsg(`Przełączono na tryb: ${targetRole.toUpperCase()}`);
+      if (data.subscription) {
+        onSubscriptionUpdated(data.subscription);
+      }
+    } catch (err) {
+      setStatusMsg(`Błąd: ${err.message}`);
+    } finally {
+      setRoleUpdating(false);
+    }
+  };
+
+  const handleResetMinutes = async () => {
+    setRoleUpdating(true);
+    setStatusMsg(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/reset-minutes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Token': user?.token || ''
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Błąd resetu');
+      setStatusMsg('Zresetowano wykorzystane minuty do 0.0 min');
+      if (data.subscription) {
+        onSubscriptionUpdated(data.subscription);
+      }
+    } catch (err) {
+      setStatusMsg(`Błąd: ${err.message}`);
+    } finally {
+      setRoleUpdating(false);
+    }
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -196,7 +250,90 @@ const AdminDashboard = ({ user }) => {
     <div className="admin-dashboard-container animate-fade-in">
       <div className="admin-header-row">
         <h2>Konsola Administratora</h2>
-        <div className="admin-badge">AI Cost Tracker</div>
+        <div className="admin-badge">AI Cost Tracker & Permissions</div>
+      </div>
+
+      {/* SEKCJA TESTERA UPRAWNIEŃ I PAKIETÓW DLA ADMINA */}
+      <div className="admin-simulator-card glass-panel animate-fade-in">
+        <div className="simulator-header">
+          <div className="simulator-badge">🛠️ TESTER UPRAWNIEŃ & BLOKAD</div>
+          <h3 className="simulator-title">Przełącznik trybu testowego aplikacji</h3>
+          <p className="simulator-subtitle">
+            Wciel się natychmiast w dowolną rolę, aby przetestować działanie przycisków, blokad paywalla, 5 historii demonstracyjnych i ograniczeń wideo bez przechodzenia przez Stripe.
+          </p>
+        </div>
+
+        <div className="simulator-roles-grid">
+          <button 
+            type="button"
+            className={`simulator-btn ${currentPreview === 'admin' ? 'active-admin' : ''}`}
+            onClick={() => handleSetRole('admin')}
+            disabled={roleUpdating}
+          >
+            <span className="role-icon">👑</span>
+            <div className="role-text">
+              <span className="role-name">Administrator</span>
+              <span className="role-desc">Pełny dostęp do wszystkiego (9999 min)</span>
+            </div>
+          </button>
+
+          <button 
+            type="button"
+            className={`simulator-btn ${currentPreview === 'starter' ? 'active-starter' : ''}`}
+            onClick={() => handleSetRole('starter')}
+            disabled={roleUpdating}
+          >
+            <span className="role-icon">🆓</span>
+            <div className="role-text">
+              <span className="role-name">Starter (Free)</span>
+              <span className="role-desc">Test blokad: 5 historii demo, blokada YouTube & tworzenia</span>
+            </div>
+          </button>
+
+          <button 
+            type="button"
+            className={`simulator-btn ${currentPreview === 'pro' ? 'active-pro' : ''}`}
+            onClick={() => handleSetRole('pro')}
+            disabled={roleUpdating}
+          >
+            <span className="role-icon">✨</span>
+            <div className="role-text">
+              <span className="role-name">Pro (150 min)</span>
+              <span className="role-desc">Tworzenie historii, YouTube i Mastery Path odblokowane</span>
+            </div>
+          </button>
+
+          <button 
+            type="button"
+            className={`simulator-btn ${currentPreview === 'intensive' ? 'active-intensive' : ''}`}
+            onClick={() => handleSetRole('intensive')}
+            disabled={roleUpdating}
+          >
+            <span className="role-icon">🚀</span>
+            <div className="role-text">
+              <span className="role-name">Intensive (400 min)</span>
+              <span className="role-desc">Wszystko + symulacje branżowe</span>
+            </div>
+          </button>
+        </div>
+
+        <div className="simulator-footer">
+          <div className="simulator-status-info">
+            Aktywny tryb: <strong className="simulator-active-pill">{currentPreview.toUpperCase()}</strong>
+            {subscription && (
+              <span className="simulator-meta"> • Pula minut Live Orb: <strong>{subscription.live_minutes_used}</strong> / <strong>{subscription.live_minutes_limit} min</strong></span>
+            )}
+            {statusMsg && <span className="simulator-alert animate-fade-in">{statusMsg}</span>}
+          </div>
+          <button 
+            type="button"
+            className="btn-reset-minutes"
+            onClick={handleResetMinutes}
+            disabled={roleUpdating}
+          >
+            🔄 Zresetuj zużyte minuty na 0
+          </button>
+        </div>
       </div>
 
       <div className="admin-filter-card glass-panel animate-fade-in">

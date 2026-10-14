@@ -38,6 +38,200 @@
   text-transform: uppercase;
 }
 
+/* ── Role Simulator Card ─────────────────────────────────────── */
+.admin-simulator-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-left: 5px solid #6366f1;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+.simulator-header {
+  margin-bottom: 18px;
+}
+
+.simulator-badge {
+  display: inline-block;
+  background: #ede9fe;
+  color: #6366f1;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.simulator-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  color: #1e293b;
+}
+
+.simulator-subtitle {
+  font-size: 13.5px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.simulator-roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.simulator-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 2px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.simulator-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.simulator-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.role-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.role-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.role-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.role-desc {
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+/* Aktywne stany ról */
+.simulator-btn.active-admin {
+  border-color: #6366f1;
+  background: #f5f3ff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+.simulator-btn.active-admin .role-name {
+  color: #4f46e5;
+}
+
+.simulator-btn.active-starter {
+  border-color: #0ea5e9;
+  background: #f0f9ff;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+}
+.simulator-btn.active-starter .role-name {
+  color: #0284c7;
+}
+
+.simulator-btn.active-pro {
+  border-color: #8b5cf6;
+  background: #faf5ff;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+.simulator-btn.active-pro .role-name {
+  color: #7c3aed;
+}
+
+.simulator-btn.active-intensive {
+  border-color: #0f172a;
+  background: #f1f5f9;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.15);
+}
+.simulator-btn.active-intensive .role-name {
+  color: #0f172a;
+}
+
+/* Stopka symulatora */
+.simulator-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.simulator-status-info {
+  font-size: 13px;
+  color: #475569;
+}
+
+.simulator-active-pill {
+  display: inline-block;
+  background: #1e293b;
+  color: #ffffff;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  margin-left: 4px;
+}
+
+.simulator-meta {
+  color: #64748b;
+  font-size: 12.5px;
+}
+
+.simulator-alert {
+  display: inline-block;
+  margin-left: 10px;
+  background: #dcfce7;
+  color: #15803d;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.btn-reset-minutes {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-reset-minutes:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
 /* ── Summary Grid ────────────────────────────────────────────── */
 .admin-summary-grid {
   display: grid;

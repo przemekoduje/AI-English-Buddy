@@ -384,7 +384,8 @@ export const calculateCEFRLevel = (text = "", title = "") => {
 };
 
 const SavedStories = ({ user, subscription, onOpenPaywall, onSelectStory, onStartLiveChat, onCreateStory }) => {
-  const isPlatformAdmin = Boolean(
+  const isSimulatingUser = subscription?.admin_preview_role && subscription?.admin_preview_role !== 'admin';
+  const isPlatformAdmin = !isSimulatingUser && Boolean(
     user?.is_admin ||
     subscription?.is_admin ||
     user?.email === 'przemek.rakotny@gmail.com' ||

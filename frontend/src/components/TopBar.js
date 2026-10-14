@@ -34,7 +34,8 @@ const TopBar = ({
   const avatarUrl = userPhoto || (userEmail ? `https://unavatar.io/${encodeURIComponent(userEmail)}?fallback=false` : null);
   const userInitial = (userName || 'U').charAt(0).toUpperCase();
 
-  const isPlatformAdmin = Boolean(
+  const isSimulatingUser = subscription?.admin_preview_role && subscription?.admin_preview_role !== 'admin';
+  const isPlatformAdmin = !isSimulatingUser && Boolean(
     user?.is_admin || 
     subscription?.is_admin || 
     userEmail === 'przemek.rakotny@gmail.com' || 
