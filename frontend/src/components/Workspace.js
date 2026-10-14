@@ -1025,33 +1025,7 @@ function Workspace({
     prevExplanationWordRef.current = explanationWord;
   }, [explanationWord]);
 
-  const handleSelectDemoStory = useCallback((demo) => {
-    handleStop();
-    setGeneratedText(demo.text);
-    setCurrentStoryTitle(demo.title);
-    setCurrentStoryId(demo.id);
-    setSelectedCategory(demo.category);
-    setSelectedLevel(demo.level);
-    setStoryParts([{
-      id: demo.id,
-      title: demo.title,
-      text: demo.text,
-      part_number: 1,
-      level: demo.level,
-      cefr_level: demo.level,
-      category: demo.category,
-      topics: demo.topics,
-      read_progress: 0,
-      custom_details: demo.custom_details
-    }]);
-    setActivePartIndex(0);
-    setLoadedRootId(demo.id);
-    setIsContinuing(false);
-    setReadingProgress(0);
-    setReadSentenceIndices(new Set());
-    setDismissedStoryWords(new Set());
-    setInlineWordData(null);
-  }, []);
+
 
   const activeStoryText = generatedText || (DEMO_STORIES[0]?.text || FIGMA_SAMPLE_TEXT);
   const activeStoryTitle = currentStoryTitle || (DEMO_STORIES[0]?.title || FIGMA_SAMPLE_TITLE);
@@ -3212,32 +3186,7 @@ function Workspace({
         )}
 
         <div className="workspace-figma-top-bar">
-          <div className="demo-stories-selector-bar">
-            <div className="demo-stories-label">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-              <span>Przykładowe lekcje Start:</span>
-            </div>
-            <div className="demo-stories-pills">
-              {DEMO_STORIES.map((demo) => {
-                const isSelected = (currentStoryId === demo.id) || (!currentStoryId && currentStoryTitle === demo.title);
-                return (
-                  <button
-                    key={demo.id}
-                    type="button"
-                    className={`demo-story-pill ${isSelected ? "active" : ""}`}
-                    onClick={() => handleSelectDemoStory(demo)}
-                    title={demo.custom_details || demo.title}
-                  >
-                    <span className="demo-pill-badge">{demo.level}</span>
-                    <span className="demo-pill-category">{demo.category}</span>
-                    <span className="demo-pill-title">{demo.title}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+
 
           {(storyParts.length > 0 || generatedText) && (
             <div className="chapter-tabs" style={{ margin: 0 }}>
