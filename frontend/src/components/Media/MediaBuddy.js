@@ -856,6 +856,67 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   const currentVideoRef = useRef(currentVideo);
   const recentScrollRef = useRef(null);
   const unwatchedScrollRef = useRef(null);
+  const videoPlayerCardRef = useRef(null);
+  const hasAutoScrolledRef = useRef(false);
+  const isVideoGalleryOpenRef = useRef(isVideoGalleryOpen);
+  const currentVideoId = currentVideo?.id || currentVideo?.youtubeId;
+  const prevVideoIdRef = useRef(currentVideoId);
+
+  useEffect(() => {
+    isVideoGalleryOpenRef.current = isVideoGalleryOpen;
+  }, [isVideoGalleryOpen]);
+
+  useEffect(() => {
+    if (prevVideoIdRef.current !== currentVideoId) {
+      prevVideoIdRef.current = currentVideoId;
+      hasAutoScrolledRef.current = false;
+    }
+  }, [currentVideoId]);
+
+  const performScrollToPlayer = useCallback(() => {
+    requestAnimationFrame(() => {
+      const targetElement = videoPlayerCardRef.current || document.querySelector(".video-player-card") || document.querySelector(".media-workspace-grid");
+      if (!targetElement) return;
+
+      const topbar = document.querySelector(".mission-topbar") || document.querySelector("header");
+      const scrollContainer = targetElement.closest(".view-container") || document.querySelector(".view-container");
+
+      const elementRect = targetElement.getBoundingClientRect();
+      const headerBottom = topbar 
+        ? topbar.getBoundingClientRect().bottom 
+        : (scrollContainer ? scrollContainer.getBoundingClientRect().top : 0);
+      const currentGapBelowHeader = elementRect.top - headerBottom;
+
+      if (scrollContainer) {
+        const targetScrollTop = Math.max(0, Math.round(scrollContainer.scrollTop + (currentGapBelowHeader - 20)));
+        scrollContainer.scrollTo({
+          top: targetScrollTop,
+          behavior: "smooth"
+        });
+      } else {
+        const currentScroll = window.scrollY || document.documentElement.scrollTop;
+        const targetScrollTop = Math.max(0, Math.round(currentScroll + (currentGapBelowHeader - 20)));
+        window.scrollTo({
+          top: targetScrollTop,
+          behavior: "smooth"
+        });
+      }
+    });
+  }, []);
+
+  const scrollToPlayer = useCallback(() => {
+    if (hasAutoScrolledRef.current) return;
+    hasAutoScrolledRef.current = true;
+
+    if (isVideoGalleryOpenRef.current) {
+      setIsVideoGalleryOpen(false);
+      setTimeout(() => {
+        performScrollToPlayer();
+      }, 350);
+    } else {
+      performScrollToPlayer();
+    }
+  }, [performScrollToPlayer]);
 
   const scrollRow = (ref, direction) => {
     if (ref.current) {
@@ -1085,6 +1146,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
   const handlePlayerStateChange = (state) => {
     if (state === 1) { // PLAYING
+      scrollToPlayer();
       setIsPlaying(true);
       window.__speakling_is_media_playing = true;
       document.body.dataset.mediaPlaying = "true";
@@ -1186,9 +1248,13 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       if (isPlaying) {
         playerRef.current.pauseVideo();
       } else {
+        scrollToPlayer();
         playerRef.current.playVideo();
       }
     } else {
+      if (!isPlaying) {
+        scrollToPlayer();
+      }
       setIsPlaying(!isPlaying);
     }
   };
@@ -2227,7 +2293,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         {/* Left Column: Player + Lesson Details + Words Worth Keeping */}
         <div className="media-left-column">
           {/* Video Player Card */}
-          <div className="video-player-card">
+          <div className="video-player-card" ref={videoPlayerCardRef}>
             <div className="video-player-frame-wrapper" ref={playerWrapperRef}>
               <div className="video-level-badge">
                 {videoMeta.level} · {videoMeta.category}
