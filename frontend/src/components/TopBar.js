@@ -34,9 +34,15 @@ const TopBar = ({
   const avatarUrl = userPhoto || (userEmail ? `https://unavatar.io/${encodeURIComponent(userEmail)}?fallback=false` : null);
   const userInitial = (userName || 'U').charAt(0).toUpperCase();
 
-  const tier = subscription?.tier || 'starter';
-  const remaining = subscription?.minutes_remaining !== undefined ? subscription.minutes_remaining : 5;
-  const isProOrIntensive = tier === 'pro' || tier === 'intensive';
+  const isPlatformAdmin = Boolean(
+    user?.is_admin || 
+    subscription?.is_admin || 
+    userEmail === 'przemek.rakotny@gmail.com' || 
+    userEmail === 'przemokoduje@gmail.com'
+  );
+  const tier = isPlatformAdmin ? 'admin' : (subscription?.tier || 'starter');
+  const remaining = isPlatformAdmin ? 9999 : (subscription?.minutes_remaining !== undefined ? subscription.minutes_remaining : 5);
+  const isProOrIntensive = isPlatformAdmin || tier === 'pro' || tier === 'intensive';
 
   // Zamknięcie rozwijanego menu po kliknięciu poza nim
   useEffect(() => {
@@ -106,12 +112,12 @@ const TopBar = ({
         {/* Pigułka subskrypcji i minut Live AI */}
         <button 
           className={`topbar-plan-pill ${isProOrIntensive ? 'plan-pill-premium' : 'plan-pill-free'}`}
-          onClick={() => onOpenPaywall && onOpenPaywall()}
-          title="Zarządzaj pakietem i limitami minut Live AI"
+          onClick={() => !isPlatformAdmin && onOpenPaywall && onOpenPaywall()}
+          title={isPlatformAdmin ? "Konto Administratora — pełny dostęp" : "Zarządzaj pakietem i limitami minut Live AI"}
         >
           <span className="plan-pill-badge">{tier.toUpperCase()}</span>
-          <span className="plan-pill-mins">{remaining.toFixed(1)}m</span>
-          <span className="plan-pill-action">{tier === 'starter' ? '⚡ Uaktualnij' : 'Plan'}</span>
+          <span className="plan-pill-mins">{isPlatformAdmin ? '∞' : `${remaining.toFixed(1)}m`}</span>
+          <span className="plan-pill-action">{isPlatformAdmin ? 'Pełny dostęp' : (tier === 'starter' ? '⚡ Uaktualnij' : 'Plan')}</span>
         </button>
 
         <button className="topbar-lang-pill" title="Zmień język docelowy (EN → PL)">

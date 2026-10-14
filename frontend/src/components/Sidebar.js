@@ -22,7 +22,7 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
   const isEffectiveAdmin = Boolean(
     isAdmin || 
     subscription?.is_admin || 
-    (user?.email && (user.email.includes('przemyslaw') || user.email.includes('przemokoduje')))
+    (user?.email && (user.email.includes('przemek') || user.email.includes('przemyslaw') || user.email.includes('przemokoduje')))
   );
 
   const [adminTickingInfo, setAdminTickingInfo] = useState({
@@ -250,7 +250,6 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
     {
       id: 'media',
       label: 'Media Buddy',
-      badge: isStarter && !isAdmin ? 'PRO' : null,
       icon: (
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10" />
@@ -286,12 +285,6 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
 
   const handleItemClick = (item) => {
     if (item.disabled) return;
-    if (item.id === 'media' && isStarter && !isAdmin) {
-      if (onOpenPaywall) {
-        onOpenPaywall({ feature: 'media' });
-        return;
-      }
-    }
     onNavigate(item.id);
   };
 

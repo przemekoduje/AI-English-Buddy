@@ -142,6 +142,20 @@ const PaywallModal = ({
 
   // Kontekstowy nagłówek w zależności od przyczyny wywołania paywalla
   const getContextualHeadline = () => {
+    if (initialReason?.feature === 'create_story' || initialReason?.feature === 'create_custom_story') {
+      return {
+        badge: 'TWORZENIE HISTORII AI',
+        title: 'Tworzenie własnych historii wymaga pakietu Pro',
+        subtitle: 'W darmowym pakiecie Start masz do dyspozycji 5 przygotowanych historii demonstracyjnych. Przejdź na Pro, aby generować nielimitowane opowiadania na dowolny temat i poziom CEFR!'
+      };
+    }
+    if (initialReason?.feature === 'media_custom_video') {
+      return {
+        badge: 'WŁASNE WIDEO YOUTUBE',
+        title: 'Analiza dowolnych filmów wymaga pakietu Pro',
+        subtitle: 'W planie Start możesz uczyć się z 5 gotowych materiałów demonstracyjnych. Aktywuj pakiet Pro, aby analizować dowolne filmy z YouTube, seriale i podcasty!'
+      };
+    }
     if (initialReason?.feature === 'mastery') {
       return {
         badge: 'ODBLOKUJ MASTERY PATH',

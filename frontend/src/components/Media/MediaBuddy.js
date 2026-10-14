@@ -5,24 +5,10 @@ import PronunciationPracticeModal from "../Notebook/PronunciationPracticeModal";
 import WordExplanationModal from "../Notebook/WordExplanationModal";
 import transcriptsData from "./transcripts.json";
 import { ensureCompleteSentences, splitBlockIntoSentences } from "./sentenceGrouping";
+import { DEMO_VIDEOS, getDemoVideoTranscript, DEMO_VIDEO_VOCAB } from "../../data/demoVideosData";
+import { DEMO_DICTIONARY, DEMO_SENTENCES } from "../../data/demoStoriesData";
 
-const SAMPLE_VIDEOS = [
-  {
-    title: "Buddhist Meditations (Podcast)",
-    id: "_U5J8JlJq2Y",
-    url: "https://www.youtube.com/watch?v=_U5J8JlJq2Y"
-  },
-  {
-    title: "Mark Zuckerberg - Meta AI",
-    id: "DbfejwP1d3c",
-    url: "https://www.youtube.com/watch?v=DbfejwP1d3c"
-  },
-  {
-    title: "Steve Jobs - Stanford 2005",
-    id: "UF8uR6Z6KLc",
-    url: "https://www.youtube.com/watch?v=UF8uR6Z6KLc"
-  }
-];
+const SAMPLE_VIDEOS = DEMO_VIDEOS;
 
 const formatTimestamp = (secs) => {
   if (isNaN(secs) || secs < 0) return "00:00:00,000";
@@ -173,29 +159,16 @@ const parseSubtitlesOrTranscript = (rawText) => {
   return [];
 };
 
-const CURATED_VIDEOS = [
-  {
-    id: "james_veitch_spam",
-    title: "James Veitch - Replying to Spam Email",
-    youtubeId: "_QdPW8JrYzQ",
-    description: "A hilarious talk about what happens when you reply to a spam email. Learn natural humor, storytelling idioms, and persuasive tone.",
-    transcript: ensureCompleteSentences(transcriptsData.james_veitch_spam)
-  },
-  {
-    id: "james_veitch_unsubscribe",
-    title: "James Veitch - The Agony of Unsubscribing",
-    youtubeId: "Dceyy0cX6J4",
-    description: "Everyday frustration turned into comedy. Great practice for modern conversational phrases, retail emails, and British humor.",
-    transcript: ensureCompleteSentences(transcriptsData.james_veitch_unsubscribe)
-  },
-  {
-    id: "jeff_allen_teenagers",
-    title: "Jeff Allen - Teenagers (Dry Bar Comedy)",
-    youtubeId: "cqjhCC4sP4Q",
-    description: "Classic American stand-up comedy about family life and teenage logic. Clear pronunciation with authentic colloquial vocabulary.",
-    transcript: ensureCompleteSentences(transcriptsData.jeff_allen_teenagers)
-  }
-];
+const CURATED_VIDEOS = DEMO_VIDEOS.map((vid) => ({
+  id: vid.id,
+  title: vid.title,
+  youtubeId: vid.youtubeId || vid.id,
+  description: vid.description,
+  level: vid.level,
+  category: vid.category,
+  keyWords: vid.keyWords,
+  transcript: ensureCompleteSentences(getDemoVideoTranscript(vid.id || vid.youtubeId) || [])
+}));
 
 const CURATED_SOURCES = [
   {
@@ -369,13 +342,13 @@ const getInitialVideoTime = (video, user) => {
 
 function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   const userKey = useMemo(() => getUserKey(user), [user]);
-  const isLocked = !user?.is_admin && !subscription?.is_admin && !subscription?.can_access_media;
-
-  useEffect(() => {
-    if (isLocked && onOpenPaywall) {
-      onOpenPaywall({ feature: 'media' });
-    }
-  }, [isLocked]);
+  const isPlatformAdmin = Boolean(
+    user?.is_admin ||
+    subscription?.is_admin ||
+    user?.email === 'przemek.rakotny@gmail.com' ||
+    user?.email === 'przemokoduje@gmail.com'
+  );
+  const isStarterUser = !isPlatformAdmin && (!subscription || subscription.tier === 'starter');
 
   const [currentVideo, setCurrentVideo] = useState(() => getInitialVideo(user));
   const initialTime = useMemo(() => getInitialVideoTime(currentVideo, user), [currentVideo, user]);
@@ -1469,6 +1442,14 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       return;
     }
 
+    if (DEMO_SENTENCES[segment.text.trim()]) {
+      const tr = DEMO_SENTENCES[segment.text.trim()];
+      setSegmentTranslation(tr);
+      setTranslationsCache(prev => ({ ...prev, [index]: tr }));
+      setIsTranslatingSegment(false);
+      return;
+    }
+
     if (latestSegmentIndexRef.current === index && isTranslatingSegment) return;
 
     latestSegmentIndexRef.current = index;
@@ -1614,12 +1595,27 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
       playerRef.current.pauseVideo();
     }
+    const cleanWord = word.replace(/[^a-zA-Z'-]/g, "").toLowerCase();
     latestWordRef.current = word;
     setSelectedWord(word);
     setWordTranslation("");
     setWordSentenceTranslation("");
     setIsTranslating(true);
     setIsSaved(false);
+
+    // Check hidden offline dictionary (DEMO_VIDEO_VOCAB or DEMO_DICTIONARY) for zero-cost instant lookup
+    const offlineDef = DEMO_VIDEO_VOCAB[cleanWord] || DEMO_DICTIONARY[cleanWord];
+    const offlineSentence = (sentenceContext && DEMO_SENTENCES[sentenceContext.trim()]) || "";
+    if (offlineDef) {
+      setTimeout(() => {
+        if (latestWordRef.current !== word) return;
+        const plTrans = typeof offlineDef === 'string' ? offlineDef : (offlineDef.pl || offlineDef.translation);
+        setWordTranslation(plTrans);
+        setWordSentenceTranslation(offlineSentence || (sentenceContext ? `(Zdanie): ${sentenceContext}` : ""));
+        setIsTranslating(false);
+      }, 180);
+      return;
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/translate`, {
@@ -1855,6 +1851,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   };
 
   const handleOpenAddMediaModal = () => {
+    if (isStarterUser) {
+      if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
+      return;
+    }
     setExtractionError("");
     setExtractedData(null);
     setUploadedFileStatus(null);
@@ -1871,6 +1871,30 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     const videoId = extractVideoId(rawUrl);
     if (!videoId) {
       setExtractionError("Nieprawidłowy adres URL filmu YouTube.");
+      return;
+    }
+
+    const demoFound = DEMO_VIDEOS.find(v => v.id === videoId || v.youtubeId === videoId);
+    if (demoFound) {
+      const demoTranscript = getDemoVideoTranscript(demoFound.id || demoFound.youtubeId);
+      if (demoTranscript && demoTranscript.length > 0) {
+        setExtractedData({
+          videoId: demoFound.youtubeId || demoFound.id,
+          youtubeUrl: `https://www.youtube.com/watch?v=${demoFound.youtubeId || demoFound.id}`,
+          title: demoFound.title,
+          segments: demoTranscript,
+          stats: {
+            sentence_count: demoTranscript.length,
+            word_count: demoTranscript.reduce((acc, s) => acc + (s.text || "").split(/\s+/).length, 0),
+            duration: demoTranscript[demoTranscript.length - 1]?.end || 0
+          }
+        });
+        return;
+      }
+    }
+
+    if (isStarterUser) {
+      if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
       return;
     }
 
@@ -2038,6 +2062,11 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     const videoId = extractVideoId(customUrl);
     if (!videoId) {
       setCustomError("Nieprawidłowy adres URL lub ID wideo.");
+      return;
+    }
+    const demoFound = DEMO_VIDEOS.find(v => v.id === videoId || v.youtubeId === videoId);
+    if (!demoFound && isStarterUser) {
+      if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
       return;
     }
     setModalVideoUrl(customUrl);

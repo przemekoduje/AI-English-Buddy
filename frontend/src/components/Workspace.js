@@ -11,6 +11,7 @@ import WordExplanationModal from "./Notebook/WordExplanationModal";
 import SessionSummaryModal from "./Notebook/SessionSummaryModal";
 import PronunciationPracticeModal from "./Notebook/PronunciationPracticeModal";
 import { calculateCEFRLevel } from "./Story/SavedStories";
+import { DEMO_STORIES, DEMO_DICTIONARY, DEMO_SENTENCES } from "../data/demoStoriesData";
 
 // Curated vocabulary metadata for rich inline word card details & key story words
 const VOCABULARY_INFO = {
@@ -266,7 +267,15 @@ function Workspace({
   selectedVoice = 'en-US-BrianNeural',
   onVoiceChange,
 }) {
-  const hasMasteryAccess = Boolean(user?.is_admin || isAdmin || subscription?.is_admin || subscription?.can_access_mastery);
+  const isPlatformAdmin = Boolean(
+    isAdmin ||
+    user?.is_admin ||
+    subscription?.is_admin ||
+    user?.email === 'przemek.rakotny@gmail.com' ||
+    user?.email === 'przemokoduje@gmail.com'
+  );
+  const isStarterUser = !isPlatformAdmin && (!subscription || subscription.tier === 'starter');
+  const hasMasteryAccess = Boolean(isPlatformAdmin || subscription?.can_access_mastery);
   const isMasteryLocked = !hasMasteryAccess;
 
   const [dismissedStoryWords, setDismissedStoryWords] = useState(new Set());
@@ -660,6 +669,10 @@ function Workspace({
   };
 
   const handleGenerateContinuation = async () => {
+    if (isStarterUser) {
+      if (onOpenPaywall) onOpenPaywall({ feature: 'create_custom_story' });
+      return;
+    }
     handleStop();
     setIsLoading(true);
 
@@ -1012,14 +1025,57 @@ function Workspace({
     prevExplanationWordRef.current = explanationWord;
   }, [explanationWord]);
 
-  const activeStoryText = generatedText || FIGMA_SAMPLE_TEXT;
-  const activeStoryTitle = currentStoryTitle || FIGMA_SAMPLE_TITLE;
+  const handleSelectDemoStory = useCallback((demo) => {
+    handleStop();
+    setGeneratedText(demo.text);
+    setCurrentStoryTitle(demo.title);
+    setCurrentStoryId(demo.id);
+    setSelectedCategory(demo.category);
+    setSelectedLevel(demo.level);
+    setStoryParts([{
+      id: demo.id,
+      title: demo.title,
+      text: demo.text,
+      part_number: 1,
+      level: demo.level,
+      cefr_level: demo.level,
+      category: demo.category,
+      topics: demo.topics,
+      read_progress: 0,
+      custom_details: demo.custom_details
+    }]);
+    setActivePartIndex(0);
+    setLoadedRootId(demo.id);
+    setIsContinuing(false);
+    setReadingProgress(0);
+    setReadSentenceIndices(new Set());
+    setDismissedStoryWords(new Set());
+    setInlineWordData(null);
+  }, []);
+
+  const activeStoryText = generatedText || (DEMO_STORIES[0]?.text || FIGMA_SAMPLE_TEXT);
+  const activeStoryTitle = currentStoryTitle || (DEMO_STORIES[0]?.title || FIGMA_SAMPLE_TITLE);
 
   // Initialize sample story if empty on mount and reset scroll
   useEffect(() => {
     if (!generatedText) {
-      setGeneratedText(FIGMA_SAMPLE_TEXT);
-      if (!currentStoryTitle) setCurrentStoryTitle(FIGMA_SAMPLE_TITLE);
+      const defaultStory = DEMO_STORIES[0] || { text: FIGMA_SAMPLE_TEXT, title: FIGMA_SAMPLE_TITLE, id: "demo_default" };
+      setGeneratedText(defaultStory.text);
+      if (!currentStoryTitle) setCurrentStoryTitle(defaultStory.title);
+      if (!currentStoryId) setCurrentStoryId(defaultStory.id);
+      setSelectedCategory(defaultStory.category || "Tech");
+      setSelectedLevel(defaultStory.level || "B2");
+      setStoryParts([{
+        id: defaultStory.id,
+        title: defaultStory.title,
+        text: defaultStory.text,
+        part_number: 1,
+        level: defaultStory.level || "B2",
+        cefr_level: defaultStory.level || "B2",
+        category: defaultStory.category || "Tech",
+        topics: defaultStory.topics || ["Tech"],
+        read_progress: 0
+      }]);
     }
     const container = document.querySelector('.view-container');
     if (container) {
@@ -1141,6 +1197,10 @@ function Workspace({
   };
 
   const handleGenerateFigmaStory = async () => {
+    if (isStarterUser) {
+      if (onOpenPaywall) onOpenPaywall({ feature: 'create_custom_story' });
+      return;
+    }
     handleStop();
     setIsGeneratingStory(true);
     try {
@@ -2224,9 +2284,41 @@ function Workspace({
 
     pauseAudioForTooltip();
 
+    const lowerClean = cleanWord.toLowerCase();
     const meta = getWordMeta(cleanWord);
     const sentences = paragraphText.split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
-    const sentenceContext = sentences.find(s => s.toLowerCase().includes(cleanWord.toLowerCase())) || paragraphText;
+    const sentenceContext = sentences.find(s => s.toLowerCase().includes(lowerClean)) || paragraphText;
+
+    const demoWord = DEMO_DICTIONARY[lowerClean];
+    const demoSentenceTrans = DEMO_SENTENCES[sentenceContext.trim()] || "";
+
+    if (demoWord) {
+      const initialData = {
+        word: cleanWord,
+        phonetic: demoWord.phonetic || meta.phonetic || `/${lowerClean}/`,
+        pos: demoWord.pos || meta.pos || "word",
+        level: demoWord.level || meta.level || "B2",
+        pl: "Wczytuję...",
+        enDef: demoWord.enDef || meta.enDef || "",
+        sentence: sentenceContext,
+        sentenceTranslation: demoSentenceTrans || "",
+        paragraphIndex: pIdx
+      };
+      setInlineWordData(initialData);
+      setShowInlineSentenceTrans(false);
+
+      setTimeout(() => {
+        setInlineWordData(prev => {
+          if (!prev || prev.word.toLowerCase() !== lowerClean) return prev;
+          return {
+            ...prev,
+            pl: demoWord.pl || meta.pl,
+            sentenceTranslation: demoSentenceTrans || prev.sentenceTranslation
+          };
+        });
+      }, 180);
+      return;
+    }
 
     const initialData = {
       word: cleanWord,
@@ -3120,6 +3212,33 @@ function Workspace({
         )}
 
         <div className="workspace-figma-top-bar">
+          <div className="demo-stories-selector-bar">
+            <div className="demo-stories-label">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+              <span>Przykładowe lekcje Start:</span>
+            </div>
+            <div className="demo-stories-pills">
+              {DEMO_STORIES.map((demo) => {
+                const isSelected = (currentStoryId === demo.id) || (!currentStoryId && currentStoryTitle === demo.title);
+                return (
+                  <button
+                    key={demo.id}
+                    type="button"
+                    className={`demo-story-pill ${isSelected ? "active" : ""}`}
+                    onClick={() => handleSelectDemoStory(demo)}
+                    title={demo.custom_details || demo.title}
+                  >
+                    <span className="demo-pill-badge">{demo.level}</span>
+                    <span className="demo-pill-category">{demo.category}</span>
+                    <span className="demo-pill-title">{demo.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {(storyParts.length > 0 || generatedText) && (
             <div className="chapter-tabs" style={{ margin: 0 }}>
               {storyParts.map((part, index) => (
@@ -3134,6 +3253,10 @@ function Workspace({
               <button
                 className={`chapter-tab continue-tab ${isContinuing ? "active" : ""}`}
                 onClick={() => {
+                  if (isStarterUser) {
+                    if (onOpenPaywall) onOpenPaywall({ feature: 'create_custom_story' });
+                    return;
+                  }
                   handleStop();
                   setIsContinuing(true);
                   setIsGeneratorCollapsed(false);
