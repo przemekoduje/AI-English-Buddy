@@ -3132,10 +3132,17 @@ function Workspace({
 
               <button
                 type="button"
-                className="create-story-generate-btn"
+                className={`create-story-generate-btn ${isStarterUser ? "pro-locked" : ""}`}
                 onClick={handleGenerateFigmaStory}
                 disabled={isGeneratingStory || isLoading}
+                title={isStarterUser ? "Tworzenie własnych historii AI wymaga pakietu PRO" : "Stwórz opowiadanie"}
               >
+                {isStarterUser && (
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                )}
                 <span>
                   {isGeneratingStory || isLoading
                     ? (isContinuing ? "Tworzę kontynuację..." : "Tworzę opowiadanie...")
@@ -3145,6 +3152,7 @@ function Workspace({
                       )
                   }
                 </span>
+                {isStarterUser && <span className="workspace-pro-badge">PRO</span>}
               </button>
             </div>
           </div>
@@ -3211,8 +3219,10 @@ function Workspace({
                   setIsGeneratorCollapsed(false);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
+                title={isStarterUser ? "Kontynuowanie opowiadania wymaga pakietu PRO" : "Kontynuuj opowiadanie"}
               >
                 + Continue Story
+                {isStarterUser && <span className="chapter-pro-tag">PRO</span>}
               </button>
             </div>
           )}

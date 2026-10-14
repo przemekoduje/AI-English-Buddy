@@ -815,38 +815,6 @@ const SavedStories = ({ user, subscription, onOpenPaywall, onSelectStory, onStar
           <h1 className="hero-title">Good stories. Better English.</h1>
           <p className="hero-subtitle">Your personal reading shelf — ready whenever you are.</p>
         </div>
-        <button
-          type="button"
-          className={`create-story-btn ${!isPlatformAdmin ? "pro-locked" : ""}`}
-          onClick={() => {
-            if (!isPlatformAdmin) {
-              if (onOpenPaywall) onOpenPaywall({ feature: 'create_custom_story' });
-              return;
-            }
-            if (onCreateStory) onCreateStory();
-            else if (onSelectStory) onSelectStory("", "", null);
-          }}
-          title={!isPlatformAdmin ? "Tworzenie własnych historii AI wymaga pakietu PRO" : "Stwórz nową historię AI"}
-        >
-          {!isPlatformAdmin ? (
-            <>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              <span>Create a story</span>
-              <span className="create-story-pro-tag">PRO</span>
-            </>
-          ) : (
-            <>
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span>Create a story</span>
-            </>
-          )}
-        </button>
       </header>
 
       {/* Filter and Search Bar */}
