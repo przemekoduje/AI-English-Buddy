@@ -17,6 +17,7 @@ const PaywallModal = ({
   if (!isOpen) return null;
 
   const currentTier = subscription?.tier || 'starter';
+  const hasUsedTrial = Boolean(subscription?.has_used_trial);
   const minutesUsed = subscription?.live_minutes_used || 0;
   const minutesLimit = subscription?.total_minutes_allowed || subscription?.live_minutes_limit || 5;
   const minutesRemaining = subscription?.minutes_remaining ?? Math.max(0, minutesLimit - minutesUsed);
@@ -322,9 +323,10 @@ const PaywallModal = ({
           </div>
 
           {/* KARTA 2: Pro (Rekomendowany) */}
+          {/* KARTA 2: Pro (Rekomendowany) */}
           <div className={`paywall-card card-pro highlighted-card ${currentTier === 'pro' ? 'is-current' : ''}`}>
             <div className="card-ribbon">
-              <span>NAJPOPULARNIEJSZY · 7 DNI FREE</span>
+              <span>{hasUsedTrial ? 'NAJPOPULARNIEJSZY' : 'NAJPOPULARNIEJSZY · 7 DNI FREE'}</span>
             </div>
 
             <div className="card-top">
@@ -333,7 +335,11 @@ const PaywallModal = ({
                 <span className="card-price">49 zł</span>
                 <span className="card-period">/ miesięcznie</span>
               </div>
-              <p className="card-desc">Pełny zestaw narzędzi edukacyjnych i codzienna swoboda mówienia.</p>
+              <p className="card-desc">
+                {hasUsedTrial
+                  ? 'Pełny zestaw narzędzi edukacyjnych i codzienna swoboda mówienia.'
+                  : '7 dni bezpłatnego testu. 0 zł dzisiaj, pierwsza opłata 49 zł dopiero po 7 dniach.'}
+              </p>
             </div>
 
             <ul className="card-features-list">
@@ -347,7 +353,11 @@ const PaywallModal = ({
               </li>
               <li>
                 <span className="check-icon check-purple">✓</span>
-                <span><strong>Media Buddy</strong> (filmy i YouTube)</span>
+                <span><strong>Media Buddy</strong> (dowolne filmy YouTube)</span>
+              </li>
+              <li>
+                <span className="check-icon check-purple">✓</span>
+                <span>Generowanie własnych historii AI</span>
               </li>
               <li>
                 <span className="check-icon check-purple">✓</span>
@@ -355,11 +365,13 @@ const PaywallModal = ({
               </li>
               <li>
                 <span className="check-icon check-purple">✓</span>
-                <span>Wysokiej jakości synteza głosu lektora</span>
-              </li>
-              <li>
-                <span className="check-icon check-purple">✓</span>
-                <span><strong>7 dni darmowego okresu próbnego</strong></span>
+                <span>
+                  {hasUsedTrial ? (
+                    'Wysokiej jakości synteza głosu lektora'
+                  ) : (
+                    <strong>7 dni darmowego okresu próbnego (0 zł)</strong>
+                  )}
+                </span>
               </li>
             </ul>
 
@@ -376,8 +388,10 @@ const PaywallModal = ({
                 >
                   {loadingPlan === 'pro' ? (
                     <span className="spinner-inline" />
+                  ) : hasUsedTrial ? (
+                    'Aktywuj pakiet Pro (49 zł/mc)'
                   ) : (
-                    'Wypróbuj 7 dni bezpłatnie'
+                    'Wypróbuj 7 dni za 0 zł'
                   )}
                 </button>
               )}
@@ -392,7 +406,11 @@ const PaywallModal = ({
                 <span className="card-price">99 zł</span>
                 <span className="card-period">/ miesięcznie</span>
               </div>
-              <p className="card-desc">Dla profesjonalistów dążących do natychmiastowej płynności językowej.</p>
+              <p className="card-desc">
+                {hasUsedTrial
+                  ? 'Dla profesjonalistów dążących do natychmiastowej płynności językowej.'
+                  : '7 dni bezpłatnego testu. 0 zł dzisiaj, pierwsza opłata 99 zł dopiero po 7 dniach.'}
+              </p>
             </div>
 
             <ul className="card-features-list">
@@ -402,7 +420,7 @@ const PaywallModal = ({
               </li>
               <li>
                 <span className="check-icon check-blue">✓</span>
-                <span>Wszystko z planu Pro (Mastery + Media)</span>
+                <span>Wszystko z planu Pro (Mastery + Media + Historie)</span>
               </li>
               <li>
                 <span className="check-icon check-blue">✓</span>
@@ -418,7 +436,13 @@ const PaywallModal = ({
               </li>
               <li>
                 <span className="check-icon check-blue">✓</span>
-                <span><strong>7 dni darmowego okresu próbnego</strong></span>
+                <span>
+                  {hasUsedTrial ? (
+                    'Fakturowanie cykliczne z możliwością rezygnacji'
+                  ) : (
+                    <strong>7 dni darmowego okresu próbnego (0 zł)</strong>
+                  )}
+                </span>
               </li>
             </ul>
 
@@ -435,6 +459,8 @@ const PaywallModal = ({
                 >
                   {loadingPlan === 'intensive' ? (
                     <span className="spinner-inline" />
+                  ) : hasUsedTrial ? (
+                    'Aktywuj pakiet Intensive (99 zł/mc)'
                   ) : (
                     'Wybierz Intensive (7 dni free)'
                   )}

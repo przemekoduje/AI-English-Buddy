@@ -1294,6 +1294,7 @@ def get_user_subscription(email):
         "can_access_industry_modes": plan["can_access_industry_modes"] or admin,
         "can_buy_topup": plan["can_buy_topup"] or admin,
         "trial_ends_at": str(trial_ends_at) if trial_ends_at else None,
+        "has_used_trial": bool(sub_data.get('has_used_trial', False)),
         "current_period_end": str(sub_data.get('current_period_end', '')),
         "stripe_customer_id": sub_data.get('stripe_customer_id'),
         "has_stripe_subscription": bool(sub_data.get('stripe_subscription_id')),
@@ -1446,11 +1447,27 @@ def create_stripe_checkout_session():
             }), 200
 
     try:
+        stripe_sec = os.getenv("STRIPE_SECRET_KEY", STRIPE_SECRET_KEY).strip()
+        if stripe_sec:
+            stripe.api_key = stripe_sec
+
+        customer_kwargs = {}
+        stripe_customer_id = sub.get("stripe_customer_id")
+        if stripe_customer_id:
+            try:
+                stripe.Customer.retrieve(stripe_customer_id)
+                customer_kwargs["customer"] = stripe_customer_id
+            except Exception as cust_err:
+                print(f"Stripe: Klient {stripe_customer_id} nie istnieje w obecnym środowisku Stripe: {cust_err}")
+                customer_kwargs["customer_email"] = user_email
+        else:
+            customer_kwargs["customer_email"] = user_email
+
         if plan == "topup_60":
             # Jednorazowa paczka 60 minut (29 zł)
             session = stripe.checkout.Session.create(
                 mode="payment",
-                customer_email=user_email,
+                **customer_kwargs,
                 line_items=[{
                     "price_data": {
                         "currency": "pln",
@@ -1471,23 +1488,37 @@ def create_stripe_checkout_session():
                 cancel_url=f"{return_url}?payment=cancelled"
             )
         else:
-            # Subskrypcja z 7-dniowym darmowym okresem próbnym
+            # Subskrypcja z 7-dniowym darmowym okresem próbnym (wymagana autoryzacja karty)
             target_plan = plan if plan in ["pro", "intensive"] else "pro"
             plan_info = SUBSCRIPTION_PLANS[target_plan]
             unit_amount = plan_info["price_pln"] * 100
+            has_used_trial = bool(sub.get("has_used_trial"))
+
+            sub_params = {
+                "metadata": {
+                    "user_email": user_email,
+                    "plan": target_plan
+                }
+            }
+            # Użytkownik otrzymuje 7 dni darmowego triala przy pierwszej subskrypcji
+            if not has_used_trial:
+                sub_params["trial_period_days"] = 7
 
             session = stripe.checkout.Session.create(
                 mode="subscription",
-                customer_email=user_email,
-                subscription_data={
-                    "trial_period_days": 7
-                },
+                **customer_kwargs,
+                payment_method_collection="always",
+                subscription_data=sub_params,
                 line_items=[{
                     "price_data": {
                         "currency": "pln",
                         "product_data": {
                             "name": f"Speakling {plan_info['name']}",
-                            "description": f"{plan_info['name']} — {plan_info['features'][1]} (7-dniowy darmowy okres próbny)"
+                            "description": (
+                                f"{plan_info['name']} — 7 dni darmowego okresu próbnego za 0 zł (następnie {plan_info['price_pln']} zł/miesiąc)"
+                                if not has_used_trial
+                                else f"{plan_info['name']} — {plan_info['price_pln']} zł/miesiąc"
+                            )
                         },
                         "unit_amount": unit_amount,
                         "recurring": {"interval": "month"}
@@ -1519,10 +1550,12 @@ def verify_stripe_session():
     req_data = request.get_json(silent=True) or {}
     session_id = req_data.get("session_id", "").strip()
 
-    if not session_id or not STRIPE_SECRET_KEY:
-        return jsonify({"success": False, "message": "Brak sesji do weryfikacji"}), 400
+    stripe_sec = os.getenv("STRIPE_SECRET_KEY", STRIPE_SECRET_KEY).strip()
+    if not session_id or not stripe_sec:
+        return jsonify({"success": False, "message": "Brak sesji do weryfikacji lub brak klucza Stripe"}), 400
 
     try:
+        stripe.api_key = stripe_sec
         session = stripe.checkout.Session.retrieve(session_id)
         email = session.metadata.get("user_email") or user_email or (session.customer_details.email if session.customer_details else None)
         plan = session.metadata.get("plan", "pro")
@@ -1549,16 +1582,30 @@ def verify_stripe_session():
                 current_extra = sub.get("extra_live_minutes", 0.0)
                 update_user_subscription(email, {
                     "extra_live_minutes": current_extra + 60.0,
+                    "stripe_customer_id": session.customer,
                     "processed_sessions": processed
                 })
             else:
                 target_plan = plan if plan in ["pro", "intensive"] else "pro"
                 trial_end = (now + timedelta(days=7)).isoformat()
                 limit = SUBSCRIPTION_PLANS[target_plan]["live_minutes_limit"]
+                sub_status = "trialing" if session.subscription else "active"
+
+                # Pobranie precyzyjnych szczegółów ze Stripe Subscription
+                if session.subscription:
+                    try:
+                        stripe_sub = stripe.Subscription.retrieve(session.subscription)
+                        sub_status = stripe_sub.status
+                        if stripe_sub.trial_end:
+                            trial_end = datetime.fromtimestamp(stripe_sub.trial_end).isoformat()
+                    except Exception as sub_err:
+                        print(f"Stripe verify: Nie udało się pobrać subskrypcji {session.subscription}: {sub_err}")
+
                 update_user_subscription(email, {
                     "tier": target_plan,
-                    "status": "trialing" if session.subscription else "active",
+                    "status": sub_status,
                     "trial_ends_at": trial_end,
+                    "has_used_trial": True,
                     "live_minutes_limit": limit,
                     "stripe_customer_id": session.customer,
                     "stripe_subscription_id": session.subscription,
@@ -1588,14 +1635,16 @@ def create_stripe_portal_session():
 
     sub = get_user_subscription(user_email)
     customer_id = sub.get("stripe_customer_id")
+    stripe_sec = os.getenv("STRIPE_SECRET_KEY", STRIPE_SECRET_KEY).strip()
 
-    if not STRIPE_SECRET_KEY or not customer_id:
+    if not stripe_sec or not customer_id:
         return jsonify({
             "error": "Brak podpiętego klienta Stripe dla tego konta.",
             "message": "Nie odnaleziono aktywnego identyfikatora klienta Stripe. Możesz zarządzać planem bezpośrednio w aplikacji."
         }), 400
 
     try:
+        stripe.api_key = stripe_sec
         portal_session = stripe.billing_portal.Session.create(
             customer=customer_id,
             return_url=APP_URL
@@ -1612,9 +1661,15 @@ def stripe_webhook():
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature", "")
 
-    if STRIPE_WEBHOOK_SECRET:
+    stripe_sec = os.getenv("STRIPE_SECRET_KEY", STRIPE_SECRET_KEY).strip()
+    stripe_wh_sec = os.getenv("STRIPE_WEBHOOK_SECRET", STRIPE_WEBHOOK_SECRET).strip()
+
+    if stripe_sec:
+        stripe.api_key = stripe_sec
+
+    if stripe_wh_sec:
         try:
-            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+            event = stripe.Webhook.construct_event(payload, sig_header, stripe_wh_sec)
         except Exception as e:
             print(f"Błąd weryfikacji podpisu Stripe Webhook: {e}")
             return jsonify({"error": "Nieprawidłowy podpis"}), 400
@@ -1661,10 +1716,22 @@ def stripe_webhook():
                 target_plan = plan if plan in ["pro", "intensive"] else "pro"
                 trial_end = (now + timedelta(days=7)).isoformat()
                 limit = SUBSCRIPTION_PLANS[target_plan]["live_minutes_limit"]
+                sub_status = "trialing" if subscription_id else "active"
+
+                if subscription_id:
+                    try:
+                        stripe_sub = stripe.Subscription.retrieve(subscription_id)
+                        sub_status = stripe_sub.status
+                        if stripe_sub.trial_end:
+                            trial_end = datetime.fromtimestamp(stripe_sub.trial_end).isoformat()
+                    except Exception as sub_err:
+                        print(f"Stripe Webhook: nie udało się pobrać subskrypcji {subscription_id}: {sub_err}")
+
                 update_user_subscription(email, {
                     "tier": target_plan,
-                    "status": "trialing" if subscription_id else "active",
+                    "status": sub_status,
                     "trial_ends_at": trial_end,
+                    "has_used_trial": True,
                     "live_minutes_limit": limit,
                     "stripe_customer_id": customer_id,
                     "stripe_subscription_id": subscription_id,
@@ -1678,10 +1745,15 @@ def stripe_webhook():
         status = data_object.get("status")  # active, trialing, past_due, canceled
         current_period_end = data_object.get("current_period_end")
 
-        # Szukamy użytkownika po stripe_customer_id
-        if 'db' in globals() and db is not None and customer_id:
+        # Szukamy użytkownika po stripe_customer_id lub stripe_subscription_id
+        if 'db' in globals() and db is not None:
             try:
-                users_matching = db.collection('users').where('subscription.stripe_customer_id', '==', customer_id).limit(1).get()
+                users_matching = []
+                if customer_id:
+                    users_matching = list(db.collection('users').where('subscription.stripe_customer_id', '==', customer_id).limit(1).get())
+                if not users_matching and subscription_id:
+                    users_matching = list(db.collection('users').where('subscription.stripe_subscription_id', '==', subscription_id).limit(1).get())
+
                 for u_doc in users_matching:
                     u_email = u_doc.id
                     updates = {"status": status}
@@ -1692,14 +1764,20 @@ def stripe_webhook():
                         updates["live_minutes_limit"] = SUBSCRIPTION_PLANS["starter"]["live_minutes_limit"]
                     update_user_subscription(u_email, updates)
             except Exception as find_err:
-                print(f"Błąd wyszukiwania użytkownika po Stripe customer ID: {find_err}")
+                print(f"Błąd wyszukiwania użytkownika po Stripe customer/subscription ID: {find_err}")
 
     elif event_type == "invoice.payment_succeeded":
         # Miesięczne odnowienie — resetujemy wykorzystane minuty
         customer_id = data_object.get("customer")
-        if 'db' in globals() and db is not None and customer_id:
+        subscription_id = data_object.get("subscription")
+        if 'db' in globals() and db is not None:
             try:
-                users_matching = db.collection('users').where('subscription.stripe_customer_id', '==', customer_id).limit(1).get()
+                users_matching = []
+                if customer_id:
+                    users_matching = list(db.collection('users').where('subscription.stripe_customer_id', '==', customer_id).limit(1).get())
+                if not users_matching and subscription_id:
+                    users_matching = list(db.collection('users').where('subscription.stripe_subscription_id', '==', subscription_id).limit(1).get())
+
                 for u_doc in users_matching:
                     u_email = u_doc.id
                     update_user_subscription(u_email, {
