@@ -267,6 +267,11 @@ function App() {
     localStorage.removeItem("buddy_generated_text");
     localStorage.removeItem("buddy_current_story_title");
     localStorage.removeItem("buddy_current_story_id");
+    localStorage.removeItem("buddy_selected_story_id");
+    localStorage.removeItem("media_buddy_custom_videos");
+    localStorage.removeItem("media_buddy_last_video_id");
+    localStorage.removeItem("media_buddy_last_youtube_id");
+    localStorage.removeItem("media_buddy_video_progress");
     setUser(null);
     setSubscription(null);
     setGeneratedText("");
@@ -275,11 +280,6 @@ function App() {
   };
 
   const handleNavigate = (view) => {
-    // Blokada wejścia w Media Buddy dla pakietu Starter
-    if (view === 'media' && subscription && !subscription.can_access_media && !isAdmin) {
-      openPaywall({ feature: 'media' });
-      return;
-    }
     setCurrentView(view);
     localStorage.setItem("buddy_current_view", view);
   };
@@ -348,6 +348,8 @@ function App() {
           ) : currentView === 'stories' ? (
             <SavedStories 
               user={user} 
+              subscription={subscription}
+              onOpenPaywall={openPaywall}
               onSelectStory={(text, title, id) => {
                 setGeneratedText(text);
                 setCurrentStoryTitle(title);

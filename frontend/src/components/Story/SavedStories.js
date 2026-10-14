@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { API_BASE_URL } from '../../config';
 import "./SavedStories.css";
+import { DEMO_STORIES } from "../../data/demoStoriesData";
 
 // Bogata baza tematycznych zdjęć wysokiej rozdzielczości z wieloma wariantami dla każdego motywu
 const THEMATIC_SCENES = [
@@ -382,7 +383,15 @@ export const calculateCEFRLevel = (text = "", title = "") => {
   return "C2";
 };
 
-const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) => {
+const SavedStories = ({ user, subscription, onOpenPaywall, onSelectStory, onStartLiveChat, onCreateStory }) => {
+  const isPlatformAdmin = Boolean(
+    user?.is_admin ||
+    subscription?.is_admin ||
+    user?.email === 'przemek.rakotny@gmail.com' ||
+    user?.email === 'przemokoduje@gmail.com'
+  );
+  const isStarterUser = !isPlatformAdmin && (!subscription || subscription.tier === 'starter');
+
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -537,6 +546,25 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
   };
 
   const loadStories = useCallback(async () => {
+    if (isStarterUser) {
+      setLoading(true);
+      const demoList = DEMO_STORIES.map(demo => ({
+        id: demo.id,
+        title: demo.title,
+        text: demo.text,
+        level: demo.level,
+        cefr_level: demo.level,
+        category: demo.category,
+        topics: demo.topics,
+        read_progress: parseInt(localStorage.getItem(`buddy_story_progress_${demo.id}`) || "0", 10),
+        coverImage: demo.coverImage || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80",
+        isDemo: true
+      }));
+      setStories(demoList);
+      setLoading(false);
+      return;
+    }
+
     if (!user) return;
     setLoading(true);
     setError("");
@@ -556,7 +584,7 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, isStarterUser]);
 
   useEffect(() => {
     loadStories();
@@ -767,6 +795,10 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
           type="button"
           className="create-story-btn"
           onClick={() => {
+            if (isStarterUser) {
+              if (onOpenPaywall) onOpenPaywall({ feature: 'create_custom_story' });
+              return;
+            }
             if (onCreateStory) onCreateStory();
             else if (onSelectStory) onSelectStory("", "", null);
           }}

@@ -261,16 +261,16 @@ const getUserKey = (user) => {
 };
 
 const loadSavedCustomVideos = (user) => {
+  const isPlatformAdmin = Boolean(
+    user?.is_admin ||
+    user?.email === 'przemek.rakotny@gmail.com' ||
+    user?.email === 'przemokoduje@gmail.com'
+  );
+  if (!isPlatformAdmin) return [];
   const userKey = getUserKey(user);
+  if (userKey === 'guest') return [];
   try {
-    let saved = localStorage.getItem(`media_buddy_custom_videos_${userKey}`);
-    if (!saved && userKey !== 'guest') {
-      const legacy = localStorage.getItem("media_buddy_custom_videos");
-      if (legacy) {
-        saved = legacy;
-        localStorage.setItem(`media_buddy_custom_videos_${userKey}`, legacy);
-      }
-    }
+    const saved = localStorage.getItem(`media_buddy_custom_videos_${userKey}`);
     if (!saved) return [];
     const parsed = JSON.parse(saved);
     return parsed.map((v) => ({
@@ -284,10 +284,18 @@ const loadSavedCustomVideos = (user) => {
 };
 
 const getInitialVideo = (user) => {
+  const isPlatformAdmin = Boolean(
+    user?.is_admin ||
+    user?.email === 'przemek.rakotny@gmail.com' ||
+    user?.email === 'przemokoduje@gmail.com'
+  );
+  if (!isPlatformAdmin) {
+    return CURATED_VIDEOS[0];
+  }
   const userKey = getUserKey(user);
   try {
-    let savedId = localStorage.getItem(`media_buddy_last_video_id_${userKey}`) || (userKey === 'guest' ? localStorage.getItem("media_buddy_last_video_id") : null);
-    let savedYoutubeId = localStorage.getItem(`media_buddy_last_youtube_id_${userKey}`) || (userKey === 'guest' ? localStorage.getItem("media_buddy_last_youtube_id") : null);
+    let savedId = localStorage.getItem(`media_buddy_last_video_id_${userKey}`);
+    let savedYoutubeId = localStorage.getItem(`media_buddy_last_youtube_id_${userKey}`);
     const customList = loadSavedCustomVideos(user);
     const allAvailable = [...CURATED_VIDEOS, ...customList];
 
@@ -299,7 +307,7 @@ const getInitialVideo = (user) => {
     }
 
     // Fallback: check most recently watched in media_buddy_video_progress
-    const savedProgress = localStorage.getItem(`media_buddy_video_progress_${userKey}`) || (userKey === 'guest' ? localStorage.getItem("media_buddy_video_progress") : null);
+    const savedProgress = localStorage.getItem(`media_buddy_video_progress_${userKey}`);
     if (savedProgress) {
       const prog = JSON.parse(savedProgress);
       const ids = Object.keys(prog);
@@ -436,7 +444,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     }));
   }, []);
 
-  const [customVideos, setCustomVideos] = useState(() => loadSavedCustomVideos(user));
+  const [customVideos, setCustomVideos] = useState(() => isStarterUser ? [] : loadSavedCustomVideos(user));
 
   const [videoProgress, setVideoProgress] = useState(() => {
     try {
@@ -714,8 +722,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   }, [unwatchedSortOrder]);
 
   const allVideos = useMemo(() => {
-    return [...CURATED_VIDEOS, ...customVideos];
-  }, [customVideos]);
+    return isStarterUser ? CURATED_VIDEOS : [...CURATED_VIDEOS, ...customVideos];
+  }, [customVideos, isStarterUser]);
 
   const recentVideos = useMemo(() => {
     const watched = allVideos.filter(v => videoProgress[v.id]);
@@ -836,6 +844,15 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
   // Cloud Sync on Mount or User Change
   useEffect(() => {
+    if (isStarterUser) {
+      setCustomVideos([]);
+      if (userKey && userKey !== 'guest') {
+        try {
+          localStorage.removeItem(`media_buddy_custom_videos_${userKey}`);
+        } catch (e) {}
+      }
+      return;
+    }
     const activeKey = getUserKey(user);
     const localVideos = loadSavedCustomVideos(user);
     setCustomVideos(localVideos);
