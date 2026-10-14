@@ -2365,3 +2365,85 @@
   padding: 0.2rem 0.6rem;
   border-radius: 9999px;
 }
+
+/* ==========================================================================
+   STARTER PRO RESTRICTIONS FOR MEDIA
+   ========================================================================== */
+
+.btn-add-media.pro-locked {
+  background: #181926;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.12);
+}
+
+.btn-add-media.pro-locked:hover {
+  background: #202235;
+  border-color: rgba(245, 158, 11, 0.75);
+  color: #fde68a;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.22);
+}
+
+.toolbar-analyse-btn.pro-locked {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.3) 100%) !important;
+  border: 1px solid rgba(245, 158, 11, 0.5) !important;
+  color: #fbbf24 !important;
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.15) !important;
+}
+
+.toolbar-analyse-btn.pro-locked:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(217, 119, 6, 0.45) 100%) !important;
+  border-color: rgba(245, 158, 11, 0.8) !important;
+  color: #fde68a !important;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25) !important;
+  transform: translateY(-1px);
+}
+
+.toolbar-input-wrapper.pro-locked-input {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: #fafaf9;
+  cursor: pointer;
+}
+
+.toolbar-input-wrapper.pro-locked-input:hover {
+  border-color: rgba(245, 158, 11, 0.65);
+  background: #fffdf5;
+}
+
+.toolbar-input-wrapper.pro-locked-input input {
+  cursor: pointer;
+}
+
+.suggestion-load-btn.pro-locked {
+  background: #181926;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+}
+
+.suggestion-load-btn.pro-locked:hover {
+  background: #202235;
+  border-color: rgba(245, 158, 11, 0.8);
+  color: #fde68a;
+}
+
+.media-pro-btn-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.media-pro-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #000000;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  line-height: 1;
+  text-transform: uppercase;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.35);
+}

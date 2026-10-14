@@ -356,7 +356,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     user?.email === 'przemek.rakotny@gmail.com' ||
     user?.email === 'przemokoduje@gmail.com'
   );
-  const isStarterUser = !isPlatformAdmin && (!subscription || subscription.tier === 'starter');
+  const isStarterUser = !isPlatformAdmin && (!subscription || subscription.tier === 'starter' || subscription.status === 'expired');
 
   const [currentVideo, setCurrentVideo] = useState(() => getInitialVideo(user));
   const initialTime = useMemo(() => getInitialVideoTime(currentVideo, user), [currentVideo, user]);
@@ -1769,6 +1769,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   };
 
   const fetchAndLoadVideo = async (videoId) => {
+    if (isStarterUser) {
+      if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
+      return;
+    }
     setCustomError("");
 
     const getStaticTranscript = (id) => {
@@ -1959,6 +1963,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   };
 
   const handleApplyExtractedVideo = (videoInfo) => {
+    if (isStarterUser) {
+      if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
+      return;
+    }
     const dataToApply = videoInfo || extractedData;
     if (!dataToApply || !dataToApply.videoId) return;
 
@@ -1989,6 +1997,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   };
 
   const handleApplyManualText = () => {
+    if (isStarterUser) {
+      if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
+      return;
+    }
     if (!manualPastedText || !manualPastedText.trim()) {
       setExtractionError("Wklej tekst transkrypcji lub napisy.");
       return;
@@ -2026,6 +2038,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   };
 
   const handleFileUpload = (e) => {
+    if (isStarterUser) {
+      if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
+      return;
+    }
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
@@ -2049,6 +2065,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   };
 
   const handleApplyUploadedFile = () => {
+    if (isStarterUser) {
+      if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
+      return;
+    }
     if (!uploadedFileStatus || !uploadedFileStatus.parsedSegments) return;
     const formatted = ensureCompleteSentences(uploadedFileStatus.parsedSegments);
     const targetVidId = extractVideoId(manualTargetVideoId) || currentVideo?.youtubeId || "uploaded_file";
@@ -2076,6 +2096,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
   const handleLoadCustomVideo = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    if (isStarterUser) {
+      if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
+      return;
+    }
     const videoId = extractVideoId(customUrl);
     if (!videoId) {
       setCustomError("Nieprawidłowy adres URL lub ID wideo.");
@@ -2129,16 +2153,25 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           </div>
           <button
             type="button"
-            className="btn-add-media"
+            className={`btn-add-media ${isStarterUser ? "pro-locked" : ""}`}
             onClick={handleOpenAddMediaModal}
-            title="Dodaj własne wideo lub napisy"
+            title={isStarterUser ? "Dodawanie i ściąganie własnych materiałów wideo wymaga pakietu PRO" : "Dodaj własne wideo lub napisy"}
           >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            Add media
+            {isStarterUser ? (
+              <span className="media-pro-btn-content">
+                <span>🔒 Add media</span>
+                <span className="media-pro-badge">PRO</span>
+              </span>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Add media
+              </>
+            )}
           </button>
         </div>
 
@@ -2185,7 +2218,15 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
 
 
-          <form onSubmit={handleLoadCustomVideo} className="toolbar-input-wrapper">
+          <form
+            onSubmit={handleLoadCustomVideo}
+            className={`toolbar-input-wrapper ${isStarterUser ? "pro-locked-input" : ""}`}
+            onClick={() => {
+              if (isStarterUser && onOpenPaywall) {
+                onOpenPaywall({ feature: 'media_custom_video' });
+              }
+            }}
+          >
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="input-link-icon">
               <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
@@ -2193,22 +2234,40 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
             <input
               type="text"
               className="toolbar-input"
-              placeholder="Paste a video or audio link..."
+              placeholder={isStarterUser ? "🔒 Wklej link do wideo (wymaga PRO)..." : "Paste a video or audio link..."}
               value={customUrl}
-              onChange={(e) => setCustomUrl(e.target.value)}
+              onChange={(e) => {
+                if (isStarterUser) {
+                  if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
+                  return;
+                }
+                setCustomUrl(e.target.value);
+              }}
+              readOnly={isStarterUser}
+              title={isStarterUser ? "Ściąganie i analiza własnych filmów z YouTube wymaga pakietu PRO" : undefined}
             />
           </form>
 
           <button
             type="button"
-            className="toolbar-analyse-btn"
+            className={`toolbar-analyse-btn ${isStarterUser ? "pro-locked" : ""}`}
             onClick={handleLoadCustomVideo}
             disabled={isLoadingCustom}
+            title={isStarterUser ? "Ściąganie i analiza własnych wideo z YouTube wymaga pakietu PRO" : "Analyse media"}
           >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-            </svg>
-            Analyse media
+            {isStarterUser ? (
+              <span className="media-pro-btn-content">
+                <span>🔒 Analyse media</span>
+                <span className="media-pro-badge">PRO</span>
+              </span>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                </svg>
+                Analyse media
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -2448,14 +2507,19 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                         <p className="suggestion-video-desc">{video.description}</p>
                         <button
                           type="button"
-                          className="suggestion-load-btn"
+                          className={`suggestion-load-btn ${isStarterUser ? "pro-locked" : ""}`}
                           onClick={() => {
+                            if (isStarterUser) {
+                              if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
+                              return;
+                            }
                             fetchAndLoadVideo(video.youtubeId);
                             setIsVideoGalleryOpen(false);
                           }}
                           disabled={isLoadingCustom}
+                          title={isStarterUser ? "Ładowanie filmów z zewnętrznych kanałów wymaga pakietu PRO" : "Załaduj wideo"}
                         >
-                          Załaduj wideo ▶
+                          {isStarterUser ? "🔒 Załaduj (PRO)" : "Załaduj wideo ▶"}
                         </button>
                       </div>
                     </div>
@@ -3131,8 +3195,14 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                         <button
                           type="button"
                           className="btn-download-srt"
-                          onClick={() => downloadSrtFile(extractedData.segments, extractedData.title)}
-                          title="Pobierz plik .srt"
+                          onClick={() => {
+                            if (isStarterUser) {
+                              if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
+                              return;
+                            }
+                            downloadSrtFile(extractedData.segments, extractedData.title);
+                          }}
+                          title={isStarterUser ? "Pobieranie plików .srt wymaga pakietu PRO" : "Pobierz plik .srt"}
                         >
                           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
