@@ -77,7 +77,6 @@ const PaywallModal = ({
 
         const options = {
           clientSecret: embeddedSession.clientSecret,
-          fetchClientSecret: async () => embeddedSession.clientSecret,
         };
 
         let checkout;
@@ -122,6 +121,8 @@ const PaywallModal = ({
   const handleSelectPlan = async (planKey) => {
     setErrorMsg(null);
     setSuccessMsg(null);
+    setCheckoutError(null);
+    setIsCheckoutLoading(true);
     setLoadingPlan(planKey);
 
     try {
