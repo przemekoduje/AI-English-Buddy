@@ -872,31 +872,38 @@
 /* Floating Live Chat FAB */
 .floating-chat-fab-wrapper {
   position: fixed;
-  bottom: 2rem;
-  right: 2rem;
+  bottom: var(--fab-inset, 24px);
+  right: var(--fab-inset, 24px);
   z-index: 100;
 }
 
 .floating-chat-fab {
-  background: #2563eb;
+  background: var(--ai-gradient, linear-gradient(135deg, #1a73e8 0%, #a953ff 100%));
   color: #ffffff;
   border: none;
-  border-radius: 999px;
-  padding: 0.75rem 1.4rem;
-  font-size: 0.92rem;
-  font-weight: 700;
+  border-radius: var(--btn-radius, 9999px);
+  min-height: var(--btn-height-comfortable, 48px);
+  padding: 0 1.5rem;
+  font-family: var(--font-main);
+  font-size: var(--text-button, 13px);
+  font-weight: 600;
+  line-height: 140%;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 8px 24px rgba(26, 115, 232, 0.35);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .floating-chat-fab:hover {
-  transform: translateY(-3px) scale(1.02);
-  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.5);
-  background: #1d4ed8;
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 30px rgba(26, 115, 232, 0.45);
+}
+
+.floating-chat-fab:focus-visible {
+  outline: var(--focus-ring, 2px solid #202124);
+  outline-offset: var(--focus-offset, 3px);
 }
 
 .fab-sound-bars {

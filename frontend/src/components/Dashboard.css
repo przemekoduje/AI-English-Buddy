@@ -109,6 +109,11 @@
   transition: background 0.4s ease, box-shadow 0.4s ease;
 }
 
+.tutor-gemini-orb:focus-visible {
+  outline: var(--focus-ring, 2px solid #202124);
+  outline-offset: var(--focus-offset, 3px);
+}
+
 /* Radar pulse rings */
 .orb-pulse-ring-1,
 .orb-pulse-ring-2 {
@@ -617,8 +622,10 @@
   background: var(--bg-card, #ffffff);
   border: 1px solid var(--slate-200, #e2e8f0);
   border-radius: 50%;
-  width: 40px;
-  height: 40px;
+  min-width: var(--touch-min, 44px);
+  min-height: var(--touch-min, 44px);
+  width: var(--touch-min, 44px);
+  height: var(--touch-min, 44px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -631,7 +638,12 @@
 .tutor-settings-icon-btn:hover {
   background: var(--slate-100, #f1f5f9);
   color: var(--primary, #1a73e8);
-  transform: rotate(30deg);
+  transform: rotate(30deg) translateY(-2px);
+}
+
+.tutor-settings-icon-btn:focus-visible {
+  outline: var(--focus-ring, 2px solid #202124);
+  outline-offset: var(--focus-offset, 3px);
 }
 
 .tutor-badge-container {
@@ -719,13 +731,16 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.6rem 1.25rem;
+  min-height: var(--btn-height-standard, 44px);
+  padding: 0 1.25rem;
   background: var(--bg-card, #ffffff);
   border: 1px solid var(--slate-200, #e2e8f0);
-  border-radius: 999px;
+  border-radius: var(--btn-radius, 9999px);
   color: var(--slate-700, #334155);
-  font-size: 0.9rem;
+  font-family: var(--font-main);
+  font-size: var(--text-button, 13px);
   font-weight: 600;
+  line-height: 140%;
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -735,6 +750,13 @@
   background: var(--slate-50, #f8fafc);
   border-color: var(--primary, #1a73e8);
   color: var(--primary, #1a73e8);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.tutor-pill-btn:focus-visible {
+  outline: var(--focus-ring, 2px solid #202124);
+  outline-offset: var(--focus-offset, 3px);
 }
 
 .tutor-pill-btn.camera-active {
@@ -1812,12 +1834,15 @@
   display: inline-flex;
   align-items: center;
   gap: 0.625rem;
-  background: #1a73e8;
+  background: var(--brand-blue, #1a73e8);
   color: #ffffff;
-  padding: 0.875rem 2.25rem;
-  border-radius: 999px;
-  font-size: 0.9375rem;
+  padding: 0 2.25rem;
+  min-height: var(--btn-height-comfortable, 48px);
+  border-radius: var(--btn-radius, 9999px);
+  font-family: var(--font-main);
+  font-size: var(--text-button, 13px);
   font-weight: 600;
+  line-height: 140%;
   border: none;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1825,9 +1850,14 @@
 }
 
 .btn-figma-start-primary:hover {
-  background: #1557b0;
-  transform: translateY(-1px);
+  background: var(--brand-blue-hover, #1557b0);
+  transform: translateY(-2px);
   box-shadow: 0 6px 18px rgba(26, 115, 232, 0.4);
+}
+
+.btn-figma-start-primary:focus-visible {
+  outline: var(--focus-ring, 2px solid #202124);
+  outline-offset: var(--focus-offset, 3px);
 }
 
 .ready-mic-notice {
@@ -1850,8 +1880,8 @@
 .active-call-main-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 20px;
-  padding: 2rem;
+  border-radius: var(--radius-card, 24px);
+  padding: var(--card-inset, 24px);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -1931,8 +1961,10 @@
 }
 
 .dock-btn {
-  width: 38px;
-  height: 38px;
+  min-width: var(--touch-min, 44px);
+  min-height: var(--touch-min, 44px);
+  width: var(--touch-min, 44px);
+  height: var(--touch-min, 44px);
   border-radius: 50%;
   border: none;
   background: #f1f3f4;
@@ -1947,6 +1979,13 @@
 .dock-btn:hover {
   background: #e8eaed;
   color: #202124;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.dock-btn:focus-visible {
+  outline: var(--focus-ring, 2px solid #202124);
+  outline-offset: var(--focus-offset, 3px);
 }
 
 .dock-btn.active {
@@ -1968,16 +2007,25 @@
   background: #fce8e6;
   color: #c5221f;
   border: none;
-  padding: 0.5rem 1.125rem;
-  border-radius: 999px;
+  min-height: var(--btn-height-standard, 44px);
+  padding: 0 1.25rem;
+  border-radius: var(--btn-radius, 9999px);
+  font-family: var(--font-main);
   font-weight: 600;
-  font-size: 0.8125rem;
+  font-size: var(--text-button, 13px);
+  line-height: 140%;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 
 .dock-btn-end:hover {
   background: #fad2cf;
+  transform: translateY(-2px);
+}
+
+.dock-btn-end:focus-visible {
+  outline: var(--focus-ring, 2px solid #202124);
+  outline-offset: var(--focus-offset, 3px);
 }
 
 /* Active Transcript Drawer */

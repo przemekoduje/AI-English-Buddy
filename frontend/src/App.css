@@ -89,8 +89,8 @@
 /* Floating Live Chat Bubble - Desktop Only */
 .live-chat-floating-bubble {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: var(--fab-inset, 24px);
+  right: var(--fab-inset, 24px);
   width: 60px;
   height: 60px;
   border-radius: 50%;
@@ -110,6 +110,11 @@
   transform: scale(1.08) translateY(-2px);
   background: var(--accent-hover, #f2a600);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2), 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
+.live-chat-floating-bubble:focus-visible {
+  outline: var(--focus-ring, 2px solid #202124);
+  outline-offset: var(--focus-offset, 3px);
 }
 
 .live-chat-floating-bubble:active {

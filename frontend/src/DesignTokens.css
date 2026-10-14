@@ -1,114 +1,160 @@
 :root {
-  /* ── Accent — Google Keep Yellow ───────────────────────────────────────── */
-  --accent:        #fbbc04;          /* Keep classic yellow */
-  --accent-hover:  #f2a600;          /* slightly darker yellow */
-  --accent-light:  #feefc3;          /* soft cream yellow active state bg */
-  --accent-mid:    rgba(251, 188, 4, 0.25);
+  /* ==========================================================================
+     Speakling — Figma Design System Tokens (14.10.2026)
+     Filozofia: Google Keep / Material 3 Light Scheme + Apple-Clean Minimalizm
+     ========================================================================== */
 
-  /* Keep alias for backwards compat with older components */
-  --primary-500: var(--accent);
-  --primary-600: var(--accent-hover);
-  --primary-700: #d49a00;
-  --secondary-500: var(--accent);
-  --secondary-600: var(--accent-hover);
+  /* ── 01. Kolory i Akcenty (Brand & Semantic Palette) ───────────────────── */
+  /* Główne działanie (Brand Blue — podstawa akcji użytkownika) */
+  --brand-blue:         #1a73e8;
+  --brand-blue-hover:   #1557b0;
+  --brand-blue-light:   #e8f0fe;
+  --brand-blue-mid:     rgba(26, 115, 232, 0.15);
+
+  /* Wsparcie AI & Mastery Path (Violet & Gradients) */
+  --ai-violet:          #7c3aed;
+  --ai-violet-hover:    #6d28d9;
+  --ai-violet-light:    #f4eeff;
+  --ai-violet-mid:      rgba(124, 58, 237, 0.15);
+  --ai-gradient:        linear-gradient(135deg, #1a73e8 0%, #a953ff 100%);
+  --ai-mastery-gradient: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+
+  /* Google Keep Yellow (Notatki, fiszki, wyróżnienia lekcji) */
+  --accent:             #fbbc04;
+  --accent-hover:       #f2a600;
+  --accent-light:       #feefc3;
+  --accent-mid:         rgba(251, 188, 4, 0.25);
+
+  /* Lektor i czytanie na głos (Narrator Warm Orange) */
+  --narrator-bg:        #fff7ed;
+  --narrator-border:    #f97316;
+  --narrator-text:      #7c2d12;
+
+  /* Statusy semantyczne */
+  --color-success:      #10b981;
+  --color-success-bg:   #ecfdf5;
+  --color-warning:      #f59e0b;
+  --color-warning-bg:   #fffbeb;
+  --color-danger:       #ef4444;
+  --color-danger-bg:    #fef2f2;
+
+  /* Aliases dla wstecznej kompatybilności */
+  --primary-500:        var(--brand-blue);
+  --primary-600:        var(--brand-blue-hover);
+  --primary-700:        #0d47a1;
+  --secondary-500:      var(--accent);
+  --secondary-600:      var(--accent-hover);
 
   /* ── Neutral Surface Scale — Google Keep Light Scheme ──────────────────── */
-  --gray-0:    #ffffff;          /* pure white (cards background) */
-  --gray-50:   #ffffff;          /* Keep app bg (clean white) */
-  --gray-100:  #f1f3f4;          /* sidebar hover / search bar bg */
-  --gray-200:  #e8eaed;          /* secondary hover fill */
-  --gray-300:  #e0e0e0;          /* thin border color */
-  --gray-400:  #dadce0;          /* input borders / placeholders */
-  --gray-500:  #5f6368;          /* secondary text (gray icons) */
-  --gray-700:  #3c4043;          /* body/reading text */
-  --gray-900:  #202124;          /* primary text (titles, bold) */
+  --gray-0:             #ffffff;          /* Czysta biel (karty, panele) */
+  --gray-50:            #ffffff;          /* Tło aplikacji */
+  --gray-100:           #f1f3f4;          /* Paski wyszukiwania, hover */
+  --gray-200:           #e8eaed;          /* Subtelne podkłady przycisków */
+  --gray-300:           #e2e8f0;          /* Cienka ramka kart i linii */
+  --gray-400:           #dadce0;          /* Ramki inputów i placeholderów */
+  --gray-500:           #5f6368;          /* Drugorzędny tekst i ikony */
+  --gray-700:           #3c4043;          /* Treść czytania i opisy */
+  --gray-900:           #202124;          /* Główny nagłówek, bold */
 
-  /* Backwards compat aliases */
-  --slate-50:  var(--gray-50);
-  --slate-100: var(--gray-100);
-  --slate-200: var(--gray-200);
-  --slate-300: var(--gray-300);
-  --slate-500: var(--gray-500);
-  --slate-700: var(--gray-700);
-  --slate-800: var(--gray-900);
-  --slate-900: var(--gray-900);
+  /* Aliases Slate dla spójności */
+  --slate-50:           #f8fafc;
+  --slate-100:          var(--gray-100);
+  --slate-200:          var(--gray-200);
+  --slate-300:          var(--gray-300);
+  --slate-500:          var(--gray-500);
+  --slate-700:          var(--gray-700);
+  --slate-800:          var(--gray-900);
+  --slate-900:          #0f172a;
 
-  /* ── Semantic Surfaces ─────────────────────────────────────────────────── */
-  --bg-main:       var(--gray-50);
-  --surface:       var(--gray-0);
-  --surface-hover: var(--gray-100);
-  --sidebar-bg:    var(--gray-0);
-  --topbar-bg:     rgba(255, 255, 255, 0.95);
-  --border:        var(--gray-300);
-  --border-subtle: rgba(0, 0, 0, 0.05);
+  /* ── Powierzchnie Semantyczne ─────────────────────────────────────────── */
+  --bg-main:            var(--gray-50);
+  --surface:            var(--gray-0);
+  --surface-hover:      var(--gray-100);
+  --sidebar-bg:         var(--gray-0);
+  --topbar-bg:          rgba(255, 255, 255, 0.96);
+  --border:             var(--gray-300);
+  --border-subtle:      rgba(0, 0, 0, 0.05);
 
-  /* Legacy */
-  --grad-primary:  var(--accent);
-  --grad-premium:  linear-gradient(135deg, var(--accent), #ffca28);
-  --grad-subtle:   var(--gray-100);
-  --glass-bg:      rgba(255, 255, 255, 0.9);
-  --glass-border:  rgba(0, 0, 0, 0.05);
-  --glass-blur:    blur(8px);
+  --grad-primary:       var(--brand-blue);
+  --grad-premium:       var(--ai-gradient);
+  --grad-subtle:        var(--gray-100);
+  --glass-bg:           rgba(255, 255, 255, 0.92);
+  --glass-border:       rgba(0, 0, 0, 0.06);
+  --glass-blur:         blur(12px);
 
-  /* ── Typography ──────────────────────────────────────────────────────────
-     Outfit for geometric headings (feels like Product Sans / Google Sans)
-     Roboto for clean, readable body text
-     ──────────────────────────────────────────────────────────────────────── */
-  --font-display:  'Outfit', 'Google Sans', 'Roboto', sans-serif;
-  --font-main:     'Roboto', system-ui, -apple-system, sans-serif;
-  --font-serif:    'Georgia', 'Times New Roman', serif;
-  --font-mono:     'Roboto Mono', ui-monospace, 'Courier New', monospace;
+  /* ── 02. Typografia (Typography Scale) ────────────────────────────────── */
+  --font-display:       'Outfit', 'Google Sans', 'Roboto', sans-serif;
+  --font-main:          'Roboto', system-ui, -apple-system, sans-serif;
+  --font-serif:         'Georgia', 'Times New Roman', serif;
+  --font-mono:          'Roboto Mono', ui-monospace, monospace;
 
-  /* MD3-compatible type scale */
-  --text-display-lg:   3.5625rem;
-  --text-display-md:   2.8125rem;
-  --text-display-sm:   2.25rem;
-  --text-headline-lg:  2rem;
-  --text-headline-md:  1.75rem;
-  --text-headline-sm:  1.5rem;
-  --text-title-lg:     1.375rem;
-  --text-title-md:     1.0625rem;
-  --text-title-sm:     0.9375rem;
-  --text-body-lg:      0.9375rem;   /* 15px */
-  --text-body-md:      0.875rem;
-  --text-body-sm:      0.8125rem;
-  --text-label-lg:     0.875rem;
-  --text-label-md:     0.8125rem;
-  --text-label-sm:     0.75rem;
+  /* Hierarchia typograficzna */
+  --text-h1:            2.25rem;          /* 36px */
+  --text-h2:            1.5rem;           /* 24px */
+  --text-h3:            1.1875rem;        /* 19px */
+  --text-body-lg:       0.9375rem;        /* 15px */
+  --text-body-md:       0.875rem;         /* 14px */
+  --text-label:         0.8125rem;        /* 13px */
+  --text-caption:       0.75rem;          /* 12px */
 
-  --lh-display:   1.12;
-  --lh-headline:  1.2;
-  --lh-title:     1.3;
-  --lh-body:      1.6;
-  --lh-label:     1.4;
+  --lh-tight:           1.2;
+  --lh-body:            1.6;
+  --lh-label:           1.4;
 
-  --ls-display:   -0.02em;
-  --ls-headline:  -0.02em;
-  --ls-title:     -0.01em;
-  --ls-body:       0;
-  --ls-label:      0;
+  /* ── 03. Odstępy i Układ (Normalized Spacing Scale) ───────────────────── */
+  --space-4:            4px;
+  --space-8:            8px;
+  --space-12:           12px;
+  --space-16:           16px;
+  --space-20:           20px;
+  --space-24:           24px;
+  --space-32:           32px;
+  --space-48:           48px;
+  --space-64:           64px;
 
-  /* ── Elevation — Google / Material Design style ──────────────────────── */
-  --shadow-sm:      0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
-  --shadow-md:      0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
-  --shadow-lg:      0 4px 10px 0 rgba(60,64,67,0.3), 0 8px 16px 6px rgba(60,64,67,0.15);
-  --shadow-xl:      0 8px 16px 0 rgba(60,64,67,0.3), 0 16px 24px 8px rgba(60,64,67,0.15);
-  --shadow-premium: 0 2px 6px 0 rgba(60,64,67,0.15);
+  /* Standardy dotyku i odstępów komponentów */
+  --card-inset:         24px;             /* Wewnętrzny padding kart */
+  --touch-min:          44px;             /* Minimalny cel dotykowy 44x44 px */
+  --touch-gap:          8px;              /* Odstęp między celami dotykowymi */
+  --fab-inset:          24px;             /* Położenie FAB od krawędzi ekranu */
 
-  /* ── Radius — Keep style (8px / standard boxy) ────────────────────────── */
-  --radius-sm:   4px;
-  --radius-md:   8px;
-  --radius-lg:   8px;
-  --radius-xl:   12px;
-  --radius-2xl:  16px;
-  --radius-full: 9999px;
+  /* ── 04. Przyciski i Kontrolki (Button Anatomy) ────────────────────────── */
+  --btn-height-standard:    44px;         /* Standardowy przycisk */
+  --btn-height-comfortable: 48px;         /* Komfortowy przycisk */
+  --btn-padding-x:          18px;         /* Padding poziomy standardowy */
+  --btn-padding-x-comfy:    24px;         /* Padding poziomy komfortowy */
+  --btn-radius:             9999px;       /* Zaokrąglenie pigułki (full) */
+  --btn-icon-size:          20px;
 
-  /* ── Transitions ─────────────────────────────────────────────────────── */
-  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-soft: 220ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 200ms ease;
+  /* Fokus klawiatury i dostępność */
+  --focus-ring:         2px solid #202124;
+  --focus-offset:       3px;
+
+  /* ── 05. Zaokrąglenia (Border Radii) ──────────────────────────────────── */
+  --radius-sm:          4px;
+  --radius-input:       12px;             /* Pola formularzy i inputy */
+  --radius-card-sm:     16px;             /* Małe karty i kafelki */
+  --radius-card:        20px;             /* Standardowe karty i panele */
+  --radius-modal:       24px;             /* Główne okna modalne i czytnik */
+  --radius-full:        9999px;           /* Pigułki, chipsy i przyciski */
+
+  /* ── 06. Cienie i Wyniesienie (Elevation) ─────────────────────────────── */
+  --shadow-card-base:   0 2px 12px -2px rgba(0, 0, 0, 0.03);
+  --shadow-card-hover:  0 6px 18px rgba(0, 0, 0, 0.06);
+  --shadow-modal:       0 25px 60px -15px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-fab:         0 6px 20px rgba(26, 115, 232, 0.35);
+  --shadow-ai-btn:      0 4px 14px rgba(124, 58, 237, 0.28);
+  --shadow-ai-btn-hover: 0 6px 18px rgba(124, 58, 237, 0.38);
+
+  /* ── 07. Ruch i Mikroanimacje (Transitions) ────────────────────────────── */
+  --transition-figma:   200ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-fast:    120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-soft:    250ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* ==========================================================================
+   Globalne Resetowanie i Dostępność
+   ========================================================================== */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -120,9 +166,31 @@ body {
   font-size: var(--text-body-lg);
   font-weight: 400;
   line-height: var(--lh-body);
-  letter-spacing: var(--ls-body);
   background-color: var(--bg-main);
   color: var(--gray-900);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Wyraźny fokus klawiatury dla dostępności (Figma 07) */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Poszanowanie preferencji zredukowanego ruchu (Figma 06 & 07) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

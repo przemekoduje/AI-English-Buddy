@@ -147,41 +147,54 @@
 .topbar-lang-pill {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.875rem;
+  gap: var(--space-8, 8px);
+  padding: 0 var(--btn-padding-x, 18px);
+  height: var(--btn-height-standard, 44px);
   background: var(--surface);
-  border: 1px solid var(--gray-200);
-  border-radius: 999px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-full, 999px);
   font-family: var(--font-main);
-  font-size: 0.75rem;
+  font-size: var(--text-label, 13px);
   font-weight: 600;
   color: var(--gray-700);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: var(--transition-figma, all 0.2s cubic-bezier(0.16, 1, 0.3, 1));
 }
 
 .topbar-lang-pill:hover {
   background: var(--gray-100);
-  border-color: var(--gray-300);
+  border-color: var(--gray-400);
+  color: var(--gray-900);
+}
+
+.topbar-lang-pill:focus-visible {
+  outline: var(--focus-ring, 2px solid #202124);
+  outline-offset: var(--focus-offset, 3px);
 }
 
 .topbar-icon-btn {
-  width: 36px;
-  height: 36px;
+  width: var(--touch-min, 44px);
+  height: var(--touch-min, 44px);
   border-radius: 50%;
-  border: 1px solid var(--gray-200);
+  border: 1px solid var(--gray-300);
   background: var(--surface);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--gray-600);
+  color: var(--gray-700);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: var(--transition-figma, all 0.2s cubic-bezier(0.16, 1, 0.3, 1));
 }
 
 .topbar-icon-btn:hover {
   background: var(--gray-100);
   color: var(--gray-900);
+  border-color: var(--gray-400);
+}
+
+.topbar-icon-btn:focus-visible {
+  outline: var(--focus-ring, 2px solid #202124);
+  outline-offset: var(--focus-offset, 3px);
 }
 
 .topbar-user-wrapper {

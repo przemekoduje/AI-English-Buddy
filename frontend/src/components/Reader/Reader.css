@@ -292,9 +292,9 @@ input[type="range"] {
 }
 
 .reading-now {
-  background-color: #fed7aa !important;
-  color: #7c2d12 !important;
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.35);
+  background-color: var(--narrator-bg, #fff7ed) !important;
+  color: var(--narrator-text, #7c2d12) !important;
+  box-shadow: 0 0 0 2px var(--narrator-border, #f97316);
   border-radius: 6px;
 }
 
@@ -308,9 +308,13 @@ input[type="range"] {
   background: white;
   border: 1px solid var(--border);
   color: #DC2626;
-  padding: 0.6rem 1.2rem;
-  border-radius: var(--radius-md);
+  min-height: var(--btn-height-standard, 44px);
+  padding: 0 1.25rem;
+  border-radius: var(--btn-radius, 9999px);
+  font-family: var(--font-main);
+  font-size: var(--text-button, 13px);
   font-weight: 600;
+  line-height: 140%;
   cursor: pointer;
   transition: var(--transition-fast);
 }
@@ -319,6 +323,13 @@ input[type="range"] {
   background: #FEE2E2;
   border-color: rgba(239, 68, 68, 0.2);
   color: #B91C1C;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.clear-story-btn:focus-visible {
+  outline: var(--focus-ring, 2px solid #202124);
+  outline-offset: var(--focus-offset, 3px);
 }
 
 /* Hover popup wrappers and box styling */
