@@ -2094,27 +2094,6 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     setIsVideoGalleryOpen(false);
   };
 
-  const handleLoadCustomVideo = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (isStarterUser) {
-      if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
-      return;
-    }
-    const videoId = extractVideoId(customUrl);
-    if (!videoId) {
-      setCustomError("Nieprawidłowy adres URL lub ID wideo.");
-      return;
-    }
-    const demoFound = DEMO_VIDEOS.find(v => v.id === videoId || v.youtubeId === videoId);
-    if (!demoFound && isStarterUser) {
-      if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
-      return;
-    }
-    setModalVideoUrl(customUrl);
-    setAddMediaTab("youtube");
-    setShowAddMediaModal(true);
-    handleExtractFromYouTube(customUrl);
-  };
 
   const handleCopyTranscript = () => {
     if (!currentVideo?.transcript) return;
@@ -2214,60 +2193,6 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
               <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
             </svg>
             Audio
-          </button>
-
-
-
-          <form
-            onSubmit={handleLoadCustomVideo}
-            className={`toolbar-input-wrapper ${isStarterUser ? "pro-locked-input" : ""}`}
-            onClick={() => {
-              if (isStarterUser && onOpenPaywall) {
-                onOpenPaywall({ feature: 'media_custom_video' });
-              }
-            }}
-          >
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="input-link-icon">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-            </svg>
-            <input
-              type="text"
-              className="toolbar-input"
-              placeholder={isStarterUser ? "🔒 Wklej link do wideo (wymaga PRO)..." : "Paste a video or audio link..."}
-              value={customUrl}
-              onChange={(e) => {
-                if (isStarterUser) {
-                  if (onOpenPaywall) onOpenPaywall({ feature: 'media_custom_video' });
-                  return;
-                }
-                setCustomUrl(e.target.value);
-              }}
-              readOnly={isStarterUser}
-              title={isStarterUser ? "Ściąganie i analiza własnych filmów z YouTube wymaga pakietu PRO" : undefined}
-            />
-          </form>
-
-          <button
-            type="button"
-            className={`toolbar-analyse-btn ${isStarterUser ? "pro-locked" : ""}`}
-            onClick={handleLoadCustomVideo}
-            disabled={isLoadingCustom}
-            title={isStarterUser ? "Ściąganie i analiza własnych wideo z YouTube wymaga pakietu PRO" : "Analyse media"}
-          >
-            {isStarterUser ? (
-              <span className="media-pro-btn-content">
-                <span>🔒 Analyse media</span>
-                <span className="media-pro-badge">PRO</span>
-              </span>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-                </svg>
-                Analyse media
-              </>
-            )}
           </button>
         </div>
       </div>
