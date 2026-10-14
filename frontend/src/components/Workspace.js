@@ -522,6 +522,16 @@ function Workspace({
             setCurrentStoryTitle(activePart.title);
             if (typeof activePart.read_progress === 'number') {
               setReadingProgress(activePart.read_progress);
+            } else {
+              setReadingProgress(0);
+            }
+            if (activePart.level || activePart.cefr_level) {
+              setSelectedLevel(activePart.level || activePart.cefr_level);
+            }
+            const partCat = activePart.category || (activePart.topics && activePart.topics[0]);
+            if (partCat) {
+              const normCat = partCat.toLowerCase() === 'technology' ? 'Tech' : partCat;
+              setSelectedCategory(normCat);
             }
           }
         }
@@ -633,6 +643,19 @@ function Workspace({
       setCurrentStoryTitle(part.title);
       setCurrentStoryId(part.id);
       setDismissedStoryWords(new Set());
+      if (typeof part.read_progress === 'number') {
+        setReadingProgress(part.read_progress);
+      } else {
+        setReadingProgress(0);
+      }
+      if (part.level || part.cefr_level) {
+        setSelectedLevel(part.level || part.cefr_level);
+      }
+      const partCat = part.category || (part.topics && part.topics[0]);
+      if (partCat) {
+        const normCat = partCat.toLowerCase() === 'technology' ? 'Tech' : partCat;
+        setSelectedCategory(normCat);
+      }
     }
   };
 
@@ -1034,7 +1057,7 @@ function Workspace({
   }, [activeStoryText]);
 
 
-  const saveStoryToDb = async (title, text) => {
+  const saveStoryToDb = async (title, text, extra = {}) => {
     if (!user) return null;
     try {
       const response = await fetch(`${API_BASE_URL}/api/stories`, {
@@ -1043,7 +1066,15 @@ function Workspace({
           "Content-Type": "application/json",
           "X-Session-Token": user.token
         },
-        body: JSON.stringify({ title, text })
+        body: JSON.stringify({
+          title,
+          text,
+          level: extra.level || selectedLevel,
+          cefr_level: extra.cefr_level || extra.level || selectedLevel,
+          category: extra.category || selectedCategory,
+          topics: extra.topics || [selectedCategory],
+          read_progress: 0
+        })
       });
       if (response.ok) {
         return await response.json();
@@ -1156,8 +1187,14 @@ function Workspace({
           },
           body: JSON.stringify({
             topics: [selectedCategory],
+            category: selectedCategory,
+            level: selectedLevel,
+            cefr_level: selectedLevel,
             customDetails: promptDetails,
             settings: {
+              level: selectedLevel,
+              cefr_level: selectedLevel,
+              category: selectedCategory,
               language_level: levelMap[selectedLevel] || "medium",
               length: "medium",
               is_factual: false,
@@ -1175,12 +1212,21 @@ function Workspace({
         }
 
         if (data && data[0] && data[0].generated_text) {
+          const assignedLevel = data[0].level || data[0].cefr_level || selectedLevel;
+          const assignedCategory = data[0].category || (data[0].topics && data[0].topics[0]) || selectedCategory;
+
           const nextPartNum = storyParts.length + 1;
           const newPart = {
             id: data[0].story_id,
             title: data[0].title || `Part ${nextPartNum}`,
             text: data[0].generated_text,
-            part_number: nextPartNum
+            part_number: nextPartNum,
+            level: assignedLevel,
+            cefr_level: assignedLevel,
+            category: assignedCategory,
+            topics: data[0].topics || [assignedCategory],
+            read_progress: 0,
+            custom_details: promptDetails
           };
 
           const updatedParts = [...storyParts, newPart];
@@ -1190,9 +1236,16 @@ function Workspace({
           setGeneratedText(newPart.text);
           setCurrentStoryTitle(newPart.title);
           setCurrentStoryId(newPart.id);
+          setReadingProgress(0);
+          setReadSentenceIndices(new Set());
+          if (newPart.id) {
+            try {
+              localStorage.setItem(`buddy_story_progress_${newPart.id}`, 0);
+              localStorage.removeItem(`buddy_story_read_sentences_${newPart.id}`);
+            } catch (e) {}
+          }
 
           setDismissedStoryWords(new Set());
-          setReadSentenceIndices(new Set());
           setCurrentChunkIndex(-1);
           setCustomStoryPrompt("");
           setIsContinuing(false);
@@ -1214,8 +1267,14 @@ function Workspace({
           },
           body: JSON.stringify({
             topics: [selectedCategory],
+            category: selectedCategory,
+            level: selectedLevel,
+            cefr_level: selectedLevel,
             customDetails: promptDetails,
             settings: {
+              level: selectedLevel,
+              cefr_level: selectedLevel,
+              category: selectedCategory,
               language_level: levelMap[selectedLevel] || "medium",
               length: "medium",
               is_factual: false,
@@ -1234,12 +1293,20 @@ function Workspace({
         if (data && data[0] && data[0].generated_text) {
           const title = data[0].title || `${selectedCategory} Story`;
           const storyId = data[0].story_id;
+          const assignedLevel = data[0].level || data[0].cefr_level || selectedLevel;
+          const assignedCategory = data[0].category || (data[0].topics && data[0].topics[0]) || selectedCategory;
 
           const newPart = {
             id: storyId,
             title: title,
             text: data[0].generated_text,
-            part_number: 1
+            part_number: 1,
+            level: assignedLevel,
+            cefr_level: assignedLevel,
+            category: assignedCategory,
+            topics: data[0].topics || [assignedCategory],
+            read_progress: 0,
+            custom_details: promptDetails
           };
 
           setStoryParts([newPart]);
@@ -1248,9 +1315,16 @@ function Workspace({
           setCurrentStoryId(storyId);
           setGeneratedText(data[0].generated_text);
           setCurrentStoryTitle(title);
+          setReadingProgress(0);
+          setReadSentenceIndices(new Set());
+          if (storyId) {
+            try {
+              localStorage.setItem(`buddy_story_progress_${storyId}`, 0);
+              localStorage.removeItem(`buddy_story_read_sentences_${storyId}`);
+            } catch (e) {}
+          }
 
           setDismissedStoryWords(new Set());
-          setReadSentenceIndices(new Set());
           setCurrentChunkIndex(-1);
           setCustomStoryPrompt("");
           setIsContinuing(false);
@@ -2343,27 +2417,82 @@ function Workspace({
     }
   }, [currentChunkIndex, isSpeaking, isPaused]);
 
+  const activePart = useMemo(() => {
+    if (storyParts && storyParts.length > 0) {
+      if (activePartIndex >= 0 && activePartIndex < storyParts.length) {
+        return storyParts[activePartIndex];
+      }
+      return storyParts[0];
+    }
+    return null;
+  }, [storyParts, activePartIndex]);
+
   const storyLevel = useMemo(() => {
+    // 1. Check custom_details if it explicitly specifies a target CEFR level
+    const details = activePart?.custom_details || storyParts?.[0]?.custom_details;
+    if (details) {
+      const match = details.match(/(?:tailored for|level)\s*:?\s*([A-C][1-2])\b/i) || details.match(/\b([A-C][1-2])\s*CEFR\b/i);
+      if (match) return match[1].toUpperCase();
+    }
+    // 2. Direct level from activePart or root part
+    if (activePart?.level && activePart.level !== "unknown") return activePart.level;
+    if (activePart?.cefr_level && activePart.cefr_level !== "unknown") return activePart.cefr_level;
+    if (storyParts?.[0]?.level && storyParts[0].level !== "unknown") return storyParts[0].level;
+    if (storyParts?.[0]?.cefr_level && storyParts[0].cefr_level !== "unknown") return storyParts[0].cefr_level;
+    // 3. Fallback to current selection if story just generated
+    if (selectedLevel) return selectedLevel;
+    // 4. Linguistic fallback
     if (!activeStoryText) return "B2";
     return calculateCEFRLevel(activeStoryText, activeStoryTitle) || "B2";
-  }, [activeStoryText, activeStoryTitle]);
+  }, [activePart, storyParts, selectedLevel, activeStoryText, activeStoryTitle]);
 
   const storyCategory = useMemo(() => {
+    // 1. Direct metadata from active part or root part
+    const directCat =
+      activePart?.category ||
+      activePart?.topics?.[0] ||
+      activePart?.topic ||
+      storyParts?.[0]?.category ||
+      storyParts?.[0]?.topics?.[0] ||
+      storyParts?.[0]?.topic;
+    if (directCat && typeof directCat === "string" && directCat.trim()) {
+      const trimmed = directCat.trim();
+      if (trimmed.toLowerCase() === "technology") return "Tech";
+      return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+    }
+
+    // 2. Check custom_details if theme was stored
+    const details = activePart?.custom_details || storyParts?.[0]?.custom_details;
+    if (details) {
+      const match = details.match(/theme\s*:\s*([^.,]+)/i);
+      if (match) {
+        const cat = match[1].trim();
+        if (cat.toLowerCase() === "technology") return "Tech";
+        return cat.charAt(0).toUpperCase() + cat.slice(1);
+      }
+    }
+
+    // 3. Fallback to current selection if story was created with selectedCategory
+    if (selectedCategory) {
+      return selectedCategory;
+    }
+
+    // 4. Fallback to text analysis only if no metadata exists
     const combined = `${activeStoryTitle || ""} ${activeStoryText || ""}`.toLowerCase();
+    if (combined.includes("tech") || combined.includes("ai") || combined.includes("software") || combined.includes("code") || combined.includes("model") || combined.includes("developer")) {
+      return "Tech";
+    }
     if (combined.includes("office") || combined.includes("business") || combined.includes("job") || combined.includes("routine") || combined.includes("colleague")) {
       return "Business";
     }
-    if (combined.includes("travel") || combined.includes("trip") || combined.includes("journey") || combined.includes("city")) {
+    if (combined.includes("travel") || combined.includes("trip") || combined.includes("flight") || combined.includes("hotel") || combined.includes("vacation") || combined.includes("tourism")) {
       return "Travel";
     }
-    if (combined.includes("tech") || combined.includes("ai") || combined.includes("software") || combined.includes("code")) {
-      return "Technology";
-    }
     if (combined.includes("health") || combined.includes("doctor") || combined.includes("fitness")) {
-      return "Health";
+      return "Daily Life";
     }
-    return "General";
-  }, [activeStoryTitle, activeStoryText]);
+    return "Tech";
+  }, [activePart, storyParts, selectedCategory, activeStoryTitle, activeStoryText]);
 
   const wordCount = useMemo(() => {
     if (!activeStoryText) return 0;
@@ -2375,11 +2504,11 @@ function Workspace({
   }, [wordCount]);
 
   const computedReadingProgress = useMemo(() => {
-    if (textChunks.length === 0) return readingProgress || 65;
+    if (textChunks.length === 0) return typeof readingProgress === "number" ? readingProgress : 0;
     if (currentChunkIndex >= 0) {
       return Math.min(100, Math.round(((currentChunkIndex + 1) / textChunks.length) * 100));
     }
-    return readingProgress || 65;
+    return typeof readingProgress === "number" ? readingProgress : 0;
   }, [currentChunkIndex, textChunks, readingProgress]);
 
   const handleDeleteStoryWord = async (word) => {

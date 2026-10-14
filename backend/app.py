@@ -3732,8 +3732,17 @@ def generate_text():
             )
 
     # Scoping Level
+    explicit_cefr = (
+        settings.get("level") 
+        or settings.get("cefr_level") 
+        or data.get("level") 
+        or data.get("cefr_level")
+    )
     level = settings.get("language_level", "medium")
-    if level == "simple":
+    if explicit_cefr:
+        cefr_clean = str(explicit_cefr).upper().strip()
+        user_prompt += f"Target CEFR Language Level: {cefr_clean}. Ensure vocabulary, grammar, and sentence complexity strictly correspond to CEFR level {cefr_clean}.\n"
+    elif level == "simple":
         user_prompt += "Language level: Simple. Use very basic vocabulary (A1-A2 level), short sentences, and simple grammar. Avoid complex structures.\n"
     elif level == "advanced":
         user_prompt += "Language level: Advanced. Use rich vocabulary, idioms, complex sentence structures (C1-C2 level), and advanced expressions.\n"
@@ -3812,11 +3821,29 @@ def generate_text():
         # Sprawdź czy identyczna historia już istnieje
         existing_stories = stories_ref.where('user_email', '==', user_email).where('text_hash', '==', text_hash).limit(1).get()
         story_id = None
+        existing_doc_data = None
         for doc in existing_stories:
             story_id = doc.id
+            existing_doc_data = doc.to_dict()
             
         if not story_id:
-            story_lvl = analyze_cefr_level(story_text, title)
+            requested_lvl = (
+                explicit_cefr 
+                or (
+                    "A2" if level == "simple" 
+                    else "C1" if level == "advanced" 
+                    else "B2" if level == "medium" 
+                    else None
+                )
+            )
+            story_lvl = (str(requested_lvl).upper().strip() if requested_lvl else None) or analyze_cefr_level(story_text, title)
+
+            story_category = settings.get('category') or data.get('category')
+            if not topics and story_category:
+                topics = [story_category]
+            elif topics and not story_category:
+                story_category = topics[0]
+
             new_story_data = {
                 'user_email': user_email,
                 'title': title,
@@ -3824,6 +3851,8 @@ def generate_text():
                 'text_hash': text_hash,
                 'level': story_lvl,
                 'cefr_level': story_lvl,
+                'category': story_category or (topics[0] if topics else 'General'),
+                'read_progress': 0,
                 'timestamp': firestore.SERVER_TIMESTAMP
             }
             if parent_id:
@@ -3836,14 +3865,27 @@ def generate_text():
                     new_story_data['custom_details'] = custom_details
             else:
                 new_story_data['part_number'] = 1
-                new_story_data['topics'] = topics
+                new_story_data['topics'] = topics or []
                 new_story_data['custom_details'] = custom_details
                 new_story_data['multi_part'] = settings.get('multi_part', False)
 
             doc_ref = stories_ref.add(new_story_data)
             story_id = doc_ref[1].id
 
-        return jsonify([{"generated_text": story_text, "title": title, "story_id": story_id}])
+        res_level = (new_story_data.get('level') if 'new_story_data' in locals() else (existing_doc_data.get('level') if existing_doc_data else (explicit_cefr or "B2")))
+        res_cefr = (new_story_data.get('cefr_level') if 'new_story_data' in locals() else (existing_doc_data.get('cefr_level') if existing_doc_data else res_level))
+        res_cat = (new_story_data.get('category') if 'new_story_data' in locals() else (existing_doc_data.get('category') if existing_doc_data else (topics[0] if topics else 'General')))
+        res_topics = (new_story_data.get('topics') if 'new_story_data' in locals() else (existing_doc_data.get('topics') if existing_doc_data else (topics or [])))
+
+        return jsonify([{
+            "generated_text": story_text,
+            "title": title,
+            "story_id": story_id,
+            "level": res_level,
+            "cefr_level": res_cefr,
+            "category": res_cat,
+            "topics": res_topics
+        }])
     except (KeyError, IndexError) as e:
         return jsonify({"error": "Nie udało się sparsować odpowiedzi z AI", "details": str(e)}), 500
     except requests.exceptions.RequestException as e:
@@ -4199,11 +4241,23 @@ def get_all_stories_firestore():
                 else:
                     story_data['timestamp'] = str(story_data['timestamp'])
             
-            # Zapewnij realny poziom CEFR
-            if not story_data.get('level'):
+            # Zapewnij poprawny poziom CEFR i kategorię (również z custom_details dla istniejących historii)
+            details = story_data.get('custom_details', '') or ''
+            explicit_lvl_match = re.search(r'(?:tailored for|level)\s*:?\s*([A-C][1-2])\b', details, re.IGNORECASE) or re.search(r'\b([A-C][1-2])\s*CEFR\b', details, re.IGNORECASE)
+            if explicit_lvl_match:
+                story_data['level'] = explicit_lvl_match.group(1).upper()
+                story_data['cefr_level'] = explicit_lvl_match.group(1).upper()
+            elif not story_data.get('level'):
                 computed_lvl = analyze_cefr_level(story_data.get('text', ''), story_data.get('title', ''))
                 story_data['level'] = computed_lvl
                 story_data['cefr_level'] = computed_lvl
+
+            if not story_data.get('category'):
+                st_topics = story_data.get('topics')
+                if st_topics and len(st_topics) > 0:
+                    story_data['category'] = st_topics[0]
+            if story_data.get('category', '').lower() == 'technology':
+                story_data['category'] = 'Tech'
                 
             stories_list.append(story_data)
         
@@ -4279,16 +4333,25 @@ def add_story_firestore():
         image_url = data.get('image_url') or generate_story_image_url(title, text)
 
         # Dodaj nową historię dla konkretnego użytkownika z analizą CEFR
-        story_lvl = analyze_cefr_level(text, title)
+        requested_lvl = data.get('level') or data.get('cefr_level')
+        story_lvl = str(requested_lvl).upper().strip() if requested_lvl else analyze_cefr_level(text, title)
+
+        story_topics = data.get('topics') or ([data.get('category')] if data.get('category') else [])
+        story_category = data.get('category') or (story_topics[0] if story_topics else 'General')
+        if story_category.lower() == 'technology':
+            story_category = 'Tech'
+
         new_story_data = {
             'user_email': user_email,
             'title': title,
             'text': text,
             'text_hash': text_hash,
-            'read_progress': 0,
+            'read_progress': data.get('read_progress', 0),
             'image_url': image_url,
             'level': story_lvl,
             'cefr_level': story_lvl,
+            'category': story_category,
+            'topics': story_topics,
             'timestamp': firestore.SERVER_TIMESTAMP
         }
         doc_ref = stories_ref.add(new_story_data)
@@ -4447,6 +4510,24 @@ def get_story_parts_firestore(story_id):
             if root_doc.exists:
                 root_data = root_doc.to_dict()
         
+        def enrich_part(p):
+            det = p.get('custom_details', '') or ''
+            m = re.search(r'(?:tailored for|level)\s*:?\s*([A-C][1-2])\b', det, re.IGNORECASE) or re.search(r'\b([A-C][1-2])\s*CEFR\b', det, re.IGNORECASE)
+            if m:
+                p['level'] = m.group(1).upper()
+                p['cefr_level'] = m.group(1).upper()
+            elif not p.get('level'):
+                comp = analyze_cefr_level(p.get('text', ''), p.get('title', ''))
+                p['level'] = comp
+                p['cefr_level'] = comp
+            if not p.get('category'):
+                t_list = p.get('topics')
+                if t_list and len(t_list) > 0:
+                    p['category'] = t_list[0]
+            if p.get('category', '').lower() == 'technology':
+                p['category'] = 'Tech'
+            return p
+
         parts_list = []
         root_part = root_data.copy()
         root_part['id'] = root_id
@@ -4456,7 +4537,7 @@ def get_story_parts_firestore(story_id):
                 root_part['timestamp'] = root_part['timestamp'].isoformat()
             else:
                 root_part['timestamp'] = str(root_part['timestamp'])
-        parts_list.append(root_part)
+        parts_list.append(enrich_part(root_part))
         
         child_docs = db.collection('stories').where('parent_id', '==', root_id).get()
         for doc in child_docs:
@@ -4468,7 +4549,7 @@ def get_story_parts_firestore(story_id):
                     doc_data['timestamp'] = doc_data['timestamp'].isoformat()
                 else:
                     doc_data['timestamp'] = str(doc_data['timestamp'])
-            parts_list.append(doc_data)
+            parts_list.append(enrich_part(doc_data))
             
         parts_list.sort(key=lambda x: x.get('part_number', 1))
         

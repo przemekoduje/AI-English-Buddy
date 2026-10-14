@@ -641,19 +641,31 @@ const SavedStories = ({ user, onSelectStory, onStartLiveChat, onCreateStory }) =
         }
         const progress = Math.max(0, Math.min(100, typeof rawProgress === 'number' && !isNaN(rawProgress) ? Math.round(rawProgress) : 0));
 
-        // Real linguistic CEFR level determination
-        const level = (story.level && String(story.level).trim()) || (story.cefr_level && String(story.cefr_level).trim()) || calculateCEFRLevel(story.text, story.title);
+        // Check if custom_details explicitly specifies a target CEFR level
+        let explicitLevel = null;
+        if (story.custom_details) {
+          const match = story.custom_details.match(/(?:tailored for|level)\s*:?\s*([A-C][1-2])\b/i) || story.custom_details.match(/\b([A-C][1-2])\s*CEFR\b/i);
+          if (match) explicitLevel = match[1].toUpperCase();
+        }
+        const level = explicitLevel || (story.level && String(story.level).trim()) || (story.cefr_level && String(story.cefr_level).trim()) || calculateCEFRLevel(story.text, story.title);
 
         // Determine category
         let category = "General";
-        if (story.topics && story.topics.length > 0) {
+        if (story.category && typeof story.category === 'string' && story.category.trim()) {
+          category = story.category.trim();
+        } else if (story.topics && story.topics.length > 0) {
           category = story.topics[0];
-        } else if (story.title) {
+        } else if (story.custom_details) {
+          const match = story.custom_details.match(/theme\s*:\s*([^.,]+)/i);
+          if (match) category = match[1].trim();
+        }
+        if (category.toLowerCase() === "technology") category = "Tech";
+        if (category === "General" && story.title) {
           const t = story.title.toLowerCase();
           if (t.includes("business") || t.includes("team") || t.includes("office") || t.includes("work")) category = "Business";
           else if (t.includes("kraków") || t.includes("trip") || t.includes("travel") || t.includes("scenic")) category = "Travel";
           else if (t.includes("coffee") || t.includes("day") || t.includes("routine") || t.includes("life")) category = "Daily Life";
-          else if (t.includes("tech") || t.includes("smart") || t.includes("invention") || t.includes("future")) category = "Tech";
+          else if (t.includes("tech") || t.includes("smart") || t.includes("invention") || t.includes("future") || t.includes("tomorrow") || t.includes("ai")) category = "Tech";
           else if (t.includes("market") || t.includes("food") || t.includes("recipe")) category = "Food & Market";
         }
 
