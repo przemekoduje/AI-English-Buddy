@@ -512,7 +512,58 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   }, [autoScrollEnabled]);
 
   const [pastedSrt, setPastedSrt] = useState("");
-  const [notebookWords, setNotebookWords] = useState([]);
+
+  const getLocalStorageWordsKey = useCallback((video) => {
+    const userKey = user?.email || user?.uid || "guest";
+    const vidKey = video?.youtubeId || video?.id || "default";
+    return `media_buddy_notebook_words_${userKey}_${vidKey}`;
+  }, [user]);
+
+  const getVideoStoryIds = useCallback((video) => {
+    if (!video) return [];
+    const ids = new Set();
+    const rawList = [video.id, video.youtubeId].filter(Boolean);
+    rawList.forEach(raw => {
+      ids.add(raw);
+      const clean = raw.replace(/^(standup_phrase_custom_|standup_phrase_|standup_custom_|standup_|media_custom_|media_|custom_)+/, "");
+      if (clean) {
+        ids.add(clean);
+        ids.add(`custom_${clean}`);
+        ids.add(`standup_${clean}`);
+        ids.add(`standup_custom_${clean}`);
+        ids.add(`standup_phrase_${clean}`);
+        ids.add(`standup_phrase_custom_${clean}`);
+        ids.add(`media_${clean}`);
+        ids.add(`media_custom_${clean}`);
+      }
+      ids.add(`standup_${raw}`);
+      ids.add(`standup_phrase_${raw}`);
+      ids.add(`custom_${raw}`);
+      ids.add(`media_${raw}`);
+    });
+    return Array.from(ids).filter(Boolean);
+  }, []);
+
+  const [notebookWords, setNotebookWords] = useState(() => {
+    if (!currentVideo) return [];
+    const userKey = user?.email || user?.uid || "guest";
+    const vidKey = currentVideo?.youtubeId || currentVideo?.id || "default";
+    try {
+      const cached = localStorage.getItem(`media_buddy_notebook_words_${userKey}_${vidKey}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      if (currentVideo?.youtubeId) {
+        const ytCached = localStorage.getItem(`media_buddy_notebook_words_${userKey}_${currentVideo.youtubeId}`);
+        if (ytCached) {
+          const parsed = JSON.parse(ytCached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
 
   // Exercise State
   const [exerciseData, setExerciseData] = useState(null);
@@ -522,24 +573,84 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   const [exerciseChecking, setExerciseChecking] = useState(false);
   const [showExerciseHint, setShowExerciseHint] = useState(false);
 
-  // Fetch words in vocabulary for this video
-  useEffect(() => {
-    if (!currentVideo || !user?.token) {
-      setNotebookWords([]);
-      return;
-    }
-    const storyId = currentVideo.youtubeId || currentVideo.id;
-    fetch(`${API_BASE_URL}/api/vocabulary?story_id=${storyId}`, {
+  // Sync added words immediately to state and localStorage
+  const saveToNotebookStateAndStorage = useCallback((added_doc) => {
+    if (!added_doc) return;
+    setNotebookWords(prev => {
+      const origKey = (added_doc.original || "").trim().toLowerCase();
+      const filtered = prev.filter(w => (w.original || "").trim().toLowerCase() !== origKey);
+      const updated = [added_doc, ...filtered];
+      try {
+        const storageKey = getLocalStorageWordsKey(currentVideo);
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        if (currentVideo?.youtubeId) {
+          const userKey = user?.email || user?.uid || "guest";
+          localStorage.setItem(`media_buddy_notebook_words_${userKey}_${currentVideo.youtubeId}`, JSON.stringify(updated));
+        }
+      } catch (e) {}
+      return updated;
+    });
+  }, [currentVideo, user, getLocalStorageWordsKey]);
+
+  // Fetch words in vocabulary for this video (syncs with Firestore and local storage)
+  const fetchNotebookWords = useCallback(() => {
+    if (!currentVideo || !user?.token) return;
+    const storageKey = getLocalStorageWordsKey(currentVideo);
+    const storyIds = getVideoStoryIds(currentVideo).slice(0, 30).join(",");
+
+    fetch(`${API_BASE_URL}/api/vocabulary?story_id=${encodeURIComponent(storyIds)}`, {
       headers: { "X-Session-Token": user.token }
     })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setNotebookWords(data);
+          setNotebookWords(prev => {
+            const map = new Map();
+            data.forEach(item => {
+              const k = (item.original || "").trim().toLowerCase();
+              if (k) map.set(k, item);
+            });
+            prev.forEach(item => {
+              const k = (item.original || "").trim().toLowerCase();
+              if (k && !map.has(k)) map.set(k, item);
+            });
+            const merged = Array.from(map.values());
+            try {
+              localStorage.setItem(storageKey, JSON.stringify(merged));
+              if (currentVideo.youtubeId) {
+                const userKey = user?.email || user?.uid || "guest";
+                localStorage.setItem(`media_buddy_notebook_words_${userKey}_${currentVideo.youtubeId}`, JSON.stringify(merged));
+              }
+            } catch (e) {}
+            return merged;
+          });
         }
       })
       .catch(err => console.error("Error fetching notebook words:", err));
-  }, [currentVideo, user?.token]);
+  }, [currentVideo, user, getLocalStorageWordsKey, getVideoStoryIds]);
+
+  useEffect(() => {
+    if (!currentVideo) {
+      setNotebookWords([]);
+      return;
+    }
+    const storageKey = getLocalStorageWordsKey(currentVideo);
+    try {
+      const cached = localStorage.getItem(storageKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setNotebookWords(parsed);
+        }
+      }
+    } catch (e) {}
+
+    fetchNotebookWords();
+
+    const handleVocabUpdated = () => fetchNotebookWords();
+    window.addEventListener("vocabulary-updated", handleVocabUpdated);
+    return () => window.removeEventListener("vocabulary-updated", handleVocabUpdated);
+  }, [currentVideo, fetchNotebookWords, getLocalStorageWordsKey]);
 
   const handleStartExercise = async () => {
     if (notebookWords.length === 0) return;
@@ -1448,6 +1559,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     }
 
     if (translationToSave) {
+      const targetStoryId = currentVideo.youtubeId ? `custom_${currentVideo.youtubeId}` : (currentVideo.id || "media");
       try {
         const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
           method: "POST",
@@ -1455,14 +1567,12 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           body: JSON.stringify({
             original: seg.text,
             translated: translationToSave,
-            story_id: `standup_phrase_${currentVideo.id}`
+            story_id: targetStoryId
           })
         });
         if (response.ok) {
           const added_doc = await response.json();
-          if (!notebookWords.some(w => w.original === added_doc.original)) {
-            setNotebookWords(prev => [added_doc, ...prev]);
-          }
+          saveToNotebookStateAndStorage(added_doc);
           window.dispatchEvent(new CustomEvent("vocabulary-updated"));
           setIsSegmentSaved(true);
         }
@@ -1476,6 +1586,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     const segment = currentVideo.transcript?.[activeSegmentIndex];
     const trans = translationsCache[activeSegmentIndex] || segmentTranslation;
     if (!segment || !trans) return;
+    const targetStoryId = currentVideo.youtubeId ? `custom_${currentVideo.youtubeId}` : (currentVideo.id || "media");
     try {
       const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
         method: "POST",
@@ -1483,15 +1594,13 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         body: JSON.stringify({
           original: segment.text,
           translated: trans,
-          story_id: `standup_phrase_${currentVideo.id}`
+          story_id: targetStoryId
         })
       });
       if (response.ok) {
         const added_doc = await response.json();
         setIsSegmentSaved(true);
-        if (!notebookWords.some(w => w.original === added_doc.original)) {
-          setNotebookWords(prev => [added_doc, ...prev]);
-        }
+        saveToNotebookStateAndStorage(added_doc);
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       }
     } catch (err) {
@@ -1539,6 +1648,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
   const handleSaveWord = async () => {
     if (!selectedWord || !wordTranslation) return;
+    const targetStoryId = currentVideo.youtubeId ? `custom_${currentVideo.youtubeId}` : (currentVideo.id || "media");
     try {
       const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
         method: "POST",
@@ -1546,19 +1656,44 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         body: JSON.stringify({
           original: selectedWord,
           translated: wordTranslation,
-          story_id: `standup_${currentVideo.id}`
+          story_id: targetStoryId
         })
       });
       if (response.ok) {
         const added_doc = await response.json();
         setIsSaved(true);
-        if (!notebookWords.some(w => w.original === added_doc.original)) {
-          setNotebookWords(prev => [added_doc, ...prev]);
-        }
+        saveToNotebookStateAndStorage(added_doc);
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       }
     } catch (err) {
       console.error("Błąd podczas zapisywania słówka:", err);
+    }
+  };
+
+  const handleDeleteNotebookWord = async (wordToDelete) => {
+    const origKey = (wordToDelete.original || "").trim().toLowerCase();
+    setNotebookWords(prev => {
+      const updated = prev.filter(w => (w.original || "").trim().toLowerCase() !== origKey);
+      try {
+        const storageKey = getLocalStorageWordsKey(currentVideo);
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        if (currentVideo?.youtubeId) {
+          const userKey = user?.email || user?.uid || "guest";
+          localStorage.setItem(`media_buddy_notebook_words_${userKey}_${currentVideo.youtubeId}`, JSON.stringify(updated));
+        }
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      const deleteIdentifier = wordToDelete.id || wordToDelete.original;
+      await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(deleteIdentifier)}`, {
+        method: "DELETE",
+        headers: { "X-Session-Token": user?.token || "" }
+      });
+      window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+    } catch (err) {
+      console.error("Błąd podczas usuwania słówka:", err);
     }
   };
 
@@ -2462,8 +2597,21 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                 <>
                   <div className="media-notebook-list">
                     {notebookWords.map((word, idx) => (
-                      <div key={idx} className="notebook-word-item">
-                        <strong>{word.original}</strong> — {word.translated}
+                      <div key={word.id || `${word.original}_${idx}`} className="notebook-word-item">
+                        <span className="notebook-word-text">
+                          <strong>{word.original}</strong> — {word.translated}
+                        </span>
+                        <button
+                          type="button"
+                          className="notebook-word-delete-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteNotebookWord(word);
+                          }}
+                          title="Usuń słówko z notesu"
+                        >
+                          ✕
+                        </button>
                       </div>
                     ))}
                   </div>

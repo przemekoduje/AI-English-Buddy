@@ -4492,9 +4492,29 @@ def get_vocabulary():
     try:
         query = db.collection('vocabulary').where('user_email', '==', user_email)
         if story_id:
-            query = query.where('story_id', '==', story_id)
+            raw_ids = [s.strip() for s in story_id.split(',') if s.strip()]
+            prefixes = ['standup_phrase_custom_', 'standup_phrase_', 'standup_custom_', 'standup_', 'media_custom_', 'media_', 'custom_']
+            variants = set()
+            for sid in raw_ids:
+                variants.add(sid)
+                base = sid
+                for p in prefixes:
+                    if base.startswith(p):
+                        base = base[len(p):]
+                for b in [sid, base]:
+                    if b:
+                        for p in ['', 'custom_', 'standup_', 'standup_custom_', 'standup_phrase_', 'standup_phrase_custom_', 'media_', 'media_custom_']:
+                            variants.add(f"{p}{b}")
+
+            variant_list = [v for v in variants if v]
+            if len(variant_list) == 1:
+                query = query.where('story_id', '==', variant_list[0])
+            elif len(variant_list) > 1:
+                query = query.where('story_id', 'in', variant_list[:30])
+
         docs = query.stream()
         vocab_list = []
+        seen_words = set()
         for doc in docs:
             data = doc.to_dict()
             data['id'] = doc.id
@@ -4503,6 +4523,13 @@ def get_vocabulary():
                     data['timestamp'] = data['timestamp'].isoformat()
                 else:
                     data['timestamp'] = str(data['timestamp'])
+
+            orig_lower = (data.get('original') or '').strip().lower()
+            if story_id and orig_lower in seen_words:
+                continue
+            if orig_lower:
+                seen_words.add(orig_lower)
+
             vocab_list.append(data)
         
         # Sortowanie w Pythonie chronologicznie (od najnowszych)

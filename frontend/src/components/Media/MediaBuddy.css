@@ -1147,6 +1147,41 @@
   background: #f8fafc;
   padding: 0.35rem 0.65rem;
   border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.15s ease;
+}
+
+.notebook-word-item:hover {
+  background: #f1f5f9;
+}
+
+.notebook-word-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.notebook-word-delete-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notebook-word-delete-btn:hover {
+  background: #fee2e2;
+  color: #ef4444;
 }
 
 .btn-exercise-launch {
