@@ -31,19 +31,21 @@ document.addEventListener('touchmove', function(e) {
 // Dynamic redirect back to desktop version when resizing above mobile width on desktop browser
 (function() {
   var isRedirecting = false;
+  var resizeTimer = null;
+
   function checkDesktopRedirect() {
     if (isRedirecting) return;
     try {
-      var isRealMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || 
-                         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
-                         (window.screen && Math.min(window.screen.width, window.screen.height) < 768);
+      var isPhoneDevice = /Mobi|Android.*Mobile|iPhone|iPod/i.test(navigator.userAgent) || 
+                          (window.screen && Math.min(window.screen.width, window.screen.height) <= 500);
       
-      if (!isRealMobile && window.innerWidth >= 768) {
+      if (!isPhoneDevice && window.innerWidth >= 768) {
         var path = window.location.pathname;
         if (path.startsWith('/speakling/mobile') || path.startsWith('/mobile')) {
           isRedirecting = true;
           var searchParams = new URLSearchParams(window.location.search);
           searchParams.delete('cb');
+          searchParams.set('cb', String(Date.now()));
           var query = searchParams.toString();
           var queryStr = query ? ('?' + query) : '';
           var target = window.location.origin + '/speakling' + queryStr + window.location.hash;
@@ -56,7 +58,13 @@ document.addEventListener('touchmove', function(e) {
   }
 
   checkDesktopRedirect();
-  window.addEventListener('resize', checkDesktopRedirect);
+
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimer);
+    if (window.innerWidth >= 768) {
+      resizeTimer = setTimeout(checkDesktopRedirect, 80);
+    }
+  });
 })();
 </script>'''
 

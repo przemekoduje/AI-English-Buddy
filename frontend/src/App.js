@@ -153,14 +153,16 @@ function App() {
 
   // Dynamiczne wykrywanie urządzeń mobilnych oraz zmniejszenia ekranu i przekierowanie na wersję mobilną
   useEffect(() => {
+    let resizeTimer = null;
     let isRedirecting = false;
+
     const checkMobileRedirect = () => {
       if (isRedirecting) return;
-      const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || 
-                       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
-                       window.innerWidth < 768 ||
-                       (window.screen && Math.min(window.screen.width, window.screen.height) < 768);
-      if (isMobile) {
+      const isPhoneDevice = /Mobi|Android.*Mobile|iPhone|iPod/i.test(navigator.userAgent) || 
+                            (window.screen && Math.min(window.screen.width, window.screen.height) <= 500);
+      const isMobileViewport = window.innerWidth < 768;
+
+      if (isPhoneDevice || isMobileViewport) {
         const path = window.location.pathname;
         if (!path.startsWith('/speakling/mobile') && !path.startsWith('/speakling/mobile/')) {
           isRedirecting = true;
@@ -175,9 +177,20 @@ function App() {
     };
 
     checkMobileRedirect();
-    window.addEventListener('resize', checkMobileRedirect);
+
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      if (window.innerWidth < 768) {
+        resizeTimer = setTimeout(checkMobileRedirect, 80);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
     
-    return () => window.removeEventListener('resize', checkMobileRedirect);
+    return () => {
+      clearTimeout(resizeTimer);
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   useEffect(() => {

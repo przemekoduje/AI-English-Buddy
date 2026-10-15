@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script>
       (function() {
-        var isMobileDevice = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || 
-                             (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
-                             window.innerWidth < 768 || 
-                             (window.screen && Math.min(window.screen.width, window.screen.height) < 768);
-        if (isMobileDevice) {
+        var isPhoneDevice = /Mobi|Android.*Mobile|iPhone|iPod/i.test(navigator.userAgent) || 
+                            (window.screen && Math.min(window.screen.width, window.screen.height) <= 500);
+        var isMobileViewport = window.innerWidth < 768;
+
+        if (isPhoneDevice || isMobileViewport) {
           var path = window.location.pathname;
           if (!path.startsWith('/speakling/mobile') && !path.startsWith('/speakling/mobile/')) {
             var searchParams = new URLSearchParams(window.location.search);

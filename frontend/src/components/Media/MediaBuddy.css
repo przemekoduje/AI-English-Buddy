@@ -4,11 +4,14 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  padding: 1.75rem 2.25rem;
+  padding: 1.75rem 2.25rem 3.5rem 2.25rem;
   max-width: 1440px;
   margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
   animation: fadeIn 0.35s ease-out;
   color: #0f172a;
+  position: relative;
 }
 
 @keyframes fadeIn {
@@ -2472,4 +2475,194 @@
   line-height: 1;
   text-transform: uppercase;
   box-shadow: 0 2px 6px rgba(245, 158, 11, 0.35);
+}
+
+/* ==========================================================================
+   RESPONSIVE LAYOUT & MEDIA QUERIES (Mobile to 1440px+)
+   ========================================================================== */
+
+/* --- Screens up to 1440px --- */
+@media (max-width: 1440px) {
+  .mediabuddy-container {
+    padding: 1.5rem 2rem 3.5rem 2rem;
+    gap: 1.4rem;
+    max-width: 100%;
+  }
+
+  .media-workspace-grid {
+    grid-template-columns: 1.2fr 1fr;
+    gap: 1.5rem;
+  }
+}
+
+/* --- Screens up to 1200px --- */
+@media (max-width: 1200px) {
+  .mediabuddy-container {
+    padding: 1.25rem 1.75rem 3rem 1.75rem;
+    gap: 1.35rem;
+  }
+
+  .media-workspace-grid {
+    grid-template-columns: 1.15fr 1fr;
+    gap: 1.25rem;
+  }
+
+  .mediabuddy-main-title {
+    font-size: 2rem;
+  }
+
+  .video-tile-card {
+    min-width: 190px;
+    max-width: 210px;
+  }
+}
+
+/* --- Screens up to 1024px --- */
+@media (max-width: 1024px) {
+  .mediabuddy-container {
+    padding: 1.25rem 1.5rem 3rem 1.5rem;
+    gap: 1.25rem;
+  }
+
+  .mediabuddy-main-title {
+    font-size: 1.85rem;
+  }
+
+  .mediabuddy-main-subtitle {
+    font-size: 0.95rem;
+  }
+
+  .media-workspace-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .transcription-segments-container {
+    max-height: 480px;
+  }
+}
+
+/* --- Screens up to 900px --- */
+@media (max-width: 900px) {
+  .mediabuddy-container {
+    padding: 1.15rem 1.35rem 3rem 1.35rem;
+    gap: 1.15rem;
+  }
+
+  .mediabuddy-title-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .btn-add-media {
+    align-self: flex-start;
+  }
+
+  .mediabuddy-main-title {
+    font-size: 1.75rem;
+  }
+
+  .drawer-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .drawer-close-btn {
+    align-self: flex-end;
+  }
+
+  .media-selector-row-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .media-selector-sort-controls {
+    align-self: flex-start;
+  }
+}
+
+/* --- Screens up to 768px (Mobile Breakpoint) --- */
+@media (max-width: 768px) {
+  .mediabuddy-container {
+    padding: 1rem 1.25rem 3.5rem 1.25rem;
+    gap: 1rem;
+  }
+
+  .mediabuddy-main-title {
+    font-size: 1.55rem;
+  }
+
+  .mediabuddy-main-subtitle {
+    font-size: 0.9rem;
+  }
+
+  .btn-add-media {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .mediabuddy-toolbar-row {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .toolbar-pill-btn {
+    padding: 0.5rem 0.9rem;
+    font-size: 0.85rem;
+  }
+
+  .video-player-card {
+    border-radius: 12px;
+  }
+
+  .video-custom-controls {
+    padding: 0.6rem 0.85rem;
+    gap: 0.5rem;
+  }
+
+  .video-time-display {
+    font-size: 0.78rem;
+  }
+
+  .enhanced-add-media-card {
+    padding: 1.25rem;
+    border-radius: 16px;
+    max-width: 95% !important;
+  }
+
+  .media-modal-backdrop {
+    padding: 1rem;
+  }
+}
+
+/* --- Screens up to 480px (Small Mobile) --- */
+@media (max-width: 480px) {
+  .mediabuddy-container {
+    padding: 0.85rem 1rem 3.5rem 1rem;
+    gap: 0.85rem;
+  }
+
+  .mediabuddy-main-title {
+    font-size: 1.4rem;
+  }
+
+  .video-tile-card {
+    min-width: 155px;
+    max-width: 175px;
+  }
+
+  .synced-segment-card {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .segment-original-text {
+    font-size: 0.92rem;
+  }
+
+  .segment-polish-translation {
+    font-size: 0.85rem;
+  }
 }
