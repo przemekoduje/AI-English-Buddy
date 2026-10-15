@@ -5,8 +5,12 @@ $ErrorActionPreference = "Stop"
 Write-Host "=== 1. Budowanie aplikacji mobilnej (Expo Web) ==="
 Set-Location mobile
 npx expo export --platform web
-Write-Host "=== 1b. Patching viewport (blokada pinch-zoom) ==="
-python3 scripts/patch-viewport.py
+Write-Host "=== 1b. Patching viewport (blokada pinch-zoom oraz desktop redirect) ==="
+if (Get-Command python -ErrorAction SilentlyContinue) {
+    python scripts/patch-viewport.py
+} else {
+    python3 scripts/patch-viewport.py
+}
 Set-Location ..
 
 Write-Host "=== 2. Budowanie aplikacji przeglądarkowej (React Web) ==="

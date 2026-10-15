@@ -12,8 +12,11 @@
         if (isMobileDevice) {
           var path = window.location.pathname;
           if (!path.startsWith('/speakling/mobile') && !path.startsWith('/speakling/mobile/')) {
-            var separator = window.location.search ? '&' : '?';
-            var target = window.location.origin + '/speakling/mobile/' + window.location.search + separator + 'cb=' + Date.now() + window.location.hash;
+            var searchParams = new URLSearchParams(window.location.search);
+            searchParams.delete('cb');
+            searchParams.set('cb', String(Date.now()));
+            var query = searchParams.toString();
+            var target = window.location.origin + '/speakling/mobile/?' + query + window.location.hash;
             window.location.replace(target);
           }
         }

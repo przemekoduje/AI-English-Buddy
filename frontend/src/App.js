@@ -153,7 +153,9 @@ function App() {
 
   // Dynamiczne wykrywanie urządzeń mobilnych oraz zmniejszenia ekranu i przekierowanie na wersję mobilną
   useEffect(() => {
+    let isRedirecting = false;
     const checkMobileRedirect = () => {
+      if (isRedirecting) return;
       const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || 
                        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
                        window.innerWidth < 768 ||
@@ -161,8 +163,12 @@ function App() {
       if (isMobile) {
         const path = window.location.pathname;
         if (!path.startsWith('/speakling/mobile') && !path.startsWith('/speakling/mobile/')) {
-          const separator = window.location.search ? '&' : '?';
-          const target = window.location.origin + '/speakling/mobile/' + window.location.search + separator + 'cb=' + Date.now() + window.location.hash;
+          isRedirecting = true;
+          const searchParams = new URLSearchParams(window.location.search);
+          searchParams.delete('cb');
+          searchParams.set('cb', String(Date.now()));
+          const query = searchParams.toString();
+          const target = window.location.origin + '/speakling/mobile/?' + query + window.location.hash;
           window.location.replace(target);
         }
       }

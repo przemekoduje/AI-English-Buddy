@@ -151,6 +151,40 @@ export default function HomeScreen() {
   const [aiMode, setAiMode] = useState<'free' | 'openai_full' | 'hybrid'>('free');
   const [autoSendEnabled, setAutoSendEnabled] = useState<boolean>(true);
 
+  // Dynamiczne wykrywanie powrotu do ekranu desktopowego (szerokość >= 768px na przeglądarce desktopowej)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    let isRedirecting = false;
+    const checkDesktopRedirect = () => {
+      if (isRedirecting) return;
+      try {
+        const isRealMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || 
+                             (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+                             (window.screen && Math.min(window.screen.width, window.screen.height) < 768);
+        
+        if (!isRealMobile && window.innerWidth >= 768) {
+          const path = window.location.pathname;
+          if (path.startsWith('/speakling/mobile') || path.startsWith('/mobile')) {
+            isRedirecting = true;
+            const searchParams = new URLSearchParams(window.location.search);
+            searchParams.delete('cb');
+            const query = searchParams.toString();
+            const queryStr = query ? ('?' + query) : '';
+            const target = window.location.origin + '/speakling' + queryStr + window.location.hash;
+            window.location.replace(target);
+          }
+        }
+      } catch (e) {
+        console.error('Desktop redirect check failed:', e);
+      }
+    };
+
+    checkDesktopRedirect();
+    window.addEventListener('resize', checkDesktopRedirect);
+    return () => window.removeEventListener('resize', checkDesktopRedirect);
+  }, []);
+
   const handleSelectAiMode = async (mode: 'free' | 'openai_full' | 'hybrid') => {
     if (mode === 'free') {
       setAiMode(mode);

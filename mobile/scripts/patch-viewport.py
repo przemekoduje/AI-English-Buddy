@@ -18,7 +18,7 @@ DIST_DIR = os.path.join(os.path.dirname(__file__), '..', 'dist')
 OLD_VIEWPORT = 'width=device-width, initial-scale=1, shrink-to-fit=no'
 NEW_VIEWPORT = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, shrink-to-fit=no'
 
-# JS injected right before </head> — blocks pinch-zoom on iOS Safari
+# JS injected right before </head> — blocks pinch-zoom on iOS Safari AND redirects desktop resize to desktop version
 PINCH_ZOOM_BLOCKER = '''<script>
 // Disable pinch-zoom on iOS Safari (ignores user-scalable=no since iOS 10)
 document.addEventListener('gesturestart', function(e) { e.preventDefault(); }, { passive: false });
@@ -27,6 +27,37 @@ document.addEventListener('gestureend', function(e) { e.preventDefault(); }, { p
 document.addEventListener('touchmove', function(e) {
   if (e.touches.length > 1) { e.preventDefault(); }
 }, { passive: false });
+
+// Dynamic redirect back to desktop version when resizing above mobile width on desktop browser
+(function() {
+  var isRedirecting = false;
+  function checkDesktopRedirect() {
+    if (isRedirecting) return;
+    try {
+      var isRealMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || 
+                         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+                         (window.screen && Math.min(window.screen.width, window.screen.height) < 768);
+      
+      if (!isRealMobile && window.innerWidth >= 768) {
+        var path = window.location.pathname;
+        if (path.startsWith('/speakling/mobile') || path.startsWith('/mobile')) {
+          isRedirecting = true;
+          var searchParams = new URLSearchParams(window.location.search);
+          searchParams.delete('cb');
+          var query = searchParams.toString();
+          var queryStr = query ? ('?' + query) : '';
+          var target = window.location.origin + '/speakling' + queryStr + window.location.hash;
+          window.location.replace(target);
+        }
+      }
+    } catch (e) {
+      console.error('Desktop redirect check failed:', e);
+    }
+  }
+
+  checkDesktopRedirect();
+  window.addEventListener('resize', checkDesktopRedirect);
+})();
 </script>'''
 
 html_files = list(set(
@@ -46,8 +77,11 @@ for path in html_files:
         content = content.replace(OLD_VIEWPORT, NEW_VIEWPORT)
         changed = True
 
-    # 2. Inject JS blocker before </head> (only once)
-    if PINCH_ZOOM_BLOCKER.strip() not in content and '</head>' in content:
+    # 2. Inject JS blocker & desktop redirect before </head>
+    if '// Disable pinch-zoom on iOS Safari' in content:
+        content = re.sub(r'<script>\s*// Disable pinch-zoom on iOS Safari.*?</script>', PINCH_ZOOM_BLOCKER, content, flags=re.DOTALL)
+        changed = True
+    elif PINCH_ZOOM_BLOCKER.strip() not in content and '</head>' in content:
         content = content.replace('</head>', PINCH_ZOOM_BLOCKER + '</head>', 1)
         changed = True
 
@@ -62,7 +96,7 @@ for path in html_files:
     if changed:
         with open(path, 'w', encoding='utf-8') as f:
             f.write(content)
-        print(f'✓ Patched: {os.path.basename(path)}')
+        print(f'[OK] Patched: {os.path.basename(path)}')
         patched += 1
     else:
         print(f'- Skipped (already OK): {os.path.basename(path)}')
