@@ -1948,6 +1948,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           youtubeUrl: data.youtube_url || `https://www.youtube.com/watch?v=${data.video_id}`,
           title: data.title || `Wideo YouTube (${data.video_id})`,
           segments: data.segments,
+          source: data.source,
+          from_cache: data.from_cache,
           stats: data.stats || {
             sentence_count: data.segments.length,
             word_count: data.segments.reduce((acc, s) => acc + (s.text || "").split(/\s+/).length, 0),
@@ -3045,8 +3047,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                     <div className="add-media-loading-card animate-fade-in">
                       <div className="add-media-spinner"></div>
                       <div>
-                        <strong>Pobieranie napisów przez proxy i dopasowywanie zdań...</strong>
-                        <p>Omijamy blokady datacenter YouTube i semantycznie formatujemy zdania do nauki.</p>
+                        <strong>Pobieranie lub generowanie napisów AI...</strong>
+                        <p>Sprawdzamy napisy YouTube. Jeśli są niedostępne, system AI (Gemini/Groq) odsłucha ścieżkę dźwiękową i przygotuje zsynchronizowane zdania.</p>
                       </div>
                     </div>
                   )}
@@ -3082,7 +3084,13 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                           className="preview-thumbnail"
                         />
                         <div className="preview-meta">
-                          <span className="preview-ready-badge">✓ Napisy gotowe</span>
+                          <span className="preview-ready-badge">
+                            {extractedData.source && extractedData.source.startsWith('ai_audio')
+                              ? "✨ Wygenerowano ze ścieżki audio przez AI"
+                              : extractedData.from_cache
+                                ? "⚡ Wczytano błyskawicznie z pamięci"
+                                : "✓ Napisy gotowe"}
+                          </span>
                           <h4 className="preview-title">{extractedData.title}</h4>
                           <span className="preview-url">{extractedData.youtubeUrl}</span>
                         </div>

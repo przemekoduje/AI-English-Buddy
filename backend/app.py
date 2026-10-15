@@ -3333,6 +3333,175 @@ def extract_youtube_id(url_or_id):
     return ""
 
 
+def transcribe_youtube_audio_ai(video_id, user_email=None):
+    """
+    Pobiera najlżejszą ścieżkę audio z YouTube (format low-bitrate m4a/opus)
+    i transkrybuje ją za pomocą Groq Whisper (jeśli dostępny klucz) lub Google Gemini Flash Audio.
+    Zwraca (formatted_segments, video_title, engine_name).
+    Wbudowane zabezpieczenia:
+    - Limit długości: max 15 minut (900 sekund)
+    - Bezpieczne usuwanie pliku tymczasowego
+    - Obsługa wyłącznie Groq i Gemini
+    """
+    import tempfile
+    import os
+    import base64
+    import requests
+    import json
+    import yt_dlp
+
+    # 1. Sprawdzenie metadanych i długości filmu (zabezpieczenie kosztowe)
+    ydl_info_opts = {
+        'skip_download': True,
+        'quiet': True,
+        'no_warnings': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'mweb']}}
+    }
+    with yt_dlp.YoutubeDL(ydl_info_opts) as ydl:
+        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+
+    video_title = info.get("title") or f"Wideo YouTube ({video_id})"
+    duration = info.get("duration") or 0
+
+    if duration > 900:  # 15 minut max
+        minutes = round(duration / 60)
+        raise ValueError(f"DURATION_EXCEEDED: Ten film trwa {minutes} min. Ze względów wydajnościowych transkrypcja AI ze ścieżki audio jest ograniczona do materiałów o długości do 15 minut.")
+
+    # 2. Pobranie niskowagowego strumienia audio
+    temp_dir = tempfile.gettempdir()
+    out_tmpl = os.path.join(temp_dir, f"speakling_ai_{video_id}.%(ext)s")
+    ydl_dl_opts = {
+        'format': 'ba[abr<=64]/worstaudio[ext=m4a]/worstaudio/worst',
+        'outtmpl': out_tmpl,
+        'quiet': True,
+        'no_warnings': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'ios']}}
+    }
+
+    audio_path = None
+    segments_out = []
+    engine_used = ""
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_dl_opts) as ydl:
+            dl_info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=True)
+            audio_path = ydl.prepare_filename(dl_info)
+
+        if not audio_path or not os.path.exists(audio_path):
+            raise RuntimeError("Nie udało się pobrać pliku audio z YouTube.")
+
+        file_size = os.path.getsize(audio_path)
+        print(f"Pobrano audio dla {video_id}: {file_size} bajtów ({audio_path})", flush=True)
+
+        # 3. Krok A: Groq Whisper (jeśli jest skonfigurowany klucz GROQ_API_KEY)
+        groq_key = os.getenv("GROQ_API_KEY")
+        if groq_key:
+            try:
+                print(f"Rozpoczynam transkrypcję Groq Whisper dla {video_id}...", flush=True)
+                with open(audio_path, "rb") as af:
+                    ext = os.path.splitext(audio_path)[1].lower().replace('.', '')
+                    mime = "audio/mp4" if ext == "m4a" else f"audio/{ext}"
+                    resp = requests.post(
+                        "https://api.groq.com/openai/v1/audio/transcriptions",
+                        headers={"Authorization": f"Bearer {groq_key}"},
+                        files={"file": (os.path.basename(audio_path), af, mime)},
+                        data={
+                            "model": "whisper-large-v3",
+                            "response_format": "verbose_json",
+                            "language": "en",
+                            "temperature": 0.0
+                        },
+                        timeout=90
+                    )
+                if resp.ok:
+                    g_data = resp.json()
+                    raw_segs = g_data.get("segments") or []
+                    for seg in raw_segs:
+                        t = (seg.get("text") or "").strip()
+                        if t:
+                            segments_out.append({
+                                "start": round(float(seg.get("start", 0)), 2),
+                                "end": round(float(seg.get("end", 0)), 2),
+                                "text": t
+                            })
+                    if segments_out:
+                        engine_used = "groq_whisper"
+                        print(f"Groq Whisper wygenerował {len(segments_out)} segmentów dla {video_id}", flush=True)
+            except Exception as groq_err:
+                print(f"Błąd Groq Whisper: {groq_err}", flush=True)
+
+        # 4. Krok B: Google Gemini Flash Audio (podstawowy lub fallback)
+        gemini_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
+        if not segments_out and gemini_key:
+            try:
+                print(f"Rozpoczynam transkrypcję Google Gemini Flash Audio dla {video_id}...", flush=True)
+                with open(audio_path, "rb") as af:
+                    audio_bytes = af.read()
+
+                audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+                ext = os.path.splitext(audio_path)[1].lower().replace('.', '')
+                mime = "audio/mp4" if ext in ("m4a", "mp4") else "audio/mpeg" if ext == "mp3" else f"audio/{ext}"
+
+                prompt = (
+                    "Listen carefully to the audio. Transcribe all spoken English speech into chronological sentence segments with accurate start and end timestamps in seconds. "
+                    "Output ONLY valid JSON matching this schema: "
+                    '[{"start": 0.0, "end": 2.5, "text": "First sentence."}]'
+                )
+
+                for g_model in ["gemini-flash-lite-latest", "gemini-3.5-transcribe"]:
+                    try:
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={gemini_key}"
+                        payload = {
+                            "contents": [{
+                                "parts": [
+                                    {"inline_data": {"mime_type": mime, "data": audio_b64}},
+                                    {"text": prompt}
+                                ]
+                            }],
+                            "generationConfig": {
+                                "temperature": 0.1,
+                                "response_mime_type": "application/json"
+                            }
+                        }
+                        resp = requests.post(url, json=payload, timeout=90)
+                        if resp.ok:
+                            data = resp.json()
+                            cand_text = ""
+                            for cand in data.get("candidates", [])[:1]:
+                                for part in (cand.get("content") or {}).get("parts", []):
+                                    cand_text += part.get("text") or ""
+                            if cand_text:
+                                parsed = json.loads(cand_text.strip())
+                                if isinstance(parsed, dict) and "segments" in parsed:
+                                    parsed = parsed["segments"]
+                                if isinstance(parsed, list) and len(parsed) > 0:
+                                    for item in parsed:
+                                        if isinstance(item, dict) and item.get("text"):
+                                            segments_out.append({
+                                                "start": round(float(item.get("start", 0)), 2),
+                                                "end": round(float(item.get("end", 0)), 2),
+                                                "text": item.get("text", "").strip()
+                                            })
+                                    if segments_out:
+                                        engine_used = f"gemini_{g_model}"
+                                        print(f"Gemini ({g_model}) wygenerował {len(segments_out)} segmentów dla {video_id}", flush=True)
+                                        break
+                    except Exception as m_err:
+                        print(f"Gemini {g_model} exception: {m_err}", flush=True)
+            except Exception as gem_err:
+                print(f"Błąd Gemini Audio: {gem_err}", flush=True)
+
+        return segments_out, video_title, engine_used
+
+    finally:
+        if audio_path and os.path.exists(audio_path):
+            try:
+                os.remove(audio_path)
+                print(f"Usunięto tymczasowy plik audio: {audio_path}", flush=True)
+            except Exception as rm_e:
+                print(f"Błąd usuwania pliku audio {audio_path}: {rm_e}", flush=True)
+
+
 @app.route("/api/media/subtitles/extract", methods=['GET', 'POST'])
 def extract_subtitles_endpoint():
     user_email = get_user_email_from_request()
@@ -3353,6 +3522,19 @@ def extract_subtitles_endpoint():
     if not video_id:
         return jsonify({"error": "Nieprawidłowy adres URL lub ID filmu YouTube."}), 400
 
+    # 1. Trwały Cache Firestore (0 kosztów, czas < 100ms)
+    if db:
+        try:
+            cached_doc = db.collection('youtube_transcripts_cache').document(video_id).get()
+            if cached_doc.exists:
+                cached_data = cached_doc.to_dict() or {}
+                if cached_data.get("segments") and len(cached_data["segments"]) > 0:
+                    print(f"extract_subtitles_endpoint: Zwracam napisy z pamięci podręcznej Firestore dla {video_id}", flush=True)
+                    cached_data["from_cache"] = True
+                    return jsonify(cached_data), 200
+        except Exception as cache_err:
+            print(f"Błąd sprawdzania cache dla {video_id}: {cache_err}", flush=True)
+
     video_title = f"Wideo YouTube ({video_id})"
     try:
         oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
@@ -3362,13 +3544,56 @@ def extract_subtitles_endpoint():
     except Exception as e:
         print(f"Error fetching title for {video_id}: {e}")
 
+    # 2. Próba pobrania istniejących napisów z YouTube (darmowe)
     formatted, fetched_title = fetch_youtube_captions_robust(video_id)
+    source_type = "youtube_captions"
     if fetched_title and video_title == f"Wideo YouTube ({video_id})":
         video_title = fetched_title
 
+    # 3. Jeśli brak napisów na YouTube -> Generowanie AI ze ścieżki audio (tylko Groq / Gemini)
+    if not formatted:
+        # Rate Limiting i ochrona kosztów: max 10 transkrypcji AI dziennie na użytkownika (admin 100)
+        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        daily_limit = 100 if is_admin(user_email) else 10
+        usage_ref = None
+        current_ai_count = 0
+        if db:
+            try:
+                usage_ref = db.collection('user_daily_ai_transcriptions').document(f"{user_email}_{today_str}")
+                usage_doc = usage_ref.get()
+                if usage_doc.exists:
+                    current_ai_count = usage_doc.to_dict().get("count", 0)
+                if current_ai_count >= daily_limit:
+                    return jsonify({
+                        "error": f"Wykorzystano dzienny limit transkrypcji AI ze ścieżki audio ({daily_limit} filmów/dzień). Możesz nadal bez ograniczeń korzystać z filmów z gotowymi napisami na YouTube lub z własnych plików .srt."
+                    }), 429
+            except Exception as ul_err:
+                print(f"Błąd sprawdzania limitu dziennego: {ul_err}", flush=True)
+
+        try:
+            print(f"Brak napisów na YouTube dla {video_id}. Uruchamiam generowanie AI ze ścieżki audio...", flush=True)
+            ai_segments, ai_title, engine = transcribe_youtube_audio_ai(video_id, user_email=user_email)
+            if ai_segments:
+                formatted = ai_segments
+                source_type = f"ai_audio_{engine}"
+                if ai_title:
+                    video_title = ai_title
+
+                # Zwiększenie licznika dziennego
+                if db and usage_ref:
+                    try:
+                        usage_ref.set({"count": current_ai_count + 1, "last_used": datetime.utcnow().isoformat()}, merge=True)
+                    except Exception as inc_e:
+                        print(f"Błąd inkrementacji limitu: {inc_e}", flush=True)
+        except ValueError as val_err:
+            clean_msg = str(val_err).replace("DURATION_EXCEEDED: ", "")
+            return jsonify({"error": clean_msg}), 400
+        except Exception as ai_err:
+            print(f"Błąd transkrypcji AI dla {video_id}: {ai_err}", flush=True)
+
     if not formatted:
         return jsonify({
-            "error": "Ten film nie posiada angielskich napisów na YouTube. Możesz wkleić lub wgrać własny plik .srt."
+            "error": "Ten film nie posiada napisów na YouTube i nie udało się wygenerować transkrypcji AI ze ścieżki dźwiękowej. Możesz wkleić lub wgrać własny plik .srt."
         }), 404
 
     try:
@@ -3380,19 +3605,30 @@ def extract_subtitles_endpoint():
     total_words = sum(len(s.get("text", "").split()) for s in aggregated)
     words_per_min = round((total_words / (total_duration / 60))) if total_duration > 0 else 0
 
-    return jsonify({
+    response_payload = {
         "video_id": video_id,
         "youtube_url": f"https://www.youtube.com/watch?v={video_id}",
         "title": video_title,
         "raw_segments": formatted,
         "segments": aggregated,
+        "source": source_type,
         "stats": {
             "sentence_count": len(aggregated),
             "word_count": total_words,
             "duration": total_duration,
             "words_per_minute": words_per_min
         }
-    }), 200
+    }
+
+    # Zapis do trwałego cache Firestore, aby każde kolejne odtworzenie filmu kosztowało 0 zł
+    if db:
+        try:
+            db.collection('youtube_transcripts_cache').document(video_id).set(response_payload)
+            print(f"Zapisano transkrypcję do cache Firestore dla {video_id}", flush=True)
+        except Exception as cache_save_err:
+            print(f"Błąd zapisu do cache Firestore: {cache_save_err}", flush=True)
+
+    return jsonify(response_payload), 200
 
 
 @app.route("/api/media/subtitles/refine-ai", methods=['POST'])
