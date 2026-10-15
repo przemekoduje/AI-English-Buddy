@@ -3039,66 +3039,79 @@ def fetch_youtube_captions_robust(video_id):
     formatted = []
     video_title = None
 
+    # Pobranie tytułu z szybkiego oEmbed (działa zawsze, 0 blokad IP)
+    try:
+        oe_res = requests.get(f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json", timeout=4)
+        if oe_res.ok:
+            video_title = oe_res.json().get("title")
+    except Exception:
+        pass
+
     # 0. RapidAPI YouTube Transcript (100% odporne na blokady datacenter Cloud Run)
     rapidapi_key = os.getenv("RAPIDAPI_KEY")
     rapidapi_host = os.getenv("RAPIDAPI_YOUTUBE_HOST", "youtube-transcript3.p.rapidapi.com")
     if rapidapi_key:
+        print(f"fetch_youtube_captions_robust: pobieranie napisów przez RapidAPI ({rapidapi_host}) dla {video_id}...", flush=True)
+        url = f"https://{rapidapi_host}/api/transcript-with-url"
+        headers = {
+            "x-rapidapi-key": rapidapi_key,
+            "x-rapidapi-host": rapidapi_host
+        }
+        transcript_list = None
+        # Próba 1: bez wymuszania lang (najszybsza i najbardziej niezawodna dla RapidAPI, zwraca oryginalny język w ~2s)
         try:
-            print(f"fetch_youtube_captions_robust: pobieranie napisów przez RapidAPI ({rapidapi_host}) dla {video_id}...", flush=True)
-            url = f"https://{rapidapi_host}/api/transcript-with-url"
-            headers = {
-                "x-rapidapi-key": rapidapi_key,
-                "x-rapidapi-host": rapidapi_host
-            }
-            # Próba 1: lang=en
             resp = requests.get(
                 url,
                 headers=headers,
-                params={"url": f"https://www.youtube.com/watch?v={video_id}", "lang": "en"},
-                timeout=15
+                params={"url": f"https://www.youtube.com/watch?v={video_id}"},
+                timeout=12
             )
             data = resp.json() if resp.ok else {}
-            transcript_list = data.get("transcript") if isinstance(data, dict) else None
+            raw_list = data.get("transcript") if isinstance(data, dict) else None
+            if isinstance(raw_list, list) and len(raw_list) > 0:
+                transcript_list = raw_list
+        except Exception as r_err1:
+            print(f"RapidAPI próba 1 (auto lang) dla {video_id} błąd: {r_err1}", flush=True)
 
-            # Próba 2: bez lang jeśli pierwsze zapytanie było puste
-            if not transcript_list:
-                resp_any = requests.get(
+        # Próba 2: z lang=en jeśli pierwsze zapytanie było puste
+        if not transcript_list:
+            try:
+                resp_en = requests.get(
                     url,
                     headers=headers,
-                    params={"url": f"https://www.youtube.com/watch?v={video_id}"},
-                    timeout=15
+                    params={"url": f"https://www.youtube.com/watch?v={video_id}", "lang": "en"},
+                    timeout=8
                 )
-                data_any = resp_any.json() if resp_any.ok else {}
-                raw_list = data_any.get("transcript") if isinstance(data_any, dict) else None
-                if isinstance(raw_list, list):
-                    en_items = [it for it in raw_list if str(it.get("lang", "")).startswith("en")]
-                    transcript_list = en_items if en_items else raw_list
+                data_en = resp_en.json() if resp_en.ok else {}
+                raw_list = data_en.get("transcript") if isinstance(data_en, dict) else None
+                if isinstance(raw_list, list) and len(raw_list) > 0:
+                    transcript_list = raw_list
+            except Exception as r_err2:
+                print(f"RapidAPI próba 2 (lang=en) dla {video_id} błąd: {r_err2}", flush=True)
 
-            if isinstance(transcript_list, list) and len(transcript_list) > 0:
-                import html
-                for item in transcript_list:
-                    raw_text = item.get("text", "")
-                    text = html.unescape(raw_text).replace('\n', ' ').strip()
-                    if not text:
-                        continue
-                    try:
-                        start = round(float(item.get("offset", 0)), 2)
-                        duration = round(float(item.get("duration", 0)), 2)
-                        end = round(start + duration, 2)
-                    except (ValueError, TypeError):
-                        continue
-                    formatted.append({
-                        "start": start,
-                        "end": end,
-                        "text": text
-                    })
-                if formatted:
-                    print(f"fetch_youtube_captions_robust: RapidAPI pobrało {len(formatted)} segmentów dla {video_id}", flush=True)
-                    return formatted, video_title
-        except Exception as rapid_err:
-            print(f"fetch_youtube_captions_robust RapidAPI error dla {video_id}: {rapid_err}", flush=True)
+        if isinstance(transcript_list, list) and len(transcript_list) > 0:
+            import html
+            for item in transcript_list:
+                raw_text = item.get("text", "")
+                text = html.unescape(raw_text).replace('\n', ' ').strip()
+                if not text:
+                    continue
+                try:
+                    start = round(float(item.get("offset", 0)), 2)
+                    duration = round(float(item.get("duration", 0)), 2)
+                    end = round(start + duration, 2)
+                except (ValueError, TypeError):
+                    continue
+                formatted.append({
+                    "start": start,
+                    "end": end,
+                    "text": text
+                })
+            if formatted:
+                print(f"fetch_youtube_captions_robust: RapidAPI pobrało {len(formatted)} segmentów dla {video_id}", flush=True)
+                return formatted, video_title
 
-    # 1. yt-dlp z klientami ios/android/mweb
+    # 1. yt-dlp z klientami ios/android (bez mweb, który wywołuje bot-block na datacenter IP)
     try:
         import yt_dlp
         ydl_opts = {
@@ -3107,7 +3120,7 @@ def fetch_youtube_captions_robust(video_id):
             'no_warnings': True,
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'ios', 'mweb']
+                    'player_client': ['android', 'ios']
                 }
             }
         }
@@ -3351,17 +3364,31 @@ def transcribe_youtube_audio_ai(video_id, user_email=None):
     import yt_dlp
 
     # 1. Sprawdzenie metadanych i długości filmu (zabezpieczenie kosztowe)
-    ydl_info_opts = {
-        'skip_download': True,
-        'quiet': True,
-        'no_warnings': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'mweb']}}
-    }
-    with yt_dlp.YoutubeDL(ydl_info_opts) as ydl:
-        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+    video_title = None
+    duration = 0
+    try:
+        oe_res = requests.get(f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json", timeout=4)
+        if oe_res.ok:
+            video_title = oe_res.json().get("title")
+    except Exception:
+        pass
 
-    video_title = info.get("title") or f"Wideo YouTube ({video_id})"
-    duration = info.get("duration") or 0
+    try:
+        ydl_info_opts = {
+            'skip_download': True,
+            'quiet': True,
+            'no_warnings': True,
+            'extractor_args': {'youtube': {'player_client': ['android', 'ios']}}
+        }
+        with yt_dlp.YoutubeDL(ydl_info_opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            if info:
+                video_title = video_title or info.get("title")
+                duration = info.get("duration") or 0
+    except Exception as info_err:
+        print(f"Info extract warning dla {video_id}: {info_err}", flush=True)
+
+    video_title = video_title or f"Wideo YouTube ({video_id})"
 
     if duration > 900:  # 15 minut max
         minutes = round(duration / 60)
@@ -3371,7 +3398,7 @@ def transcribe_youtube_audio_ai(video_id, user_email=None):
     temp_dir = tempfile.gettempdir()
     out_tmpl = os.path.join(temp_dir, f"speakling_ai_{video_id}.%(ext)s")
     ydl_dl_opts = {
-        'format': 'ba[abr<=64]/worstaudio[ext=m4a]/worstaudio/worst',
+        'format': 'ba[abr<=64]/worstaudio[ext=m4a]/18/worst',
         'outtmpl': out_tmpl,
         'quiet': True,
         'no_warnings': True,
@@ -3379,6 +3406,7 @@ def transcribe_youtube_audio_ai(video_id, user_email=None):
     }
 
     audio_path = None
+    converted_audio = None
     segments_out = []
     engine_used = ""
 
@@ -3393,18 +3421,36 @@ def transcribe_youtube_audio_ai(video_id, user_email=None):
         file_size = os.path.getsize(audio_path)
         print(f"Pobrano audio dla {video_id}: {file_size} bajtów ({audio_path})", flush=True)
 
+        audio_to_transcribe = audio_path
+        # Jeśli ffmpeg jest dostępny, konwertujemy do czystego, lekkiego mono MP3 (16kHz, 48k)
+        try:
+            import subprocess
+            clean_mp3 = os.path.join(temp_dir, f"speakling_clean_{video_id}.mp3")
+            conv = subprocess.run(
+                ["ffmpeg", "-y", "-i", audio_path, "-vn", "-acodec", "libmp3lame", "-ac", "1", "-ar", "16000", "-b:a", "48k", clean_mp3],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=35
+            )
+            if conv.returncode == 0 and os.path.exists(clean_mp3) and os.path.getsize(clean_mp3) > 0:
+                converted_audio = clean_mp3
+                audio_to_transcribe = converted_audio
+                print(f"Przekonwertowano audio do mono MP3: {os.path.getsize(clean_mp3)} bajtów", flush=True)
+        except Exception as conv_e:
+            print(f"ffmpeg conversion note: {conv_e}", flush=True)
+
         # 3. Krok A: Groq Whisper (jeśli jest skonfigurowany klucz GROQ_API_KEY)
         groq_key = os.getenv("GROQ_API_KEY")
         if groq_key:
             try:
                 print(f"Rozpoczynam transkrypcję Groq Whisper dla {video_id}...", flush=True)
-                with open(audio_path, "rb") as af:
-                    ext = os.path.splitext(audio_path)[1].lower().replace('.', '')
+                with open(audio_to_transcribe, "rb") as af:
+                    ext = os.path.splitext(audio_to_transcribe)[1].lower().replace('.', '')
                     mime = "audio/mp4" if ext == "m4a" else f"audio/{ext}"
                     resp = requests.post(
                         "https://api.groq.com/openai/v1/audio/transcriptions",
                         headers={"Authorization": f"Bearer {groq_key}"},
-                        files={"file": (os.path.basename(audio_path), af, mime)},
+                        files={"file": (os.path.basename(audio_to_transcribe), af, mime)},
                         data={
                             "model": "whisper-large-v3",
                             "response_format": "verbose_json",
@@ -3435,20 +3481,21 @@ def transcribe_youtube_audio_ai(video_id, user_email=None):
         if not segments_out and gemini_key:
             try:
                 print(f"Rozpoczynam transkrypcję Google Gemini Flash Audio dla {video_id}...", flush=True)
-                with open(audio_path, "rb") as af:
+                with open(audio_to_transcribe, "rb") as af:
                     audio_bytes = af.read()
 
                 audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
-                ext = os.path.splitext(audio_path)[1].lower().replace('.', '')
+                ext = os.path.splitext(audio_to_transcribe)[1].lower().replace('.', '')
                 mime = "audio/mp4" if ext in ("m4a", "mp4") else "audio/mpeg" if ext == "mp3" else f"audio/{ext}"
 
                 prompt = (
-                    "Listen carefully to the audio. Transcribe all spoken English speech into chronological sentence segments with accurate start and end timestamps in seconds. "
+                    "You are a professional audio transcriber. Listen carefully to the entire audio file. "
+                    "Transcribe all English speech verbatim into chronological sentence segments with accurate start and end timestamps in seconds. "
                     "Output ONLY valid JSON matching this schema: "
                     '[{"start": 0.0, "end": 2.5, "text": "First sentence."}]'
                 )
 
-                for g_model in ["gemini-flash-lite-latest", "gemini-3.5-transcribe"]:
+                for g_model in ["gemini-flash-latest", "gemini-3.8-flash", "gemini-flash-lite-latest"]:
                     try:
                         url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={gemini_key}"
                         payload = {
@@ -3494,12 +3541,13 @@ def transcribe_youtube_audio_ai(video_id, user_email=None):
         return segments_out, video_title, engine_used
 
     finally:
-        if audio_path and os.path.exists(audio_path):
-            try:
-                os.remove(audio_path)
-                print(f"Usunięto tymczasowy plik audio: {audio_path}", flush=True)
-            except Exception as rm_e:
-                print(f"Błąd usuwania pliku audio {audio_path}: {rm_e}", flush=True)
+        for p in [audio_path, converted_audio]:
+            if p and os.path.exists(p):
+                try:
+                    os.remove(p)
+                    print(f"Usunięto tymczasowy plik: {p}", flush=True)
+                except Exception as rm_e:
+                    print(f"Błąd usuwania pliku {p}: {rm_e}", flush=True)
 
 
 @app.route("/api/media/subtitles/extract", methods=['GET', 'POST'])

@@ -1,5 +1,10 @@
-# Use the official Python slim image
 FROM python:3.11-slim
+
+# Install system utilities including ffmpeg
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
