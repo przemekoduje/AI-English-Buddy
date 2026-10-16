@@ -1422,6 +1422,33 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     }
   };
 
+  // Center active segment vertically (~44% from top of transcript container)
+  const centerSegmentInTranscript = useCallback((index, smooth = true) => {
+    if (index === null || index === undefined || index < 0) return;
+    const listEl = transcriptListRef.current;
+    if (!listEl) return;
+    const card = listEl.querySelector(`.synced-segment-card[data-index="${index}"]`);
+    if (!card) return;
+
+    const listRect = listEl.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+
+    // Absolute offset of the card's top relative to the list's scrollable content
+    const relativeCardTop = cardRect.top - listRect.top + listEl.scrollTop;
+    const cardHeight = cardRect.height || 60;
+    const containerHeight = listEl.clientHeight || 500;
+
+    // Position the card's vertical center at ~44% from the top of the container.
+    // This leaves ~56% of the transcript window below it so the Polish translation
+    // is immediately and comfortably visible without being hidden below the bottom edge.
+    const targetScrollTop = relativeCardTop + (cardHeight * 0.5) - (containerHeight * 0.44);
+
+    listEl.scrollTo({
+      top: Math.max(0, Math.round(targetScrollTop)),
+      behavior: smooth ? "smooth" : "auto"
+    });
+  }, []);
+
   // Auto-scroll and sync active segment
   useEffect(() => {
     const checkTime = isPlaying ? currentTime + 0.4 : currentTime;
@@ -1437,11 +1464,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     if (idx !== -1) {
       if (idx !== activeSegmentIndex) {
         setActiveSegmentIndex(idx);
-        if (isPlaying && autoScrollEnabled) {
-          const activeCard = document.querySelector(`.synced-segment-card[data-index="${idx}"]`);
-          if (activeCard) {
-            activeCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
-          }
+        if (autoScrollEnabled) {
+          centerSegmentInTranscript(idx, true);
         }
       }
     } else {
@@ -1451,11 +1475,14 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         setActiveSegmentIndex(-1);
       }
     }
-  }, [currentTime, currentVideo, activeSegmentIndex, isPlaying, autoScrollEnabled]);
+  }, [currentTime, currentVideo, activeSegmentIndex, isPlaying, autoScrollEnabled, centerSegmentInTranscript]);
 
   // Translate active segment on pause
   useEffect(() => {
     if (!isPlaying && activeSegmentIndex !== -1) {
+      if (autoScrollEnabled) {
+        centerSegmentInTranscript(activeSegmentIndex, true);
+      }
       translateActiveSegment(activeSegmentIndex);
     } else if (isPlaying) {
       // Clear translation state when playing so stale data never leaks
@@ -1463,7 +1490,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       setIsTranslatingSegment(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, activeSegmentIndex]);
+  }, [isPlaying, activeSegmentIndex, autoScrollEnabled, centerSegmentInTranscript]);
 
   const translateActiveSegment = async (index) => {
     const segment = currentVideo.transcript?.[index];
@@ -1472,6 +1499,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     if (translationsCache[index]) {
       setSegmentTranslation(translationsCache[index]);
       setIsTranslatingSegment(false);
+      if (autoScrollEnabled) {
+        setTimeout(() => centerSegmentInTranscript(index, true), 80);
+      }
       return;
     }
 
@@ -1480,6 +1510,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       setSegmentTranslation(tr);
       setTranslationsCache(prev => ({ ...prev, [index]: tr }));
       setIsTranslatingSegment(false);
+      if (autoScrollEnabled) {
+        setTimeout(() => centerSegmentInTranscript(index, true), 80);
+      }
       return;
     }
 
@@ -1505,6 +1538,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         const tr = data.translation || "Brak tłumaczenia";
         setSegmentTranslation(tr);
         setTranslationsCache(prev => ({ ...prev, [index]: tr }));
+        if (autoScrollEnabled) {
+          setTimeout(() => centerSegmentInTranscript(index, true), 80);
+        }
       } else {
         setSegmentTranslation("Błąd tłumaczenia");
       }
@@ -1537,6 +1573,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         setCurrentTime(seg.start);
         setActiveSegmentIndex(index);
         saveProgress(seg.start, totalDuration);
+        if (autoScrollEnabled) {
+          centerSegmentInTranscript(index, true);
+        }
       }
     } else {
       if (activeSegmentIndex === index) {
@@ -1546,6 +1585,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         setActiveSegmentIndex(index);
         setIsPlaying(false);
         saveProgress(seg.start, totalDuration);
+        if (autoScrollEnabled) {
+          centerSegmentInTranscript(index, true);
+        }
       }
     }
   };
@@ -2901,7 +2943,15 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                 <button
                   type="button"
                   className={`transcript-toggle-pill ${autoScrollEnabled ? "active" : ""}`}
-                  onClick={() => setAutoScrollEnabled(prev => !prev)}
+                  onClick={() => {
+                    setAutoScrollEnabled(prev => {
+                      const next = !prev;
+                      if (next && activeSegmentIndex !== -1) {
+                        setTimeout(() => centerSegmentInTranscript(activeSegmentIndex, true), 60);
+                      }
+                      return next;
+                    });
+                  }}
                 >
                   <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     {autoScrollEnabled ? (
