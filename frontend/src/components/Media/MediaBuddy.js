@@ -507,7 +507,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     const userKey = user?.email || user?.uid || "guest";
     const vidKey = video?.youtubeId || video?.id || "default";
     return `media_buddy_notebook_words_${userKey}_${vidKey}`;
-  }, [user]);
+  }, [user?.email, user?.uid]);
 
   const getVideoStoryIds = useCallback((video) => {
     if (!video) return [];
@@ -796,7 +796,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       headers,
       body: JSON.stringify({ ...vid, user_email: user.email })
     }).catch(err => console.warn("Cloud video save error:", err));
-  }, [user]);
+  }, [user?.token, user?.email]);
 
   const deleteCustomVideoFromCloud = useCallback((videoId) => {
     if (!user || (!user.token && !user.email) || !videoId) return;
@@ -807,7 +807,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       method: "DELETE",
       headers
     }).catch(err => console.warn("Cloud video delete error:", err));
-  }, [user]);
+  }, [user?.token, user?.email]);
 
   const pendingCloudSyncRef = useRef(null);
   const cloudSyncTimerRef = useRef(null);
@@ -828,7 +828,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       headers,
       body: JSON.stringify({ ...payload, user_email: user.email })
     }).catch(err => console.warn("Failed to sync progress to cloud:", err));
-  }, [user]);
+  }, [user?.token, user?.email]);
 
   const scheduleProgressToCloud = useCallback((activeVid, time, dur) => {
     if (!activeVid || !user || (!user.token && !user.email)) return;

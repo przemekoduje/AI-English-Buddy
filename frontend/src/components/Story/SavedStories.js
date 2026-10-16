@@ -546,8 +546,10 @@ const SavedStories = ({ user, subscription, onOpenPaywall, onSelectStory, onStar
     }
   };
 
+  const userToken = user?.token;
+
   const loadStories = useCallback(async () => {
-    if (!user) {
+    if (!userToken) {
       setLoading(false);
       return;
     }
@@ -555,7 +557,7 @@ const SavedStories = ({ user, subscription, onOpenPaywall, onSelectStory, onStar
     setError("");
     try {
       const response = await fetch(`${API_BASE_URL}/api/stories`, {
-        headers: { "X-Session-Token": user.token }
+        headers: { "X-Session-Token": userToken }
       });
       if (response.ok) {
         const data = await response.json();
@@ -609,7 +611,7 @@ const SavedStories = ({ user, subscription, onOpenPaywall, onSelectStory, onStar
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [userToken]);
 
   useEffect(() => {
     loadStories();

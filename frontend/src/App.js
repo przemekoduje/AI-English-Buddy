@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
@@ -50,11 +50,13 @@ function App() {
     setPaywallOpen(true);
   };
 
-  const fetchSubscription = async () => {
-    if (!user || !user.token) return;
+  const userToken = user?.token;
+
+  const fetchSubscription = useCallback(async () => {
+    if (!userToken) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/subscription/status`, {
-        headers: { "X-Session-Token": user.token }
+        headers: { "X-Session-Token": userToken }
       });
       if (res.ok) {
         const data = await res.json();
@@ -62,7 +64,7 @@ function App() {
         if (data.subscription?.is_admin) {
           setIsAdmin(true);
           setUser(prev => {
-            if (!prev) return prev;
+            if (!prev || prev.is_admin === true) return prev;
             const updated = { ...prev, is_admin: true };
             try { localStorage.setItem("buddy_user", JSON.stringify(updated)); } catch (e) {}
             return updated;
@@ -97,19 +99,19 @@ function App() {
         is_admin: false
       });
     }
-  };
+  }, [userToken]);
 
   useEffect(() => {
-    if (user && user.token) {
+    if (userToken) {
       fetchSubscription();
       fetch(`${API_BASE_URL}/api/admin/verify`, {
-        headers: { "X-Session-Token": user.token }
+        headers: { "X-Session-Token": userToken }
       })
       .then(res => {
         if (res.ok) {
           setIsAdmin(true);
           setUser(prev => {
-            if (!prev) return prev;
+            if (!prev || prev.is_admin === true) return prev;
             const updated = { ...prev, is_admin: true };
             try { localStorage.setItem("buddy_user", JSON.stringify(updated)); } catch (e) {}
             return updated;
@@ -123,7 +125,7 @@ function App() {
       setIsAdmin(false);
       setSubscription(null);
     }
-  }, [user]);
+  }, [userToken, fetchSubscription]);
 
   const [generatedText, setGeneratedText] = useState(() => {
     return localStorage.getItem("buddy_generated_text") || "";

@@ -68,7 +68,7 @@ const VocabularyDrawer = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user?.token]);
 
   // Initial load & Event Listeners
   useEffect(() => {

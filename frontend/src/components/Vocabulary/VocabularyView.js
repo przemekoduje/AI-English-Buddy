@@ -117,7 +117,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
       }
     };
     fetchStories();
-  }, [user]);
+  }, [user?.token]);
 
   // Fetch Vocabulary List
   const fetchVocabulary = useCallback(async () => {
@@ -138,7 +138,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user?.token]);
 
   useEffect(() => {
     fetchVocabulary();
