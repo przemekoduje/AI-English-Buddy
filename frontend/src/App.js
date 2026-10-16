@@ -59,6 +59,15 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         setSubscription(data.subscription);
+        if (data.subscription?.is_admin) {
+          setIsAdmin(true);
+          setUser(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev, is_admin: true };
+            try { localStorage.setItem("buddy_user", JSON.stringify(updated)); } catch (e) {}
+            return updated;
+          });
+        }
       } else {
         setSubscription(prev => prev || {
           tier: 'starter',
@@ -99,6 +108,12 @@ function App() {
       .then(res => {
         if (res.ok) {
           setIsAdmin(true);
+          setUser(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev, is_admin: true };
+            try { localStorage.setItem("buddy_user", JSON.stringify(updated)); } catch (e) {}
+            return updated;
+          });
         } else {
           setIsAdmin(false);
         }

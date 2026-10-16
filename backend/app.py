@@ -1987,12 +1987,15 @@ def login():
             'created_at': firestore.SERVER_TIMESTAMP
         })
 
+        sub = get_user_subscription(email)
+        admin = is_admin(email)
         return jsonify({
             "token": token, 
             "email": email, 
             "full_name": user_data.get("full_name", ""),
             "avatar_url": user_data.get("avatar_url") or user_data.get("photo_url") or user_data.get("picture"),
-            "subscription": get_user_subscription(email)
+            "is_admin": admin,
+            "subscription": sub
         }), 200
     except Exception as e:
         print(f"Błąd logowania: {e}")
@@ -3809,6 +3812,7 @@ def handle_custom_videos():
     user_email = get_user_email_from_request()
     if not user_email:
         return jsonify({"error": "Brak autoryzacji"}), 401
+    user_email = user_email.strip().lower()
 
     if request.method == 'GET':
         try:
@@ -3865,6 +3869,7 @@ def delete_custom_video(video_id):
     user_email = get_user_email_from_request()
     if not user_email:
         return jsonify({"error": "Brak autoryzacji"}), 401
+    user_email = user_email.strip().lower()
 
     try:
         safe_email = re.sub(r'[^a-zA-Z0-9_.-]', '_', user_email)
@@ -3890,6 +3895,7 @@ def handle_media_user_state():
     user_email = get_user_email_from_request()
     if not user_email:
         return jsonify({"error": "Brak autoryzacji"}), 401
+    user_email = user_email.strip().lower()
 
     safe_email = re.sub(r'[^a-zA-Z0-9_.-]', '_', user_email)
     doc_id = safe_email
