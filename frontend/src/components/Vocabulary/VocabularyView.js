@@ -222,6 +222,8 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
         topic,
         context_sentence: contextSentence,
         part_of_speech: partOfSpeech,
+        item_type: item.item_type || (original.trim().split(/\s+/).length > 1 ? "phrase" : "word"),
+        chunk_type: item.chunk_type || (original.trim().split(/\s+/).length > 1 ? "Fraza" : ""),
         phonetic,
         definition,
         story_title: storyTitle
@@ -838,9 +840,14 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                   >
                     {/* Word Column */}
                     <div className="td-cell col-word">
-                      <div className="word-primary-text">{word.original}</div>
+                      <div className="word-primary-text">
+                        {word.original}
+                        {(word.item_type === "phrase" || word.original.trim().includes(" ")) && (
+                          <span className="vocab-phrase-tag">Zwrot</span>
+                        )}
+                      </div>
                       <div className="word-sub-meta">
-                        {word.level} · {word.topic}
+                        {word.chunk_type ? `${word.chunk_type} · ` : ""}{word.level} · {word.topic}
                       </div>
                     </div>
 
@@ -1016,9 +1023,14 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
               {/* Header with Title and Speaker */}
               <div className="active-word-header">
                 <div>
-                  <h3 className="active-word-title">{activeWord.original}</h3>
+                  <h3 className="active-word-title">
+                    {activeWord.original}
+                    {(activeWord.item_type === "phrase" || activeWord.original.trim().includes(" ")) && (
+                      <span className="vocab-phrase-tag-large">Zwrot</span>
+                    )}
+                  </h3>
                   <div className="active-word-phonetics">
-                    {activeWord.phonetic} · {activeWord.part_of_speech} · {activeWord.level}
+                    {activeWord.phonetic} · {activeWord.chunk_type || activeWord.part_of_speech} · {activeWord.level}
                   </div>
                 </div>
                 <button

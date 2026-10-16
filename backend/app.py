@@ -2181,76 +2181,119 @@ def translate_text():
     if has_context:
         if is_phrase:
             translation_prompt = (
-                f"You are a professional {source_lang}-to-{target_lang} translator.\n"
-                f"Translate the phrase '{text_to_translate}' based on its context sentence.\n"
+                f"You are an expert {source_lang}-to-{target_lang} linguistic translator specialized in the Lexical Approach (phrases, collocations, idioms).\n"
+                f"Translate the phrase '{text_to_translate}' in the context of this sentence:\n"
                 f"Sentence: \"{context_sentence}\"\n\n"
-                f"Rules:\n"
-                f"1. Line 1: Provide the natural base {target_lang} translation of the phrase '{text_to_translate}', and optionally 1-2 synonyms separated by commas.\n"
-                f"2. Line 2: Natural {target_lang} translation of the entire sentence.\n"
-                f"Respond ONLY with these 2 lines, without prefixes or labels."
+                f"Respond with a strict JSON object with these exact keys:\n"
+                f"{{\n"
+                f'  "detected_chunk": "{text_to_translate}",\n'
+                f'  "chunk_translation": "natural {target_lang} translation of this phrase",\n'
+                f'  "chunk_type": "Zwrot / Kolokacja",\n'
+                f'  "translation": "base {target_lang} translation of the phrase plus 1-2 common synonyms separated by commas",\n'
+                f'  "sentence_translation": "natural {target_lang} translation of the entire sentence"\n'
+                f"}}\n"
+                f"Respond ONLY with raw valid JSON, no markdown blocks."
             )
         else:
             translation_prompt = (
-                f"You are a professional {source_lang}-to-{target_lang} translator.\n"
-                f"Translate the word '{text_to_translate}' based on its context sentence.\n"
+                f"You are an expert {source_lang}-to-{target_lang} linguistic translator specialized in the Lexical Approach (focusing on natural lexical chunks, phrasal verbs and collocations).\n"
+                f"The user clicked the word '{text_to_translate}' in this sentence:\n"
                 f"Sentence: \"{context_sentence}\"\n\n"
-                f"Rules:\n"
-                f"1. Line 1: Provide the base {target_lang} translation of the word '{text_to_translate}' in this context, followed by 2-3 other common {target_lang} synonyms separated by commas.\n"
-                f"2. Line 2: Natural {target_lang} translation of the entire sentence.\n"
-                f"Respond ONLY with these 2 lines, without prefixes or labels."
+                f"Task:\n"
+                f"1. Check if '{text_to_translate}' forms a multi-word lexical chunk (phrasal verb, natural collocation, idiom, or fixed expression) with neighboring words in this sentence (e.g. 'forward' in 'look forward to' -> chunk is 'look forward to', 'decision' in 'make a decision' -> 'make a decision', 'run' in 'run out of' -> 'run out of', 'granted' in 'take for granted' -> 'take for granted', 'rain' in 'heavy rain' -> 'heavy rain', 'habit' in 'break a habit' -> 'break a habit').\n"
+                f"2. If yes, extract that multi-word chunk (in standard dictionary/base form) and its natural {target_lang} translation, and classify chunk_type as 'Phrasal verb', 'Kolokacja', 'Idiom', or 'Zwrot'.\n"
+                f"   If the word is standalone (e.g. 'apple' in 'I ate an apple'), set detected_chunk, chunk_translation, and chunk_type to null.\n"
+                f"3. Provide the contextual {target_lang} translation of the single word '{text_to_translate}' plus 2-3 common synonyms separated by commas.\n"
+                f"4. Provide the natural {target_lang} translation of the entire sentence.\n\n"
+                f"Respond with a strict JSON object with these exact keys:\n"
+                f"{{\n"
+                f'  "detected_chunk": "full multi-word chunk or null",\n'
+                f'  "chunk_translation": "natural translation of the chunk or null",\n'
+                f'  "chunk_type": "Phrasal verb" or "Kolokacja" or "Idiom" or null,\n'
+                f'  "translation": "contextual translation of the word, followed by 2-3 common synonyms separated by commas",\n'
+                f'  "sentence_translation": "natural translation of the entire sentence"\n'
+                f"}}\n"
+                f"Respond ONLY with raw valid JSON, no markdown blocks."
             )
     else:
         if is_phrase:
             translation_prompt = (
-                f"Translate the {source_lang} phrase or sentence to {target_lang}:\n"
-                f"\"{text_to_translate}\"\n\n"
-                f"Rules:\n"
-                f"1. Provide ONLY a single, natural {target_lang} translation on ONE line.\n"
-                f"2. Do NOT provide synonyms, alternate versions, explanations, or multiple lines.\n"
-                f"Respond ONLY with the translation text."
+                f"You are an expert {source_lang}-to-{target_lang} translator.\n"
+                f"Translate this phrase: \"{text_to_translate}\"\n\n"
+                f"Respond with a strict JSON object:\n"
+                f"{{\n"
+                f'  "detected_chunk": "{text_to_translate}",\n'
+                f'  "chunk_translation": "natural {target_lang} translation of this phrase",\n'
+                f'  "chunk_type": "Fraza",\n'
+                f'  "translation": "natural {target_lang} translation of this phrase",\n'
+                f'  "sentence_translation": ""\n'
+                f"}}\n"
+                f"Respond ONLY with raw valid JSON, no markdown blocks."
             )
         else:
             translation_prompt = (
-                f"Translate the {source_lang} word '{text_to_translate}' to {target_lang}.\n"
-                f"Rules:\n"
-                f"1. Provide the most common {target_lang} translation, followed by 2-3 other distinct {target_lang} meanings separated by commas. No prefix.\n"
-                f"Respond ONLY with the translation line, without markdown formatting or extra text."
+                f"You are an expert {source_lang}-to-{target_lang} translator.\n"
+                f"Translate this word: '{text_to_translate}'\n\n"
+                f"Respond with a strict JSON object:\n"
+                f"{{\n"
+                f'  "detected_chunk": null,\n'
+                f'  "chunk_translation": null,\n'
+                f'  "chunk_type": null,\n'
+                f'  "translation": "most common {target_lang} translation, followed by 2-3 other distinct meanings separated by commas",\n'
+                f'  "sentence_translation": ""\n'
+                f"}}\n"
+                f"Respond ONLY with raw valid JSON, no markdown blocks."
             )
     
     try:
         output_data = query_deepseek(translation_prompt, max_tokens=None)
-        translated_text = output_data['choices'][0]['message']['content']
-        print(f'"RAW TRANSLATED TEXT: {repr(translated_text)}"', flush=True)
-        
-        translated_text = translated_text.strip()
-        lines = [line.strip() for line in translated_text.split('\n') if line.strip()]
-        cleaned_lines = []
+        raw_text = output_data['choices'][0]['message']['content'].strip()
+        print(f"RAW TRANSLATION RESPONSE: {repr(raw_text)}", flush=True)
+
+        parsed_json = None
         import re
-        for line in lines:
-            for prefix in ['line 1:', 'line 2:', 'translation:', 'polish:', 'english:', '1.', '2.', '1:', '2:', '-']:
-                if line.lower().startswith(prefix):
-                    line = line[len(prefix):].strip()
-            # Usuń dodatkowe numerowanie np. "1. " przez regex
-            line = re.sub(r'^\d+[\.\)\-:]\s*', '', line)
-            line = line.strip('\'" \t\n\r.?!')
-            if line:
-                cleaned_lines.append(line)
-        
-        sentence_translation = ""
-        if has_context and len(cleaned_lines) > 1:
-            word_translation = cleaned_lines[0]
-            sentence_translation = cleaned_lines[1]
-        elif cleaned_lines:
-            if is_phrase:
-                word_translation = cleaned_lines[0]
-            else:
-                word_translation = "\n".join(cleaned_lines)
+        clean_text = raw_text
+        if clean_text.startswith("```"):
+            clean_text = re.sub(r'^```(?:json)?\s*', '', clean_text)
+            clean_text = re.sub(r'\s*```$', '', clean_text).strip()
+
+        json_match = re.search(r'\{.*\}', clean_text, re.DOTALL)
+        if json_match:
+            try:
+                parsed_json = json.loads(json_match.group(0))
+            except Exception:
+                pass
+
+        if parsed_json and isinstance(parsed_json, dict):
+            word_translation = str(parsed_json.get("translation") or "").strip()
+            sentence_translation = str(parsed_json.get("sentence_translation") or "").strip()
+            detected_chunk = parsed_json.get("detected_chunk")
+            if detected_chunk:
+                detected_chunk = str(detected_chunk).strip()
+                if not is_phrase and detected_chunk.lower() == text_to_translate.strip().lower():
+                    detected_chunk = None
+            chunk_translation = str(parsed_json.get("chunk_translation") or "").strip() if detected_chunk else None
+            chunk_type = str(parsed_json.get("chunk_type") or "").strip() if detected_chunk else None
         else:
-            word_translation = ""
+            lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
+            cleaned_lines = []
+            for l in lines:
+                l = re.sub(r'^(?:line \d+:|translation:|polish:|english:|\d+[\.\)\-:])\s*', '', l, flags=re.IGNORECASE)
+                l = l.strip('\'" \t\n\r.?!')
+                if l:
+                    cleaned_lines.append(l)
+            word_translation = cleaned_lines[0] if cleaned_lines else raw_text
+            sentence_translation = cleaned_lines[1] if (has_context and len(cleaned_lines) > 1) else ""
+            detected_chunk = text_to_translate if is_phrase else None
+            chunk_translation = word_translation if is_phrase else None
+            chunk_type = "Fraza" if is_phrase else None
 
         result = {
             "translation": word_translation,
-            "sentence_translation": sentence_translation
+            "sentence_translation": sentence_translation,
+            "detected_chunk": detected_chunk,
+            "chunk_translation": chunk_translation,
+            "chunk_type": chunk_type
         }
 
         # Zapisz w pamięci podręcznej (zabezpieczenie limitu rozmiaru)
@@ -5144,6 +5187,9 @@ def add_vocabulary():
     original = data.get('original', '').strip()
     translated = data.get('translated', '').strip()
     story_id = data.get('story_id')
+    context_sentence = data.get('context_sentence', '').strip()
+    item_type = data.get('item_type', '').strip() or ('phrase' if len(original.split()) > 1 else 'word')
+    chunk_type = data.get('chunk_type', '').strip()
 
     if not original or not translated:
         return jsonify({"error": "Wyrażenie oryginalne i tłumaczenie są wymagane"}), 400
@@ -5161,9 +5207,21 @@ def add_vocabulary():
         
         for doc in existing:
             doc_data = doc.to_dict()
+            updates = {}
             if doc_data.get('translated') != translated:
-                db.collection('vocabulary').document(doc.id).update({'translated': translated})
+                updates['translated'] = translated
                 doc_data['translated'] = translated
+            if context_sentence and doc_data.get('context_sentence') != context_sentence:
+                updates['context_sentence'] = context_sentence
+                doc_data['context_sentence'] = context_sentence
+            if item_type and doc_data.get('item_type') != item_type:
+                updates['item_type'] = item_type
+                doc_data['item_type'] = item_type
+            if chunk_type and doc_data.get('chunk_type') != chunk_type:
+                updates['chunk_type'] = chunk_type
+                doc_data['chunk_type'] = chunk_type
+            if updates:
+                db.collection('vocabulary').document(doc.id).update(updates)
             doc_data['id'] = doc.id
             return jsonify(doc_data), 200
 
@@ -5172,6 +5230,9 @@ def add_vocabulary():
             'original': original,
             'translated': translated,
             'story_id': story_id,
+            'context_sentence': context_sentence,
+            'item_type': item_type,
+            'chunk_type': chunk_type,
             'timestamp': firestore.SERVER_TIMESTAMP
         }
         doc_ref = db.collection('vocabulary').add(new_entry)

@@ -395,6 +395,11 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   const [selectedWord, setSelectedWord] = useState("");
   const [wordTranslation, setWordTranslation] = useState("");
   const [wordSentenceTranslation, setWordSentenceTranslation] = useState("");
+  const [detectedChunk, setDetectedChunk] = useState(null);
+  const [chunkTranslation, setChunkTranslation] = useState(null);
+  const [chunkType, setChunkType] = useState(null);
+  const [isChunkSaved, setIsChunkSaved] = useState(false);
+  const [selectedSentenceContext, setSelectedSentenceContext] = useState("");
   const [isTranslating, setIsTranslating] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -1352,6 +1357,12 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     setIsPlaying(false);
     setSelectedWord("");
     setWordTranslation("");
+    setWordSentenceTranslation("");
+    setDetectedChunk(null);
+    setChunkTranslation(null);
+    setChunkType(null);
+    setIsChunkSaved(false);
+    setSelectedSentenceContext("");
     setSegmentTranslation("");
     setIsSegmentSaved(false);
     setVideoDuration(0);
@@ -1675,8 +1686,21 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     setSelectedWord(word);
     setWordTranslation("");
     setWordSentenceTranslation("");
+    setDetectedChunk(null);
+    setChunkTranslation(null);
+    setChunkType(null);
+    setIsChunkSaved(false);
+    setSelectedSentenceContext(sentenceContext || "");
     setIsTranslating(true);
     setIsSaved(false);
+
+    // Check if word is already saved in notebook
+    const alreadySaved = notebookWords.some(
+      w => (w.original || "").trim().toLowerCase() === cleanWord
+    );
+    if (alreadySaved) {
+      setIsSaved(true);
+    }
 
     // Check hidden offline dictionary (DEMO_VIDEO_VOCAB or DEMO_DICTIONARY) for zero-cost instant lookup
     const offlineDef = DEMO_VIDEO_VOCAB[cleanWord] || DEMO_DICTIONARY[cleanWord];
@@ -1703,6 +1727,20 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         const data = await response.json();
         setWordTranslation(data.translation || "Brak tłumaczenia");
         setWordSentenceTranslation(data.sentence_translation || "");
+
+        if (data.detected_chunk && data.detected_chunk.toLowerCase() !== cleanWord) {
+          setDetectedChunk(data.detected_chunk);
+          setChunkTranslation(data.chunk_translation || "");
+          setChunkType(data.chunk_type || "Fraza");
+          const chunkSaved = notebookWords.some(
+            w => (w.original || "").trim().toLowerCase() === data.detected_chunk.trim().toLowerCase()
+          );
+          setIsChunkSaved(chunkSaved);
+        } else {
+          setDetectedChunk(null);
+          setChunkTranslation(null);
+          setChunkType(null);
+        }
       } else {
         setWordTranslation("Błąd tłumaczenia");
       }
@@ -1727,7 +1765,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         body: JSON.stringify({
           original: selectedWord,
           translated: wordTranslation,
-          story_id: targetStoryId
+          story_id: targetStoryId,
+          context_sentence: selectedSentenceContext || "",
+          item_type: "word",
+          chunk_type: ""
         })
       });
       if (response.ok) {
@@ -1738,6 +1779,33 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       }
     } catch (err) {
       console.error("Błąd podczas zapisywania słówka:", err);
+    }
+  };
+
+  const handleSaveChunk = async () => {
+    if (!detectedChunk || !chunkTranslation) return;
+    const targetStoryId = currentVideo.youtubeId ? `custom_${currentVideo.youtubeId}` : (currentVideo.id || "media");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
+        body: JSON.stringify({
+          original: detectedChunk,
+          translated: chunkTranslation,
+          story_id: targetStoryId,
+          context_sentence: selectedSentenceContext || "",
+          item_type: "phrase",
+          chunk_type: chunkType || "Fraza"
+        })
+      });
+      if (response.ok) {
+        const added_doc = await response.json();
+        setIsChunkSaved(true);
+        saveToNotebookStateAndStorage(added_doc);
+        window.dispatchEvent(new CustomEvent("vocabulary-updated"));
+      }
+    } catch (err) {
+      console.error("Błąd podczas zapisywania zwrotu:", err);
     }
   };
 
@@ -2778,8 +2846,52 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
             {/* Word translation details */}
             {selectedWord && (
               <div className="word-translate-result animate-fade-in">
+                {detectedChunk && (
+                  <div className="media-detected-chunk-box animate-fade-in">
+                    <div className="chunk-badge-row">
+                      <span className="chunk-badge-pill">
+                        <span className="chunk-sparkle">✨</span>
+                        {chunkType || "Rekomendowany zwrot"}
+                      </span>
+                      <span className="chunk-hint">Ucz się zwrotów dla naturalnej płynności</span>
+                    </div>
+                    <div className="chunk-content-row">
+                      <div className="chunk-text-group">
+                        <span className="chunk-phrase-title">{detectedChunk}</span>
+                        <span className="chunk-translation-text">{chunkTranslation}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className={`btn-save-chunk-recommended ${isChunkSaved ? "saved" : ""}`}
+                        onClick={handleSaveChunk}
+                        disabled={isChunkSaved}
+                      >
+                        {isChunkSaved ? (
+                          <>
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <span>Zapisano zwrot! ✓</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="12" y1="5" x2="12" y2="19" />
+                              <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            <span>Zapisz zwrot (+)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="word-header-row">
-                  <span className="original-word">{selectedWord}</span>
+                  <div className="word-header-title-wrap">
+                    <span className="original-word">{selectedWord}</span>
+                    {detectedChunk && <span className="single-word-sublabel">(pojedyncze słowo)</span>}
+                  </div>
                   <button
                     type="button"
                     className="word-details-btn"
@@ -2821,24 +2933,28 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
               {notebookWords.length > 0 ? (
                 <>
                   <div className="media-notebook-list">
-                    {notebookWords.map((word, idx) => (
-                      <div key={word.id || `${word.original}_${idx}`} className="notebook-word-item">
-                        <span className="notebook-word-text">
-                          <strong>{word.original}</strong> — {word.translated}
-                        </span>
-                        <button
-                          type="button"
-                          className="notebook-word-delete-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteNotebookWord(word);
-                          }}
-                          title="Usuń słówko z notesu"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
+                    {notebookWords.map((word, idx) => {
+                      const isPhrase = word.item_type === "phrase" || (word.original && word.original.trim().includes(" "));
+                      return (
+                        <div key={word.id || `${word.original}_${idx}`} className="notebook-word-item">
+                          <span className="notebook-word-text">
+                            {isPhrase && <span className="notebook-phrase-badge">Zwrot</span>}
+                            <strong>{word.original}</strong> — {word.translated}
+                          </span>
+                          <button
+                            type="button"
+                            className="notebook-word-delete-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteNotebookWord(word);
+                            }}
+                            title="Usuń z notesu"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {!exerciseData && !exerciseLoading && (
@@ -3093,19 +3209,44 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
             {/* Bottom Sticky Action Button — Figma Design */}
             <div className="synced-transcript-footer">
-              <button
-                type="button"
-                className={`btn-save-sticky-word ${isSaved ? "saved" : ""}`}
-                disabled={!selectedWord || isSaved}
-                onClick={handleSaveWord}
-              >
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-                </svg>
-                {selectedWord
-                  ? (isSaved ? `Zapisano "${selectedWord}" ✓` : `Save "${selectedWord}"`)
-                  : "Wybierz słowo w transkrypcji"}
-              </button>
+              {detectedChunk ? (
+                <div className="sticky-footer-chunk-actions">
+                  <button
+                    type="button"
+                    className={`btn-save-sticky-word btn-save-sticky-chunk ${isChunkSaved ? "saved" : ""}`}
+                    disabled={isChunkSaved}
+                    onClick={handleSaveChunk}
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                    </svg>
+                    {isChunkSaved ? `Zapisano zwrot "${detectedChunk}" ✓` : `✨ Zapisz zwrot "${detectedChunk}"`}
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-save-sticky-secondary ${isSaved ? "saved" : ""}`}
+                    disabled={isSaved}
+                    onClick={handleSaveWord}
+                    title={`Zapisz tylko pojedyncze słowo: "${selectedWord}"`}
+                  >
+                    {isSaved ? `Słowo "${selectedWord}" ✓` : `Samo słowo "${selectedWord}"`}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className={`btn-save-sticky-word ${isSaved ? "saved" : ""}`}
+                  disabled={!selectedWord || isSaved}
+                  onClick={handleSaveWord}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                  </svg>
+                  {selectedWord
+                    ? (isSaved ? `Zapisano "${selectedWord}" ✓` : `Save "${selectedWord}"`)
+                    : "Wybierz słowo w transkrypcji"}
+                </button>
+              )}
             </div>
           </div>
         </div>

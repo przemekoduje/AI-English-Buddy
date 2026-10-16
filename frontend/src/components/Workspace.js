@@ -2223,11 +2223,15 @@ function Workspace({
       handleDeleteWord(clean);
     } else {
       const meta = getWordMeta(clean);
+      const isPhrase = typeof wordItem === 'object' && (wordItem.item_type === 'phrase' || clean.split(/\s+/).length > 1);
       const newEntry = {
         original: clean,
-        translated: rawTranslation || meta.pl || "zapisane słówko",
+        translated: rawTranslation || meta.pl || (isPhrase ? "zapisana fraza" : "zapisane słówko"),
         created_at: new Date().toISOString(),
-        story_id: currentStoryId || undefined
+        story_id: currentStoryId || undefined,
+        context_sentence: typeof wordItem === 'object' ? (wordItem.sentence || "") : "",
+        item_type: isPhrase ? "phrase" : "word",
+        chunk_type: typeof wordItem === 'object' ? (wordItem.pos || wordItem.chunk_type || "") : ""
       };
       setNotebookWords(prev => [newEntry, ...prev.filter(w => (w.original || w.word) !== clean)]);
       try {
@@ -2277,6 +2281,9 @@ function Workspace({
         enDef: demoWord.enDef || meta.enDef || "",
         sentence: sentenceContext,
         sentenceTranslation: demoSentenceTrans || "",
+        detectedChunk: null,
+        chunkTranslation: null,
+        chunkType: null,
         paragraphIndex: pIdx
       };
       setInlineWordData(initialData);
@@ -2304,6 +2311,9 @@ function Workspace({
       enDef: meta.enDef || "",
       sentence: sentenceContext,
       sentenceTranslation: "",
+      detectedChunk: null,
+      chunkTranslation: null,
+      chunkType: null,
       paragraphIndex: pIdx
     };
     setInlineWordData(initialData);
@@ -2324,7 +2334,10 @@ function Workspace({
         return {
           ...prev,
           pl: data.translation || meta.pl || "Brak tłumaczenia",
-          sentenceTranslation: data.sentence_translation || ""
+          sentenceTranslation: data.sentence_translation || "",
+          detectedChunk: data.detected_chunk || null,
+          chunkTranslation: data.chunk_translation || null,
+          chunkType: data.chunk_type || null
         };
       });
     } catch (err) {
@@ -2821,9 +2834,58 @@ function Workspace({
   const renderInlineCard = () => {
     if (!inlineWordData) return null;
     const isSaved = isWordInNotebook(inlineWordData.word);
+    const hasChunk = Boolean(inlineWordData.detectedChunk && inlineWordData.chunkTranslation);
+    const isChunkSaved = hasChunk ? isWordInNotebook(inlineWordData.detectedChunk) : false;
 
     return (
       <div className="workspace-inline-word-card">
+        {hasChunk && (
+          <div className="inline-detected-chunk-card animate-fade-in">
+            <div className="chunk-badge-row">
+              <span className="chunk-badge-pill">
+                <span className="chunk-sparkle">✨</span>
+                {inlineWordData.chunkType || "Rekomendowany zwrot"}
+              </span>
+              <span className="chunk-hint">Ucz się całych fraz — to klucz do płynności!</span>
+            </div>
+            <div className="chunk-content-row">
+              <div className="chunk-text-group">
+                <span className="chunk-phrase-title">{inlineWordData.detectedChunk}</span>
+                <span className="chunk-translation-text">{inlineWordData.chunkTranslation}</span>
+              </div>
+              <button
+                type="button"
+                className={`inline-save-chunk-btn ${isChunkSaved ? "saved" : ""}`}
+                onClick={() => handleToggleWordSaved({
+                  word: inlineWordData.detectedChunk,
+                  translation: inlineWordData.chunkTranslation,
+                  pos: inlineWordData.chunkType || "phrase",
+                  level: inlineWordData.level || "B2",
+                  sentence: inlineWordData.sentence,
+                  item_type: "phrase"
+                })}
+              >
+                {isChunkSaved ? (
+                  <>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span>Zapisano zwrot! ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span>Zapisz zwrot (+)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="inline-word-header">
           <div className="inline-word-title-group">
             <span className="inline-word-title">{inlineWordData.word}</span>
@@ -2859,6 +2921,7 @@ function Workspace({
         </div>
 
         <div className="inline-word-def">
+          {hasChunk && <span className="inline-word-label">Samo słowo: </span>}
           <span className="inline-word-pl">{inlineWordData.pl}</span>
           {inlineWordData.enDef && (
             <span className="inline-word-en"> — {inlineWordData.enDef}</span>
@@ -2872,7 +2935,9 @@ function Workspace({
               word: inlineWordData.word,
               translation: inlineWordData.pl,
               pos: inlineWordData.pos,
-              level: inlineWordData.level
+              level: inlineWordData.level,
+              sentence: inlineWordData.sentence,
+              item_type: "word"
             })}
           >
             {isSaved ? (
@@ -2880,7 +2945,7 @@ function Workspace({
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                <span>Saved</span>
+                <span>Saved word</span>
               </>
             ) : (
               <>
@@ -2900,7 +2965,7 @@ function Workspace({
                 detail: {
                   sentence: inlineWordData.sentence || "Maya knew she would need to adapt to a new routine.",
                   sentenceTranslation: inlineWordData.sentenceTranslation,
-                  phrase: inlineWordData.word ? `${inlineWordData.word} to a new routine` : "adapt to a new routine",
+                  phrase: hasChunk ? inlineWordData.detectedChunk : (inlineWordData.word ? `${inlineWordData.word} to a new routine` : "adapt to a new routine"),
                   word: inlineWordData.word,
                   wordTranslation: inlineWordData.pl
                 }
