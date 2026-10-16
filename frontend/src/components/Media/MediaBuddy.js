@@ -650,7 +650,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
       const res = await fetch(`${API_BASE_URL}/api/vocabulary/generate-exercise`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+        headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
         body: JSON.stringify({ words: selectedWords })
       });
       if (res.ok) {
@@ -673,7 +673,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     try {
       const res = await fetch(`${API_BASE_URL}/api/vocabulary/check-translation`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+        headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
         body: JSON.stringify({
           target_word: exerciseData.target_words.join(", "),
           sentence_pl: exerciseData.sentence_pl,
@@ -1559,7 +1559,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       try {
         const res = await fetch(`${API_BASE_URL}/api/translate`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+          headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
           body: JSON.stringify({ text: seg.text })
         });
         if (res.ok) {
@@ -1577,7 +1577,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       try {
         const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+          headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
           body: JSON.stringify({
             original: seg.text,
             translated: translationToSave,
@@ -1604,7 +1604,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+        headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
         body: JSON.stringify({
           original: segment.text,
           translated: trans,
@@ -1653,7 +1653,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/translate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+        headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
         body: JSON.stringify({ text: word, context: sentenceContext })
       });
       if (latestWordRef.current !== word) return;
@@ -1681,7 +1681,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
+        headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
         body: JSON.stringify({
           original: selectedWord,
           translated: wordTranslation,
@@ -3021,7 +3021,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                         </p>
                       </div>
 
-                      {((showBilingual || blurChallengeEnabled || isOriginalBlurred) && ((isActive && !isPlaying) || (isOriginalBlurred && !isPlaying))) && (
+                      {((showBilingual && (translation || (isActive && !isPlaying))) || ((blurChallengeEnabled || isOriginalBlurred) && ((isActive && !isPlaying) || (isOriginalBlurred && !isPlaying)))) && (
                         <p className="synced-polish-text animate-fade-in">
                           {isTranslatingSegment && isActive ? (
                             <span className="translation-loading">Tłumaczenie fragmentu...</span>

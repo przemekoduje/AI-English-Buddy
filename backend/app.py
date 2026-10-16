@@ -5494,7 +5494,10 @@ def generate_vocabulary_exercise():
         return jsonify({"error": "Brak autoryzacji"}), 401
 
     data = request.get_json(silent=True) or {}
-    words = data.get('words', [])
+    words = data.get('words')
+    single_word = data.get('word')
+    if not words and single_word:
+        words = [{'original': single_word.strip(), 'translated': ''}]
 
     if not words or not isinstance(words, list):
         return jsonify({"error": "Brak listy słów"}), 400
