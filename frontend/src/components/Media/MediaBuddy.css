@@ -512,13 +512,16 @@
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.3);
+  height: 4px;
+  background: rgba(15, 23, 42, 0.5);
+  overflow: hidden;
+  z-index: 4;
 }
 
 .video-tile-progress-bar {
   height: 100%;
-  background: #2563eb;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  box-shadow: 0 0 6px rgba(37, 99, 235, 0.7);
 }
 
 .video-tile-info {
@@ -773,8 +776,10 @@
   border-radius: 999px;
   cursor: pointer;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   transition: height 0.15s ease;
+  user-select: none;
+  touch-action: none;
 }
 
 .video-progress-slider-wrap:hover {
@@ -783,9 +788,30 @@
 
 .video-progress-slider-filled {
   height: 100%;
-  background: #2563eb;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
   border-radius: 999px;
-  transition: width 0.1s linear;
+  position: relative;
+  transition: width 0.08s linear;
+}
+
+.video-progress-slider-thumb {
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid #2563eb;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.45);
+  pointer-events: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.video-progress-slider-wrap:hover .video-progress-slider-thumb {
+  transform: translateY(-50%) scale(1.25);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.6);
 }
 
 .speed-pill-btn {

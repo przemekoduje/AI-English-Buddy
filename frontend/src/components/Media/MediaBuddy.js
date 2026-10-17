@@ -457,7 +457,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
   const [videoProgress, setVideoProgress] = useState(() => {
     try {
-      const saved = localStorage.getItem(`media_buddy_video_progress_${userKey}`) || (userKey === 'guest' ? localStorage.getItem("media_buddy_video_progress") : null);
+      const activeKey = user?.email || (user?.uid ? `uid_${user.uid}` : 'guest');
+      const saved = localStorage.getItem(`media_buddy_video_progress_${activeKey}`) || localStorage.getItem("media_buddy_video_progress");
       return saved ? JSON.parse(saved) : {};
     } catch (e) {
       console.error("Failed to load video progress from localStorage", e);
@@ -734,30 +735,35 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     return isStarterUser ? CURATED_VIDEOS : [...CURATED_VIDEOS, ...customVideos];
   }, [customVideos, isStarterUser]);
 
+  const getVideoProg = useCallback((vid) => {
+    if (!vid) return null;
+    return videoProgress[vid.id] || (vid.youtubeId ? videoProgress[vid.youtubeId] : null) || null;
+  }, [videoProgress]);
+
   const recentVideos = useMemo(() => {
-    const watched = allVideos.filter(v => videoProgress[v.id]);
+    const watched = allVideos.filter(v => Boolean(getVideoProg(v)));
     watched.sort((a, b) => {
-      const timeA = videoProgress[a.id]?.lastWatched || 0;
-      const timeB = videoProgress[b.id]?.lastWatched || 0;
+      const timeA = getVideoProg(a)?.lastWatched || 0;
+      const timeB = getVideoProg(b)?.lastWatched || 0;
       return recentSortOrder === "newest" ? timeB - timeA : timeA - timeB;
     });
 
     if (watched.length < 10) {
-      const unwatched = allVideos.filter(v => !videoProgress[v.id]);
+      const unwatched = allVideos.filter(v => !getVideoProg(v));
       const padded = recentSortOrder === "newest" ? unwatched : [...unwatched].reverse();
       return [...watched, ...padded].slice(0, 10);
     }
     return watched.slice(0, 10);
-  }, [allVideos, videoProgress, recentSortOrder]);
+  }, [allVideos, getVideoProg, recentSortOrder]);
 
   const unwatchedVideos = useMemo(() => {
     const list = allVideos.filter(v => {
-      const prog = videoProgress[v.id];
+      const prog = getVideoProg(v);
       return !prog || prog.progressPercent < 25;
     });
     list.sort((a, b) => {
-      const progA = videoProgress[a.id];
-      const progB = videoProgress[b.id];
+      const progA = getVideoProg(a);
+      const progB = getVideoProg(b);
       const timeA = progA?.lastWatched || 0;
       const timeB = progB?.lastWatched || 0;
 
@@ -772,7 +778,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       return unwatchedSortOrder === "newest" ? idxB - idxA : idxA - idxB;
     });
     return list;
-  }, [allVideos, videoProgress, unwatchedSortOrder]);
+  }, [allVideos, getVideoProg, unwatchedSortOrder]);
 
   // Sync customVideos to user-scoped localStorage
   useEffect(() => {
@@ -832,14 +838,18 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
   const scheduleProgressToCloud = useCallback((activeVid, time, dur) => {
     if (!activeVid || !user || (!user.token && !user.email)) return;
-    const curProgress = {
-      [activeVid.id]: {
-        lastWatched: Date.now(),
-        currentTime: time,
-        duration: dur,
-        progressPercent: dur > 0 ? (time / dur) * 100 : 0
-      }
+    const progData = {
+      lastWatched: Date.now(),
+      currentTime: time,
+      duration: dur,
+      progressPercent: dur > 0 ? (time / dur) * 100 : 0
     };
+    const curProgress = {
+      [activeVid.id]: progData
+    };
+    if (activeVid.youtubeId && activeVid.youtubeId !== activeVid.id) {
+      curProgress[activeVid.youtubeId] = progData;
+    }
     pendingCloudSyncRef.current = {
       video_progress: curProgress,
       last_video_id: activeVid.id,
@@ -856,12 +866,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
   // Cloud Sync on Mount or User/Subscription Change
   useEffect(() => {
-    if (isStarterUser) {
-      return;
-    }
     const activeKey = getUserKey(user);
     const localVideos = loadSavedCustomVideos(user, subscription);
-    if (localVideos.length > 0) {
+    if (!isStarterUser && localVideos.length > 0) {
       setCustomVideos(prev => {
         const prevIds = new Set(prev.map(v => v.id));
         const missing = localVideos.filter(v => !prevIds.has(v.id));
@@ -869,7 +876,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       });
     }
     try {
-      const saved = localStorage.getItem(`media_buddy_video_progress_${activeKey}`);
+      const saved = localStorage.getItem(`media_buddy_video_progress_${activeKey}`) || localStorage.getItem("media_buddy_video_progress");
       if (saved) {
         setVideoProgress(JSON.parse(saved));
       }
@@ -884,36 +891,37 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         if (user.token) headers["X-Session-Token"] = user.token;
         const emailParam = user.email ? `?user_email=${encodeURIComponent(user.email.toLowerCase().trim())}` : "";
 
-        // 1. Pobierz własne filmy z bazy danych
-        const vidRes = await fetch(`${API_BASE_URL}/api/media/custom-videos${emailParam}`, { headers });
+        // 1. Pobierz własne filmy z bazy danych (tylko PRO / Admin)
         let latestVideos = localVideos;
-        if (vidRes.ok && isMounted) {
-          const vidData = await vidRes.json();
-          if (Array.isArray(vidData.videos)) {
-            const cloudVideos = vidData.videos.map(v => ({
-              ...v,
-              transcript: ensureCompleteSentences(v.transcript)
-            }));
-            if (cloudVideos.length > 0) {
-              latestVideos = cloudVideos;
-              setCustomVideos(cloudVideos);
-              localStorage.setItem(`media_buddy_custom_videos_${activeKey}`, JSON.stringify(cloudVideos));
-            } else if (localVideos.length > 0) {
-              // Migracja: jeśli w chmurze jeszcze nic nie ma, przenieś lokalnie zapisane filmy tego profilu
-              for (const v of localVideos) {
-                try {
-                  await fetch(`${API_BASE_URL}/api/media/custom-videos`, {
-                    method: "POST",
-                    headers: { ...headers, "Content-Type": "application/json" },
-                    body: JSON.stringify({ ...v, user_email: user.email })
-                  });
-                } catch (err) { }
+        if (!isStarterUser) {
+          const vidRes = await fetch(`${API_BASE_URL}/api/media/custom-videos${emailParam}`, { headers });
+          if (vidRes.ok && isMounted) {
+            const vidData = await vidRes.json();
+            if (Array.isArray(vidData.videos)) {
+              const cloudVideos = vidData.videos.map(v => ({
+                ...v,
+                transcript: ensureCompleteSentences(v.transcript)
+              }));
+              if (cloudVideos.length > 0) {
+                latestVideos = cloudVideos;
+                setCustomVideos(cloudVideos);
+                localStorage.setItem(`media_buddy_custom_videos_${activeKey}`, JSON.stringify(cloudVideos));
+              } else if (localVideos.length > 0) {
+                for (const v of localVideos) {
+                  try {
+                    await fetch(`${API_BASE_URL}/api/media/custom-videos`, {
+                      method: "POST",
+                      headers: { ...headers, "Content-Type": "application/json" },
+                      body: JSON.stringify({ ...v, user_email: user.email })
+                    });
+                  } catch (err) { }
+                }
               }
             }
           }
         }
 
-        // 2. Pobierz postęp i ostatnio odtwarzany film z chmury
+        // 2. Pobierz postęp i ostatnio odtwarzany film z chmury (dla wszystkich użytkowników)
         const stateRes = await fetch(`${API_BASE_URL}/api/media/state${emailParam}`, { headers });
         if (stateRes.ok && isMounted) {
           const stateData = await stateRes.json();
@@ -1130,15 +1138,19 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     }
 
     setVideoProgress(prev => {
+      const progData = {
+        lastWatched: Date.now(),
+        currentTime: time,
+        duration: dur,
+        progressPercent: dur > 0 ? (time / dur) * 100 : 0
+      };
       const nextProgress = {
         ...prev,
-        [activeVid.id]: {
-          lastWatched: Date.now(),
-          currentTime: time,
-          duration: dur,
-          progressPercent: dur > 0 ? (time / dur) * 100 : 0
-        }
+        [activeVid.id]: progData
       };
+      if (activeVid.youtubeId && activeVid.youtubeId !== activeVid.id) {
+        nextProgress[activeVid.youtubeId] = progData;
+      }
       try {
         localStorage.setItem(`media_buddy_video_progress_${userKey}`, JSON.stringify(nextProgress));
       } catch (e) {
@@ -1411,16 +1423,98 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     }
   };
 
-  const handleSeek = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
+  const isSeekingRef = useRef(false);
+
+  const calculateSeekTime = (clientX, element) => {
+    if (!element) return 0;
+    const rect = element.getBoundingClientRect();
+    if (!rect.width) return 0;
+    const clickX = clientX - rect.left;
     const ratio = Math.max(0, Math.min(1, clickX / rect.width));
-    const targetTime = ratio * totalDuration;
+    return ratio * totalDuration;
+  };
+
+  const handleSeek = (e) => {
+    const targetTime = calculateSeekTime(e.clientX, e.currentTarget);
     if (playerRef.current && typeof playerRef.current.seekTo === "function") {
       playerRef.current.seekTo(targetTime, true);
       setCurrentTime(targetTime);
       saveProgress(targetTime, totalDuration);
     }
+  };
+
+  const handleSeekMouseDown = (e) => {
+    const sliderEl = e.currentTarget;
+    isSeekingRef.current = true;
+    const targetTime = calculateSeekTime(e.clientX, sliderEl);
+    setCurrentTime(targetTime);
+    if (playerRef.current && typeof playerRef.current.seekTo === "function") {
+      playerRef.current.seekTo(targetTime, true);
+    }
+
+    const onMouseMove = (moveEvt) => {
+      if (!isSeekingRef.current) return;
+      const moveTime = calculateSeekTime(moveEvt.clientX, sliderEl);
+      setCurrentTime(moveTime);
+      if (playerRef.current && typeof playerRef.current.seekTo === "function") {
+        playerRef.current.seekTo(moveTime, true);
+      }
+    };
+
+    const onMouseUp = (upEvt) => {
+      if (isSeekingRef.current) {
+        isSeekingRef.current = false;
+        const finalTime = calculateSeekTime(upEvt.clientX, sliderEl);
+        setCurrentTime(finalTime);
+        if (playerRef.current && typeof playerRef.current.seekTo === "function") {
+          playerRef.current.seekTo(finalTime, true);
+        }
+        saveProgress(finalTime, totalDuration);
+      }
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+  const handleSeekTouchStart = (e) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    const sliderEl = e.currentTarget;
+    const targetTime = calculateSeekTime(touch.clientX, sliderEl);
+    setCurrentTime(targetTime);
+    if (playerRef.current && typeof playerRef.current.seekTo === "function") {
+      playerRef.current.seekTo(targetTime, true);
+    }
+
+    const onTouchMove = (moveEvt) => {
+      const moveTouch = moveEvt.touches[0];
+      if (!moveTouch) return;
+      const moveTime = calculateSeekTime(moveTouch.clientX, sliderEl);
+      setCurrentTime(moveTime);
+      if (playerRef.current && typeof playerRef.current.seekTo === "function") {
+        playerRef.current.seekTo(moveTime, true);
+      }
+    };
+
+    const onTouchEnd = (endEvt) => {
+      const endTouch = endEvt.changedTouches[0];
+      if (endTouch) {
+        const finalTime = calculateSeekTime(endTouch.clientX, sliderEl);
+        setCurrentTime(finalTime);
+        if (playerRef.current && typeof playerRef.current.seekTo === "function") {
+          playerRef.current.seekTo(finalTime, true);
+        }
+        saveProgress(finalTime, totalDuration);
+      }
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+
+    window.addEventListener("touchmove", onTouchMove);
+    window.addEventListener("touchend", onTouchEnd);
   };
 
   const toggleFullscreen = () => {
@@ -2424,7 +2518,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                 <div className="media-selector-scroll" ref={customVideosScrollRef}>
                   {customVideos.map((vid) => {
                     const isActive = currentVideo.id === vid.id;
-                    const prog = videoProgress[vid.id];
+                    const prog = getVideoProg(vid);
                     return (
                       <div
                         key={vid.id}
@@ -2510,7 +2604,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                 {recentVideos.map((vid) => {
                   const isCustom = vid.id.startsWith("custom_");
                   const isActive = currentVideo.id === vid.id;
-                  const prog = videoProgress[vid.id];
+                  const prog = getVideoProg(vid);
                   return (
                     <div
                       key={vid.id}
@@ -2600,7 +2694,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                   {unwatchedVideos.map((vid) => {
                     const isCustom = vid.id.startsWith("custom_");
                     const isActive = currentVideo.id === vid.id;
-                    const prog = videoProgress[vid.id];
+                    const prog = getVideoProg(vid);
                     return (
                       <div
                         key={vid.id}
@@ -2774,12 +2868,20 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                 {formatTime(currentTime)} / {formatTime(totalDuration)}
               </span>
 
-              {/* Progress Slider */}
-              <div className="video-progress-slider-wrap" onClick={handleSeek} title="Przewiń">
+              {/* Progress Slider with Active Thumb Marker */}
+              <div
+                className="video-progress-slider-wrap"
+                onMouseDown={handleSeekMouseDown}
+                onTouchStart={handleSeekTouchStart}
+                onClick={handleSeek}
+                title="Przewiń wideo (kliknij lub przeciągnij)"
+              >
                 <div
                   className="video-progress-slider-filled"
                   style={{ width: `${Math.min(100, (currentTime / (totalDuration || 1)) * 100)}%` }}
-                />
+                >
+                  <span className="video-progress-slider-thumb" />
+                </div>
               </div>
 
               <button
