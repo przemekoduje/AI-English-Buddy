@@ -5065,19 +5065,35 @@ def get_vocabulary():
         if story_id:
             raw_ids = [s.strip() for s in story_id.split(',') if s.strip()]
             prefixes = ['standup_phrase_custom_', 'standup_phrase_', 'standup_custom_', 'standup_', 'media_custom_', 'media_', 'custom_']
-            variants = set()
+            
+            # 1. Priorytetowo zachowaj dokładne ID żądane przez klienta na początku listy
+            ordered_variants = []
+            seen_variants = set()
             for sid in raw_ids:
-                variants.add(sid)
+                if sid and sid not in seen_variants:
+                    seen_variants.add(sid)
+                    ordered_variants.append(sid)
+
+            # 2. Wyodrębnij czyste identyfikatory bazowe (bez nakładających się prefiksów)
+            bases = set()
+            for sid in raw_ids:
                 base = sid
                 for p in prefixes:
                     if base.startswith(p):
                         base = base[len(p):]
-                for b in [sid, base]:
-                    if b:
-                        for p in ['', 'custom_', 'standup_', 'standup_custom_', 'standup_phrase_', 'standup_phrase_custom_', 'media_', 'media_custom_']:
-                            variants.add(f"{p}{b}")
+                if base:
+                    bases.add(base)
 
-            variant_list = [v for v in variants if v]
+            # 3. Dodaj warianty bazowe z dozwolonymi prefiksami, uporządkowane według ważności
+            allowed_prefixes = ['custom_', '', 'media_', 'media_custom_', 'standup_', 'standup_custom_', 'standup_phrase_', 'standup_phrase_custom_']
+            for b in sorted(bases):
+                for p in allowed_prefixes:
+                    cand = f"{p}{b}"
+                    if cand and cand not in seen_variants:
+                        seen_variants.add(cand)
+                        ordered_variants.append(cand)
+
+            variant_list = ordered_variants
             if len(variant_list) == 1:
                 query = query.where('story_id', '==', variant_list[0])
             elif len(variant_list) > 1:

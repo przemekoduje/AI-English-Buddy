@@ -209,7 +209,14 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
       const cleanTranslated = (item.translated || "").split("\n")[0].trim();
 
       // Story Title Tag
-      const storyTitle = item.story_title || story?.title || "A new beginning";
+      let storyTitle = item.story_title || story?.title;
+      if (!storyTitle) {
+        if (item.story_id && (item.story_id.startsWith("custom_") || item.story_id.startsWith("media_") || item.story_id.startsWith("standup_"))) {
+          storyTitle = "Media Buddy";
+        } else {
+          storyTitle = "A new beginning";
+        }
+      }
 
       return {
         ...item,

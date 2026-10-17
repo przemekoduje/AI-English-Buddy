@@ -512,27 +512,31 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
   const getVideoStoryIds = useCallback((video) => {
     if (!video) return [];
-    const ids = new Set();
-    const rawList = [video.id, video.youtubeId].filter(Boolean);
+    const ordered = [];
+    const seen = new Set();
+    const addId = (id) => {
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        ordered.push(id);
+      }
+    };
+
+    const rawList = [video.youtubeId, video.id].filter(Boolean);
     rawList.forEach(raw => {
-      ids.add(raw);
       const clean = raw.replace(/^(standup_phrase_custom_|standup_phrase_|standup_custom_|standup_|media_custom_|media_|custom_)+/, "");
       if (clean) {
-        ids.add(clean);
-        ids.add(`custom_${clean}`);
-        ids.add(`standup_${clean}`);
-        ids.add(`standup_custom_${clean}`);
-        ids.add(`standup_phrase_${clean}`);
-        ids.add(`standup_phrase_custom_${clean}`);
-        ids.add(`media_${clean}`);
-        ids.add(`media_custom_${clean}`);
+        addId(`custom_${clean}`);
+        addId(clean);
+        addId(`media_${clean}`);
+        addId(`media_custom_${clean}`);
+        addId(`standup_${clean}`);
+        addId(`standup_custom_${clean}`);
+        addId(`standup_phrase_${clean}`);
+        addId(`standup_phrase_custom_${clean}`);
       }
-      ids.add(`standup_${raw}`);
-      ids.add(`standup_phrase_${raw}`);
-      ids.add(`custom_${raw}`);
-      ids.add(`media_${raw}`);
+      addId(raw);
     });
-    return Array.from(ids).filter(Boolean);
+    return ordered;
   }, []);
 
   const [notebookWords, setNotebookWords] = useState(() => {
@@ -594,7 +598,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     if (!video || !user?.token) return;
     const storageKey = getLocalStorageWordsKey(video);
     const validStoryIds = new Set(getVideoStoryIds(video));
-    const storyIds = Array.from(validStoryIds).slice(0, 30).join(",");
+    const storyIds = getVideoStoryIds(video).slice(0, 10).join(",");
 
     fetch(`${API_BASE_URL}/api/vocabulary?story_id=${encodeURIComponent(storyIds)}`, {
       headers: { "X-Session-Token": user.token }
@@ -612,22 +616,32 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
             return validStoryIds.has(item.story_id);
           });
 
-          // De-duplicate by original
-          const map = new Map();
-          strictlyThisVideoWords.forEach(item => {
-            const k = (item.original || "").trim().toLowerCase();
-            if (k && !map.has(k)) map.set(k, item);
-          });
-          const list = Array.from(map.values());
+          // De-duplicate by original, keeping both server items and freshly saved video words
+          setNotebookWords(prev => {
+            const map = new Map();
+            strictlyThisVideoWords.forEach(item => {
+              const k = (item.original || "").trim().toLowerCase();
+              if (k && !map.has(k)) map.set(k, item);
+            });
 
-          setNotebookWords(list);
-          try {
-            localStorage.setItem(storageKey, JSON.stringify(list));
-            if (video.youtubeId) {
-              const userKey = user?.email || user?.uid || "guest";
-              localStorage.setItem(`media_buddy_notebook_words_${userKey}_${video.youtubeId}`, JSON.stringify(list));
-            }
-          } catch (e) { }
+            // Also keep any words currently in prev that strictly belong to this video
+            prev.forEach(item => {
+              if (item && item.story_id && validStoryIds.has(item.story_id)) {
+                const k = (item.original || "").trim().toLowerCase();
+                if (k && !map.has(k)) map.set(k, item);
+              }
+            });
+
+            const list = Array.from(map.values());
+            try {
+              localStorage.setItem(storageKey, JSON.stringify(list));
+              if (video.youtubeId) {
+                const userKey = user?.email || user?.uid || "guest";
+                localStorage.setItem(`media_buddy_notebook_words_${userKey}_${video.youtubeId}`, JSON.stringify(list));
+              }
+            } catch (e) { }
+            return list;
+          });
         }
       })
       .catch(err => console.error("Error fetching notebook words:", err));
