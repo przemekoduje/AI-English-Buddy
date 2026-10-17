@@ -763,7 +763,7 @@
 
 .video-time-display {
   font-size: 0.82rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono);
   font-weight: 500;
   color: #64748b;
   white-space: nowrap;
@@ -1657,14 +1657,14 @@
 
 .synced-time-badge {
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 500;
   color: #94a3b8;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono);
 }
 
 .synced-time-badge.active-time {
   color: #2563eb;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .synced-segment-actions {
@@ -2008,7 +2008,7 @@
   border-radius: 8px;
   padding: 0.65rem;
   font-size: 0.82rem;
-  font-family: monospace;
+  font-family: var(--font-mono);
   outline: none;
 }
 

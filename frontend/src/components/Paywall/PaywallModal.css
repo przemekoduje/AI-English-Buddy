@@ -87,9 +87,9 @@
 
 .paywall-title {
   margin: 0;
-  font-family: 'Outfit', 'Google Sans', -apple-system, sans-serif;
+  font-family: var(--font-display);
   font-size: 1.85rem;
-  font-weight: 700;
+  font-weight: 500;
   color: #0f172a;
   letter-spacing: -0.02em;
 }
@@ -259,9 +259,9 @@
 }
 
 .card-price {
-  font-family: 'Outfit', -apple-system, sans-serif;
+  font-family: var(--font-display);
   font-size: 2.1rem;
-  font-weight: 800;
+  font-weight: 500;
   color: #0f172a;
   letter-spacing: -0.03em;
 }
@@ -643,9 +643,9 @@
 }
 
 .checkout-plan-badge {
-  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-family: var(--font-display);
   font-size: 0.75rem;
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: 0.06em;
   color: #7c3aed;
   text-transform: uppercase;
@@ -654,9 +654,9 @@
 
 .checkout-plan-title {
   margin: 0;
-  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-family: var(--font-display);
   font-size: 1.45rem;
-  font-weight: 700;
+  font-weight: 500;
   color: #0f172a;
   letter-spacing: -0.01em;
 }
@@ -674,9 +674,9 @@
 }
 
 .checkout-price-main {
-  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-family: var(--font-display);
   font-size: 1.85rem;
-  font-weight: 800;
+  font-weight: 500;
   color: #7c3aed;
   letter-spacing: -0.02em;
 }

@@ -82,11 +82,18 @@
   --glass-border:       rgba(0, 0, 0, 0.06);
   --glass-blur:         blur(12px);
 
-  /* ── 02. Typografia (Typography Scale) ────────────────────────────────── */
-  --font-display:       'Outfit', 'Google Sans', 'Roboto', sans-serif;
+  /* ── 02. Typografia (Typography Scale — Google Workspace Style) ───────── */
+  --font-display:       'Roboto', system-ui, -apple-system, sans-serif;
   --font-main:          'Roboto', system-ui, -apple-system, sans-serif;
-  --font-serif:         'Georgia', 'Times New Roman', serif;
+  --font-serif:         'Roboto', system-ui, -apple-system, sans-serif;
   --font-mono:          'Roboto Mono', ui-monospace, monospace;
+
+  /* Wagi fontu — czysty minimalizm Google: regular 400 + delikatny bold (medium 500) */
+  --weight-light:       300;
+  --weight-regular:     400;
+  --weight-medium:      500;
+  --weight-semibold:    500;
+  --weight-bold:        500;
 
   /* Hierarchia typograficzna */
   --text-h1:            2.25rem;          /* 36px */

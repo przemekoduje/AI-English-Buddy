@@ -1618,7 +1618,7 @@
 }
 
 .story-words-empty-title {
-  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-family: var(--font-display);
   font-size: 0.875rem;
   font-weight: 600;
   color: #334155;
@@ -1626,7 +1626,7 @@
 }
 
 .story-words-empty-sub {
-  font-family: var(--font-main, 'Roboto', sans-serif);
+  font-family: var(--font-main);
   font-size: 0.75rem;
   color: #64748b;
   line-height: 1.4;
@@ -1833,7 +1833,7 @@
 }
 
 .workspace-hero-title {
-  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-family: var(--font-display);
   font-size: 2.15rem;
   font-weight: 800;
   color: #0f172a;
@@ -1896,7 +1896,7 @@
 }
 
 .create-story-heading {
-  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-family: var(--font-display);
   font-size: 1.25rem;
   font-weight: 700;
   color: #0f172a;
@@ -1908,7 +1908,7 @@
   border: 1px solid #cbd5e1;
   border-radius: 999px;
   padding: 0.3rem 0.8rem;
-  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-family: var(--font-display);
   font-size: 0.75rem;
   font-weight: 600;
   color: #64748b;
@@ -2117,7 +2117,7 @@
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-family: var(--font-display);
   font-size: 0.82rem;
   font-weight: 600;
   color: #334155;
@@ -2134,7 +2134,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   background: #f8fafc;
-  font-family: var(--font-main, 'Roboto', sans-serif);
+  font-family: var(--font-main);
   font-size: 0.88rem;
   color: #0f172a;
   line-height: 1.5;
@@ -2165,7 +2165,7 @@
   font-size: 0.78rem;
   color: #94a3b8;
   font-weight: 500;
-  font-family: var(--font-main, 'Roboto', sans-serif);
+  font-family: var(--font-main);
 }
 
 /* COLLAPSED EXPAND BAR */

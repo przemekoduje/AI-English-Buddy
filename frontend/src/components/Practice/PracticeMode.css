@@ -123,8 +123,8 @@
   border-radius: 9999px;
   border: 1.5px solid var(--slate-200, #e2e8f0);
   background: white;
-  font-weight: 600;
-  font-family: var(--font-main, 'Inter', sans-serif);
+  font-weight: 500;
+  font-family: var(--font-main);
   color: var(--slate-600, #475569);
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
