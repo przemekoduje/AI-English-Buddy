@@ -539,17 +539,13 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     if (!currentVideo) return [];
     const userKey = user?.email || user?.uid || "guest";
     const vidKey = currentVideo?.youtubeId || currentVideo?.id || "default";
+    const validStoryIds = new Set(getVideoStoryIds(currentVideo));
     try {
       const cached = localStorage.getItem(`media_buddy_notebook_words_${userKey}_${vidKey}`);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-      if (currentVideo?.youtubeId) {
-        const ytCached = localStorage.getItem(`media_buddy_notebook_words_${userKey}_${currentVideo.youtubeId}`);
-        if (ytCached) {
-          const parsed = JSON.parse(ytCached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter(w => !w.story_id || validStoryIds.has(w.story_id));
         }
       }
     } catch (e) { }
@@ -564,57 +560,74 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   const [exerciseChecking, setExerciseChecking] = useState(false);
   const [showExerciseHint, setShowExerciseHint] = useState(false);
 
-  // Sync added words immediately to state and localStorage
+  // Sync added words immediately to state and localStorage (strictly for current video)
   const saveToNotebookStateAndStorage = useCallback((added_doc) => {
     if (!added_doc) return;
+    const activeVid = currentVideoRef.current || currentVideo;
+    if (!activeVid) return;
+    const validStoryIds = new Set(getVideoStoryIds(activeVid));
+
+    if (!added_doc.story_id && activeVid.youtubeId) {
+      added_doc.story_id = `custom_${activeVid.youtubeId}`;
+    }
+
     setNotebookWords(prev => {
+      const cleanedPrev = prev.filter(w => !w.story_id || validStoryIds.has(w.story_id));
       const origKey = (added_doc.original || "").trim().toLowerCase();
-      const filtered = prev.filter(w => (w.original || "").trim().toLowerCase() !== origKey);
+      const filtered = cleanedPrev.filter(w => (w.original || "").trim().toLowerCase() !== origKey);
       const updated = [added_doc, ...filtered];
       try {
-        const storageKey = getLocalStorageWordsKey(currentVideo);
+        const storageKey = getLocalStorageWordsKey(activeVid);
         localStorage.setItem(storageKey, JSON.stringify(updated));
-        if (currentVideo?.youtubeId) {
+        if (activeVid?.youtubeId) {
           const userKey = user?.email || user?.uid || "guest";
-          localStorage.setItem(`media_buddy_notebook_words_${userKey}_${currentVideo.youtubeId}`, JSON.stringify(updated));
+          localStorage.setItem(`media_buddy_notebook_words_${userKey}_${activeVid.youtubeId}`, JSON.stringify(updated));
         }
       } catch (e) { }
       return updated;
     });
-  }, [currentVideo, user, getLocalStorageWordsKey]);
+  }, [currentVideo, user, getLocalStorageWordsKey, getVideoStoryIds]);
 
-  // Fetch words in vocabulary for this video (syncs with Firestore and local storage)
-  const fetchNotebookWords = useCallback(() => {
-    if (!currentVideo || !user?.token) return;
-    const storageKey = getLocalStorageWordsKey(currentVideo);
-    const storyIds = getVideoStoryIds(currentVideo).slice(0, 30).join(",");
+  // Fetch words in vocabulary strictly for this video (syncs with Firestore and local storage)
+  const fetchNotebookWords = useCallback((targetVideo) => {
+    const video = targetVideo || currentVideoRef.current || currentVideo;
+    if (!video || !user?.token) return;
+    const storageKey = getLocalStorageWordsKey(video);
+    const validStoryIds = new Set(getVideoStoryIds(video));
+    const storyIds = Array.from(validStoryIds).slice(0, 30).join(",");
 
     fetch(`${API_BASE_URL}/api/vocabulary?story_id=${encodeURIComponent(storyIds)}`, {
       headers: { "X-Session-Token": user.token }
     })
       .then(res => res.json())
       .then(data => {
+        // Discard stale response if active video changed
+        if (currentVideoRef.current && currentVideoRef.current.id !== video.id && currentVideoRef.current.youtubeId !== video.youtubeId) {
+          return;
+        }
         if (Array.isArray(data)) {
-          setNotebookWords(prev => {
-            const map = new Map();
-            data.forEach(item => {
-              const k = (item.original || "").trim().toLowerCase();
-              if (k) map.set(k, item);
-            });
-            prev.forEach(item => {
-              const k = (item.original || "").trim().toLowerCase();
-              if (k && !map.has(k)) map.set(k, item);
-            });
-            const merged = Array.from(map.values());
-            try {
-              localStorage.setItem(storageKey, JSON.stringify(merged));
-              if (currentVideo.youtubeId) {
-                const userKey = user?.email || user?.uid || "guest";
-                localStorage.setItem(`media_buddy_notebook_words_${userKey}_${currentVideo.youtubeId}`, JSON.stringify(merged));
-              }
-            } catch (e) { }
-            return merged;
+          // Strictly filter only words that belong to this video's story_id
+          const strictlyThisVideoWords = data.filter(item => {
+            if (!item.story_id) return true;
+            return validStoryIds.has(item.story_id);
           });
+
+          // De-duplicate by original
+          const map = new Map();
+          strictlyThisVideoWords.forEach(item => {
+            const k = (item.original || "").trim().toLowerCase();
+            if (k && !map.has(k)) map.set(k, item);
+          });
+          const list = Array.from(map.values());
+
+          setNotebookWords(list);
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(list));
+            if (video.youtubeId) {
+              const userKey = user?.email || user?.uid || "guest";
+              localStorage.setItem(`media_buddy_notebook_words_${userKey}_${video.youtubeId}`, JSON.stringify(list));
+            }
+          } catch (e) { }
         }
       })
       .catch(err => console.error("Error fetching notebook words:", err));
@@ -626,22 +639,39 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       return;
     }
     const storageKey = getLocalStorageWordsKey(currentVideo);
+    const validStoryIds = new Set(getVideoStoryIds(currentVideo));
+
+    // 1. Immediately reset state to this video's cache (or empty array)
     try {
       const cached = localStorage.getItem(storageKey);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setNotebookWords(parsed);
+        if (Array.isArray(parsed)) {
+          const validCached = parsed.filter(w => !w.story_id || validStoryIds.has(w.story_id));
+          setNotebookWords(validCached);
+        } else {
+          setNotebookWords([]);
         }
+      } else {
+        setNotebookWords([]);
       }
-    } catch (e) { }
+    } catch (e) {
+      setNotebookWords([]);
+    }
 
-    fetchNotebookWords();
+    // Reset exercise state when video switches
+    setExerciseData(null);
+    setExerciseResult(null);
+    setExerciseTranslation("");
+    setShowExerciseHint(false);
 
-    const handleVocabUpdated = () => fetchNotebookWords();
+    // 2. Fetch fresh words from server for this specific video
+    fetchNotebookWords(currentVideo);
+
+    const handleVocabUpdated = () => fetchNotebookWords(currentVideo);
     window.addEventListener("vocabulary-updated", handleVocabUpdated);
     return () => window.removeEventListener("vocabulary-updated", handleVocabUpdated);
-  }, [currentVideo, fetchNotebookWords, getLocalStorageWordsKey]);
+  }, [currentVideo, fetchNotebookWords, getLocalStorageWordsKey, getVideoStoryIds]);
 
   const handleStartExercise = async () => {
     if (notebookWords.length === 0) return;
@@ -1377,6 +1407,11 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     setSelectedSentenceContext("");
     setSegmentTranslation("");
     setIsSegmentSaved(false);
+    setIsSaved(false);
+    setExerciseData(null);
+    setExerciseResult(null);
+    setExerciseTranslation("");
+    setShowExerciseHint(false);
     setVideoDuration(0);
     lastSavedSecondRef.current = -1;
     setTranslationsCache({});
@@ -1905,14 +1940,15 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
   const handleDeleteNotebookWord = async (wordToDelete) => {
     const origKey = (wordToDelete.original || "").trim().toLowerCase();
+    const activeVid = currentVideoRef.current || currentVideo;
     setNotebookWords(prev => {
       const updated = prev.filter(w => (w.original || "").trim().toLowerCase() !== origKey);
       try {
-        const storageKey = getLocalStorageWordsKey(currentVideo);
+        const storageKey = getLocalStorageWordsKey(activeVid);
         localStorage.setItem(storageKey, JSON.stringify(updated));
-        if (currentVideo?.youtubeId) {
+        if (activeVid?.youtubeId) {
           const userKey = user?.email || user?.uid || "guest";
-          localStorage.setItem(`media_buddy_notebook_words_${userKey}_${currentVideo.youtubeId}`, JSON.stringify(updated));
+          localStorage.setItem(`media_buddy_notebook_words_${userKey}_${activeVid.youtubeId}`, JSON.stringify(updated));
         }
       } catch (e) { }
       return updated;
