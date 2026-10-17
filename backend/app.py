@@ -6541,6 +6541,28 @@ try:
 except Exception as e_gcp_init:
     print(f"Google Cloud TTS client init note: {e_gcp_init}", flush=True)
 
+def generate_openai_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
+    if openai_client:
+        try:
+            openai_voice = "onyx"
+            if "Brian" in voice_name or "Marek" in voice_name or "Guy" in voice_name:
+                openai_voice = "onyx"
+            elif "Jenny" in voice_name or "Emma" in voice_name or "Aria" in voice_name or "Zofia" in voice_name:
+                openai_voice = "nova"
+            
+            response = openai_client.audio.speech.create(
+                model="tts-1",
+                voice=openai_voice,
+                input=text_to_speak
+            )
+            data = response.read()
+            if data and len(data) > 100:
+                print(f"OpenAI TTS generated fallback audio ({openai_voice})", flush=True)
+                return data
+        except Exception as e_oa:
+            print(f"OpenAI TTS fallback error: {e_oa}", flush=True)
+    return b""
+
 def generate_gtts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
     try:
         from gtts import gTTS
@@ -6576,7 +6598,11 @@ def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
         except Exception as e_gcp:
             print(f"Google Cloud TTS error: {e_gcp}, falling back...", flush=True)
 
-    return generate_gtts_bytes(text_to_speak, voice_name)
+    gtts_audio = generate_gtts_bytes(text_to_speak, voice_name)
+    if gtts_audio and len(gtts_audio) > 100:
+        return gtts_audio
+
+    return generate_openai_tts_bytes(text_to_speak, voice_name)
 
 async def get_edge_audio_with_retry(text_to_speak, primary_voice="en-US-BrianNeural"):
     # Stały, jednolity lektor w całej aplikacji — nie zmieniamy głosu w trakcie kolejnych zdań!
