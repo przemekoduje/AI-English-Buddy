@@ -669,31 +669,12 @@ class MockOpenAIClient:
     def __init__(self):
         self.chat = MockChat()
 
-# Klient OpenAI / DeepSeek / Gemini
+# Klient Gemini (Wyłączny silnik AI w projekcie Speakling)
 client = None
+gemini_client = None
 openai_client = None
 deepseek_client = None
-gemini_client = None
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-if OPENAI_API_KEY:
-    try:
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        print("Klient OpenAI (wewnętrzny) zainicjalizowany.")
-    except Exception as e_oa:
-        print(f"Błąd inicjalizacji klienta OpenAI: {e_oa}")
-
-if DEEPSEEK_API_KEY:
-    try:
-        deepseek_client = OpenAI(
-            api_key=DEEPSEEK_API_KEY,
-            base_url="https://api.deepseek.com"
-        )
-        print("Klient DeepSeek (wewnętrzny) zainicjalizowany.")
-    except Exception as e_ds:
-        print(f"Błąd inicjalizacji klienta DeepSeek: {e_ds}")
 
 if GEMINI_API_KEY:
     try:
@@ -701,47 +682,22 @@ if GEMINI_API_KEY:
             api_key=GEMINI_API_KEY,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
         )
-        print("Klient Gemini (wewnętrzny) zainicjalizowany.")
+        print("Klient Gemini zainicjalizowany jako wyłączny silnik AI.")
     except Exception as e_gem:
         print(f"Błąd inicjalizacji klienta Gemini: {e_gem}")
 
-# Domyślny dostawca: jeśli GEMINI_API_KEY jest dostępny, preferuj Gemini (gwarantowane kredyty i wysoka wydajność)
-preferred_provider = os.getenv("AI_PROVIDER", "gemini" if GEMINI_API_KEY else "openai").lower()
+preferred_provider = "gemini"
 
-if preferred_provider == "gemini" and gemini_client:
+if gemini_client:
     client = gemini_client
     MODEL_NAME = "gemini-flash-lite-latest"
     API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     API_TOKEN = GEMINI_API_KEY
-    print("Główny klient AI: Gemini (gemini-flash-lite-latest).")
-elif preferred_provider == "deepseek" and deepseek_client:
-    client = deepseek_client
-    MODEL_NAME = "deepseek-chat"
-    API_URL = "https://api.deepseek.com/chat/completions"
-    API_TOKEN = DEEPSEEK_API_KEY
-    print("Główny klient AI: DeepSeek (deepseek-chat).")
-elif OPENAI_API_KEY and openai_client:
-    client = openai_client
-    MODEL_NAME = "gpt-4o-mini"
-    API_URL = "https://api.openai.com/v1/chat/completions"
-    API_TOKEN = OPENAI_API_KEY
-    print("Główny klient AI: OpenAI (gpt-4o-mini).")
-elif DEEPSEEK_API_KEY and deepseek_client:
-    client = deepseek_client
-    MODEL_NAME = "deepseek-chat"
-    API_URL = "https://api.deepseek.com/chat/completions"
-    API_TOKEN = DEEPSEEK_API_KEY
-    print("Główny klient AI: DeepSeek (deepseek-chat).")
-elif gemini_client:
-    client = gemini_client
-    MODEL_NAME = "gemini-flash-lite-latest"
-    API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-    API_TOKEN = GEMINI_API_KEY
-    print("Główny klient AI: Gemini (gemini-flash-lite-latest).")
+    print("Główny klient AI: Google Gemini (gemini-flash-lite-latest).")
 else:
-    print("OSTRZEŻENIE: Brak działających kluczy API. Używam lokalnego mocka AI.")
-    MODEL_NAME = "gpt-4o-mini"
-    API_URL = "https://api.openai.com/v1/chat/completions"
+    print("OSTRZEŻENIE: Brak GEMINI_API_KEY. Używam lokalnego mocka AI.")
+    MODEL_NAME = "gemini-mock"
+    API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     API_TOKEN = ""
     client = MockOpenAIClient()
 
@@ -827,49 +783,17 @@ EXHAUSTED_PROVIDERS = {}
 
 def get_candidate_providers(custom_client=None, custom_model=None, model_tier="cheap"):
     if custom_client:
-        return [("custom", custom_client, custom_model or ("gemini-pro-latest" if model_tier == "advanced" else "gemini-flash-lite-latest"))]
+        return [("custom", custom_client, custom_model or ("gemini-3.5-flash" if model_tier == "advanced" else "gemini-flash-lite-latest"))]
 
-    preferred = os.getenv("AI_PROVIDER", "gemini" if GEMINI_API_KEY else "openai").lower()
-    
     gemini_model = "gemini-3.5-flash" if model_tier == "advanced" else "gemini-flash-lite-latest"
-    openai_model = "gpt-4o" if model_tier == "advanced" else "gpt-4o-mini"
-    deepseek_model = "deepseek-chat"
 
     all_available = []
-    if preferred == "gemini":
-        if gemini_client:
-            all_available.append(("gemini", gemini_client, gemini_model))
-        if openai_client:
-            all_available.append(("openai", openai_client, openai_model))
-        if deepseek_client:
-            all_available.append(("deepseek", deepseek_client, deepseek_model))
-    elif preferred == "deepseek":
-        if deepseek_client:
-            all_available.append(("deepseek", deepseek_client, deepseek_model))
-        if gemini_client:
-            all_available.append(("gemini", gemini_client, gemini_model))
-        if openai_client:
-            all_available.append(("openai", openai_client, openai_model))
-    else:  # openai or other
-        if openai_client:
-            all_available.append(("openai", openai_client, openai_model))
-        if gemini_client:
-            all_available.append(("gemini", gemini_client, gemini_model))
-        if deepseek_client:
-            all_available.append(("deepseek", deepseek_client, deepseek_model))
+    if gemini_client:
+        all_available.append(("gemini", gemini_client, gemini_model))
+    elif client and not isinstance(client, MockOpenAIClient):
+        all_available.append(("gemini", client, gemini_model))
 
-    # Fallback to general client if not already added
-    if client and not isinstance(client, MockOpenAIClient):
-        s_name = 'gemini' if ('generativelanguage' in str(getattr(client, 'base_url', '')).lower()) else ('deepseek' if ('deepseek' in str(type(client)).lower() or 'deepseek' in MODEL_NAME.lower()) else 'openai')
-        if not any(c[0] == s_name for c in all_available):
-            all_available.append((s_name, client, gemini_model if s_name == 'gemini' else (openai_model if s_name == 'openai' else deepseek_model)))
-
-    now = time.time()
-    active = [c for c in all_available if EXHAUSTED_PROVIDERS.get(c[0], 0) < now]
-    if not active:
-        active = all_available
-
-    return active
+    return all_available
 
 
 def track_chat_completion(user_email, feature, messages, response_format=None, custom_client=None, custom_model=None, model_tier="cheap", **kwargs):
@@ -1017,20 +941,6 @@ def transcribe_audio_bytes(audio_bytes, mime_type="audio/webm", user_email=None,
             except Exception as e_gem:
                 print(f"Gemini STT ({g_model}) exception: {e_gem}", flush=True)
 
-    hf_token = os.getenv("HF_API_TOKEN") or os.getenv("HF_TOKEN")
-    if hf_token:
-        try:
-            hf_res = requests.post(
-                "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo",
-                headers={"Authorization": f"Bearer {hf_token}", "Content-Type": mime},
-                data=audio_bytes,
-                timeout=30
-            )
-            if hf_res.ok:
-                return (hf_res.json().get("text", "") or "").strip()
-            print(f"HF Whisper STT error {hf_res.status_code}: {hf_res.text[:300]}", flush=True)
-        except Exception as hf_err:
-            print(f"HF Whisper STT exception: {hf_err}", flush=True)
     return ""
 
 def get_user_from_request():
@@ -6602,7 +6512,7 @@ def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
     if gtts_audio and len(gtts_audio) > 100:
         return gtts_audio
 
-    return generate_openai_tts_bytes(text_to_speak, voice_name)
+    return b""
 
 async def get_edge_audio_with_retry(text_to_speak, primary_voice="en-US-BrianNeural"):
     # Stały, jednolity lektor w całej aplikacji — nie zmieniamy głosu w trakcie kolejnych zdań!
