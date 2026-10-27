@@ -9,8 +9,8 @@ export const getApiBaseUrl = () => {
       return 'http://127.0.0.1:5001';
     }
   }
-  // Produkcja: bezpośrednie połączenie z Cloud Run
-  return 'https://ai-english-buddy-backend-665075210565.europe-west1.run.app';
+  // Produkcja: bezpośrednie połączenie z Cloud Run (Warszawa europe-central2)
+  return 'https://speakling-backend-665075210565.europe-central2.run.app';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
