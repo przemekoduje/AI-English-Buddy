@@ -63,7 +63,14 @@ const Auth = ({ onLoginSuccess }) => {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (parseErr) {
+        if (!response.ok) {
+          data = { error: `Server temporarily unavailable (${response.status}). Please try again in a moment.` };
+        }
+      }
 
       if (response.ok) {
         if (rememberMe) {
@@ -86,7 +93,7 @@ const Auth = ({ onLoginSuccess }) => {
       }
     } catch (err) {
       console.error("Auth error:", err);
-      setError("Cannot connect to server. Please ensure the backend is running.");
+      setError("Cannot connect to server. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
