@@ -28,13 +28,15 @@ if [ -f "portal/index.html" ]; then
   cp portal/index.html frontend/build/index.html
 fi
 
-echo "=== 4. Publikacja połączonej aplikacji na Firebase Hosting ==="
-FIREBASE_PROJECT="${FIREBASE_PROJECT:-speakling-live-temp}"
-npx firebase-tools deploy --only hosting --project "$FIREBASE_PROJECT"
-npx firebase-tools deploy --only hosting --project przemokoduje-online || true
-npx firebase-tools deploy --only hosting --project ai-english-buddy-150e5 || true
+# === 4. Publikacja aplikacji na Firebase Hosting ===
+# Używamy jednego wskazanego projektu Firebase (domyślnie projekt aktywny/zastępczy: speakling-live-temp)
+TARGET_PROJECT="${FIREBASE_PROJECT:-speakling-live-temp}"
+echo "Wdrażanie na projekt Firebase: $TARGET_PROJECT..."
+npx firebase-tools deploy --only hosting --project "$TARGET_PROJECT"
 
 echo "=== WDROŻENIE ZAKOŃCZONE SUKCESEM! ==="
-echo "Portal główny: https://przemokoduje.com/"
-echo "Speakling Desktop: https://przemokoduje.com/speakling"
-echo "Speakling Mobile: https://przemokoduje.com/speakling/mobile/"
+echo "Adres działający (Hosting): https://$TARGET_PROJECT.web.app/speakling"
+echo "Adres mobilny: https://$TARGET_PROJECT.web.app/speakling/mobile/"
+if [ "$TARGET_PROJECT" = "ai-english-buddy-150e5" ]; then
+  echo "Domena główna: https://przemokoduje.com/speakling"
+fi

@@ -36,12 +36,15 @@ if (Test-Path portal/index.html) {
     Copy-Item -Force portal/index.html frontend/build/index.html
 }
 
-Write-Host "=== 4. Publikacja połączonej aplikacji na Firebase Hosting ==="
-$FirebaseProject = if ($env:FIREBASE_PROJECT) { $env:FIREBASE_PROJECT } else { "speakling-live-temp" }
-npx firebase-tools deploy --only hosting --project $FirebaseProject
-npx firebase-tools deploy --only hosting --project przemokoduje-online
-npx firebase-tools deploy --only hosting --project ai-english-buddy-150e5
+# === 4. Publikacja aplikacji na Firebase Hosting ===
+# Używamy jednego wskazanego projektu Firebase (domyślnie projekt aktywny/zastępczy: speakling-live-temp)
+$TargetProject = if ($env:FIREBASE_PROJECT) { $env:FIREBASE_PROJECT } else { "speakling-live-temp" }
+Write-Host "Wdrażanie na projekt Firebase: $TargetProject..." -ForegroundColor Cyan
+npx firebase-tools deploy --only hosting --project $TargetProject
 
-Write-Host "=== WDRUŻENIE ZAKOŃCZONE SUKCESEM! ===" -ForegroundColor Green
-Write-Host "Adres główny (Desktop): https://przemokoduje.com/speakling"
-Write-Host "Adres mobilny (wersja dedykowana): https://przemokoduje.com/speakling/mobile/"
+Write-Host "=== WDROŻENIE ZAKOŃCZONE SUKCESEM! ===" -ForegroundColor Green
+Write-Host "Adres działający (Hosting): https://$TargetProject.web.app/speakling"
+Write-Host "Adres mobilny: https://$TargetProject.web.app/speakling/mobile/"
+if ($TargetProject -eq "ai-english-buddy-150e5") {
+    Write-Host "Domena główna: https://przemokoduje.com/speakling"
+}
