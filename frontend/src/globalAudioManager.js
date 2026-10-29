@@ -73,9 +73,25 @@ const globalAudioManager = (() => {
       }
     },
 
+    /**
+     * Sprawdza czy w tej chwili jakiekolwiek audio jest aktywnie odtwarzane.
+     */
+    isPlaying() {
+      try {
+        if (_currentAudio && !_currentAudio.paused && !_currentAudio.ended) {
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    },
+
     get currentAudio() { return _currentAudio; },
     get currentRequestId() { return _currentRequestId; },
   };
 })();
+
+if (typeof window !== "undefined") {
+  window.__speakling_global_audio = globalAudioManager;
+}
 
 export default globalAudioManager;

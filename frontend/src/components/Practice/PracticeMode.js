@@ -125,8 +125,39 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       if (element) {
         element.scrollIntoView({ behavior: "smooth", block: "center" });
       }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent('speakling-user-active', { detail: { type: 'sentence_change', index: currentIndex } }));
+      }
     }
   }, [currentIndex]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.__speakling_has_active_reading = true;
+      window.dispatchEvent(new CustomEvent('speakling-user-active', { detail: { type: 'practice_opened' } }));
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.__speakling_has_active_reading = false;
+        window.__speakling_is_reading_aloud = false;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const isPlayingOrBusy = Boolean(
+      isSpeaking ||
+      isRecording ||
+      isEvaluating ||
+      (liveChatActive && (chatOrbStatus === "speaking" || chatOrbStatus === "listening" || chatOrbStatus === "thinking" || isChatRecording))
+    );
+    if (typeof window !== "undefined") {
+      window.__speakling_is_reading_aloud = isPlayingOrBusy;
+      if (isPlayingOrBusy) {
+        window.dispatchEvent(new CustomEvent('speakling-user-active', { detail: { type: 'practice_active_task' } }));
+      }
+    }
+  }, [isSpeaking, isRecording, isEvaluating, liveChatActive, chatOrbStatus, isChatRecording]);
 
   const prepareContent = async () => {
     setIsPreparing(true);

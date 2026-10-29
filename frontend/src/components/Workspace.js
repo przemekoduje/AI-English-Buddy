@@ -1087,6 +1087,20 @@ function Workspace({
     }
   }, [activeStoryText]);
 
+  useEffect(() => {
+    window.__speakling_has_active_reading = Boolean(activeStoryText && activeStoryText.trim().length > 30);
+    return () => {
+      window.__speakling_has_active_reading = false;
+    };
+  }, [activeStoryText]);
+
+  useEffect(() => {
+    window.__speakling_is_reading_aloud = Boolean(isSpeaking);
+    return () => {
+      window.__speakling_is_reading_aloud = false;
+    };
+  }, [isSpeaking]);
+
 
   const saveStoryToDb = async (title, text, extra = {}) => {
     if (!user) return null;
@@ -1618,6 +1632,11 @@ function Workspace({
     isPausedRef.current = false;
     setPlaySingle(single);
 
+    if (typeof window !== "undefined") {
+      window.__speakling_is_reading_aloud = true;
+      window.dispatchEvent(new CustomEvent('speakling-user-active', { detail: { type: 'sentence_progress', index } }));
+    }
+
     // Zlicz zdanie czytane przez lektora
     markSentenceAsRead(index);
 
@@ -1717,16 +1736,26 @@ function Workspace({
         currentAudioRef.current.play().catch(() => { });
         setIsPaused(false);
         isPausedRef.current = false;
+        if (typeof window !== "undefined") {
+          window.__speakling_is_reading_aloud = true;
+          window.dispatchEvent(new CustomEvent('speakling-user-active', { detail: { type: 'playback_resume' } }));
+        }
       } else {
         currentAudioRef.current.pause();
         setIsPaused(true);
         isPausedRef.current = true;
+        if (typeof window !== "undefined") {
+          window.__speakling_is_reading_aloud = false;
+        }
       }
     } else if (isSpeakingRef.current) {
       setIsPaused(true);
       isPausedRef.current = true;
       setIsSpeaking(false);
       isSpeakingRef.current = false;
+      if (typeof window !== "undefined") {
+        window.__speakling_is_reading_aloud = false;
+      }
     } else {
       const idx = currentChunkIndexRef.current === -1 || currentChunkIndexRef.current >= textChunks.length ? 0 : currentChunkIndexRef.current;
       speakChunk(idx, false);
@@ -1744,6 +1773,9 @@ function Workspace({
     isSpeakingRef.current = false;
     setIsPaused(false);
     isPausedRef.current = false;
+    if (typeof window !== "undefined") {
+      window.__speakling_is_reading_aloud = false;
+    }
     setCurrentChunkIndex(-1);
     currentChunkIndexRef.current = -1;
     setPlaySingle(false);

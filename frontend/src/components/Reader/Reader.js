@@ -54,6 +54,31 @@ const Reader = ({
   const chatHistoryEndRef = useRef(null);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.__speakling_has_active_reading = true;
+      window.dispatchEvent(new CustomEvent('speakling-user-active', { detail: { type: 'reader_open' } }));
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.__speakling_has_active_reading = false;
+        window.__speakling_reader_chat_active = false;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const isLiveChatting = Boolean(
+      liveChatActive && (chatOrbStatus === "speaking" || chatOrbStatus === "listening" || chatOrbStatus === "thinking" || isChatRecording)
+    );
+    if (typeof window !== "undefined") {
+      window.__speakling_reader_chat_active = isLiveChatting;
+      if (isLiveChatting) {
+        window.dispatchEvent(new CustomEvent('speakling-user-active', { detail: { type: 'reader_chat_active' } }));
+      }
+    }
+  }, [liveChatActive, chatOrbStatus, isChatRecording]);
+
+  useEffect(() => {
     if (liveChatActive && liveChatStageRef.current) {
       liveChatStageRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }

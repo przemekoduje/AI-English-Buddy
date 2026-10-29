@@ -540,6 +540,29 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
     liveStatusRef.current = liveStatus;
   }, [liveStatus]);
 
+  useEffect(() => {
+    const isLiveVoiceActive = Boolean(
+      isChatActive && (
+        (liveStatus !== 'inactive' && liveStatus !== 'error') ||
+        isClassicRecording ||
+        isClassicProcessing ||
+        isClassicBotSpeaking ||
+        classicUserSpeakingState
+      )
+    );
+    if (typeof window !== "undefined") {
+      window.__speakling_live_chat_active = isLiveVoiceActive;
+      if (isLiveVoiceActive) {
+        window.dispatchEvent(new CustomEvent('speakling-user-active', { detail: { type: 'live_chat_active' } }));
+      }
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.__speakling_live_chat_active = false;
+      }
+    };
+  }, [isChatActive, liveStatus, isClassicRecording, isClassicProcessing, isClassicBotSpeaking, classicUserSpeakingState]);
+
   // Classic Mode Refs
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);

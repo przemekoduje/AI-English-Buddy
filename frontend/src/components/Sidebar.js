@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import logoImg from '../assets/logo.png';
 import { API_BASE_URL } from '../config';
+import globalAudioManager from '../globalAudioManager';
 import './Sidebar.css';
 
 const DAILY_GOAL_MINUTES = 20;
@@ -75,38 +76,88 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
       lastActivityRef.current = Date.now();
     };
 
-    const INACTIVITY_TIMEOUT_SECONDS = 8;
-
     const isLearningMediaActive = () => {
-      // 1. Sprawdź czy trwa odtwarzanie wideo w Media Buddy (YouTube)
+      // 1. Sprawdź czy trwa odtwarzanie wideo w Media Buddy (YouTube lub wideo własne)
       if (window.__speakling_is_media_playing || document.body?.dataset?.mediaPlaying === "true") {
         return true;
       }
 
-      // 2. Sprawdź czy trwa odtwarzanie nagrania lektora lub wideo edukacyjnego
+      // 2. Czytanie opowiadania na głos przez lektora (Workspace / Reader)
+      if (window.__speakling_is_reading_aloud) {
+        return true;
+      }
+
+      // 3. Aktywna rozmowa głosowa Chat Live (Dashboard / Gemini Live / Classic)
+      if (window.__speakling_live_chat_active) {
+        return true;
+      }
+
+      // 4. Czytanie dialogu w Reader (chat audio)
+      if (window.__speakling_reader_chat_active) {
+        return true;
+      }
+
+      // 5. Global Audio Manager (aktywne odtwarzanie lektora w pamięci)
+      if (globalAudioManager && typeof globalAudioManager.isPlaying === 'function' && globalAudioManager.isPlaying()) {
+        return true;
+      }
+      if (typeof window !== 'undefined' && window.__speakling_global_audio?.isPlaying?.()) {
+        return true;
+      }
+
+      // 6. Web Speech API (SpeechSynthesis)
+      if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
+        return true;
+      }
+
+      // 7. Dowolne elementy HTML5 audio lub video w DOM
       const mediaList = document.querySelectorAll('audio, video');
       for (const m of mediaList) {
         if (!m.paused && !m.ended && m.currentTime > 0) return true;
       }
+
       return false;
     };
 
+    // Nasłuchiwanie wszelkich mikro-interakcji użytkownika (w tym scroll wewnątrz kontenerów, kółko myszy, dotyk i powrót na kartę)
+    const handleVisibility = () => {
+      if (!document.hidden) markActivity();
+    };
+
     window.addEventListener('mousemove', markActivity, { passive: true });
+    window.addEventListener('pointermove', markActivity, { passive: true });
+    window.addEventListener('pointerdown', markActivity, { passive: true });
     window.addEventListener('keydown', markActivity, { passive: true });
     window.addEventListener('click', markActivity, { passive: true });
     window.addEventListener('touchstart', markActivity, { passive: true });
-    window.addEventListener('scroll', markActivity, { passive: true });
+    window.addEventListener('touchmove', markActivity, { passive: true });
+    window.addEventListener('wheel', markActivity, { passive: true });
+    window.addEventListener('focus', markActivity, { passive: true });
+    window.addEventListener('speakling-user-active', markActivity, { passive: true });
     document.addEventListener('selectionchange', markActivity, { passive: true });
+    document.addEventListener('scroll', markActivity, { capture: true, passive: true });
+    document.addEventListener('visibilitychange', handleVisibility, { passive: true });
 
     let tickCounter = 0;
     const interval = setInterval(() => {
       const isHidden = document.hidden;
       const secSinceLastAction = Math.floor((Date.now() - lastActivityRef.current) / 1000);
       const isMediaPlaying = isLearningMediaActive();
-      const hasRecentInteraction = secSinceLastAction <= INACTIVITY_TIMEOUT_SECONDS;
+
+      // Ustalenie progu bezczynności zależnie od kontekstu nauki:
+      // - Podczas czytania tekstu lub ćwiczeń z opowiadaniem: 180 sekund (3 minuty)
+      // - W innych widokach edukacyjnych (słownik, media, dashboard): 120 sekund (2 minuty)
+      // - W widokach pomocniczych/menu: 45 sekund
+      const isStudyView = ['workspace', 'media', 'notebook', 'stories', 'subtitle-studio', 'dashboard'].includes(currentView);
+      const hasActiveStory = Boolean(
+        window.__speakling_has_active_reading || 
+        document.querySelector('.story-reading-card, .reader-container, .workspace-story-box, .story-card, .workspace-container')
+      );
+      const currentInactivityThreshold = hasActiveStory ? 180 : (isStudyView ? 120 : 45);
+      const hasRecentInteraction = secSinceLastAction <= currentInactivityThreshold;
 
       if (isEffectiveAdmin) {
-        if (isHidden) {
+        if (isHidden && !isMediaPlaying) {
           setAdminTickingInfo({
             isTicking: false,
             status: 'hidden',
@@ -116,29 +167,30 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
           setAdminTickingInfo({
             isTicking: true,
             status: 'media',
-            reason: 'Naliczanie: wideo/audio włączone'
+            reason: isHidden ? 'Naliczanie: słuchanie w tle' : 'Naliczanie: lektor / audio / wideo'
           });
         } else if (hasRecentInteraction) {
           setAdminTickingInfo({
             isTicking: true,
             status: 'active',
-            reason: `Naliczanie: interakcja (${secSinceLastAction}s / max 8s)`
+            reason: hasActiveStory
+              ? `Naliczanie: czytanie (${secSinceLastAction}s / max ${currentInactivityThreshold}s)`
+              : `Naliczanie: aktywność (${secSinceLastAction}s / max ${currentInactivityThreshold}s)`
           });
         } else {
           setAdminTickingInfo({
             isTicking: false,
             status: 'idle',
-            reason: `Wstrzymano: brak aktywności (${secSinceLastAction}s > 8s)`
+            reason: `Wstrzymano: brak aktywności (${secSinceLastAction}s > ${currentInactivityThreshold}s)`
           });
         }
       }
 
-      // 1. Karta musi być aktywna/widoczna
-      if (isHidden) return;
+      // 1. Jeśli karta w tle, liczymy TYLKO gdy użytkownik aktywnie słucha lektora lub wideo w tle
+      if (isHidden && !isMediaPlaying) return;
 
-      // 2. Sprawdzamy czy użytkownik faktycznie wykonuje zajęcia lub słucha/ogląda materiał
+      // 2. Jeśli karta jest widoczna: naliczaj gdy jest aktywność LUB gdy odtwarzana jest treść
       if (!hasRecentInteraction && !isMediaPlaying) {
-        // Brak realnych działań na stronie i brak odtwarzanego materiału - nie naliczaj bezczynności
         return;
       }
 
@@ -175,17 +227,24 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
     return () => {
       clearInterval(interval);
       window.removeEventListener('mousemove', markActivity);
+      window.removeEventListener('pointermove', markActivity);
+      window.removeEventListener('pointerdown', markActivity);
       window.removeEventListener('keydown', markActivity);
       window.removeEventListener('click', markActivity);
       window.removeEventListener('touchstart', markActivity);
-      window.removeEventListener('scroll', markActivity);
+      window.removeEventListener('touchmove', markActivity);
+      window.removeEventListener('wheel', markActivity);
+      window.removeEventListener('focus', markActivity);
+      window.removeEventListener('speakling-user-active', markActivity);
       document.removeEventListener('selectionchange', markActivity);
+      document.removeEventListener('scroll', markActivity, { capture: true });
+      document.removeEventListener('visibilitychange', handleVisibility);
 
       try {
         localStorage.setItem(storageKey, String(practiceSecondsRef.current));
       } catch (e) {}
     };
-  }, [user?.token, storageKey, isEffectiveAdmin]);
+  }, [user?.token, storageKey, isEffectiveAdmin, currentView]);
 
   // Wyświetlanie z dokładnością do pełnej 1 minuty
   const fullPracticeMinutes = Math.floor(practiceSeconds / 60);
