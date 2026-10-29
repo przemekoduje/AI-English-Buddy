@@ -1777,43 +1777,6 @@
   }
 }
 
-/* ── FLOATING CHAT LIVE BUTTON ── */
-.chat-live-floating-btn {
-  position: fixed;
-  bottom: var(--fab-inset, 24px);
-  right: var(--fab-inset, 24px);
-  z-index: 100;
-  background: var(--ai-gradient, linear-gradient(135deg, #1a73e8 0%, #a953ff 100%));
-  color: #ffffff;
-  border: none;
-  border-radius: var(--btn-radius, 9999px);
-  min-height: var(--btn-height-comfortable, 48px);
-  padding: 0 1.5rem;
-  font-family: var(--font-main);
-  font-weight: 600;
-  font-size: var(--text-button, 13px);
-  line-height: 140%;
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(26, 115, 232, 0.35);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.chat-live-floating-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 28px rgba(26, 115, 232, 0.45);
-}
-
-.chat-live-floating-btn:focus-visible {
-  outline: var(--focus-ring, 2px solid #202124);
-  outline-offset: var(--focus-offset, 3px);
-}
-
-.chat-live-floating-btn:active {
-  transform: translateY(0);
-}
 
 .story-copied-toast {
   position: fixed;

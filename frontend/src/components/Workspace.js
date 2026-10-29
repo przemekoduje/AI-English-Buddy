@@ -3774,36 +3774,6 @@ function Workspace({
             </aside>
           </div>
 
-          {/* Floating Chat Live Button */}
-          <button
-            className="chat-live-floating-btn"
-            onClick={() => {
-              if (isMasteryLocked) {
-                if (onOpenPaywall) {
-                  onOpenPaywall({ feature: 'mastery' });
-                  return;
-                }
-              }
-              handleStop();
-              setShowPracticeMode(true);
-            }}
-          >
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3v18M8 8v8M4 11v2M16 6v12M20 10v4" />
-            </svg>
-            <span>Chat Live</span>
-            {isMasteryLocked && (
-              <span style={{
-                marginLeft: '6px',
-                background: 'rgba(255,255,255,0.25)',
-                padding: '2px 6px',
-                borderRadius: '4px',
-                fontSize: '10px',
-                fontWeight: 800,
-                letterSpacing: '0.05em'
-              }}>PRO</span>
-            )}
-          </button>
 
           {storyCopiedToast && (
             <div className="story-copied-toast">

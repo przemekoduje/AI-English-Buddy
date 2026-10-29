@@ -1194,24 +1194,6 @@ const SavedStories = ({ user, subscription, onOpenPaywall, onSelectStory, onStar
         Showing {filteredStories.length} {filteredStories.length === 1 ? "story" : "stories"} · Your reading progress is saved for your next visit.
       </footer>
 
-      {/* Floating Chat Live FAB */}
-      {onStartLiveChat && (
-        <div className="floating-chat-fab-wrapper">
-          <button
-            type="button"
-            className="floating-chat-fab"
-            onClick={() => onStartLiveChat(null)}
-            title="Start Live Voice Practice"
-          >
-            <div className="fab-sound-bars">
-              <span className="fab-bar bar-1"></span>
-              <span className="fab-bar bar-2"></span>
-              <span className="fab-bar bar-3"></span>
-            </div>
-            <span>Chat Live</span>
-          </button>
-        </div>
-      )}
 
       {/* Modal for Prompt Details */}
       {selectedPromptStory && (
