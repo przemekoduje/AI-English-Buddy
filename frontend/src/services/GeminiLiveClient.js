@@ -343,32 +343,53 @@ export class GeminiLiveClient {
    */
   isEchoSuppressionActive() {
     if (this.isBotCurrentlySpeaking) return true;
-    if (Date.now() - (this.lastBotSpeakingEndTime || 0) < 200) return true;
+    if (Date.now() - (this.lastBotSpeakingEndTime || 0) < 500) return true;
     return false;
   }
 
   /**
-   * Sprawdza czy dany tekst z SpeechRecognition jest echem ostatnich słów wypowiedzianych przez lektora
+   * Sprawdza czy dany tekst z SpeechRecognition jest echem słów wypowiedzianych przez lektora przez głośniki
    */
   isMatchingRecentBotText(userText) {
-    if (!this.isEchoSuppressionActive()) return false;
-    if (!userText || this.recentBotPhrases.length === 0) return false;
+    if (!userText) return false;
     const cleanUser = userText.toLowerCase().replace(/[^a-z0-9\s]/gi, '').trim();
-    if (!cleanUser || cleanUser.length < 5) return false;
+    if (!cleanUser || cleanUser.length < 4) return false;
 
-    for (const phrase of this.recentBotPhrases) {
+    // Zbieramy frazy lektora: bieżącą oraz ostatnie
+    const candidates = [];
+    if (this.currentBotTurnText && this.currentBotTurnText.trim()) {
+      candidates.push(this.currentBotTurnText.trim());
+    }
+    if (this.recentBotPhrases && this.recentBotPhrases.length > 0) {
+      candidates.push(...this.recentBotPhrases);
+    }
+    if (candidates.length === 0) return false;
+
+    const userWords = cleanUser.split(/\s+/).filter(w => w.length > 2);
+    if (userWords.length === 0) return false;
+
+    for (const phrase of candidates) {
       const cleanBot = phrase.toLowerCase().replace(/[^a-z0-9\s]/gi, '').trim();
-      if (cleanUser.length >= 15 && cleanBot.includes(cleanUser)) {
+      if (!cleanBot) continue;
+
+      // 1. Jeśli wypowiedź ucznia zawiera się w mowie bota (np. mikrofon wychwycił fragment zdania z głośnika)
+      if (cleanUser.length >= 10 && cleanBot.includes(cleanUser)) {
         return true;
       }
-      const userWords = cleanUser.split(/\s+/).filter(w => w.length > 2);
-      if (userWords.length >= 3) {
+
+      // 2. Jeśli mowa bota zawiera się w wypowiedzi (np. całe zdanie lektora wpadło do mikrofonu)
+      if (cleanBot.length >= 10 && cleanUser.includes(cleanBot)) {
+        return true;
+      }
+
+      // 3. Pokrycie słów: jeśli większość słów (>= 60%) to słowa z wypowiedzi lektora
+      if (userWords.length >= 2) {
         const botWords = new Set(cleanBot.split(/\s+/));
         let matchCount = 0;
         for (const w of userWords) {
           if (botWords.has(w)) matchCount++;
         }
-        if (matchCount / userWords.length >= 0.85) {
+        if (matchCount / userWords.length >= 0.6) {
           return true;
         }
       }
@@ -482,6 +503,12 @@ export class GeminiLiveClient {
         isFinal: true
       });
     }
+    // Natychmiast po wysłaniu sfinalizowanej tury użytkownika, zerujemy stan tury:
+    this.currentUserTurnText = '';
+    this.lastUserTranscript = '';
+    this.savedTurnPrefixText = '';
+    this.hasServerUserTranscription = false;
+    this.userTurnStartIndex = this.lastSpeechResultLength || 0;
   }
 
   resetUserTurnIndex() {
@@ -541,14 +568,10 @@ export class GeminiLiveClient {
           }
 
           let sessionText = '';
-          let hasFinal = false;
 
           const startIdx = Math.min(this.userTurnStartIndex || 0, event.results.length);
           for (let i = startIdx; i < event.results.length; ++i) {
             const res = event.results[i];
-            if (res.isFinal) {
-              hasFinal = true;
-            }
             if (res[0] && res[0].transcript) {
               sessionText += res[0].transcript + ' ';
             }
@@ -574,23 +597,12 @@ export class GeminiLiveClient {
             return;
           }
 
-          let fullText = combined;
-          // Zabezpieczenie przed ucięciem: jeśli dotychczasowy tekst był dłuższy,
-          // a nowy combined nagle stał się pojedynczym słowem końcowym:
-          if (this.lastUserTranscript && this.lastUserTranscript.length > combined.length) {
-            if (this.lastUserTranscript.toLowerCase().includes(combined.toLowerCase())) {
-              fullText = this.lastUserTranscript;
-            } else {
-              fullText = `${this.lastUserTranscript} ${combined}`.replace(/\s+/g, ' ').trim();
-            }
-          }
-
-          if (fullText !== this.lastUserTranscript) {
-            this.lastUserTranscript = fullText;
+          if (combined !== this.lastUserTranscript) {
+            this.lastUserTranscript = combined;
             this.onTranscript({
               sender: 'user',
-              text: fullText,
-              isFinal: hasFinal
+              text: combined,
+              isFinal: false
             });
           }
         };
@@ -737,7 +749,7 @@ export class GeminiLiveClient {
           this.onTranscript({
             sender: 'user',
             text: this.currentUserTurnText,
-            isFinal: !!(message.serverContent.inputTranscription || message.serverContent.input_transcription)
+            isFinal: false
           });
         }
       }
