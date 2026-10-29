@@ -442,31 +442,24 @@ function Workspace({
 
   const loadVocabulary = useCallback(async () => {
     if (!user) return;
-    if (!currentStoryId) {
-      setNotebookWords([]);
-      return;
-    }
+    const activeStoryKey = currentStoryId || "demo_default";
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary?story_id=${currentStoryId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary?story_id=${encodeURIComponent(activeStoryKey)}`, {
         headers: { "X-Session-Token": user.token }
       });
       if (response.ok) {
         const data = await response.json();
-        setNotebookWords(Array.isArray(data) ? data : []);
-      } else {
-        setNotebookWords([]);
+        if (Array.isArray(data)) {
+          setNotebookWords(data);
+        }
       }
     } catch (err) {
       console.error("Błąd podczas ładowania słownika:", err);
-      setNotebookWords([]);
     }
   }, [user, currentStoryId]);
 
   useEffect(() => {
     setDismissedStoryWords(new Set());
-    if (!currentStoryId) {
-      setNotebookWords([]);
-    }
   }, [currentStoryId, generatedText]);
 
   useEffect(() => {
@@ -1889,10 +1882,16 @@ function Workspace({
         if (scrollArea) scrollArea.scrollTo({ top: 0, behavior: "smooth" });
       }, 100);
       try {
+        const isPhrase = word.trim().split(/\s+/).length > 1;
         await fetch(`${API_BASE_URL}/api/vocabulary`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Session-Token": user.token },
-          body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
+          headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
+          body: JSON.stringify({
+            ...newEntry,
+            story_id: currentStoryId || "demo_default",
+            item_type: isPhrase ? "phrase" : "word",
+            chunk_type: isPhrase ? "Fraza" : ""
+          })
         });
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } catch (err) {
@@ -2023,13 +2022,19 @@ function Workspace({
       }
 
       try {
+        const isPhrase = translationContent.original.trim().split(/\s+/).length > 1;
         await fetch(`${API_BASE_URL}/api/vocabulary`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Session-Token": user.token
+            "X-Session-Token": user?.token || ""
           },
-          body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
+          body: JSON.stringify({
+            ...newEntry,
+            story_id: currentStoryId || "demo_default",
+            item_type: isPhrase ? "phrase" : "word",
+            chunk_type: isPhrase ? "Fraza" : ""
+          })
         });
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } catch (err) {
@@ -2052,10 +2057,11 @@ function Workspace({
     ]);
     const textToTranslate = selectedText;
     const preTranslated = contextMenuTranslation;
+    const isPhrase = textToTranslate.trim().split(/\s+/).length > 1;
     setMenuVisible(false);
 
     if (preTranslated && preTranslated !== "Brak tłumaczenia" && preTranslated !== "Błąd połączenia") {
-      const newEntry = { original: textToTranslate, translated: preTranslated };
+      const newEntry = { original: textToTranslate, translated: preTranslated, item_type: isPhrase ? "phrase" : "word" };
       setNotebookWords(prev => {
         if (!prev.some(e => e.original === newEntry.original)) {
           return [newEntry, ...prev];
@@ -2071,9 +2077,15 @@ function Workspace({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Session-Token": user.token
+            "X-Session-Token": user?.token || ""
           },
-          body: JSON.stringify({ original: textToTranslate, translated: preTranslated, story_id: currentStoryId })
+          body: JSON.stringify({
+            original: textToTranslate,
+            translated: preTranslated,
+            story_id: currentStoryId || "demo_default",
+            item_type: isPhrase ? "phrase" : "word",
+            chunk_type: isPhrase ? "Fraza" : ""
+          })
         });
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } catch (err) {
@@ -2083,7 +2095,7 @@ function Workspace({
     }
 
     // Dodanie optymistyczne z komunikatem oczekiwania
-    const tempEntry = { original: textToTranslate, translated: "Tłumaczenie..." };
+    const tempEntry = { original: textToTranslate, translated: "Tłumaczenie...", item_type: isPhrase ? "phrase" : "word" };
     setNotebookWords(prev => {
       if (!prev.some(e => e.original === tempEntry.original)) {
         return [tempEntry, ...prev];
@@ -2104,7 +2116,7 @@ function Workspace({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Session-Token": user.token
+          "X-Session-Token": user?.token || ""
         },
         body: JSON.stringify({ text: textToTranslate }),
       });
@@ -2122,7 +2134,7 @@ function Workspace({
         setNotebookWords(prev =>
           prev.map(item =>
             item.original === textToTranslate
-              ? { ...item, translated: data.translation }
+              ? { ...item, translated: data.translation, item_type: isPhrase ? "phrase" : "word" }
               : item
           )
         );
@@ -2132,9 +2144,15 @@ function Workspace({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Session-Token": user.token
+            "X-Session-Token": user?.token || ""
           },
-          body: JSON.stringify({ original: textToTranslate, translated: data.translation, story_id: currentStoryId })
+          body: JSON.stringify({
+            original: textToTranslate,
+            translated: data.translation,
+            story_id: currentStoryId || "demo_default",
+            item_type: isPhrase ? "phrase" : "word",
+            chunk_type: isPhrase ? "Fraza" : ""
+          })
         });
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } else {
@@ -2221,11 +2239,11 @@ function Workspace({
   const handleDeleteWord = async (wordToDelete) => {
     setNotebookWords(prev => prev.filter(w => w.original !== wordToDelete));
     try {
-      const url = `${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordToDelete)}` +
-        (currentStoryId ? `?story_id=${currentStoryId}` : "");
+      const activeStoryKey = currentStoryId || "demo_default";
+      const url = `${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordToDelete)}?story_id=${encodeURIComponent(activeStoryKey)}`;
       await fetch(url, {
         method: "DELETE",
-        headers: { "X-Session-Token": user.token }
+        headers: { "X-Session-Token": user?.token || "" }
       });
       window.dispatchEvent(new CustomEvent("vocabulary-updated"));
     } catch (err) {
@@ -2260,10 +2278,10 @@ function Workspace({
         original: clean,
         translated: rawTranslation || meta.pl || (isPhrase ? "zapisana fraza" : "zapisane słówko"),
         created_at: new Date().toISOString(),
-        story_id: currentStoryId || undefined,
+        story_id: currentStoryId || "demo_default",
         context_sentence: typeof wordItem === 'object' ? (wordItem.sentence || "") : "",
         item_type: isPhrase ? "phrase" : "word",
-        chunk_type: typeof wordItem === 'object' ? (wordItem.pos || wordItem.chunk_type || "") : ""
+        chunk_type: typeof wordItem === 'object' ? (wordItem.pos || wordItem.chunk_type || (isPhrase ? "Fraza" : "")) : (isPhrase ? "Fraza" : "")
       };
       setNotebookWords(prev => [newEntry, ...prev.filter(w => (w.original || w.word) !== clean)]);
       try {

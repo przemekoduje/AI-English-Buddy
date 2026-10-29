@@ -5122,36 +5122,46 @@ def add_vocabulary():
     if not original or not translated:
         return jsonify({"error": "Wyrażenie oryginalne i tłumaczenie są wymagane"}), 400
 
-    # Sprowadź do formy podstawowej za pomocą AI (tylko dla pojedynczych słów lub krótkich fraz, max 3 słowa)
-    if len(original.split()) <= 3:
+    # Sprowadź do formy podstawowej za pomocą AI TYLKO pojedyncze słówka (NIGDY frazy/wyrażenia!)
+    # Jeśli użytkownik zapisuje wyrażenie (phrase) lub tekst składa się z wielu słów, zachowaj dokładnie wybraną frazę.
+    if item_type == 'word' and len(original.split()) == 1:
         original, translated = get_base_form(original, translated, user_email)
 
     try:
-        # Sprawdź duplikaty w ramach tej samej historii
-        query = db.collection('vocabulary').where('user_email', '==', user_email).where('original', '==', original)
+        # Sprawdź duplikaty w ramach tej samej historii (case-insensitive)
+        query = db.collection('vocabulary').where('user_email', '==', user_email)
         if story_id:
             query = query.where('story_id', '==', story_id)
-        existing = query.limit(1).get()
+        existing_docs = query.stream()
+        orig_lower = original.strip().lower()
         
-        for doc in existing:
+        for doc in existing_docs:
             doc_data = doc.to_dict()
-            updates = {}
-            if doc_data.get('translated') != translated:
-                updates['translated'] = translated
-                doc_data['translated'] = translated
-            if context_sentence and doc_data.get('context_sentence') != context_sentence:
-                updates['context_sentence'] = context_sentence
-                doc_data['context_sentence'] = context_sentence
-            if item_type and doc_data.get('item_type') != item_type:
-                updates['item_type'] = item_type
-                doc_data['item_type'] = item_type
-            if chunk_type and doc_data.get('chunk_type') != chunk_type:
-                updates['chunk_type'] = chunk_type
-                doc_data['chunk_type'] = chunk_type
-            if updates:
-                db.collection('vocabulary').document(doc.id).update(updates)
-            doc_data['id'] = doc.id
-            return jsonify(doc_data), 200
+            if (doc_data.get('original') or '').strip().lower() == orig_lower:
+                updates = {}
+                if doc_data.get('translated') != translated:
+                    updates['translated'] = translated
+                    doc_data['translated'] = translated
+                if context_sentence and doc_data.get('context_sentence') != context_sentence:
+                    updates['context_sentence'] = context_sentence
+                    doc_data['context_sentence'] = context_sentence
+                if item_type and doc_data.get('item_type') != item_type:
+                    updates['item_type'] = item_type
+                    doc_data['item_type'] = item_type
+                if chunk_type and doc_data.get('chunk_type') != chunk_type:
+                    updates['chunk_type'] = chunk_type
+                    doc_data['chunk_type'] = chunk_type
+                if updates:
+                    db.collection('vocabulary').document(doc.id).update(updates)
+                doc_data['id'] = doc.id
+                if 'timestamp' in doc_data and doc_data['timestamp']:
+                    if hasattr(doc_data['timestamp'], 'isoformat'):
+                        doc_data['timestamp'] = doc_data['timestamp'].isoformat()
+                    else:
+                        doc_data['timestamp'] = str(doc_data['timestamp'])
+                else:
+                    doc_data['timestamp'] = datetime.utcnow().isoformat()
+                return jsonify(doc_data), 200
 
         new_entry = {
             'user_email': user_email,
@@ -5164,9 +5174,18 @@ def add_vocabulary():
             'timestamp': firestore.SERVER_TIMESTAMP
         }
         doc_ref = db.collection('vocabulary').add(new_entry)
-        added_doc = doc_ref[1].get()
-        added_data = added_doc.to_dict()
-        added_data['id'] = added_doc.id
+        added_id = doc_ref[1].id
+        added_data = {
+            'id': added_id,
+            'user_email': user_email,
+            'original': original,
+            'translated': translated,
+            'story_id': story_id,
+            'context_sentence': context_sentence,
+            'item_type': item_type,
+            'chunk_type': chunk_type,
+            'timestamp': datetime.utcnow().isoformat()
+        }
         return jsonify(added_data), 201
     except Exception as e:
         return jsonify({"error": f"Błąd podczas dodawania do słownika: {e}"}), 500

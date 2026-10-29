@@ -55,7 +55,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState("all"); // all, A1, A2, B1, B2, C1, C2
   const [topicFilter, setTopicFilter] = useState("all"); // all, Business, Travel, Daily Life, Tech, Health, General
-  const [dateFilter, setDateFilter] = useState("this_week"); // all, this_week, today, this_month
+  const [dateFilter, setDateFilter] = useState("all"); // all, this_week, today, this_month
   const [dueOnlyFilter, setDueOnlyFilter] = useState(false);
 
   // Pagination

@@ -1777,7 +1777,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           body: JSON.stringify({
             original: seg.text,
             translated: translationToSave,
-            story_id: targetStoryId
+            story_id: targetStoryId,
+            item_type: "phrase",
+            chunk_type: "Fraza"
           })
         });
         if (response.ok) {
@@ -1804,7 +1806,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         body: JSON.stringify({
           original: segment.text,
           translated: trans,
-          story_id: targetStoryId
+          story_id: targetStoryId,
+          item_type: "phrase",
+          chunk_type: "Fraza"
         })
       });
       if (response.ok) {
