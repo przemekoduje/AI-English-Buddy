@@ -626,7 +626,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
             // Also keep any words currently in prev that strictly belong to this video
             prev.forEach(item => {
-              if (item && item.story_id && validStoryIds.has(item.story_id)) {
+              if (item && (!item.story_id || validStoryIds.has(item.story_id))) {
                 const k = (item.original || "").trim().toLowerCase();
                 if (k && !map.has(k)) map.set(k, item);
               }

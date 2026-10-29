@@ -287,8 +287,16 @@ function Workspace({
   const voices = PREMIUM_VOICES;
   const selectedVoiceURI = selectedVoice || 'en-US-BrianNeural';
   const [speechRate, setSpeechRate] = useState(1.0);
-  const [speechPitch, setSpeechPitch] = useState(1);
-  const [notebookWords, setNotebookWords] = useState([]);
+  const [notebookWords, setNotebookWords] = useState(() => {
+    try {
+      const activeKey = currentStoryId || "demo_default";
+      const userKey = user?.email || user?.uid || "guest";
+      const cached = localStorage.getItem(`buddy_story_notebook_words_${userKey}_${activeKey}`);
+      return cached ? JSON.parse(cached) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [selectedText, setSelectedText] = useState("");
@@ -441,22 +449,81 @@ function Workspace({
   };
 
   const loadVocabulary = useCallback(async () => {
-    if (!user) return;
     const activeStoryKey = currentStoryId || "demo_default";
+    const userKey = user?.email || user?.uid || "guest";
+    const storageKey = `buddy_story_notebook_words_${userKey}_${activeStoryKey}`;
+
+    // 1. Synchronize from local storage first (instant responsiveness)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary?story_id=${encodeURIComponent(activeStoryKey)}`, {
+      const cached = localStorage.getItem(storageKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setNotebookWords(prev => {
+            const map = new Map();
+            parsed.forEach(item => {
+              const k = (item.original || item.word || "").trim().toLowerCase();
+              if (k && !map.has(k)) map.set(k, item);
+            });
+            prev.forEach(item => {
+              const k = (item.original || item.word || "").trim().toLowerCase();
+              if (k && !map.has(k)) map.set(k, item);
+            });
+            return Array.from(map.values());
+          });
+        }
+      }
+    } catch (e) {}
+
+    if (!user?.token) return;
+
+    // 2. Fetch from server and merge so optimistic words/phrases are never dropped
+    try {
+      const idsToFetch = [activeStoryKey];
+      if (activeStoryKey !== "demo_default") {
+        idsToFetch.push("demo_default");
+      }
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary?story_id=${encodeURIComponent(idsToFetch.join(","))}`, {
         headers: { "X-Session-Token": user.token }
       });
       if (response.ok) {
         const data = await response.json();
         if (Array.isArray(data)) {
-          setNotebookWords(data);
+          setNotebookWords(prev => {
+            const map = new Map();
+            // Server items
+            data.forEach(item => {
+              const k = (item.original || item.word || "").trim().toLowerCase();
+              if (k && !map.has(k)) map.set(k, item);
+            });
+            // Merge with local items so newly added words are never wiped out
+            prev.forEach(item => {
+              const k = (item.original || item.word || "").trim().toLowerCase();
+              if (k && !map.has(k)) map.set(k, item);
+            });
+            const merged = Array.from(map.values());
+            try {
+              localStorage.setItem(storageKey, JSON.stringify(merged));
+            } catch (e) {}
+            return merged;
+          });
         }
       }
     } catch (err) {
       console.error("Błąd podczas ładowania słownika:", err);
     }
   }, [user, currentStoryId]);
+
+  useEffect(() => {
+    const activeKey = currentStoryId || "demo_default";
+    const userKey = user?.email || user?.uid || "guest";
+    const storageKey = `buddy_story_notebook_words_${userKey}_${activeKey}`;
+    try {
+      if (notebookWords && notebookWords.length > 0) {
+        localStorage.setItem(storageKey, JSON.stringify(notebookWords));
+      }
+    } catch (e) {}
+  }, [notebookWords, currentStoryId, user]);
 
   useEffect(() => {
     setDismissedStoryWords(new Set());
@@ -824,7 +891,7 @@ function Workspace({
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "X-Session-Token": user.token
+              "X-Session-Token": user?.token || ""
             },
             body: JSON.stringify({ text: selectedText }),
           });
@@ -843,7 +910,7 @@ function Workspace({
       };
       fetchTranslation();
     }
-  }, [menuVisible, selectedText, user.token]);
+  }, [menuVisible, selectedText, user?.token]);
 
   const pauseAudioForTooltip = useCallback(() => {
     const audio = currentAudioRef.current;
@@ -2047,17 +2114,19 @@ function Workspace({
 
   const handleAddDirectly = async () => {
     if (!selectedText) return;
+    const cleanSelected = selectedText.trim().replace(/^["'“”„«»]+|["'“”„«».,!?;:]+$/g, "").trim();
+    if (!cleanSelected) return;
     setActivityLog(prev => [
       ...prev,
       {
         type: "translate",
-        word_or_phrase: selectedText,
+        word_or_phrase: cleanSelected,
         timestamp: Date.now()
       }
     ]);
-    const textToTranslate = selectedText;
+    const textToTranslate = cleanSelected;
     const preTranslated = contextMenuTranslation;
-    const isPhrase = textToTranslate.trim().split(/\s+/).length > 1;
+    const isPhrase = textToTranslate.split(/\s+/).length > 1;
     setMenuVisible(false);
 
     if (preTranslated && preTranslated !== "Brak tłumaczenia" && preTranslated !== "Błąd połączenia") {
@@ -2237,10 +2306,22 @@ function Workspace({
   };
 
   const handleDeleteWord = async (wordToDelete) => {
-    setNotebookWords(prev => prev.filter(w => w.original !== wordToDelete));
+    if (!wordToDelete) return;
+    const cleanWord = (typeof wordToDelete === 'string' ? wordToDelete : (wordToDelete.original || wordToDelete.word || "")).trim().toLowerCase();
+    const activeKey = currentStoryId || "demo_default";
+    const userKey = user?.email || user?.uid || "guest";
+    const storageKey = `buddy_story_notebook_words_${userKey}_${activeKey}`;
+
+    setNotebookWords(prev => {
+      const updated = prev.filter(w => (w.original || w.word || "").trim().toLowerCase() !== cleanWord);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
     try {
-      const activeStoryKey = currentStoryId || "demo_default";
-      const url = `${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordToDelete)}?story_id=${encodeURIComponent(activeStoryKey)}`;
+      const url = `${API_BASE_URL}/api/vocabulary/${encodeURIComponent(wordToDelete)}?story_id=${encodeURIComponent(activeKey)}`;
       await fetch(url, {
         method: "DELETE",
         headers: { "X-Session-Token": user?.token || "" }
@@ -2251,15 +2332,17 @@ function Workspace({
     }
   };
 
-  // Usunięto handleDeleteStory, ponieważ historia jest teraz zarządzana w dedykowanej zakładce.
-
   // ─── Figma Workspace Redesign Helpers & State Selectors ───
   const isWordInNotebook = useCallback((word) => {
     if (!word) return false;
     const clean = word.toLowerCase().trim();
     return notebookWords.some(w => {
       const orig = (w.original || w.word || "").toLowerCase().trim();
-      return orig === clean;
+      if (orig === clean) return true;
+      if (clean.endsWith('ed') && orig === clean.slice(0, -2)) return true;
+      if (clean.endsWith('ing') && orig === clean.slice(0, -3)) return true;
+      if (clean.endsWith('s') && orig === clean.slice(0, -1)) return true;
+      return false;
     });
   }, [notebookWords]);
 
@@ -2274,16 +2357,25 @@ function Workspace({
     } else {
       const meta = getWordMeta(clean);
       const isPhrase = typeof wordItem === 'object' && (wordItem.item_type === 'phrase' || clean.split(/\s+/).length > 1);
+      const targetStoryId = currentStoryId || "demo_default";
       const newEntry = {
         original: clean,
         translated: rawTranslation || meta.pl || (isPhrase ? "zapisana fraza" : "zapisane słówko"),
         created_at: new Date().toISOString(),
-        story_id: currentStoryId || "demo_default",
+        story_id: targetStoryId,
         context_sentence: typeof wordItem === 'object' ? (wordItem.sentence || "") : "",
         item_type: isPhrase ? "phrase" : "word",
         chunk_type: typeof wordItem === 'object' ? (wordItem.pos || wordItem.chunk_type || (isPhrase ? "Fraza" : "")) : (isPhrase ? "Fraza" : "")
       };
-      setNotebookWords(prev => [newEntry, ...prev.filter(w => (w.original || w.word) !== clean)]);
+      setNotebookWords(prev => {
+        const filtered = prev.filter(w => (w.original || w.word || "").trim().toLowerCase() !== clean.toLowerCase());
+        const updated = [newEntry, ...filtered];
+        const userKey = user?.email || user?.uid || "guest";
+        try {
+          localStorage.setItem(`buddy_story_notebook_words_${userKey}_${targetStoryId}`, JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
       try {
         await fetch(`${API_BASE_URL}/api/vocabulary`, {
           method: "POST",
@@ -2652,42 +2744,44 @@ function Workspace({
   };
 
   const keyStoryWords = useMemo(() => {
-    // Podręczne słownictwo czytanki: wyłącznie słowa zapisane przez użytkownika w tej czytance
-    if (!activeStoryText || !notebookWords || notebookWords.length === 0) return [];
+    // Podręczne słownictwo czytanki: wszystkie słowa i frazy zapisane w tej lekcji
+    if (!notebookWords || notebookWords.length === 0) return [];
 
-    const textLower = activeStoryText.toLowerCase();
     const matched = [];
-
     for (const nw of notebookWords) {
       const w = (nw.original || nw.word || "").trim();
       const wLower = w.toLowerCase();
       if (!wLower || dismissedStoryWords.has(wLower)) continue;
 
-      // Sprawdź czy słowo występuje w tekście czytanki
-      const regex = new RegExp(`\\b${wLower}\\b`, "i");
-      if (regex.test(textLower) && !matched.some(m => m.word.toLowerCase() === wLower)) {
+      if (!matched.some(m => (m.word || "").toLowerCase() === wLower)) {
         const info = VOCABULARY_INFO[wLower] || getWordMeta(w);
+        const isPhrase = nw.item_type === 'phrase' || w.split(/\s+/).length > 1;
         matched.push({
+          id: nw.id,
           word: w,
-          translation: nw.translated || nw.translation || info.pl || "",
-          pos: nw.pos || info.pos || "word",
-          level: nw.level || info.level || "B2"
+          translation: nw.translated || nw.translation || info.pl || (isPhrase ? "zapisana fraza" : "zapisane słówko"),
+          pos: nw.chunk_type || nw.pos || info.pos || (isPhrase ? "Fraza" : "word"),
+          level: nw.level || info.level || (isPhrase ? "Zwrot" : "B2"),
+          item_type: nw.item_type || (isPhrase ? "phrase" : "word")
         });
       }
     }
 
     return matched;
-  }, [activeStoryText, notebookWords, dismissedStoryWords]);
+  }, [notebookWords, dismissedStoryWords]);
 
   const effectivePracticeWords = useMemo(() => {
-    if (notebookWords && notebookWords.length > 0) {
-      return notebookWords;
-    }
     if (keyStoryWords && keyStoryWords.length > 0) {
       return keyStoryWords.map(w => ({
         original: w.word,
-        translated: w.translation
+        translated: w.translation,
+        item_type: w.item_type,
+        pos: w.pos,
+        level: w.level
       }));
+    }
+    if (notebookWords && notebookWords.length > 0) {
+      return notebookWords;
     }
     return [];
   }, [notebookWords, keyStoryWords]);
@@ -2755,7 +2849,7 @@ function Workspace({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Session-Token": user.token
+          "X-Session-Token": user?.token || ""
         },
         body: JSON.stringify({
           activity_log: activityLog,
@@ -2831,9 +2925,9 @@ function Workspace({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Session-Token": user.token
+          "X-Session-Token": user?.token || ""
         },
-        body: JSON.stringify({ ...newEntry, story_id: currentStoryId })
+        body: JSON.stringify({ ...newEntry, story_id: currentStoryId || "demo_default" })
       });
       window.dispatchEvent(new CustomEvent("vocabulary-updated"));
     } catch (err) {

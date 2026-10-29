@@ -5114,7 +5114,9 @@ def add_vocabulary():
     data = request.get_json() or {}
     original = data.get('original', '').strip()
     translated = data.get('translated', '').strip()
-    story_id = data.get('story_id')
+    story_id = (data.get('story_id') or '').strip()
+    if not story_id or story_id in ['null', 'undefined']:
+        story_id = 'demo_default'
     context_sentence = data.get('context_sentence', '').strip()
     item_type = data.get('item_type', '').strip() or ('phrase' if len(original.split()) > 1 else 'word')
     chunk_type = data.get('chunk_type', '').strip()
