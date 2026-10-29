@@ -774,22 +774,6 @@
   align-items: start;
 }
 
-@media (max-width: 1080px) {
-  .workspace-figma-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .workspace-figma-sidebar {
-    position: static;
-    max-height: none;
-    overflow-y: visible;
-  }
-
-  .story-words-card {
-    position: static;
-  }
-}
-
 /* ── LEFT COLUMN: STORY READING CARD ── */
 .story-reading-card {
   background: #ffffff;
@@ -1410,13 +1394,15 @@
   flex-direction: column;
   gap: 1.5rem;
   position: sticky;
-  top: 1.5rem;
+  top: 1rem;
   align-self: start;
-  max-height: calc(100vh - 3rem);
+  max-height: calc(100vh - 5.5rem);
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
-  padding-right: 2px;
+  padding-right: 4px;
+  padding-bottom: 5.5rem;
 }
 
 .workspace-figma-sidebar::-webkit-scrollbar {
@@ -1547,11 +1533,9 @@
   animation: slide-down 0.2s ease-out;
 }
 
-/* CARD 1: WORDS IN THIS STORY (TOP & ALWAYS VISIBLE) */
+/* CARD 1: WORDS IN THIS STORY */
 .story-words-card {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  position: relative;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 20px;
@@ -1594,6 +1578,25 @@
 .story-words-list {
   display: flex;
   flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  padding-right: 4px;
+}
+
+.story-words-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.story-words-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.story-words-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
 }
 
 .story-words-empty {
@@ -1755,6 +1758,23 @@
   color: #475569;
   line-height: 1.55;
   margin: 0;
+}
+
+@media (max-width: 1080px) {
+  .workspace-figma-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-figma-sidebar {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+    padding-bottom: 2rem;
+  }
+
+  .story-words-card {
+    position: relative;
+  }
 }
 
 /* ── FLOATING CHAT LIVE BUTTON ── */
