@@ -82,6 +82,7 @@ export class GeminiLiveClient {
   private currentBotTurnText = '';
   private currentTurnAudioChunks: Float32Array[] = [];
   private botTurnStarted = false;
+  private currentUserTurnText = '';
 
   constructor(options: GeminiLiveOptions = {}) {
     this.provider = options.provider || 'google_ai_studio';
@@ -234,6 +235,7 @@ export class GeminiLiveClient {
             }
           }
         },
+        inputAudioTranscription: {},
         outputAudioTranscription: {},
         systemInstruction: {
           parts: [
@@ -449,6 +451,18 @@ export class GeminiLiveClient {
 
     let hasPartText = false;
     if (message.serverContent && message.serverContent.modelTurn) {
+      if (!this.botTurnStarted) {
+        this.botTurnStarted = true;
+        this.currentBotTurnText = '';
+        if (this.currentUserTurnText) {
+          this.onTranscript({
+            sender: 'user',
+            text: this.currentUserTurnText.trim(),
+            isFinal: true
+          });
+          this.currentUserTurnText = '';
+        }
+      }
       const parts = message.serverContent.modelTurn.parts || [];
 
       for (const part of parts) {
@@ -468,6 +482,29 @@ export class GeminiLiveClient {
           this.onTranscript({
             sender: 'bot',
             text: this.currentBotTurnText,
+            isFinal: false
+          });
+        }
+      }
+    }
+
+    // Bezpośrednia transkrypcja mowy ucznia ze strumienia inputTranscription
+    if (message.serverContent) {
+      const inTr = message.serverContent.inputTranscription || 
+                   message.serverContent.input_transcription ||
+                   message.serverContent.interimInputTranscription ||
+                   message.serverContent.interim_input_transcription ||
+                   message.inputTranscription ||
+                   message.input_transcription;
+      if (inTr && inTr.text) {
+        const trText = inTr.text.trim();
+        if (trText) {
+          if (!this.currentUserTurnText || !this.currentUserTurnText.includes(trText)) {
+            this.currentUserTurnText = this.currentUserTurnText ? `${this.currentUserTurnText} ${trText}` : trText;
+          }
+          this.onTranscript({
+            sender: 'user',
+            text: this.currentUserTurnText,
             isFinal: false
           });
         }
@@ -540,6 +577,14 @@ export class GeminiLiveClient {
 
       if (!this.botTurnStarted) {
         this.botTurnStarted = true;
+        if (this.currentUserTurnText) {
+          this.onTranscript({
+            sender: 'user',
+            text: this.currentUserTurnText.trim(),
+            isFinal: true
+          });
+          this.currentUserTurnText = '';
+        }
         this.onTranscript({
           sender: 'bot',
           text: '🎙️ Speaking...',
