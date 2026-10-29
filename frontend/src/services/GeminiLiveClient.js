@@ -54,6 +54,8 @@ export class GeminiLiveClient {
     this.userTurnStartIndex = 0;
     this.lastSpeechResultLength = 0;
     this.isDestroyed = false;
+    this.currentUserTurnText = '';
+    this.hasServerUserTranscription = false;
 
     // Web Audio Output (Odtwarzanie Gemini)
     this.outputAudioContext = null;
@@ -279,6 +281,7 @@ export class GeminiLiveClient {
             }
           }
         },
+        inputAudioTranscription: {},
         outputAudioTranscription: {},
         systemInstruction: {
           parts: [
@@ -340,7 +343,7 @@ export class GeminiLiveClient {
    */
   isEchoSuppressionActive() {
     if (this.isBotCurrentlySpeaking) return true;
-    if (Date.now() - (this.lastBotSpeakingEndTime || 0) < 650) return true;
+    if (Date.now() - (this.lastBotSpeakingEndTime || 0) < 200) return true;
     return false;
   }
 
@@ -348,25 +351,26 @@ export class GeminiLiveClient {
    * Sprawdza czy dany tekst z SpeechRecognition jest echem ostatnich słów wypowiedzianych przez lektora
    */
   isMatchingRecentBotText(userText) {
+    if (!this.isEchoSuppressionActive()) return false;
     if (!userText || this.recentBotPhrases.length === 0) return false;
     const cleanUser = userText.toLowerCase().replace(/[^a-z0-9\s]/gi, '').trim();
-    if (!cleanUser || cleanUser.length < 3) return false;
-
-    const userWords = cleanUser.split(/\s+/).filter(w => w.length > 2);
-    if (userWords.length === 0) return false;
+    if (!cleanUser || cleanUser.length < 5) return false;
 
     for (const phrase of this.recentBotPhrases) {
       const cleanBot = phrase.toLowerCase().replace(/[^a-z0-9\s]/gi, '').trim();
-      if (cleanBot.includes(cleanUser) || cleanUser.includes(cleanBot)) {
+      if (cleanUser.length >= 15 && cleanBot.includes(cleanUser)) {
         return true;
       }
-      const botWords = new Set(cleanBot.split(/\s+/));
-      let matchCount = 0;
-      for (const w of userWords) {
-        if (botWords.has(w)) matchCount++;
-      }
-      if (matchCount / userWords.length >= 0.6) {
-        return true;
+      const userWords = cleanUser.split(/\s+/).filter(w => w.length > 2);
+      if (userWords.length >= 3) {
+        const botWords = new Set(cleanBot.split(/\s+/));
+        let matchCount = 0;
+        for (const w of userWords) {
+          if (botWords.has(w)) matchCount++;
+        }
+        if (matchCount / userWords.length >= 0.85) {
+          return true;
+        }
       }
     }
     return false;
@@ -470,10 +474,22 @@ export class GeminiLiveClient {
     }
   }
 
+  finalizeUserTurn() {
+    if (this.lastUserTranscript && this.lastUserTranscript.trim()) {
+      this.onTranscript({
+        sender: 'user',
+        text: this.lastUserTranscript.trim(),
+        isFinal: true
+      });
+    }
+  }
+
   resetUserTurnIndex() {
     this.userTurnStartIndex = this.lastSpeechResultLength || 0;
     this.savedTurnPrefixText = '';
     this.lastUserTranscript = '';
+    this.currentUserTurnText = '';
+    this.hasServerUserTranscription = false;
   }
 
   /**
@@ -510,13 +526,14 @@ export class GeminiLiveClient {
 
         rec.onresult = (event) => {
           if (!event || !event.results) return;
-          this.lastSpeechResultLength = event.results.length;
 
           // Ochrona przed echem akustycznym bez słuchawek:
           // Jeśli lektor mówi lub dźwięk z głośników właśnie wygasł, odrzucamy dźwięk
           if (this.isEchoSuppressionActive()) {
             return;
           }
+
+          this.lastSpeechResultLength = event.results.length;
 
           // Jeśli Chrome zresetował wyniki (nowa sesja po onend), zerujemy userTurnStartIndex
           if (event.results.length < this.userTurnStartIndex) {
@@ -551,11 +568,28 @@ export class GeminiLiveClient {
             return;
           }
 
-          if (combined !== this.lastUserTranscript) {
-            this.lastUserTranscript = combined;
+          // Jeśli otrzymujemy już dokładną transkrypcję bezpośrednio z serwera Gemini Live API,
+          // unikamy nadpisywania jej przez lokalne SpeechRecognition przeglądarki
+          if (this.hasServerUserTranscription && this.currentUserTurnText) {
+            return;
+          }
+
+          let fullText = combined;
+          // Zabezpieczenie przed ucięciem: jeśli dotychczasowy tekst był dłuższy,
+          // a nowy combined nagle stał się pojedynczym słowem końcowym:
+          if (this.lastUserTranscript && this.lastUserTranscript.length > combined.length) {
+            if (this.lastUserTranscript.toLowerCase().includes(combined.toLowerCase())) {
+              fullText = this.lastUserTranscript;
+            } else {
+              fullText = `${this.lastUserTranscript} ${combined}`.replace(/\s+/g, ' ').trim();
+            }
+          }
+
+          if (fullText !== this.lastUserTranscript) {
+            this.lastUserTranscript = fullText;
             this.onTranscript({
               sender: 'user',
-              text: combined,
+              text: fullText,
               isFinal: hasFinal
             });
           }
@@ -569,10 +603,10 @@ export class GeminiLiveClient {
           }
           this.userTurnStartIndex = 0;
 
-          // Auto-restart jeśli połączenie jest aktywne, klient nie został zniszczony i lektor nie mówi
-          if (this.isConnected && !this.isDestroyed && !this.isBotCurrentlySpeaking) {
+          // Auto-restart jeśli połączenie jest aktywne i klient nie został zniszczony
+          if (this.isConnected && !this.isDestroyed) {
             setTimeout(() => {
-              if (this.isConnected && !this.isDestroyed && !this.isBotCurrentlySpeaking) {
+              if (this.isConnected && !this.isDestroyed) {
                 startRec();
               }
             }, 100);
@@ -655,7 +689,7 @@ export class GeminiLiveClient {
       if (!this.botTurnStarted) {
         this.botTurnStarted = true;
         this.currentBotTurnText = '';
-        this.resetUserTurnIndex();
+        this.finalizeUserTurn();
       }
       const parts = message.serverContent.modelTurn.parts || [];
 
@@ -684,6 +718,31 @@ export class GeminiLiveClient {
       }
     }
 
+    // Bezpośrednia transkrypcja mowy ucznia ze strumienia inputTranscription (jeśli przesłana przez Gemini Live)
+    if (message.serverContent) {
+      const inTr = message.serverContent.inputTranscription || 
+                   message.serverContent.input_transcription ||
+                   message.serverContent.interimInputTranscription ||
+                   message.serverContent.interim_input_transcription ||
+                   message.inputTranscription ||
+                   message.input_transcription;
+      if (inTr && inTr.text) {
+        const trText = inTr.text.trim();
+        if (trText) {
+          if (!this.currentUserTurnText || !this.currentUserTurnText.includes(trText)) {
+            this.currentUserTurnText = this.currentUserTurnText ? `${this.currentUserTurnText} ${trText}` : trText;
+          }
+          this.lastUserTranscript = this.currentUserTurnText;
+          this.hasServerUserTranscription = true;
+          this.onTranscript({
+            sender: 'user',
+            text: this.currentUserTurnText,
+            isFinal: !!(message.serverContent.inputTranscription || message.serverContent.input_transcription)
+          });
+        }
+      }
+    }
+
     // Bezpośrednia transkrypcja mowy lektora ze strumienia outputTranscription (jeśli przesłana przez Gemini)
     if (message.serverContent) {
       const outTr = message.serverContent.outputTranscription || message.serverContent.output_transcription;
@@ -700,7 +759,6 @@ export class GeminiLiveClient {
     // 3. Koniec tura lektora
     if (message.serverContent && message.serverContent.turnComplete) {
       this.botTurnStarted = false;
-      this.resetUserTurnIndex();
       if (this.currentBotTurnText) {
         this.recentBotPhrases.push(this.currentBotTurnText);
         if (this.recentBotPhrases.length > 8) {
@@ -765,7 +823,7 @@ export class GeminiLiveClient {
 
       if (!this.botTurnStarted) {
         this.botTurnStarted = true;
-        this.resetUserTurnIndex();
+        this.finalizeUserTurn();
         this.onTranscript({
           sender: 'bot',
           text: '🎙️ Speaking...',

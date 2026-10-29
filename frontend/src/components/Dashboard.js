@@ -9,6 +9,54 @@ const VOICE_THRESHOLD = 0.012;
 const INTERRUPTION_THRESHOLD = 0.18; // Podniesiony próg, aby dźwięk z głośników komputera (ok. 0.04-0.10) nie przerywał lektora
 const SILENCE_DURATION = 1500;
 
+// Pomocnik do bezstratnego łączenia transkrypcji mowy (chroni przed ucinaniem zdań do 1-2 ostatnich słów)
+const mergeSpeechTranscripts = (prevText, newText) => {
+  if (!prevText) return newText;
+  if (!newText) return prevText;
+
+  const prevClean = prevText.trim();
+  const newClean = newText.trim();
+  if (prevClean === newClean) return prevClean;
+
+  // 1. Jeśli newClean zaczyna się od prevClean (normalna progresja w przód)
+  if (newClean.toLowerCase().startsWith(prevClean.toLowerCase())) {
+    return newClean;
+  }
+
+  // 2. Jeśli prevClean zawiera newClean (np. prev: "Do you think that I am handsome", a new: "handsome")
+  // Wtedy absolutnie chronimy całe zdanie przed degradacją do fragmentu/końcówki!
+  if (prevClean.toLowerCase().includes(newClean.toLowerCase())) {
+    return prevClean;
+  }
+
+  // 3. Sprawdzamy czy występuje częściowa nakładka słów (np. prev: "yes of", new: "of course" -> "yes of course")
+  const prevWords = prevClean.split(/\s+/);
+  const newWords = newClean.split(/\s+/);
+
+  const maxOverlap = Math.min(prevWords.length, newWords.length);
+  for (let len = maxOverlap; len > 0; len--) {
+    const prevSuffix = prevWords.slice(prevWords.length - len).map(w => w.toLowerCase().replace(/[^a-z0-9]/g, '')).join(' ');
+    const newPrefix = newWords.slice(0, len).map(w => w.toLowerCase().replace(/[^a-z0-9]/g, '')).join(' ');
+    if (prevSuffix && prevSuffix === newPrefix) {
+      const remainder = newWords.slice(len).join(' ');
+      return remainder ? `${prevClean} ${remainder}` : prevClean;
+    }
+  }
+
+  // 4. Jeśli newText to tylko krótka końcówka (1-2 słowa), a prevText to pełniejsze zdanie (>=3 słowa):
+  // Doklejamy brakującą końcówkę do istniejącego zdania zamiast kasować początek!
+  if (newWords.length <= 2 && prevWords.length >= 3) {
+    return `${prevClean} ${newClean}`;
+  }
+
+  // 5. Jeśli nowy tekst jest po prostu dłuższy:
+  if (newWords.length >= prevWords.length) {
+    return newClean;
+  }
+
+  return prevClean;
+};
+
 // Wbudowane czytanki wzorcowe (dostępne od razu dla każdego ucznia)
 export const SAMPLE_STORIES = [
   {
@@ -831,23 +879,41 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
         onTranscript: ({ sender, text, isFinal }) => {
           if (!text || !text.trim()) return;
 
-          // Ochrona przed echem akustycznym bez słuchawek:
-          if (sender === "user" && (liveStatusRef.current === "speaking" || geminiLiveRef.current?.isEchoSuppressionActive?.())) {
-            return;
-          }
-
           setChatMessages((prev) => {
             const lastMsg = prev[prev.length - 1];
-            if (lastMsg && lastMsg.sender === sender) {
+            if (lastMsg && lastMsg.sender === sender && !lastMsg.isFinal) {
               const updated = [...prev];
               const newText = text.trim();
+              const mergedText = sender === "user"
+                ? mergeSpeechTranscripts(lastMsg.text, newText)
+                : newText;
 
               updated[updated.length - 1] = {
                 ...lastMsg,
-                text: newText,
+                text: mergedText,
                 isFinal: lastMsg.isFinal || isFinal,
               };
               return updated;
+            } else if (lastMsg && lastMsg.sender === sender && lastMsg.isFinal) {
+              if (sender === "user" && text.trim().length > (lastMsg.text || "").length) {
+                const updated = [...prev];
+                const mergedText = mergeSpeechTranscripts(lastMsg.text, text.trim());
+                updated[updated.length - 1] = {
+                  ...lastMsg,
+                  text: mergedText,
+                  isFinal: isFinal,
+                };
+                return updated;
+              }
+              return [
+                ...prev,
+                {
+                  id: `${sender}-${Date.now()}`,
+                  sender: sender,
+                  text: text.trim(),
+                  isFinal: isFinal,
+                },
+              ];
             } else {
               return [
                 ...prev,
