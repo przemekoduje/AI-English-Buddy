@@ -42,14 +42,19 @@
       - subscriptions / settings            PCM 24kHz out)
 ```
 
-### Stos technologiczny
+### Stos technologiczny i struktura projektu
+* **Struktura repozytorium**:
+  * `frontend/`: React 19 SPA, Vanilla CSS, Web Audio API, klienty WebSocket i TTS.
+  * `backend/`: Flask (Python 3.11), Cloud Run, `app.py` z REST API, Firestore, Stripe SDK.
+  * `mobile/`: Expo 54 / React Native (eksportowane jako web app serwowane pod `/speakling/mobile`).
+  * `deploy.ps1` / `deploy-backend.ps1`: automatyczne wdrożenia (Firebase Hosting + Cloud Run).
 * **Frontend Web**: React 19, Vanilla CSS (bez Tailwind), Web Audio API, WebSocket.
 * **Mobile Web**: React Native, Expo 54, Expo Router, `patch-viewport.py` (blokada zoomu i desktop redirect).
 * **Backend**: Python 3.11 Flask, Gunicorn, Google Cloud Run, Secret Manager.
-* **Baza Danych & Auth**: Google Cloud Firestore, Firebase Authentication (`X-Session-Token`).
+* **Baza Danych & Auth**: Google Cloud Firestore, Firebase Authentication (nagłówek `X-Session-Token` weryfikowany w Flask).
 * **Zewnętrzne AI**:
   * **DeepSeek API** (`deepseek-chat`): generowanie opowiadań, tłumaczenia kontekstowe, lematyzacja słówek (`get_base_form`).
-  * **Gemini Multimodal Live API**: audio WebSocket (`gemini-2.0-flash-exp` / `gemini-2.5-flash-native-audio`).
+  * **Gemini Multimodal Live API**: audio WebSocket (`gemini-2.5-flash-native-audio-latest`).
   * **Microsoft edge-tts**: darmowe, wysokiej jakości głosy neuronowe (Brian, Guy, Christopher, Jenny, Aria, Sonia, Ryan).
 
 ---
@@ -80,10 +85,13 @@
   3. `retell_summarize` — Streszczenie historii własnymi słowami.
   4. `grammar_coach` — Ćwiczenie struktur gramatycznych z tekstu.
   5. `free_talk` — Luźna konwersacja na dowolny temat.
-* **Kluczowe mechanizmy bezpieczeństwa audio**:
-  * `inputAudioTranscription` + `outputAudioTranscription` — transkrypcja na żywo.
-  * Tłumienie echa: wstrzymywanie nasłuchu podczas wypowiedzi asystenta, ochrona przed zapętleniem dźwięku z głośników.
-  * Śledzenie limitu minut: co 10 sekund wysyłany jest raport do `/api/subscription/track-live-time`.
+* **Protokół WebSocket (Gemini Multimodal Live API)**:
+  * Handshake Setup: `{ setup: { model: "models/gemini-2.5-flash-native-audio-latest", generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } } } }, systemInstruction: { parts: [{ text: "..." }] }, inputAudioTranscription: {}, outputAudioTranscription: {} } }`
+  * Klient Audio Chunks: `{ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: "<base64_pcm>" }] } }`
+  * Obsługa Barge-in: serwer wysyła `{ serverContent: { interrupted: true } }`, klient natychmiast czyści bufor odtwarzania `outputAudioContext`.
+* **Kluczowe mechanizmy audio**:
+  * Tłumienie echa (Acoustic Echo Cancellation): wstrzymywanie nasłuchu podczas wypowiedzi asystenta oraz okno ochronne 500ms po zakończeniu tury bota.
+  * Śledzenie limitu minut: co 30 sekund synchronizacja zużytych sekund z `/api/subscription/track-live-time`.
 
 ### 3.3. Uproszczony Instant Translator (`frontend/src/components/Translator/TranslatorDrawer.js`)
 * Wysuwany panel boczny dostępny globalnie (lub wywoływany z zaznaczenia tekstu w czytance).
