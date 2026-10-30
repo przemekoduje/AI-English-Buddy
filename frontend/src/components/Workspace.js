@@ -297,6 +297,10 @@ function Workspace({
       return [];
     }
   });
+  const activeStoryIdRef = useRef(currentStoryId);
+  useEffect(() => {
+    activeStoryIdRef.current = currentStoryId;
+  }, [currentStoryId]);
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [selectedText, setSelectedText] = useState("");
@@ -448,65 +452,45 @@ function Workspace({
     document.addEventListener('touchend', handleTouchEnd);
   };
 
-  const loadVocabulary = useCallback(async () => {
-    const activeStoryKey = currentStoryId || "demo_default";
+  const loadVocabulary = useCallback(async (forcedStoryId = null) => {
+    const activeStoryKey = forcedStoryId || currentStoryId || "demo_default";
     const userKey = user?.email || user?.uid || "guest";
     const storageKey = `buddy_story_notebook_words_${userKey}_${activeStoryKey}`;
 
-    // 1. Synchronize from local storage first (instant responsiveness)
+    // 1. Synchronize from local storage first (instant responsiveness, strictly isolated to this story)
     try {
       const cached = localStorage.getItem(storageKey);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setNotebookWords(prev => {
-            const map = new Map();
-            parsed.forEach(item => {
-              const k = (item.original || item.word || "").trim().toLowerCase();
-              if (k && !map.has(k)) map.set(k, item);
-            });
-            prev.forEach(item => {
-              const k = (item.original || item.word || "").trim().toLowerCase();
-              if (k && !map.has(k)) map.set(k, item);
-            });
-            return Array.from(map.values());
-          });
+        if (Array.isArray(parsed)) {
+          setNotebookWords(parsed);
+        } else {
+          setNotebookWords([]);
         }
+      } else {
+        setNotebookWords([]);
       }
-    } catch (e) {}
+    } catch (e) {
+      setNotebookWords([]);
+    }
 
     if (!user?.token) return;
 
-    // 2. Fetch from server and merge so optimistic words/phrases are never dropped
+    // 2. Fetch from server FOR THIS SPECIFIC STORY ONLY (never leak demo_default or other stories)
     try {
-      const idsToFetch = [activeStoryKey];
-      if (activeStoryKey !== "demo_default") {
-        idsToFetch.push("demo_default");
-      }
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary?story_id=${encodeURIComponent(idsToFetch.join(","))}`, {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary?story_id=${encodeURIComponent(activeStoryKey)}`, {
         headers: { "X-Session-Token": user.token }
       });
       if (response.ok) {
         const data = await response.json();
         if (Array.isArray(data)) {
-          setNotebookWords(prev => {
-            const map = new Map();
-            // Server items
-            data.forEach(item => {
-              const k = (item.original || item.word || "").trim().toLowerCase();
-              if (k && !map.has(k)) map.set(k, item);
-            });
-            // Merge with local items so newly added words are never wiped out
-            prev.forEach(item => {
-              const k = (item.original || item.word || "").trim().toLowerCase();
-              if (k && !map.has(k)) map.set(k, item);
-            });
-            const merged = Array.from(map.values());
+          const currentKey = activeStoryIdRef.current || "demo_default";
+          if (currentKey === activeStoryKey) {
+            setNotebookWords(data);
             try {
-              localStorage.setItem(storageKey, JSON.stringify(merged));
+              localStorage.setItem(storageKey, JSON.stringify(data));
             } catch (e) {}
-            return merged;
-          });
+          }
         }
       }
     } catch (err) {
@@ -516,14 +500,14 @@ function Workspace({
 
   useEffect(() => {
     const activeKey = currentStoryId || "demo_default";
+    // Avoid saving if story transition is in progress
+    if (activeStoryIdRef.current !== currentStoryId) return;
     const userKey = user?.email || user?.uid || "guest";
     const storageKey = `buddy_story_notebook_words_${userKey}_${activeKey}`;
     try {
-      if (notebookWords && notebookWords.length > 0) {
-        localStorage.setItem(storageKey, JSON.stringify(notebookWords));
-      }
+      localStorage.setItem(storageKey, JSON.stringify(notebookWords || []));
     } catch (e) {}
-  }, [notebookWords, currentStoryId, user]);
+  }, [notebookWords]);
 
   useEffect(() => {
     setDismissedStoryWords(new Set());
@@ -1196,6 +1180,10 @@ function Workspace({
     setGeneratedText("");
     setCurrentStoryTitle("");
     setCurrentStoryId(null);
+    activeStoryIdRef.current = null;
+    setNotebookWords([]);
+    setDismissedStoryWords(new Set());
+    setInlineWordData(null);
     setStoryParts([]);
     setActivePartIndex(-1);
     setLoadedRootId(null);
@@ -1225,6 +1213,14 @@ function Workspace({
         // Automatycznie zapisz historię w bazie danych
         const savedStory = await saveStoryToDb(title, data[0].generated_text);
         if (savedStory && savedStory.id) {
+          const userKey = user?.email || user?.uid || "guest";
+          try {
+            localStorage.setItem(`buddy_story_notebook_words_${userKey}_${savedStory.id}`, JSON.stringify([]));
+          } catch (e) {}
+          activeStoryIdRef.current = savedStory.id;
+          setNotebookWords([]);
+          setDismissedStoryWords(new Set());
+          setInlineWordData(null);
           const newPart = {
             id: savedStory.id,
             title: title,
@@ -1252,6 +1248,11 @@ function Workspace({
     }
     handleStop();
     setIsGeneratingStory(true);
+    if (!isContinuing) {
+      setNotebookWords([]);
+      setDismissedStoryWords(new Set());
+      setInlineWordData(null);
+    }
     try {
       const levelMap = {
         "A1": "simple",
@@ -1418,6 +1419,17 @@ function Workspace({
             custom_details: promptDetails
           };
 
+          const userKey = user?.email || user?.uid || "guest";
+          if (storyId) {
+            try {
+              localStorage.setItem(`buddy_story_notebook_words_${userKey}_${storyId}`, JSON.stringify([]));
+            } catch (e) {}
+          }
+          activeStoryIdRef.current = storyId;
+          setNotebookWords([]);
+          setDismissedStoryWords(new Set());
+          setInlineWordData(null);
+
           setStoryParts([newPart]);
           setActivePartIndex(0);
           setLoadedRootId(storyId);
@@ -1454,12 +1466,22 @@ function Workspace({
     const isSaved = notebookWords.some(
       w => (w.original || w.word || "").toLowerCase() === (word || "").toLowerCase()
     );
+    const activeKey = currentStoryId || "demo_default";
+    const userKey = user?.email || user?.uid || "guest";
+    const storageKey = `buddy_story_notebook_words_${userKey}_${activeKey}`;
+
     if (isSaved) {
-      setNotebookWords(prev => prev.filter(
-        w => (w.original || w.word || "").toLowerCase() !== (word || "").toLowerCase()
-      ));
+      setNotebookWords(prev => {
+        const updated = prev.filter(
+          w => (w.original || w.word || "").toLowerCase() !== (word || "").toLowerCase()
+        );
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
       try {
-        await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(word)}`, {
+        await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(word)}?story_id=${encodeURIComponent(activeKey)}`, {
           method: "DELETE",
           headers: { "X-Session-Token": user?.token || "" }
         });
@@ -1469,13 +1491,19 @@ function Workspace({
       }
     } else {
       const trans = translation || word;
-      const newEntry = { original: word, translated: trans, phonetic, pos, level };
-      setNotebookWords(prev => [newEntry, ...prev]);
+      const newEntry = { original: word, translated: trans, phonetic, pos, level, story_id: activeKey };
+      setNotebookWords(prev => {
+        const updated = [newEntry, ...prev];
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
       try {
         await fetch(`${API_BASE_URL}/api/vocabulary`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Session-Token": user?.token || "" },
-          body: JSON.stringify({ original: word, translated: trans, story_id: currentStoryId })
+          body: JSON.stringify({ original: word, translated: trans, story_id: activeKey })
         });
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       } catch (err) {
@@ -1495,6 +1523,10 @@ function Workspace({
     setGeneratedText("");
     setCurrentStoryTitle("");
     setCurrentStoryId(null);
+    activeStoryIdRef.current = null;
+    setNotebookWords([]);
+    setDismissedStoryWords(new Set());
+    setInlineWordData(null);
     setStoryParts([]);
     setActivePartIndex(-1);
     setLoadedRootId(null);
@@ -1517,6 +1549,14 @@ function Workspace({
         setCurrentStoryTitle(title);
         const savedStory = await saveStoryToDb(title, data[0].generated_text);
         if (savedStory && savedStory.id) {
+          const userKey = user?.email || user?.uid || "guest";
+          try {
+            localStorage.setItem(`buddy_story_notebook_words_${userKey}_${savedStory.id}`, JSON.stringify([]));
+          } catch (e) {}
+          activeStoryIdRef.current = savedStory.id;
+          setNotebookWords([]);
+          setDismissedStoryWords(new Set());
+          setInlineWordData(null);
           const newPart = {
             id: savedStory.id,
             title: title,
@@ -1547,6 +1587,10 @@ function Workspace({
     setGeneratedText("");
     setCurrentStoryTitle("");
     setCurrentStoryId(null);
+    activeStoryIdRef.current = null;
+    setNotebookWords([]);
+    setDismissedStoryWords(new Set());
+    setInlineWordData(null);
     setStoryParts([]);
     setActivePartIndex(-1);
     setLoadedRootId(null);
@@ -1561,6 +1605,14 @@ function Workspace({
       // Automatycznie zapisz wklejony tekst w bazie danych na serwerze (identycznie jak AI)
       const savedStory = await saveStoryToDb(title, pastedText);
       if (savedStory && savedStory.id) {
+        const userKey = user?.email || user?.uid || "guest";
+        try {
+          localStorage.setItem(`buddy_story_notebook_words_${userKey}_${savedStory.id}`, JSON.stringify([]));
+        } catch (e) {}
+        activeStoryIdRef.current = savedStory.id;
+        setNotebookWords([]);
+        setDismissedStoryWords(new Set());
+        setInlineWordData(null);
         const newPart = {
           id: savedStory.id,
           title: title,
@@ -1585,6 +1637,10 @@ function Workspace({
       setGeneratedText("");
       setCurrentStoryTitle("");
       setCurrentStoryId(null);
+      activeStoryIdRef.current = null;
+      setNotebookWords([]);
+      setDismissedStoryWords(new Set());
+      setInlineWordData(null);
       setStoryParts([]);
       setActivePartIndex(-1);
       setLoadedRootId(null);
