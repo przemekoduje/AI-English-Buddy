@@ -1169,7 +1169,7 @@
 
 .btn-save-vocabulary.saved {
   background: #10b981;
-  cursor: default;
+  cursor: pointer;
 }
 
 /* Lexical Approach: Media Detected Chunk Box */
@@ -1225,7 +1225,7 @@
   background: #10b981;
   color: #ffffff;
   box-shadow: 0 3px 8px rgba(16, 185, 129, 0.25);
-  cursor: default;
+  cursor: pointer;
 }
 
 .notebook-phrase-badge {

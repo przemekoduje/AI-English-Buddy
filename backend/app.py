@@ -5200,24 +5200,44 @@ def delete_vocabulary(original_word):
         return jsonify({"error": "Brak autoryzacji"}), 401
 
     story_id = request.args.get('story_id')
+    raw_story_ids = {s.strip() for s in (story_id or '').split(',') if s.strip()}
 
     try:
         # Sprawdź najpierw czy original_word to ID dokumentu
         doc_ref = db.collection('vocabulary').document(original_word)
         doc = doc_ref.get()
         if doc.exists and doc.to_dict().get('user_email') == user_email:
+            doc_data = doc.to_dict()
+            target_orig = (doc_data.get('original') or '').strip().lower()
+            target_sid = (doc_data.get('story_id') or '').strip()
             doc_ref.delete()
+
+            # Usuń również ewentualne duplikaty tego samego słówka w ramach tego samego wideo/historii
+            if target_orig:
+                allowed_sids = set(raw_story_ids)
+                if target_sid:
+                    allowed_sids.add(target_sid)
+                if allowed_sids:
+                    for d in db.collection('vocabulary').where('user_email', '==', user_email).stream():
+                        d_data = d.to_dict()
+                        if (d_data.get('original') or '').strip().lower() == target_orig:
+                            d_sid = (d_data.get('story_id') or '').strip()
+                            if d_sid in allowed_sids:
+                                db.collection('vocabulary').document(d.id).delete()
+
             return jsonify({"message": "Usunięto wyrażenie ze słownika"}), 200
 
-        # W przeciwnym razie usuń po polu original
-        query = db.collection('vocabulary').where('user_email', '==', user_email).where('original', '==', original_word)
-        if story_id:
-            query = query.where('story_id', '==', story_id)
-        docs = query.stream()
+        # W przeciwnym razie usuń po polu original (case-insensitive)
+        target_orig = original_word.strip().lower()
+        docs = db.collection('vocabulary').where('user_email', '==', user_email).stream()
         deleted_count = 0
-        for doc in docs:
-            db.collection('vocabulary').document(doc.id).delete()
-            deleted_count += 1
+        for d in docs:
+            d_data = d.to_dict()
+            if (d_data.get('original') or '').strip().lower() == target_orig:
+                d_sid = (d_data.get('story_id') or '').strip()
+                if not raw_story_ids or d_sid in raw_story_ids:
+                    db.collection('vocabulary').document(d.id).delete()
+                    deleted_count += 1
         return jsonify({"message": f"Usunięto {deleted_count} wyrażeń ze słownika"}), 200
     except Exception as e:
         return jsonify({"error": f"Błąd podczas usuwania ze słownika: {e}"}), 500

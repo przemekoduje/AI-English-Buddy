@@ -402,6 +402,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   const [selectedSentenceContext, setSelectedSentenceContext] = useState("");
   const [isTranslating, setIsTranslating] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [isSavingWord, setIsSavingWord] = useState(false);
+  const [isSavingChunk, setIsSavingChunk] = useState(false);
+  const justSavedWordRef = useRef("");
+  const justSavedChunkRef = useRef("");
 
   // Segment phrase translation states
   const [segmentTranslation, setSegmentTranslation] = useState("");
@@ -549,7 +553,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.filter(w => !w.story_id || validStoryIds.has(w.story_id));
+          return parsed.filter(w => Boolean(w && w.story_id && validStoryIds.has(w.story_id)));
         }
       }
     } catch (e) { }
@@ -571,12 +575,12 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     if (!activeVid) return;
     const validStoryIds = new Set(getVideoStoryIds(activeVid));
 
-    if (!added_doc.story_id && activeVid.youtubeId) {
-      added_doc.story_id = `custom_${activeVid.youtubeId}`;
+    if (!added_doc.story_id) {
+      added_doc.story_id = activeVid.youtubeId ? `custom_${activeVid.youtubeId}` : (activeVid.id || "media");
     }
 
     setNotebookWords(prev => {
-      const cleanedPrev = prev.filter(w => !w.story_id || validStoryIds.has(w.story_id));
+      const cleanedPrev = prev.filter(w => Boolean(w && w.story_id && validStoryIds.has(w.story_id)));
       const origKey = (added_doc.original || "").trim().toLowerCase();
       const filtered = cleanedPrev.filter(w => (w.original || "").trim().toLowerCase() !== origKey);
       const updated = [added_doc, ...filtered];
@@ -611,37 +615,26 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         }
         if (Array.isArray(data)) {
           // Strictly filter only words that belong to this video's story_id
-          const strictlyThisVideoWords = data.filter(item => {
-            if (!item.story_id) return true;
-            return validStoryIds.has(item.story_id);
+          const strictlyThisVideoWords = data.filter(item =>
+            Boolean(item && item.story_id && validStoryIds.has(item.story_id))
+          );
+
+          // Server response is the authoritative source of truth for this video's saved words
+          const map = new Map();
+          strictlyThisVideoWords.forEach(item => {
+            const k = (item.original || "").trim().toLowerCase();
+            if (k && !map.has(k)) map.set(k, item);
           });
 
-          // De-duplicate by original, keeping both server items and freshly saved video words
-          setNotebookWords(prev => {
-            const map = new Map();
-            strictlyThisVideoWords.forEach(item => {
-              const k = (item.original || "").trim().toLowerCase();
-              if (k && !map.has(k)) map.set(k, item);
-            });
-
-            // Also keep any words currently in prev that strictly belong to this video
-            prev.forEach(item => {
-              if (item && (!item.story_id || validStoryIds.has(item.story_id))) {
-                const k = (item.original || "").trim().toLowerCase();
-                if (k && !map.has(k)) map.set(k, item);
-              }
-            });
-
-            const list = Array.from(map.values());
-            try {
-              localStorage.setItem(storageKey, JSON.stringify(list));
-              if (video.youtubeId) {
-                const userKey = user?.email || user?.uid || "guest";
-                localStorage.setItem(`media_buddy_notebook_words_${userKey}_${video.youtubeId}`, JSON.stringify(list));
-              }
-            } catch (e) { }
-            return list;
-          });
+          const list = Array.from(map.values());
+          setNotebookWords(list);
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(list));
+            if (video.youtubeId) {
+              const userKey = user?.email || user?.uid || "guest";
+              localStorage.setItem(`media_buddy_notebook_words_${userKey}_${video.youtubeId}`, JSON.stringify(list));
+            }
+          } catch (e) { }
         }
       })
       .catch(err => console.error("Error fetching notebook words:", err));
@@ -661,7 +654,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) {
-          const validCached = parsed.filter(w => !w.story_id || validStoryIds.has(w.story_id));
+          const validCached = parsed.filter(w => Boolean(w && w.story_id && validStoryIds.has(w.story_id)));
           setNotebookWords(validCached);
         } else {
           setNotebookWords([]);
@@ -686,6 +679,29 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     window.addEventListener("vocabulary-updated", handleVocabUpdated);
     return () => window.removeEventListener("vocabulary-updated", handleVocabUpdated);
   }, [currentVideo, fetchNotebookWords, getLocalStorageWordsKey, getVideoStoryIds]);
+
+  // Keep isSaved and isChunkSaved reactive to notebookWords changes (e.g. server sync or deletion)
+  useEffect(() => {
+    if (!selectedWord) {
+      setIsSaved(false);
+    } else {
+      const cleanWord = selectedWord.replace(/[^a-zA-Z'-]/g, "").toLowerCase();
+      const inNotebook = notebookWords.some(
+        w => (w.original || "").trim().toLowerCase() === cleanWord
+      );
+      setIsSaved(inNotebook || (justSavedWordRef.current === cleanWord && notebookWords.length > 0));
+    }
+
+    if (!detectedChunk) {
+      setIsChunkSaved(false);
+    } else {
+      const cleanChunk = detectedChunk.trim().toLowerCase();
+      const chunkInNotebook = notebookWords.some(
+        w => (w.original || "").trim().toLowerCase() === cleanChunk
+      );
+      setIsChunkSaved(chunkInNotebook || (justSavedChunkRef.current === cleanChunk && notebookWords.length > 0));
+    }
+  }, [notebookWords, selectedWord, detectedChunk]);
 
   const handleStartExercise = async () => {
     if (notebookWords.length === 0) return;
@@ -1422,6 +1438,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     setSegmentTranslation("");
     setIsSegmentSaved(false);
     setIsSaved(false);
+    justSavedWordRef.current = "";
+    justSavedChunkRef.current = "";
     setExerciseData(null);
     setExerciseResult(null);
     setExerciseTranslation("");
@@ -1830,6 +1848,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     }
     const cleanWord = word.replace(/[^a-zA-Z'-]/g, "").toLowerCase();
     latestWordRef.current = word;
+    justSavedWordRef.current = "";
+    justSavedChunkRef.current = "";
     setSelectedWord(word);
     setWordTranslation("");
     setWordSentenceTranslation("");
@@ -1839,15 +1859,13 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     setIsChunkSaved(false);
     setSelectedSentenceContext(sentenceContext || "");
     setIsTranslating(true);
-    setIsSaved(false);
 
-    // Check if word is already saved in notebook
+    // Check if word is already saved in notebook for this video
+    const validStoryIds = new Set(getVideoStoryIds(currentVideoRef.current || currentVideo));
     const alreadySaved = notebookWords.some(
-      w => (w.original || "").trim().toLowerCase() === cleanWord
+      w => w && w.story_id && validStoryIds.has(w.story_id) && (w.original || "").trim().toLowerCase() === cleanWord
     );
-    if (alreadySaved) {
-      setIsSaved(true);
-    }
+    setIsSaved(alreadySaved);
 
     // Check hidden offline dictionary (DEMO_VIDEO_VOCAB or DEMO_DICTIONARY) for zero-cost instant lookup
     const offlineDef = DEMO_VIDEO_VOCAB[cleanWord] || DEMO_DICTIONARY[cleanWord];
@@ -1880,7 +1898,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           setChunkTranslation(data.chunk_translation || "");
           setChunkType(data.chunk_type || "Fraza");
           const chunkSaved = notebookWords.some(
-            w => (w.original || "").trim().toLowerCase() === data.detected_chunk.trim().toLowerCase()
+            w => w && w.story_id && validStoryIds.has(w.story_id) && (w.original || "").trim().toLowerCase() === data.detected_chunk.trim().toLowerCase()
           );
           setIsChunkSaved(chunkSaved);
         } else {
@@ -1903,8 +1921,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   };
 
   const handleSaveWord = async () => {
-    if (!selectedWord || !wordTranslation) return;
+    if (!selectedWord || !wordTranslation || isSavingWord) return;
     const targetStoryId = currentVideo.youtubeId ? `custom_${currentVideo.youtubeId}` : (currentVideo.id || "media");
+    const cleanWord = selectedWord.replace(/[^a-zA-Z'-]/g, "").toLowerCase();
+    setIsSavingWord(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
         method: "POST",
@@ -1920,18 +1940,23 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       });
       if (response.ok) {
         const added_doc = await response.json();
+        justSavedWordRef.current = cleanWord;
         setIsSaved(true);
         saveToNotebookStateAndStorage(added_doc);
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       }
     } catch (err) {
       console.error("Błąd podczas zapisywania słówka:", err);
+    } finally {
+      setIsSavingWord(false);
     }
   };
 
   const handleSaveChunk = async () => {
-    if (!detectedChunk || !chunkTranslation) return;
+    if (!detectedChunk || !chunkTranslation || isSavingChunk) return;
     const targetStoryId = currentVideo.youtubeId ? `custom_${currentVideo.youtubeId}` : (currentVideo.id || "media");
+    const cleanChunk = detectedChunk.trim().toLowerCase();
+    setIsSavingChunk(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
         method: "POST",
@@ -1947,18 +1972,33 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       });
       if (response.ok) {
         const added_doc = await response.json();
+        justSavedChunkRef.current = cleanChunk;
         setIsChunkSaved(true);
         saveToNotebookStateAndStorage(added_doc);
         window.dispatchEvent(new CustomEvent("vocabulary-updated"));
       }
     } catch (err) {
       console.error("Błąd podczas zapisywania zwrotu:", err);
+    } finally {
+      setIsSavingChunk(false);
     }
   };
 
   const handleDeleteNotebookWord = async (wordToDelete) => {
     const origKey = (wordToDelete.original || "").trim().toLowerCase();
     const activeVid = currentVideoRef.current || currentVideo;
+    const cleanSelected = (selectedWord || "").replace(/[^a-zA-Z'-]/g, "").toLowerCase();
+    const cleanChunk = (detectedChunk || "").trim().toLowerCase();
+
+    if (origKey && (origKey === cleanSelected || justSavedWordRef.current === cleanSelected)) {
+      justSavedWordRef.current = "";
+      setIsSaved(false);
+    }
+    if (origKey && (origKey === cleanChunk || justSavedChunkRef.current === cleanChunk)) {
+      justSavedChunkRef.current = "";
+      setIsChunkSaved(false);
+    }
+
     setNotebookWords(prev => {
       const updated = prev.filter(w => (w.original || "").trim().toLowerCase() !== origKey);
       try {
@@ -1974,7 +2014,8 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
     try {
       const deleteIdentifier = wordToDelete.id || wordToDelete.original;
-      await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(deleteIdentifier)}`, {
+      const storyIds = getVideoStoryIds(activeVid).slice(0, 10).join(",");
+      await fetch(`${API_BASE_URL}/api/vocabulary/${encodeURIComponent(deleteIdentifier)}?story_id=${encodeURIComponent(storyIds)}`, {
         method: "DELETE",
         headers: { "X-Session-Token": user?.token || "" }
       });
@@ -3020,7 +3061,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                         type="button"
                         className={`btn-save-chunk-recommended ${isChunkSaved ? "saved" : ""}`}
                         onClick={handleSaveChunk}
-                        disabled={isChunkSaved}
+                        disabled={isSavingChunk}
                       >
                         {isChunkSaved ? (
                           <>
@@ -3035,7 +3076,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                               <line x1="12" y1="5" x2="12" y2="19" />
                               <line x1="5" y1="12" x2="19" y2="12" />
                             </svg>
-                            <span>Zapisz zwrot (+)</span>
+                            <span>{isSavingChunk ? "Zapisywanie..." : "Zapisz zwrot (+)"}</span>
                           </>
                         )}
                       </button>
@@ -3071,9 +3112,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                       type="button"
                       className={`btn-save-vocabulary ${isSaved ? "saved" : ""}`}
                       onClick={handleSaveWord}
-                      disabled={isSaved}
+                      disabled={isSavingWord}
                     >
-                      {isSaved ? "Zapisano słówko! ✓" : "Zapisz słówko (+)"}
+                      {isSavingWord ? "Zapisywanie..." : (isSaved ? "Zapisano słówko! ✓" : "Zapisz słówko (+)")}
                     </button>
                   </>
                 )}
@@ -3370,7 +3411,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                   <button
                     type="button"
                     className={`btn-save-sticky-word btn-save-sticky-chunk ${isChunkSaved ? "saved" : ""}`}
-                    disabled={isChunkSaved}
+                    disabled={isSavingChunk}
                     onClick={handleSaveChunk}
                   >
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -3381,7 +3422,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                   <button
                     type="button"
                     className={`btn-save-sticky-secondary ${isSaved ? "saved" : ""}`}
-                    disabled={isSaved}
+                    disabled={isSavingWord}
                     onClick={handleSaveWord}
                     title={`Zapisz tylko pojedyncze słowo: "${selectedWord}"`}
                   >
@@ -3392,7 +3433,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                 <button
                   type="button"
                   className={`btn-save-sticky-word ${isSaved ? "saved" : ""}`}
-                  disabled={!selectedWord || isSaved}
+                  disabled={!selectedWord || isSavingWord}
                   onClick={handleSaveWord}
                 >
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
