@@ -1140,34 +1140,6 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     return { level: "B2", category: "Business & Life" };
   }, [currentVideo]);
 
-  // Words worth keeping pills
-  const keyWordsList = useMemo(() => {
-    const list = [];
-    notebookWords.forEach(w => {
-      if (w.original && !list.includes(w.original.toLowerCase())) {
-        list.push(w.original.toLowerCase());
-      }
-    });
-    if (currentVideo?.transcript) {
-      const stopwords = new Set(["the", "and", "that", "this", "with", "from", "they", "have", "were", "what", "when", "your", "will", "would", "about", "there", "their", "which", "could", "laughter", "cheering", "applause", "hello", "going", "know", "said", "just"]);
-      for (const seg of currentVideo.transcript) {
-        const words = (seg.text || "").replace(/[^a-zA-Z\s]/g, "").split(/\s+/);
-        for (const w of words) {
-          const clean = w.toLowerCase().trim();
-          if (clean.length > 5 && !stopwords.has(clean) && !list.includes(clean)) {
-            list.push(clean);
-            if (list.length >= 8) break;
-          }
-        }
-        if (list.length >= 8) break;
-      }
-    }
-    if (list.length === 0) {
-      return ["adapt", "supportive", "clarify", "encourage", "perspective"];
-    }
-    return list.slice(0, 8);
-  }, [notebookWords, currentVideo]);
-
   // Total Duration
   const totalDuration = useMemo(() => {
     if (videoDuration > 0) return videoDuration;
@@ -3018,27 +2990,11 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
           {/* Words Worth Keeping Card — Figma Design (Above) */}
           <div className="words-keeping-card">
-            {/* <h3 className="words-keeping-title">Words worth keeping</h3> */}
-
-            <div className="words-keeping-pills">
-              {keyWordsList.map((word, idx) => {
-                const isWordActive = selectedWord.toLowerCase() === word.toLowerCase();
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    className={`word-keeping-pill ${isWordActive ? "active" : ""}`}
-                    onClick={() => handleWordClick(word, currentVideo?.transcript?.[activeSegmentIndex]?.text || "")}
-                  >
-                    {word}
-                  </button>
-                );
-              })}
-            </div>
-
-            <p className="words-keeping-hint">
-              Select a word in the transcript to hear it or save it to your vocabulary.
-            </p>
+            {!selectedWord && (
+              <p className="words-keeping-hint">
+                Select a word in the transcript to hear it or save it to your vocabulary.
+              </p>
+            )}
 
             {/* Word translation details */}
             {selectedWord && (
