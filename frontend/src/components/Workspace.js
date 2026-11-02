@@ -1951,8 +1951,8 @@ function Workspace({
     const clickX = e.clientX;
     const clickY = e.clientY;
 
-    const menuWidth = 290;
-    const menuHeight = 280;
+    const menuWidth = 320;
+    const menuHeight = 330;
     let x = clickX;
     let y = clickY;
 
@@ -3182,10 +3182,10 @@ function Workspace({
                 resumeAudioAfterTooltip();
               }}
               title="Zamknij podgląd i kontynuuj czytanie"
+              aria-label="Zamknij"
             >
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="6" />
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
@@ -3375,19 +3375,17 @@ function Workspace({
               className="sentence-context-menu-close"
               onClick={() => setSentenceContextMenu(null)}
               title="Zamknij menu"
+              aria-label="Zamknij menu"
             >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="6" />
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
 
           {sentenceContextMenu.sentenceText && (
             <div className="sentence-context-menu-preview" title={sentenceContextMenu.sentenceText}>
-              "{sentenceContextMenu.sentenceText.length > 90
-                ? sentenceContextMenu.sentenceText.substring(0, 90) + "..."
-                : sentenceContextMenu.sentenceText}"
+              "{sentenceContextMenu.sentenceText.trim()}"
             </div>
           )}
 
