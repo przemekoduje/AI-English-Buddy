@@ -304,6 +304,7 @@ function Workspace({
   const [menuVisible, setMenuVisible] = useState(false);
   const [sentenceContextMenu, setSentenceContextMenu] = useState(null);
   const sentenceContextMenuRef = useRef(null);
+  const [highlightedSentenceIndex, setHighlightedSentenceIndex] = useState(-1);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [selectedText, setSelectedText] = useState("");
   const [isPaused, setIsPaused] = useState(false);
@@ -1758,11 +1759,14 @@ function Workspace({
     if (index >= textChunks.length) {
       isChunkFetchingRef.current = false;
       handleStop();
-      setReadingProgress(100);
-      syncProgressDebounced(currentStoryId, 100);
+      if (!single) {
+        setReadingProgress(100);
+        syncProgressDebounced(currentStoryId, 100);
+      }
       return;
     }
 
+    setHighlightedSentenceIndex(-1);
     currentAudioRef.current = null;
     setCurrentChunkIndex(index);
     currentChunkIndexRef.current = index;
@@ -1777,8 +1781,10 @@ function Workspace({
       window.dispatchEvent(new CustomEvent('speakling-user-active', { detail: { type: 'sentence_progress', index } }));
     }
 
-    // Zlicz zdanie czytane przez lektora
-    markSentenceAsRead(index);
+    // Zlicz zdanie czytane przez lektora TYLKO w procesie czytania całościowego tekstu
+    if (!single) {
+      markSentenceAsRead(index);
+    }
 
     setActivityLog(prev => [
       ...prev,
@@ -1814,9 +1820,12 @@ function Workspace({
       audio.onended = () => {
         if (!globalAudioManager.isValid(requestId)) return;
         globalAudioManager.release(requestId);
-        markSentenceAsRead(index);
+        
+        if (!single) {
+          markSentenceAsRead(index);
+        }
 
-        if (index === textChunks.length - 1) {
+        if (!single && index === textChunks.length - 1) {
           // Lektor ukończył ostatnie zdanie tekstu -> 100%
           setReadingProgress(100);
           syncProgressDebounced(currentStoryId, 100);
@@ -1828,7 +1837,21 @@ function Workspace({
         }
 
         if (single) {
-          handleStop();
+          // Zakończono czytanie pojedynczego zdania:
+          // 1. Zatrzymujemy odtwarzanie lektora
+          setIsSpeaking(false);
+          isSpeakingRef.current = false;
+          setIsPaused(false);
+          isPausedRef.current = false;
+          currentAudioRef.current = null;
+          if (typeof window !== "undefined") {
+            window.__speakling_is_reading_aloud = false;
+          }
+          setCurrentChunkIndex(-1);
+          currentChunkIndexRef.current = -1;
+          setPlaySingle(false);
+          // 2. Pozostawiamy przeczytane indywidualne zdanie podświetlone do czasu podjęcia dalszej decyzji przez użytkownika
+          setHighlightedSentenceIndex(index);
         } else {
           // Naturalna, krótka mikropauza (80ms) – eliminuje nienaturalną ciszę, lektor czyta płynnie
           setTimeout(() => {
@@ -1897,7 +1920,13 @@ function Workspace({
         window.__speakling_is_reading_aloud = false;
       }
     } else {
-      const idx = currentChunkIndexRef.current === -1 || currentChunkIndexRef.current >= textChunks.length ? 0 : currentChunkIndexRef.current;
+      let idx = 0;
+      if (highlightedSentenceIndex >= 0 && highlightedSentenceIndex < textChunks.length) {
+        idx = highlightedSentenceIndex;
+      } else if (currentChunkIndexRef.current >= 0 && currentChunkIndexRef.current < textChunks.length) {
+        idx = currentChunkIndexRef.current;
+      }
+      setHighlightedSentenceIndex(-1);
       speakChunk(idx, false);
     }
   };
@@ -1921,10 +1950,12 @@ function Workspace({
     setPlaySingle(false);
     wasPlayingBeforeTooltipRef.current = false;
     pausedChunkIndexRef.current = -1;
+    setHighlightedSentenceIndex(-1);
   };
 
   const handlePlaySentence = (index, single = false) => {
     setIsGeneratorCollapsed(true);
+    setHighlightedSentenceIndex(-1);
     if (isSpeaking && currentChunkIndex === index && playSingle === single) {
       handlePlayback();
     } else {
@@ -2845,11 +2876,13 @@ function Workspace({
 
   const computedReadingProgress = useMemo(() => {
     if (textChunks.length === 0) return typeof readingProgress === "number" ? readingProgress : 0;
-    if (currentChunkIndex >= 0) {
-      return Math.min(100, Math.round(((currentChunkIndex + 1) / textChunks.length) * 100));
+    // Pasek postępu odnosi się tylko i wyłącznie do procesu czytania tekstu w całości (ciągłego czytania)
+    if (!playSingle && currentChunkIndex >= 0) {
+      const activeProgress = Math.min(100, Math.round(((currentChunkIndex + 1) / textChunks.length) * 100));
+      return Math.max(typeof readingProgress === "number" ? readingProgress : 0, activeProgress);
     }
     return typeof readingProgress === "number" ? readingProgress : 0;
-  }, [currentChunkIndex, textChunks, readingProgress]);
+  }, [currentChunkIndex, playSingle, textChunks, readingProgress]);
 
   const handleDeleteStoryWord = async (word) => {
     if (!word) return;
@@ -3056,7 +3089,7 @@ function Workspace({
   const renderParagraphTokens = (pText, pIdx) => {
     const sents = (paragraphSentences && paragraphSentences[pIdx]) ? paragraphSentences[pIdx] : [{ chunkIndex: -1, text: pText }];
     return sents.map((sentence, sIdx) => {
-      const isCurrentReading = (isSpeaking || isPaused || wasPlayingBeforeTooltipRef.current) && currentChunkIndex >= 0 && sentence.chunkIndex === currentChunkIndex;
+      const isCurrentReading = ((isSpeaking || isPaused || wasPlayingBeforeTooltipRef.current) && currentChunkIndex >= 0 && sentence.chunkIndex === currentChunkIndex) || (highlightedSentenceIndex >= 0 && sentence.chunkIndex === highlightedSentenceIndex);
       const tokens = sentence.text.split(/([\w\u00C0-\u017F'-]+)/g);
 
       return (
@@ -3294,7 +3327,7 @@ function Workspace({
           <button
             className="player-btn player-stop-btn"
             onClick={handleStop}
-            disabled={!isSpeaking && !isPaused}
+            disabled={!isSpeaking && !isPaused && highlightedSentenceIndex === -1}
             title="Zatrzymaj"
           >
             <svg viewBox="0 0 24 24" fill="currentColor">
@@ -3430,7 +3463,7 @@ function Workspace({
               </div>
             </button>
 
-            {(isSpeaking || isPaused) && (
+            {(isSpeaking || isPaused || highlightedSentenceIndex >= 0) && (
               <button
                 type="button"
                 className="sentence-context-action-btn stop-action"
@@ -3777,7 +3810,7 @@ function Workspace({
                   )}
                 </button>
 
-                {(isSpeaking || isPaused) && (
+                {(isSpeaking || isPaused || highlightedSentenceIndex >= 0) && (
                   <button
                     className="toolbar-pill-btn toolbar-stop-btn"
                     onClick={handleStop}
