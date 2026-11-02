@@ -302,6 +302,8 @@ function Workspace({
     activeStoryIdRef.current = currentStoryId;
   }, [currentStoryId]);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [sentenceContextMenu, setSentenceContextMenu] = useState(null);
+  const sentenceContextMenuRef = useRef(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [selectedText, setSelectedText] = useState("");
   const [isPaused, setIsPaused] = useState(false);
@@ -847,6 +849,28 @@ function Workspace({
       document.removeEventListener("touchstart", handleOutsideClick);
     };
   }, [menuVisible]);
+
+  useEffect(() => {
+    if (!sentenceContextMenu) return;
+    const handleOutsideClick = (e) => {
+      if (sentenceContextMenuRef.current && !sentenceContextMenuRef.current.contains(e.target)) {
+        setSentenceContextMenu(null);
+      }
+    };
+    const handleEscape = (e) => {
+      if (e.key === "Escape") {
+        setSentenceContextMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [sentenceContextMenu]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1907,6 +1931,44 @@ function Workspace({
       handleStop();
       speakChunk(index, single);
     }
+  };
+
+  const handleSentenceContextMenu = (e, chunkIndex, sentenceText) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    let idx = chunkIndex;
+    if (idx === undefined || idx === null || idx < 0) {
+      if (textChunks && textChunks.length > 0) {
+        const trimmed = (sentenceText || "").trim();
+        const found = textChunks.findIndex(c => c.trim().includes(trimmed) || trimmed.includes(c.trim()));
+        idx = found !== -1 ? found : 0;
+      } else {
+        idx = 0;
+      }
+    }
+
+    const clickX = e.clientX;
+    const clickY = e.clientY;
+
+    const menuWidth = 290;
+    const menuHeight = 280;
+    let x = clickX;
+    let y = clickY;
+
+    if (x + menuWidth > window.innerWidth - 12) {
+      x = Math.max(12, window.innerWidth - menuWidth - 12);
+    }
+    if (y + menuHeight > window.innerHeight - 12) {
+      y = Math.max(12, clickY - menuHeight);
+    }
+
+    setSentenceContextMenu({
+      chunkIndex: idx,
+      sentenceText: sentenceText || (textChunks && textChunks[idx]) || "",
+      x,
+      y
+    });
   };
 
   const handleTextSelection = (e) => {
@@ -3002,11 +3064,19 @@ function Workspace({
           <span
             className={`story-sentence ${isCurrentReading ? "reading-now" : ""}`}
             data-chunk-index={sentence.chunkIndex}
+            onContextMenu={(e) => handleSentenceContextMenu(e, sentence.chunkIndex, sentence.text)}
           >
             {tokens.map((token, tIdx) => {
               const isWord = /[\w\u00C0-\u017F'-]+/.test(token);
               if (!isWord) {
-                return <span key={tIdx}>{token}</span>;
+                return (
+                  <span
+                    key={tIdx}
+                    onContextMenu={(e) => handleSentenceContextMenu(e, sentence.chunkIndex, sentence.text)}
+                  >
+                    {token}
+                  </span>
+                );
               }
               const cleanWord = token.toLowerCase();
               const isSelected = inlineWordData && inlineWordData.word.toLowerCase() === cleanWord && inlineWordData.paragraphIndex === pIdx;
@@ -3019,6 +3089,7 @@ function Workspace({
                     e.stopPropagation();
                     handleFigmaWordClick(token, pIdx, sentence.text);
                   }}
+                  onContextMenu={(e) => handleSentenceContextMenu(e, sentence.chunkIndex, sentence.text)}
                 >
                   {token}
                 </span>
@@ -3274,6 +3345,162 @@ function Workspace({
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8" />
               </svg>
               Przećwicz wymowę
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Submenu zdania po kliknięciu prawym przyciskiem myszy */}
+      {sentenceContextMenu && (
+        <div
+          ref={sentenceContextMenuRef}
+          className="sentence-context-menu"
+          style={{
+            top: sentenceContextMenu.y,
+            left: sentenceContextMenu.x
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <div className="sentence-context-menu-header">
+            <div className="sentence-context-menu-badge">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 6h16M4 12h10M4 18h14" />
+              </svg>
+              <span>Zdanie {sentenceContextMenu.chunkIndex + 1}</span>
+            </div>
+            <button
+              type="button"
+              className="sentence-context-menu-close"
+              onClick={() => setSentenceContextMenu(null)}
+              title="Zamknij menu"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="6" />
+              </svg>
+            </button>
+          </div>
+
+          {sentenceContextMenu.sentenceText && (
+            <div className="sentence-context-menu-preview" title={sentenceContextMenu.sentenceText}>
+              "{sentenceContextMenu.sentenceText.length > 90
+                ? sentenceContextMenu.sentenceText.substring(0, 90) + "..."
+                : sentenceContextMenu.sentenceText}"
+            </div>
+          )}
+
+          <div className="sentence-context-menu-actions">
+            <button
+              type="button"
+              className="sentence-context-action-btn primary-action"
+              onClick={() => {
+                handlePlaySentence(sentenceContextMenu.chunkIndex, false);
+                setSentenceContextMenu(null);
+              }}
+              title="Czytaj lektorem od tego zdania do końca tekstu"
+            >
+              <div className="sentence-action-icon-circle play-all-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M5 13h11.86l-5.43 5.43 1.42 1.42L21.14 12l-8.29-8.29-1.42 1.42 5.43 5.43H5v2z" />
+                </svg>
+              </div>
+              <div className="sentence-action-text-group">
+                <span className="sentence-action-title">Czytaj od tego zdania</span>
+                <span className="sentence-action-subtitle">Odtwarzaj tekst od tego momentu</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="sentence-context-action-btn"
+              onClick={() => {
+                handlePlaySentence(sentenceContextMenu.chunkIndex, true);
+                setSentenceContextMenu(null);
+              }}
+              title="Odsłuchaj tylko to pojedyncze zdanie"
+            >
+              <div className="sentence-action-icon-circle play-single-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+              <div className="sentence-action-text-group">
+                <span className="sentence-action-title">Tylko to zdanie</span>
+                <span className="sentence-action-subtitle">Pojedyncze odsłuchanie zdania</span>
+              </div>
+            </button>
+
+            {(isSpeaking || isPaused) && (
+              <button
+                type="button"
+                className="sentence-context-action-btn stop-action"
+                onClick={() => {
+                  handleStop();
+                  setSentenceContextMenu(null);
+                }}
+                title="Zatrzymaj lektora"
+              >
+                <div className="sentence-action-icon-circle stop-icon">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                </div>
+                <div className="sentence-action-text-group">
+                  <span className="sentence-action-title">Zatrzymaj czytanie</span>
+                  <span className="sentence-action-subtitle">Wstrzymaj lektora</span>
+                </div>
+              </button>
+            )}
+
+            <div className="sentence-context-divider" />
+
+            <button
+              type="button"
+              className="sentence-context-action-btn"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('open-instant-translator', {
+                  detail: {
+                    sentence: sentenceContextMenu.sentenceText,
+                    phrase: sentenceContextMenu.sentenceText
+                  }
+                }));
+                setSentenceContextMenu(null);
+              }}
+              title="Przetłumacz całe to zdanie na język polski"
+            >
+              <div className="sentence-action-icon-circle translate-icon">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" />
+                </svg>
+              </div>
+              <div className="sentence-action-text-group">
+                <span className="sentence-action-title">Przetłumacz zdanie</span>
+                <span className="sentence-action-subtitle">Otwórz szybkie tłumaczenie</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="sentence-context-action-btn"
+              onClick={() => {
+                setPracticeTargetText(sentenceContextMenu.sentenceText);
+                setShowPracticeModal(true);
+                setSentenceContextMenu(null);
+              }}
+              title="Przećwicz wymowę tego zdania z mikrofonem i oceną AI"
+            >
+              <div className="sentence-action-icon-circle mic-icon">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3M8 22h8" />
+                </svg>
+              </div>
+              <div className="sentence-action-text-group">
+                <span className="sentence-action-title">Przećwicz wymowę</span>
+                <span className="sentence-action-subtitle">Nagraj i sprawdź swój akcent</span>
+              </div>
             </button>
           </div>
         </div>
@@ -3612,7 +3839,11 @@ function Workspace({
               <div className="story-divider" />
 
               {/* Paragraphs */}
-              <div className={`story-body-content font-size-${fontSizeMode}`}>
+              <div 
+                className={`story-body-content font-size-${fontSizeMode}`}
+                onMouseUp={handleTextSelection}
+                onTouchEnd={handleTextSelection}
+              >
                 {paragraphs.map((pText, pIdx) => {
                   const isInlineInThisParagraph = inlineWordData && inlineWordData.paragraphIndex === pIdx;
                   return (
