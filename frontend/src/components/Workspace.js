@@ -364,6 +364,9 @@ function Workspace({
 
   // Create your next story banner states (Figma top card)
   const [isGeneratorCollapsed, setIsGeneratorCollapsed] = useState(false);
+  const [createCardMode, setCreateCardMode] = useState("ai"); // "ai" | "paste"
+  const [pastedStoryTitle, setPastedStoryTitle] = useState("");
+  const [pastedStoryText, setPastedStoryText] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Business");
   const [selectedLevel, setSelectedLevel] = useState("B2");
   const [customStoryPrompt, setCustomStoryPrompt] = useState("");
@@ -1607,6 +1610,9 @@ function Workspace({
   };
 
   const pasteStory = async (pastedText, customTitle = "") => {
+    const cleanText = (pastedText || "").trim();
+    if (!cleanText) return;
+
     handleStop();
     setIsLoading(true);
     setGeneratedText("");
@@ -1622,37 +1628,94 @@ function Workspace({
     setIsContinuing(false);
     setContinuationDetails("");
     setSelectedContinuationTopics([]);
+    setReadingProgress(0);
+    setReadSentenceIndices(new Set());
+    setParagraphTranslations({});
+    setShowFullTranslation(false);
+    setCurrentChunkIndex(-1);
 
     try {
-      const title = customTitle.trim() || "Imported Practice Text";
-      setGeneratedText(pastedText);
-      setCurrentStoryTitle(title);
-      // Automatycznie zapisz wklejony tekst w bazie danych na serwerze (identycznie jak AI)
-      const savedStory = await saveStoryToDb(title, pastedText);
-      if (savedStory && savedStory.id) {
-        const userKey = user?.email || user?.uid || "guest";
-        try {
-          localStorage.setItem(`buddy_story_notebook_words_${userKey}_${savedStory.id}`, JSON.stringify([]));
-        } catch (e) {}
-        activeStoryIdRef.current = savedStory.id;
-        setNotebookWords([]);
-        setDismissedStoryWords(new Set());
-        setInlineWordData(null);
-        const newPart = {
-          id: savedStory.id,
-          title: title,
-          text: pastedText,
-          part_number: 1
-        };
-        setStoryParts([newPart]);
-        setActivePartIndex(0);
-        setLoadedRootId(savedStory.id);
-        setCurrentStoryId(savedStory.id);
+      let title = (customTitle || "").trim();
+      if (!title) {
+        const firstLine = cleanText.split(/\n+/)[0].trim();
+        if (firstLine.length > 0 && firstLine.length <= 65 && !/[.!?]$/.test(firstLine)) {
+          title = firstLine;
+        } else {
+          const words = cleanText.split(/\s+/).slice(0, 6).join(" ").replace(/[.,!?;:]+$/, "");
+          title = words ? `${words}...` : "Własne opowiadanie";
+        }
       }
+
+      const detectedLevel = calculateCEFRLevel(cleanText, title) || selectedLevel || "B2";
+      setSelectedLevel(detectedLevel);
+      setGeneratedText(cleanText);
+      setCurrentStoryTitle(title);
+
+      // Automatycznie zapisz wklejony tekst w bazie danych na serwerze (identycznie jak AI)
+      const savedStory = await saveStoryToDb(title, cleanText, {
+        level: detectedLevel,
+        cefr_level: detectedLevel,
+        category: selectedCategory || "Custom",
+        topics: [selectedCategory || "Custom"]
+      });
+
+      const partId = (savedStory && savedStory.id) ? savedStory.id : `custom_${Date.now()}`;
+      const userKey = user?.email || user?.uid || "guest";
+      try {
+        localStorage.setItem(`buddy_story_notebook_words_${userKey}_${partId}`, JSON.stringify([]));
+        localStorage.setItem(`buddy_story_progress_${partId}`, 0);
+        localStorage.removeItem(`buddy_story_read_sentences_${partId}`);
+      } catch (e) {}
+
+      activeStoryIdRef.current = partId;
+      setNotebookWords([]);
+      setDismissedStoryWords(new Set());
+      setInlineWordData(null);
+      const newPart = {
+        id: partId,
+        title: title,
+        text: cleanText,
+        part_number: 1,
+        level: detectedLevel,
+        cefr_level: detectedLevel,
+        category: selectedCategory || "Custom",
+        topics: [selectedCategory || "Custom"],
+        read_progress: 0
+      };
+      setStoryParts([newPart]);
+      setActivePartIndex(0);
+      setLoadedRootId(partId);
+      setCurrentStoryId(partId);
+      setPastedStoryText("");
+      setPastedStoryTitle("");
+      setIsGeneratorCollapsed(true);
     } catch (error) {
       console.error("Błąd podczas zapisywania wklejonego tekstu:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handlePasteCustomStory = async () => {
+    if (!pastedStoryText.trim()) {
+      alert("Wklej treść opowiadania przed wczytaniem.");
+      return;
+    }
+    await pasteStory(pastedStoryText, pastedStoryTitle);
+  };
+
+  const handlePasteFromClipboard = async () => {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      alert("Twoja przeglądarka nie obsługuje bezpośredniego odczytu schowka. Użyj skrótu Ctrl+V (lub Cmd+V) w polu tekstowym.");
+      return;
+    }
+    try {
+      const clipText = await navigator.clipboard.readText();
+      if (clipText && clipText.trim()) {
+        setPastedStoryText(clipText);
+      }
+    } catch (err) {
+      console.warn("Brak dostępu do schowka:", err);
     }
   };
 
@@ -3592,16 +3655,48 @@ function Workspace({
       )}
 
       <div className="workspace-figma-container">
-        {/* Collapsible Panel: Create your next story / Continue your story */}
+        {/* Collapsible Panel: Create your next story / Continue your story / Paste own story */}
         <div className={`workspace-create-story-card ${isGeneratorCollapsed ? "collapsed" : ""}`}>
           <div className="create-story-top-row">
             <div className="create-story-title-group">
               <h2 className="create-story-heading">
-                {isContinuing
-                  ? `Continue your story ${storyParts.length > 0 ? `(Part ${storyParts.length + 1})` : ""}`
-                  : "Create your next story"}
+                {createCardMode === "paste"
+                  ? "Wklej własne opowiadanie"
+                  : isContinuing
+                    ? `Continue your story ${storyParts.length > 0 ? `(Part ${storyParts.length + 1})` : ""}`
+                    : "Create your next story"}
               </h2>
-              {isContinuing && (
+              <div className="create-story-mode-tabs" role="tablist" aria-label="Tryb tworzenia opowiadania">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={createCardMode === "ai"}
+                  className={`create-story-mode-tab ${createCardMode === "ai" ? "active" : ""}`}
+                  onClick={() => setCreateCardMode("ai")}
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                  <span>Generator AI</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={createCardMode === "paste"}
+                  className={`create-story-mode-tab ${createCardMode === "paste" ? "active" : ""}`}
+                  onClick={() => {
+                    setCreateCardMode("paste");
+                    if (isContinuing) setIsContinuing(false);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                  </svg>
+                  <span>Wklej własny tekst</span>
+                </button>
+              </div>
+              {createCardMode === "ai" && isContinuing && (
                 <button
                   type="button"
                   className="create-story-cancel-btn"
@@ -3627,80 +3722,169 @@ function Workspace({
             </div>
           </div>
 
-          <div className="create-story-controls-row">
-            <div className="create-story-chips">
-              {["Business", "Daily Life", "Travel", "Tech"].map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  className={`create-story-chip ${selectedCategory === cat ? "active" : ""}`}
-                  onClick={() => setSelectedCategory(cat)}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-
-            <div className="create-story-right-controls">
-              <div className="create-story-level-select-wrapper">
-                <select
-                  className="create-story-level-select"
-                  value={selectedLevel}
-                  onChange={(e) => setSelectedLevel(e.target.value)}
-                >
-                  {["A1", "A2", "B1", "B2", "C1", "C2"].map((lvl) => (
-                    <option key={lvl} value={lvl}>{lvl}</option>
+          {createCardMode === "ai" ? (
+            <>
+              <div className="create-story-controls-row">
+                <div className="create-story-chips">
+                  {["Business", "Daily Life", "Travel", "Tech"].map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      className={`create-story-chip ${selectedCategory === cat ? "active" : ""}`}
+                      onClick={() => setSelectedCategory(cat)}
+                    >
+                      {cat}
+                    </button>
                   ))}
-                </select>
+                </div>
+
+                <div className="create-story-right-controls">
+                  <div className="create-story-level-select-wrapper">
+                    <select
+                      className="create-story-level-select"
+                      value={selectedLevel}
+                      onChange={(e) => setSelectedLevel(e.target.value)}
+                    >
+                      {["A1", "A2", "B1", "B2", "C1", "C2"].map((lvl) => (
+                        <option key={lvl} value={lvl}>{lvl}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    className={`create-story-generate-btn ${isStarterUser ? "pro-locked" : ""}`}
+                    onClick={handleGenerateFigmaStory}
+                    disabled={isGeneratingStory || isLoading}
+                    title={isStarterUser ? "Tworzenie własnych historii AI wymaga pakietu PRO" : "Stwórz opowiadanie"}
+                  >
+                    {isStarterUser && (
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    )}
+                    <span>
+                      {isGeneratingStory || isLoading
+                        ? (isContinuing ? "Tworzę kontynuację..." : "Tworzę opowiadanie...")
+                        : (isContinuing
+                            ? (storyParts.length > 0 ? `Wygeneruj część ${storyParts.length + 1}` : "Kontynuuj opowiadanie")
+                            : "Create a story"
+                          )
+                      }
+                    </span>
+                    {isStarterUser && <span className="workspace-pro-badge">PRO</span>}
+                  </button>
+                </div>
               </div>
 
-              <button
-                type="button"
-                className={`create-story-generate-btn ${isStarterUser ? "pro-locked" : ""}`}
-                onClick={handleGenerateFigmaStory}
-                disabled={isGeneratingStory || isLoading}
-                title={isStarterUser ? "Tworzenie własnych historii AI wymaga pakietu PRO" : "Stwórz opowiadanie"}
-              >
-                {isStarterUser && (
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                )}
-                <span>
-                  {isGeneratingStory || isLoading
-                    ? (isContinuing ? "Tworzę kontynuację..." : "Tworzę opowiadanie...")
-                    : (isContinuing
-                        ? (storyParts.length > 0 ? `Wygeneruj część ${storyParts.length + 1}` : "Kontynuuj opowiadanie")
-                        : "Create a story"
-                      )
-                  }
-                </span>
-                {isStarterUser && <span className="workspace-pro-badge">PRO</span>}
-              </button>
+              <div className="create-story-prompt-wrapper">
+                <label htmlFor="create-story-prompt" className="create-story-prompt-label">
+                  {isContinuing ? "Co ma się wydarzyć w kolejnej części? (opcjonalnie):" : "Własny opis opowiadania (opcjonalnie):"}
+                </label>
+                <textarea
+                  id="create-story-prompt"
+                  className="create-story-prompt-textarea"
+                  value={customStoryPrompt}
+                  onChange={(e) => setCustomStoryPrompt(e.target.value)}
+                  placeholder={isContinuing
+                    ? "Np. Alex poznaje przewodnika, dociera do tajemniczego miejsca, dochodzi do niespodziewanego zwrotu akcji..."
+                    : "Np. Maya jest młodą projektantką w Cambridge. Opisz jej pierwszy dzień w pracy i rozmowę z wymagającym klientem..."}
+                  rows="3"
+                  disabled={isGeneratingStory || isLoading}
+                />
+              </div>
+
+              <div className="create-story-footer-note">
+                CEFR levels: A1 • A2 • B1 • B2 • C1 • C2. Stories are tailored to your selected level.
+              </div>
+            </>
+          ) : (
+            <div className="create-story-paste-section">
+              <div className="create-story-paste-top-controls">
+                <div className="create-story-paste-title-wrap">
+                  <input
+                    id="create-story-paste-title"
+                    type="text"
+                    className="create-story-paste-title-input"
+                    value={pastedStoryTitle}
+                    onChange={(e) => setPastedStoryTitle(e.target.value)}
+                    placeholder="Tytuł opowiadania lub artykułu (opcjonalnie)..."
+                    disabled={isLoading || isGeneratingStory}
+                  />
+                </div>
+                <div className="create-story-right-controls">
+                  <button
+                    type="button"
+                    className="create-story-clipboard-btn"
+                    onClick={handlePasteFromClipboard}
+                    disabled={isLoading || isGeneratingStory}
+                    title="Wklej tekst bezpośrednio ze schowka"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                    </svg>
+                    <span>Ze schowka</span>
+                  </button>
+
+                  {(pastedStoryText || pastedStoryTitle) && (
+                    <button
+                      type="button"
+                      className="create-story-clear-btn"
+                      onClick={() => {
+                        setPastedStoryText("");
+                        setPastedStoryTitle("");
+                      }}
+                      disabled={isLoading || isGeneratingStory}
+                      title="Wyczyść wpisany tekst"
+                    >
+                      Wyczyść
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="create-story-generate-btn create-story-paste-submit-btn"
+                    onClick={handlePasteCustomStory}
+                    disabled={isLoading || isGeneratingStory || !pastedStoryText.trim()}
+                    title="Wczytaj wklejone opowiadanie do czytnika"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    <span>{isLoading ? "Wczytuję tekst..." : "Wczytaj opowiadanie"}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="create-story-prompt-wrapper">
+                <div className="create-story-paste-label-row">
+                  <label htmlFor="create-story-paste-textarea" className="create-story-prompt-label">
+                    Treść własnego opowiadania (wklej tekst po angielsku):
+                  </label>
+                  {pastedStoryText.trim() && (
+                    <span className="create-story-paste-counter">
+                      {pastedStoryText.trim().split(/\s+/).filter(Boolean).length} słów · ~{Math.max(1, Math.ceil(pastedStoryText.trim().split(/\s+/).filter(Boolean).length / 130))} min czytania · poziom {calculateCEFRLevel(pastedStoryText, pastedStoryTitle) || "B2"}
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  id="create-story-paste-textarea"
+                  className="create-story-prompt-textarea paste-story-textarea"
+                  value={pastedStoryText}
+                  onChange={(e) => setPastedStoryText(e.target.value)}
+                  placeholder="Wklej tutaj dowolne opowiadanie, artykuł, e-mail lub fragment książki po angielsku. Kliknij dowolne słowo podczas czytania, aby sprawdzić wymowę, tłumaczenie zdania i zapisać słownictwo..."
+                  rows="5"
+                  disabled={isLoading || isGeneratingStory}
+                />
+              </div>
+
+              <div className="create-story-footer-note">
+                Wklejony tekst zostanie automatycznie podzielony na interaktywne zdania z lektorem AI, tłumaczeniem i słowniczkiem.
+              </div>
             </div>
-          </div>
-
-          <div className="create-story-prompt-wrapper">
-            <label htmlFor="create-story-prompt" className="create-story-prompt-label">
-              {isContinuing ? "Co ma się wydarzyć w kolejnej części? (opcjonalnie):" : "Własny opis opowiadania (opcjonalnie):"}
-            </label>
-            <textarea
-              id="create-story-prompt"
-              className="create-story-prompt-textarea"
-              value={customStoryPrompt}
-              onChange={(e) => setCustomStoryPrompt(e.target.value)}
-              placeholder={isContinuing
-                ? "Np. Alex poznaje przewodnika, dociera do tajemniczego miejsca, dochodzi do niespodziewanego zwrotu akcji..."
-                : "Np. Maya jest młodą projektantką w Cambridge. Opisz jej pierwszy dzień w pracy i rozmowę z wymagającym klientem..."}
-              rows="3"
-              disabled={isGeneratingStory || isLoading}
-            />
-          </div>
-
-          <div className="create-story-footer-note">
-            CEFR levels: A1 • A2 • B1 • B2 • C1 • C2. Stories are tailored to your selected level.
-          </div>
+          )}
         </div>
 
         {/* Sleek expandable pill when collapsed */}
@@ -3709,10 +3893,28 @@ function Workspace({
             <button
               type="button"
               className="workspace-open-generator-pill"
-              onClick={() => setIsGeneratorCollapsed(false)}
+              onClick={() => {
+                setCreateCardMode("ai");
+                setIsGeneratorCollapsed(false);
+              }}
               title="Otwórz generator opowieści"
             >
               <span>{isContinuing ? `Continue your story (Part ${storyParts.length + 1})` : `Create your next story (${selectedCategory} · ${selectedLevel})`}</span>
+            </button>
+            <button
+              type="button"
+              className="workspace-open-generator-pill workspace-open-paste-pill"
+              onClick={() => {
+                setCreateCardMode("paste");
+                setIsGeneratorCollapsed(false);
+              }}
+              title="Wklej własny tekst do nauki"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+              </svg>
+              <span>Wklej własne opowiadanie</span>
             </button>
           </div>
         )}
@@ -3739,6 +3941,7 @@ function Workspace({
                     return;
                   }
                   handleStop();
+                  setCreateCardMode("ai");
                   setIsContinuing(true);
                   setIsGeneratorCollapsed(false);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
