@@ -2820,8 +2820,78 @@ def aggregate_transcript(entries):
 
     return stitched
 
+
+ENGLISH_COMMON_WORDS = {
+    "the", "and", "to", "of", "in", "is", "it", "that", "you", "for", "with", "on", "as",
+    "are", "this", "was", "be", "at", "have", "from", "or", "by", "not", "but", "what",
+    "all", "were", "we", "when", "your", "can", "there", "an", "their", "they", "which",
+    "will", "would", "about", "up", "out", "if", "who", "get", "go", "me", "my", "so",
+    "just", "like", "know", "people", "time", "how", "one", "he", "she", "his", "her",
+    "do", "don't", "it's", "i'm", "we're", "that's", "there's", "you're", "they're",
+    "has", "had", "been", "into", "more", "other", "some", "could", "them", "see",
+    "than", "then", "now", "look", "only", "come", "its", "over", "think", "also",
+    "back", "after", "use", "two", "our", "work", "first", "well", "way", "even",
+    "new", "want", "because", "any", "these", "give", "day", "most", "us", "i", "a"
+}
+
+
+def is_english_transcript(segments):
+    """
+    Weryfikuje, czy przekazana lista segmentów napisów jest w języku angielskim.
+    Odrzuca napisy w innych alfabetach (np. arabskim, cyrylicy, chińskim) oraz
+    w innych językach łacińskich, aby uniknąć niepotrzebnych kosztów przetwarzania AI i tłumaczeń.
+    """
+    if not segments or not isinstance(segments, list):
+        return False
+
+    sample_texts = []
+    for seg in segments[:80]:
+        if isinstance(seg, dict):
+            seg_lang = str(seg.get("lang") or seg.get("language") or "").strip().lower()
+            if seg_lang and not (seg_lang == "en" or seg_lang.startswith("en-") or seg_lang.startswith("en_")):
+                return False
+            t = (seg.get("text") or "").strip()
+            if t:
+                sample_texts.append(t)
+        elif isinstance(seg, str) and seg.strip():
+            sample_texts.append(seg.strip())
+
+    combined = " ".join(sample_texts).strip()
+    if not combined:
+        return False
+
+    latin_count = 0
+    non_latin_alpha_count = 0
+    for ch in combined:
+        if 'a' <= ch <= 'z' or 'A' <= ch <= 'Z':
+            latin_count += 1
+        elif ch.isalpha():
+            non_latin_alpha_count += 1
+
+    total_alpha = latin_count + non_latin_alpha_count
+    if total_alpha == 0:
+        return False
+
+    if (latin_count / total_alpha) < 0.90:
+        return False
+
+    words = re.findall(r"[a-z']+", combined.lower())
+    if not words:
+        return False
+
+    if len(words) >= 12:
+        en_hits = sum(1 for w in words if w in ENGLISH_COMMON_WORDS)
+        if (en_hits / len(words)) < 0.10:
+            return False
+
+    return True
+
+
 def semantic_group_transcript(entries):
     if not entries:
+        return []
+    if not is_english_transcript(entries):
+        print("semantic_group_transcript: Odrzucono nieangielskie napisy przed wywołaniem LLM (ochrona kosztów).", flush=True)
         return []
     
     if not API_TOKEN:
@@ -3006,68 +3076,56 @@ def fetch_youtube_captions_robust(video_id):
         pass
 
     # 0. RapidAPI YouTube Transcript (100% odporne na blokady datacenter Cloud Run)
+    # ZAWSZE wymuszamy język angielski (lang=en / en-US / en-GB) i weryfikujemy treść przed zwróceniem!
     rapidapi_key = os.getenv("RAPIDAPI_KEY")
     rapidapi_host = os.getenv("RAPIDAPI_YOUTUBE_HOST", "youtube-transcript3.p.rapidapi.com")
     if rapidapi_key:
-        print(f"fetch_youtube_captions_robust: pobieranie napisów przez RapidAPI ({rapidapi_host}) dla {video_id}...", flush=True)
+        print(f"fetch_youtube_captions_robust: pobieranie angielskich napisów przez RapidAPI ({rapidapi_host}) dla {video_id}...", flush=True)
         url = f"https://{rapidapi_host}/api/transcript-with-url"
         headers = {
             "x-rapidapi-key": rapidapi_key,
             "x-rapidapi-host": rapidapi_host
         }
-        transcript_list = None
-        # Próba 1: bez wymuszania lang (najszybsza i najbardziej niezawodna dla RapidAPI, zwraca oryginalny język w ~2s)
-        try:
-            resp = requests.get(
-                url,
-                headers=headers,
-                params={"url": f"https://www.youtube.com/watch?v={video_id}"},
-                timeout=12
-            )
-            data = resp.json() if resp.ok else {}
-            raw_list = data.get("transcript") if isinstance(data, dict) else None
-            if isinstance(raw_list, list) and len(raw_list) > 0:
-                transcript_list = raw_list
-        except Exception as r_err1:
-            print(f"RapidAPI próba 1 (auto lang) dla {video_id} błąd: {r_err1}", flush=True)
-
-        # Próba 2: z lang=en jeśli pierwsze zapytanie było puste
-        if not transcript_list:
+        import html
+        for target_lang in ["en", "en-US", "en-GB"]:
             try:
                 resp_en = requests.get(
                     url,
                     headers=headers,
-                    params={"url": f"https://www.youtube.com/watch?v={video_id}", "lang": "en"},
-                    timeout=8
+                    params={"url": f"https://www.youtube.com/watch?v={video_id}", "lang": target_lang},
+                    timeout=10
                 )
                 data_en = resp_en.json() if resp_en.ok else {}
                 raw_list = data_en.get("transcript") if isinstance(data_en, dict) else None
                 if isinstance(raw_list, list) and len(raw_list) > 0:
-                    transcript_list = raw_list
-            except Exception as r_err2:
-                print(f"RapidAPI próba 2 (lang=en) dla {video_id} błąd: {r_err2}", flush=True)
-
-        if isinstance(transcript_list, list) and len(transcript_list) > 0:
-            import html
-            for item in transcript_list:
-                raw_text = item.get("text", "")
-                text = html.unescape(raw_text).replace('\n', ' ').strip()
-                if not text:
-                    continue
-                try:
-                    start = round(float(item.get("offset", 0)), 2)
-                    duration = round(float(item.get("duration", 0)), 2)
-                    end = round(start + duration, 2)
-                except (ValueError, TypeError):
-                    continue
-                formatted.append({
-                    "start": start,
-                    "end": end,
-                    "text": text
-                })
-            if formatted:
-                print(f"fetch_youtube_captions_robust: RapidAPI pobrało {len(formatted)} segmentów dla {video_id}", flush=True)
-                return formatted, video_title
+                    candidate_formatted = []
+                    for item in raw_list:
+                        item_lang = str(item.get("lang") or item.get("language") or "").strip().lower()
+                        if item_lang and not (item_lang == "en" or item_lang.startswith("en-") or item_lang.startswith("en_")):
+                            continue
+                        raw_text = item.get("text", "")
+                        text = html.unescape(raw_text).replace('\n', ' ').strip()
+                        if not text:
+                            continue
+                        try:
+                            start = round(float(item.get("offset", 0)), 2)
+                            duration = round(float(item.get("duration", 0)), 2)
+                            end = round(start + duration, 2)
+                        except (ValueError, TypeError):
+                            continue
+                        candidate_formatted.append({
+                            "start": start,
+                            "end": end,
+                            "text": text
+                        })
+                    if candidate_formatted and is_english_transcript(candidate_formatted):
+                        formatted = candidate_formatted
+                        print(f"fetch_youtube_captions_robust: RapidAPI (lang={target_lang}) pobrało {len(formatted)} angielskich segmentów dla {video_id}", flush=True)
+                        return formatted, video_title
+                    elif candidate_formatted:
+                        print(f"fetch_youtube_captions_robust: RapidAPI (lang={target_lang}) zwróciło nieangielskie napisy dla {video_id} - odrzucono!", flush=True)
+            except Exception as r_err:
+                print(f"RapidAPI próba (lang={target_lang}) dla {video_id} błąd: {r_err}", flush=True)
 
     # 1. yt-dlp z klientami ios/android (bez mweb, który wywołuje bot-block na datacenter IP)
     try:
@@ -3091,12 +3149,14 @@ def fetch_youtube_captions_robust(video_id):
             auto_captions = info.get('automatic_captions', {}) or {}
 
             en_candidates = []
+            allowed_en_codes = {'en', 'en-orig', 'en-us', 'en-gb', 'en-ca', 'en-au', 'en-in', 'a.en'}
             for pool in [subtitles, auto_captions]:
-                for code in ['en', 'en-orig', 'en-US', 'en-GB', 'a.en']:
+                for code in ['en', 'en-orig', 'en-US', 'en-GB', 'en-CA', 'en-AU', 'a.en']:
                     if code in pool:
                         en_candidates.append(pool[code])
                 for code, tracks in pool.items():
-                    if code.startswith('en') and tracks not in en_candidates:
+                    code_low = code.lower()
+                    if (code_low in allowed_en_codes or code_low.startswith('en-')) and tracks not in en_candidates:
                         en_candidates.append(tracks)
 
             for track_list in en_candidates:
@@ -3111,9 +3171,9 @@ def fetch_youtube_captions_robust(video_id):
                             res = requests.get(track['url'], headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}, timeout=12)
                             if res.ok and res.text:
                                 parsed = parse_transcript_text(res.text, ext=track.get('ext', ''))
-                                if parsed:
+                                if parsed and is_english_transcript(parsed):
                                     formatted = parsed
-                                    print(f"fetch_youtube_captions_robust: pobrano {len(formatted)} segmentów ({preferred_ext}) dla {video_id}", flush=True)
+                                    print(f"fetch_youtube_captions_robust: pobrano {len(formatted)} angielskich segmentów ({preferred_ext}) dla {video_id}", flush=True)
                                     break
                         except Exception as req_err:
                             print(f"Błąd pobierania napisów {preferred_ext}: {req_err}", flush=True)
@@ -3125,15 +3185,17 @@ def fetch_youtube_captions_robust(video_id):
         try:
             from youtube_transcript_api import YouTubeTranscriptApi
             api = YouTubeTranscriptApi()
-            transcript = api.fetch(video_id, languages=['en', 'en-US', 'en-GB'])
+            transcript = api.fetch(video_id, languages=['en', 'en-US', 'en-GB', 'en-CA', 'en-AU'])
+            candidate_formatted = []
             for entry in transcript:
                 start = round(entry.start, 2)
                 duration = round(entry.duration, 2)
                 end = round(start + duration, 2)
                 text = entry.text.replace('\n', ' ').strip()
                 if text:
-                    formatted.append({"start": start, "end": end, "text": text})
-            if formatted:
+                    candidate_formatted.append({"start": start, "end": end, "text": text})
+            if candidate_formatted and is_english_transcript(candidate_formatted):
+                formatted = candidate_formatted
                 print(f"fetch_youtube_captions_robust: pobrano z youtube-transcript-api ({len(formatted)} segm.)", flush=True)
         except Exception as yt_api_err:
             print(f"fetch_youtube_captions_robust youtube-transcript-api error: {yt_api_err}", flush=True)
@@ -3147,12 +3209,15 @@ def fetch_youtube_captions_robust(video_id):
             caption = yt.captions.get('en') or yt.captions.get('a.en')
             if not caption:
                 for c_code in yt.captions:
-                    if c_code.startswith('en') or c_code.endswith('.en'):
+                    c_low = str(c_code).lower()
+                    if c_low == 'en' or c_low.startswith('en-') or c_low.endswith('.en'):
                         caption = yt.captions[c_code]
                         break
             if caption:
                 srt_data = caption.generate_srt_captions()
-                formatted = parse_transcript_text(srt_data, ext='srt')
+                parsed = parse_transcript_text(srt_data, ext='srt')
+                if parsed and is_english_transcript(parsed):
+                    formatted = parsed
         except Exception as py_err:
             print(f"fetch_youtube_captions_robust pytubefix error: {py_err}", flush=True)
 
@@ -3262,9 +3327,9 @@ def get_youtube_transcript():
     if fetched_title and video_title == f"Wideo YouTube ({video_id})":
         video_title = fetched_title
 
-    if not formatted:
+    if not formatted or not is_english_transcript(formatted):
         return jsonify({
-            "error": "Nie udało się pobrać transkrypcji dla tego filmu. Upewnij się, że film posiada angielskie napisy na YouTube."
+            "error": "Nie udało się pobrać angielskiej transkrypcji dla tego filmu. Upewnij się, że film posiada napisy w języku angielskim na YouTube."
         }), 404
 
     try:
@@ -3528,16 +3593,21 @@ def extract_subtitles_endpoint():
     if not video_id:
         return jsonify({"error": "Nieprawidłowy adres URL lub ID filmu YouTube."}), 400
 
-    # 1. Trwały Cache Firestore (0 kosztów, czas < 100ms)
+    # 1. Trwały Cache Firestore (0 kosztów, czas < 100ms) - weryfikujemy, czy zapisane napisy są po angielsku
     if db:
         try:
             cached_doc = db.collection('youtube_transcripts_cache').document(video_id).get()
             if cached_doc.exists:
                 cached_data = cached_doc.to_dict() or {}
-                if cached_data.get("segments") and len(cached_data["segments"]) > 0:
-                    print(f"extract_subtitles_endpoint: Zwracam napisy z pamięci podręcznej Firestore dla {video_id}", flush=True)
-                    cached_data["from_cache"] = True
-                    return jsonify(cached_data), 200
+                cached_segs = cached_data.get("segments") or []
+                if cached_segs and len(cached_segs) > 0:
+                    if is_english_transcript(cached_segs):
+                        print(f"extract_subtitles_endpoint: Zwracam angielskie napisy z pamięci podręcznej Firestore dla {video_id}", flush=True)
+                        cached_data["from_cache"] = True
+                        return jsonify(cached_data), 200
+                    else:
+                        print(f"extract_subtitles_endpoint: Usuwam nieangielskie napisy z cache Firestore dla {video_id}", flush=True)
+                        db.collection('youtube_transcripts_cache').document(video_id).delete()
         except Exception as cache_err:
             print(f"Błąd sprawdzania cache dla {video_id}: {cache_err}", flush=True)
 
@@ -3550,8 +3620,10 @@ def extract_subtitles_endpoint():
     except Exception as e:
         print(f"Error fetching title for {video_id}: {e}")
 
-    # 2. Próba pobrania istniejących napisów z YouTube (darmowe)
+    # 2. Próba pobrania istniejących angielskich napisów z YouTube (darmowe)
     formatted, fetched_title = fetch_youtube_captions_robust(video_id)
+    if formatted and not is_english_transcript(formatted):
+        formatted = None
     source_type = "youtube_captions"
     if fetched_title and video_title == f"Wideo YouTube ({video_id})":
         video_title = fetched_title
@@ -3579,7 +3651,7 @@ def extract_subtitles_endpoint():
         try:
             print(f"Brak napisów na YouTube dla {video_id}. Uruchamiam generowanie AI ze ścieżki audio...", flush=True)
             ai_segments, ai_title, engine = transcribe_youtube_audio_ai(video_id, user_email=user_email)
-            if ai_segments:
+            if ai_segments and is_english_transcript(ai_segments):
                 formatted = ai_segments
                 source_type = f"ai_audio_{engine}"
                 if ai_title:
@@ -3597,9 +3669,9 @@ def extract_subtitles_endpoint():
         except Exception as ai_err:
             print(f"Błąd transkrypcji AI dla {video_id}: {ai_err}", flush=True)
 
-    if not formatted:
+    if not formatted or not is_english_transcript(formatted):
         return jsonify({
-            "error": "Ten film nie posiada napisów na YouTube i nie udało się wygenerować transkrypcji AI ze ścieżki dźwiękowej. Możesz wkleić lub wgrać własny plik .srt."
+            "error": "Ten film nie posiada angielskich napisów na YouTube i nie udało się wygenerować angielskiej transkrypcji ze ścieżki dźwiękowej. Możesz wkleić lub wgrać własny angielski plik .srt."
         }), 404
 
     try:
@@ -3651,6 +3723,9 @@ def refine_subtitles_ai():
     segments = req_data.get("segments") or []
     if not segments:
         return jsonify({"error": "Brak segmentów do przetworzenia."}), 400
+
+    if not is_english_transcript(segments):
+        return jsonify({"error": "Wykryto napisy w języku innym niż angielski. Przetwarzanie AI obsługuje wyłącznie angielskie napisy."}), 400
 
     segments_to_process = segments[:150]
 
@@ -3775,6 +3850,14 @@ def handle_custom_videos():
             videos = []
             for doc in docs:
                 data = doc.to_dict() or {}
+                raw_transcript = data.get('transcript') or []
+                if raw_transcript and not is_english_transcript(raw_transcript):
+                    print(f"handle_custom_videos GET: Oczyszczam nieangielskie napisy dla wideo {data.get('id')}", flush=True)
+                    data['transcript'] = []
+                    try:
+                        db.collection('user_custom_videos').document(doc.id).update({'transcript': []})
+                    except Exception:
+                        pass
                 if 'updated_at' in data and data['updated_at']:
                     if hasattr(data['updated_at'], 'isoformat'):
                         data['updated_at'] = data['updated_at'].isoformat()
@@ -3794,6 +3877,11 @@ def handle_custom_videos():
             if not video_id:
                 return jsonify({"error": "Brak video_id"}), 400
 
+            incoming_transcript = req_data.get("transcript") or []
+            if incoming_transcript and not is_english_transcript(incoming_transcript):
+                print(f"handle_custom_videos POST: Odrzucam zapis nieangielskich napisów dla {video_id}", flush=True)
+                incoming_transcript = []
+
             safe_email = re.sub(r'[^a-zA-Z0-9_.-]', '_', user_email)
             safe_vid = re.sub(r'[^a-zA-Z0-9_.-]', '_', str(video_id))
             doc_id = f"{safe_email}_{safe_vid}"
@@ -3806,7 +3894,7 @@ def handle_custom_videos():
                 "user_email": user_email,
                 "title": req_data.get("title") or f"Wideo {video_id}",
                 "youtubeId": req_data.get("youtubeId") or req_data.get("youtube_id"),
-                "transcript": req_data.get("transcript") or [],
+                "transcript": incoming_transcript,
                 "updated_at": timestamp_val
             }
             db.collection('user_custom_videos').document(doc_id).set(video_data)

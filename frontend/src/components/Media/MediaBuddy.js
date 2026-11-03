@@ -10,6 +10,55 @@ import { DEMO_DICTIONARY, DEMO_SENTENCES } from "../../data/demoStoriesData";
 
 const SAMPLE_VIDEOS = DEMO_VIDEOS;
 
+const ENGLISH_COMMON_WORDS = new Set([
+  "the", "and", "to", "of", "in", "is", "it", "you", "that", "for",
+  "on", "with", "as", "are", "this", "by", "be", "at", "or", "from",
+  "an", "not", "but", "have", "has", "had", "was", "were", "we", "they",
+  "he", "she", "his", "her", "their", "our", "your", "my", "me", "him",
+  "them", "us", "what", "which", "who", "when", "where", "why", "how",
+  "all", "any", "both", "each", "few", "more", "most", "other", "some",
+  "such", "no", "nor", "only", "own", "same", "so", "than", "too", "very",
+  "can", "will", "just", "should", "now", "about", "into", "over", "after",
+  "if", "because", "while", "during", "before", "under", "again", "there",
+  "here", "do", "does", "did", "doing", "would", "could", "out", "up", "down",
+  "one", "two", "time", "people", "way", "look", "like", "make", "know", "think"
+]);
+
+const isEnglishText = (text) => {
+  if (!text || typeof text !== "string") return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  // Reject Arabic, Hebrew, Cyrillic, CJK, Devanagari, Thai scripts immediately
+  if (/[\u0590-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0400-\u04FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(trimmed)) {
+    return false;
+  }
+  const letters = trimmed.match(/\p{L}/gu) || [];
+  if (letters.length === 0) return false;
+  const asciiLetters = trimmed.match(/[a-zA-Z]/g) || [];
+  if (asciiLetters.length / letters.length < 0.9) return false;
+  return true;
+};
+
+const isEnglishTranscript = (segments) => {
+  if (!Array.isArray(segments) || segments.length === 0) return false;
+  const sampleText = segments
+    .slice(0, 60)
+    .map((s) => (typeof s === "string" ? s : s?.text || ""))
+    .join(" ")
+    .trim();
+  if (!sampleText) return false;
+  if (!isEnglishText(sampleText)) return false;
+
+  const words = sampleText.toLowerCase().match(/[a-z']+/g) || [];
+  if (words.length >= 12) {
+    const enHits = words.filter((w) => ENGLISH_COMMON_WORDS.has(w)).length;
+    if (enHits / words.length < 0.1) {
+      return false;
+    }
+  }
+  return true;
+};
+
 const formatTimestamp = (secs) => {
   if (isNaN(secs) || secs < 0) return "00:00:00,000";
   const hours = Math.floor(secs / 3600);
@@ -290,10 +339,25 @@ const loadSavedCustomVideos = (user, subscription) => {
     if (!saved) return [];
     const parsed = JSON.parse(saved);
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((v) => ({
-      ...v,
-      transcript: ensureCompleteSentences(v.transcript)
-    }));
+    let hadInvalid = false;
+    const cleaned = parsed.map((v) => {
+      const validTranscript = isEnglishTranscript(v?.transcript)
+        ? ensureCompleteSentences(v.transcript)
+        : [];
+      if (v?.transcript?.length > 0 && validTranscript.length === 0) {
+        hadInvalid = true;
+      }
+      return {
+        ...v,
+        transcript: validTranscript
+      };
+    });
+    if (hadInvalid) {
+      try {
+        localStorage.setItem(`media_buddy_custom_videos_${userKey}`, JSON.stringify(cleaned));
+      } catch (err) { }
+    }
+    return cleaned;
   } catch (e) {
     console.error("Failed to load custom videos from localStorage", e);
     return [];
@@ -960,7 +1024,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
             if (Array.isArray(vidData.videos)) {
               const cloudVideos = vidData.videos.map(v => ({
                 ...v,
-                transcript: ensureCompleteSentences(v.transcript)
+                transcript: isEnglishTranscript(v.transcript) ? ensureCompleteSentences(v.transcript) : []
               }));
               if (cloudVideos.length > 0) {
                 latestVideos = cloudVideos;
@@ -1421,6 +1485,80 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     setTranslationsCache({});
   }, [currentVideo]);
 
+  const healedVideosRef = useRef(new Set());
+
+  // Self-heal custom videos whose transcript was non-English (e.g. Arabic) or purged
+  useEffect(() => {
+    if (!currentVideo || !currentVideo.youtubeId || isStarterUser) return;
+    const isCurated = CURATED_VIDEOS.some(v => v.id === currentVideo.id || v.youtubeId === currentVideo.youtubeId);
+    if (isCurated) return;
+
+    const hasValidEnglish = Array.isArray(currentVideo.transcript)
+      && currentVideo.transcript.length > 0
+      && isEnglishTranscript(currentVideo.transcript);
+
+    if (hasValidEnglish) return;
+
+    const ytId = currentVideo.youtubeId;
+    if (healedVideosRef.current.has(ytId)) {
+      if (currentVideo.transcript?.length > 0 && !isEnglishTranscript(currentVideo.transcript)) {
+        setCurrentVideo(prev => ({ ...prev, transcript: [] }));
+      }
+      return;
+    }
+    healedVideosRef.current.add(ytId);
+
+    let cancelled = false;
+    const healEnglishSubtitles = async () => {
+      try {
+        const resp = await fetch(`${API_BASE_URL}/api/media/subtitles/extract`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(user?.token ? { "X-Session-Token": user.token } : {})
+          },
+          body: JSON.stringify({
+            url: `https://www.youtube.com/watch?v=${ytId}`,
+            video_id: ytId,
+            user_email: user?.email
+          })
+        });
+        if (cancelled) return;
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.segments && data.segments.length > 0 && isEnglishTranscript(data.segments)) {
+            const fixedTranscript = ensureCompleteSentences(data.segments);
+            const updatedVid = {
+              ...currentVideo,
+              title: data.title || currentVideo.title,
+              transcript: fixedTranscript
+            };
+            setCurrentVideo(updatedVid);
+            setCustomVideos(prev => {
+              const next = prev.map(v => (v.id === updatedVid.id || v.youtubeId === ytId) ? updatedVid : v);
+              try {
+                localStorage.setItem(`media_buddy_custom_videos_${userKey}`, JSON.stringify(next));
+              } catch (e) {}
+              return next;
+            });
+            saveCustomVideoToCloud(updatedVid);
+            return;
+          }
+        }
+        if (currentVideo.transcript?.length > 0) {
+          setCurrentVideo(prev => ({ ...prev, transcript: [] }));
+        }
+      } catch (err) {
+        console.warn("Auto-heal English subtitles error:", err);
+      }
+    };
+
+    healEnglishSubtitles();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentVideo, isStarterUser, user?.token, user?.email, userKey, saveCustomVideoToCloud]);
+
   // Player controls
   const togglePlayPause = () => {
     if (playerRef.current) {
@@ -1639,6 +1777,11 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   const translateActiveSegment = async (index) => {
     const segment = currentVideo.transcript?.[index];
     if (!segment || !segment.text) return;
+    if (!isEnglishText(segment.text)) {
+      setSegmentTranslation("");
+      setIsTranslatingSegment(false);
+      return;
+    }
 
     if (translationsCache[index]) {
       setSegmentTranslation(translationsCache[index]);
@@ -2138,10 +2281,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       });
       if (response.ok) {
         const data = await response.json();
-        if (data.transcript && data.transcript.length > 0) {
+        if (data.transcript && data.transcript.length > 0 && isEnglishTranscript(data.transcript)) {
           newTranscript = data.transcript;
         } else {
-          setCustomError("Ten film nie posiada angielskich napisów. Możesz dodać własne napisy .srt po załadowaniu.");
+          setCustomError("Ten film nie posiada angielskich napisów. Możesz dodać własne angielskie napisy .srt po załadowaniu.");
         }
         if (data.title) newTitle = data.title;
       } else {
@@ -2254,7 +2397,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
       const data = await resp.json();
 
-      if (resp.ok && data.segments && data.segments.length > 0) {
+      if (resp.ok && data.segments && data.segments.length > 0 && isEnglishTranscript(data.segments)) {
         setExtractedData({
           videoId: data.video_id,
           youtubeUrl: data.youtube_url || `https://www.youtube.com/watch?v=${data.video_id}`,
@@ -2269,7 +2412,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           }
         });
       } else {
-        setExtractionError(data.error || "Nie udało się pobrać napisów dla tego filmu.");
+        setExtractionError(data.error || "Nie udało się pobrać angielskich napisów dla tego filmu.");
       }
     } catch (err) {
       console.error("Extraction error:", err);
@@ -2338,6 +2481,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       setExtractionError("Nie udało się rozpoznać formatu napisów ani tekstu.");
       return;
     }
+    if (!isEnglishTranscript(parsed)) {
+      setExtractionError("Wykryto tekst w języku innym niż angielski. Wklej wyłącznie angielskie napisy.");
+      return;
+    }
 
     const targetVidId = extractVideoId(manualTargetVideoId) || currentVideo?.youtubeId || "custom_video";
     const targetTitle = manualCustomTitle.trim() || currentVideo?.title || `Własne napisy (${targetVidId})`;
@@ -2389,6 +2536,11 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       const content = evt.target.result;
       const parsed = parseSubtitlesOrTranscript(content);
       if (parsed && parsed.length > 0) {
+        if (!isEnglishTranscript(parsed)) {
+          setUploadedFileStatus(null);
+          setExtractionError("Wgrany plik zawiera napisy w języku innym niż angielski. Wgraj plik z angielskimi napisami.");
+          return;
+        }
         setUploadedFileStatus({
           name: file.name,
           segmentsCount: parsed.length,
