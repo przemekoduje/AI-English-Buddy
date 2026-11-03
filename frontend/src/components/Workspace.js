@@ -878,20 +878,46 @@ function Workspace({
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) return;
-      if (e.key.toLowerCase() === 'p') {
-        if (showPracticeMode || showPracticeModal || showTranslationModal || explanationWord || showWordTooltip || showFlashcards || showSummaryModal) {
-          return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName) || e.target?.isContentEditable) return;
+      if (showPracticeMode || showPracticeModal || showTranslationModal || showExerciseModal || showSendEmailModal || explanationWord || showWordTooltip || showFlashcards || showSummaryModal) {
+        return;
+      }
+
+      const isSpace = e.code === 'Space' || e.key === ' ';
+      const isReadingSessionActive = Boolean(
+        isSpeakingRef.current ||
+        isPausedRef.current ||
+        currentChunkIndexRef.current >= 0 ||
+        isSpeaking ||
+        isPaused
+      );
+
+      // Spacja działa tymczasowo (gdy strona jest aktywna i tekst jest w trakcie czytania / spauzowany) jako Pause / Wznów
+      if (isSpace && isReadingSessionActive) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.repeat) return;
+        if (document.activeElement && document.activeElement.tagName === 'BUTTON') {
+          document.activeElement.blur();
         }
+        if (handlePlaybackRef.current) {
+          handlePlaybackRef.current();
+        }
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'p') {
+        if (e.repeat) return;
         e.preventDefault();
         if (handlePlaybackRef.current) {
           handlePlaybackRef.current();
         }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showPracticeMode, showPracticeModal, showTranslationModal, explanationWord, showWordTooltip, showFlashcards, showSummaryModal]);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [isSpeaking, isPaused, showPracticeMode, showPracticeModal, showTranslationModal, showExerciseModal, showSendEmailModal, explanationWord, showWordTooltip, showFlashcards, showSummaryModal]);
 
   useEffect(() => {
     if (menuVisible && selectedText) {
@@ -1959,9 +1985,13 @@ function Workspace({
     setIsGeneratorCollapsed(true);
     if (currentAudioRef.current) {
       if (isPausedRef.current || currentAudioRef.current.paused) {
+        wasPlayingBeforeTooltipRef.current = false;
+        pausedChunkIndexRef.current = -1;
         currentAudioRef.current.play().catch(() => { });
         setIsPaused(false);
         isPausedRef.current = false;
+        setIsSpeaking(true);
+        isSpeakingRef.current = true;
         if (typeof window !== "undefined") {
           window.__speakling_is_reading_aloud = true;
           window.dispatchEvent(new CustomEvent('speakling-user-active', { detail: { type: 'playback_resume' } }));
@@ -1974,7 +2004,7 @@ function Workspace({
           window.__speakling_is_reading_aloud = false;
         }
       }
-    } else if (isSpeakingRef.current) {
+    } else if (isSpeakingRef.current && !isPausedRef.current) {
       setIsPaused(true);
       isPausedRef.current = true;
       setIsSpeaking(false);
@@ -1983,6 +2013,8 @@ function Workspace({
         window.__speakling_is_reading_aloud = false;
       }
     } else {
+      wasPlayingBeforeTooltipRef.current = false;
+      pausedChunkIndexRef.current = -1;
       let idx = 0;
       if (highlightedSentenceIndex >= 0 && highlightedSentenceIndex < textChunks.length) {
         idx = highlightedSentenceIndex;
@@ -1990,7 +2022,7 @@ function Workspace({
         idx = currentChunkIndexRef.current;
       }
       setHighlightedSentenceIndex(-1);
-      speakChunk(idx, false);
+      speakChunk(idx, playSingle);
     }
   };
   handlePlaybackRef.current = handlePlayback;
@@ -3375,7 +3407,7 @@ function Workspace({
           <button
             className={`player-btn play-pause-btn ${isSpeaking && !isPaused ? 'playing' : ''}`}
             onClick={handlePlayback}
-            title={isSpeaking && !isPaused ? "Pauza (Skrót: P)" : "Odtwarzaj (Skrót: P)"}
+            title={isSpeaking && !isPaused ? "Pauza (Skrót: Spacja)" : (isPaused || currentChunkIndex >= 0) ? "Wznów czytanie (Skrót: Spacja)" : "Odtwarzaj (Skrót: P)"}
           >
             {isSpeaking && !isPaused ? (
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -3993,6 +4025,7 @@ function Workspace({
                 <button
                   className={`toolbar-pill-btn ${isSpeaking && !isPaused ? "active" : ""}`}
                   onClick={handlePlayback}
+                  title={isSpeaking && !isPaused ? "Wstrzymaj czytanie (Spacja)" : (isPaused || currentChunkIndex >= 0) ? "Wznów czytanie (Spacja)" : "Odsłuchaj tekst (P)"}
                 >
                   {isSpeaking && !isPaused ? (
                     <>
@@ -4008,7 +4041,7 @@ function Workspace({
                         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
                         <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
                       </svg>
-                      <span>Listen</span>
+                      <span>{isPaused && currentChunkIndex >= 0 ? "Resume" : "Listen"}</span>
                     </>
                   )}
                 </button>
