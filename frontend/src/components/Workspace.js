@@ -306,6 +306,7 @@ function Workspace({
   const [sentenceContextMenu, setSentenceContextMenu] = useState(null);
   const sentenceContextMenuRef = useRef(null);
   const [highlightedSentenceIndex, setHighlightedSentenceIndex] = useState(-1);
+  const [translatedSentenceHighlight, setTranslatedSentenceHighlight] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [selectedText, setSelectedText] = useState("");
   const [isPaused, setIsPaused] = useState(false);
@@ -876,6 +877,27 @@ function Workspace({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [sentenceContextMenu]);
+
+  useEffect(() => {
+    const handleTranslatorClosed = () => {
+      setTranslatedSentenceHighlight(null);
+    };
+    const handleTranslatorOpened = (e) => {
+      if (!e.detail?.noBackdrop) {
+        setTranslatedSentenceHighlight(null);
+      }
+    };
+    window.addEventListener("instant-translator-closed", handleTranslatorClosed);
+    window.addEventListener("open-instant-translator", handleTranslatorOpened);
+    return () => {
+      window.removeEventListener("instant-translator-closed", handleTranslatorClosed);
+      window.removeEventListener("open-instant-translator", handleTranslatorOpened);
+    };
+  }, []);
+
+  useEffect(() => {
+    setTranslatedSentenceHighlight(null);
+  }, [currentStoryId]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -3199,12 +3221,17 @@ function Workspace({
     const sents = (paragraphSentences && paragraphSentences[pIdx]) ? paragraphSentences[pIdx] : [{ chunkIndex: -1, text: pText }];
     return sents.map((sentence, sIdx) => {
       const isCurrentReading = ((isSpeaking || isPaused || wasPlayingBeforeTooltipRef.current) && currentChunkIndex >= 0 && sentence.chunkIndex === currentChunkIndex) || (highlightedSentenceIndex >= 0 && sentence.chunkIndex === highlightedSentenceIndex);
+      const isTranslatedHighlight = Boolean(
+        translatedSentenceHighlight &&
+        ((translatedSentenceHighlight.chunkIndex >= 0 && sentence.chunkIndex === translatedSentenceHighlight.chunkIndex) ||
+         (translatedSentenceHighlight.text && sentence.text.trim() === translatedSentenceHighlight.text.trim()))
+      );
       const tokens = sentence.text.split(/([\w\u00C0-\u017F'-]+)/g);
 
       return (
         <React.Fragment key={sentence.chunkIndex >= 0 ? `chunk-${sentence.chunkIndex}` : `p-${pIdx}-s-${sIdx}`}>
           <span
-            className={`story-sentence ${isCurrentReading ? "reading-now" : ""}`}
+            className={`story-sentence ${isCurrentReading ? "reading-now" : ""} ${isTranslatedHighlight ? "translating-now" : ""}`}
             data-chunk-index={sentence.chunkIndex}
             onContextMenu={(e) => handleSentenceContextMenu(e, sentence.chunkIndex, sentence.text)}
           >
@@ -3677,10 +3704,16 @@ function Workspace({
               type="button"
               className="sentence-context-action-btn"
               onClick={() => {
+                setTranslatedSentenceHighlight({
+                  chunkIndex: sentenceContextMenu.chunkIndex,
+                  text: sentenceContextMenu.sentenceText
+                });
                 window.dispatchEvent(new CustomEvent('open-instant-translator', {
                   detail: {
                     sentence: sentenceContextMenu.sentenceText,
-                    phrase: sentenceContextMenu.sentenceText
+                    phrase: sentenceContextMenu.sentenceText,
+                    noBackdrop: true,
+                    chunkIndex: sentenceContextMenu.chunkIndex
                   }
                 }));
                 setSentenceContextMenu(null);

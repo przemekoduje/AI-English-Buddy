@@ -1265,6 +1265,22 @@
   border: none !important;
 }
 
+.story-sentence.translating-now {
+  background-color: #dbeafe !important;
+  color: #1e3a8a !important;
+  box-shadow: 0 0 0 1.5px rgba(59, 130, 246, 0.28) !important;
+  border-radius: 6px;
+}
+
+.story-sentence.translating-now .reader-word {
+  color: inherit;
+}
+
+.story-sentence.translating-now .reader-word:hover {
+  background: rgba(37, 99, 235, 0.16);
+  color: #1e3a8a;
+}
+
 /* ── INLINE WORD DETAIL CARD ── */
 .workspace-inline-word-card {
   border: 1.5px solid #3b82f6;

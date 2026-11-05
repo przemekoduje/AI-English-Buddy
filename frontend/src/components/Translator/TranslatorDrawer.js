@@ -29,27 +29,58 @@ const TranslatorDrawer = ({ user }) => {
   const [phraseSaved, setPhraseSaved] = useState(false);
   const [copiedSource, setCopiedSource] = useState(false);
   const [copiedTrans, setCopiedTrans] = useState(false);
+  const [suppressBackdrop, setSuppressBackdrop] = useState(false);
 
   const debounceTimerRef = useRef(null);
   const textareaRef = useRef(null);
+  const drawerContainerRef = useRef(null);
 
-  const handleOpenDrawer = () => setIsOpen(true);
-  const handleCloseDrawer = () => setIsOpen(false);
+  const handleOpenDrawer = () => {
+    setSuppressBackdrop(false);
+    setIsOpen(true);
+  };
+  const handleCloseDrawer = () => {
+    setIsOpen(false);
+    setSuppressBackdrop(false);
+    window.dispatchEvent(new CustomEvent("instant-translator-closed"));
+  };
 
   // Close when pressing Escape
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "Escape" && isOpen) {
         setIsOpen(false);
+        setSuppressBackdrop(false);
+        window.dispatchEvent(new CustomEvent("instant-translator-closed"));
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
+  // When opened without backdrop (from right-click "Przetłumacz zdanie"), close on left-click outside the drawer
+  useEffect(() => {
+    if (!isOpen || !suppressBackdrop) return;
+    const handleOutsideMouseDown = (e) => {
+      if (e.button !== 0) return; // ignore right-click so user can right-click another sentence
+      if (drawerContainerRef.current && drawerContainerRef.current.contains(e.target)) {
+        return;
+      }
+      if (e.target.closest && e.target.closest(".sentence-context-menu")) {
+        return;
+      }
+      setIsOpen(false);
+      setSuppressBackdrop(false);
+      window.dispatchEvent(new CustomEvent("instant-translator-closed"));
+    };
+    document.addEventListener("mousedown", handleOutsideMouseDown);
+    return () => document.removeEventListener("mousedown", handleOutsideMouseDown);
+  }, [isOpen, suppressBackdrop]);
+
   // Listen to open-instant-translator events from Workspace and other components
   useEffect(() => {
     const handleOpenCustom = (e) => {
+      setSuppressBackdrop(Boolean(e.detail && e.detail.noBackdrop));
       setIsOpen(true);
       if (e.detail) {
         const {
@@ -298,7 +329,7 @@ const TranslatorDrawer = ({ user }) => {
       </button>
 
       {/* Main Slide-out Drawer */}
-      <div className={`translator-drawer-container ${isOpen ? "open" : ""}`}>
+      <div ref={drawerContainerRef} className={`translator-drawer-container ${isOpen ? "open" : ""}`}>
         <div className="instant-translator-content">
           {/* Top Header */}
           <div className="instant-translator-header">
@@ -507,7 +538,7 @@ const TranslatorDrawer = ({ user }) => {
       </div>
 
       {/* Backdrop overlay */}
-      {isOpen && (
+      {isOpen && !suppressBackdrop && (
         <div className="translator-drawer-overlay" onClick={handleCloseDrawer} />
       )}
     </>
