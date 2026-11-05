@@ -767,16 +767,22 @@ def log_api_usage(user_email, service, feature, model, prompt_tokens=0, completi
             'cost_pln': cost_pln
         }
 
-        if 'db' in globals() and db is not None:
-            if hasattr(db, 'collection'):
-                db.collection('api_usage').add(usage_data)
-            else:
-                import uuid
-                mock_db.write_doc('api_usage', str(uuid.uuid4()), usage_data)
-        else:
-            if 'mock_db' in globals() and mock_db is not None:
-                import uuid
-                mock_db.write_doc('api_usage', str(uuid.uuid4()), usage_data)
+        def _persist_usage():
+            try:
+                if 'db' in globals() and db is not None:
+                    if hasattr(db, 'collection'):
+                        db.collection('api_usage').add(usage_data)
+                    else:
+                        import uuid
+                        mock_db.write_doc('api_usage', str(uuid.uuid4()), usage_data)
+                else:
+                    if 'mock_db' in globals() and mock_db is not None:
+                        import uuid
+                        mock_db.write_doc('api_usage', str(uuid.uuid4()), usage_data)
+            except Exception as e_inner:
+                print(f"Error logging API usage (async): {e_inner}", flush=True)
+
+        threading.Thread(target=_persist_usage, daemon=True).start()
     except Exception as e:
         print(f"Error logging API usage: {e}", flush=True)
 
@@ -945,17 +951,28 @@ def transcribe_audio_bytes(audio_bytes, mime_type="audio/webm", user_email=None,
 
     return ""
 
+SESSION_TOKEN_CACHE = {}
+
 def get_user_from_request():
     if 'db' not in globals() or db is None:
         return None
     token = request.headers.get("X-Session-Token")
     if not token:
         return None
+    now = time.time()
+    cached = SESSION_TOKEN_CACHE.get(token)
+    if cached and cached[1] > now:
+        return cached[0]
     try:
         session_ref = db.collection('sessions').document(token).get()
         if session_ref.exists:
             session_data = session_ref.to_dict()
-            return session_data.get("email")
+            email = session_data.get("email")
+            if email:
+                if len(SESSION_TOKEN_CACHE) > 2000:
+                    SESSION_TOKEN_CACHE.clear()
+                SESSION_TOKEN_CACHE[token] = (email, now + 300)
+            return email
     except Exception as e:
         print(f"Błąd weryfikacji sesji: {e}")
     return None
@@ -1952,8 +1969,63 @@ PREDEFINED_TOPICS = [
 
 # --- FAST IN-MEMORY CACHES FOR COST & SPEED OPTIMIZATION ---
 TRANSLATION_CACHE = {}
+SENTENCE_TRANSLATION_CACHE = {}
 EXPLAIN_WORD_CACHE = {}
 BASE_FORM_CACHE = {}
+_GEMINI_HTTP_SESSION = requests.Session()
+
+
+def fast_translate_llm(prompt_text, max_output_tokens=220):
+    """Szybkie wywołanie Gemini REST API z Keep-Alive, JSON mode i wyłączonym 'thinking' (0 budżetu myślenia),
+    aby tłumaczenie pojedynczych słów/zdań trwało ~0.3-0.5s zamiast 2-4s."""
+    gemini_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
+    if gemini_key:
+        user_email = None
+        try:
+            user_email = get_user_from_request()
+        except Exception:
+            pass
+        user_email = user_email or "guest@speakling.ai"
+
+        for g_model in ("gemini-2.0-flash-lite", "gemini-flash-lite-latest"):
+            try:
+                gen_cfg = {
+                    "temperature": 0.1,
+                    "maxOutputTokens": max_output_tokens,
+                    "responseMimeType": "application/json"
+                }
+                if "2.0" not in g_model:
+                    gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
+                payload = {
+                    "contents": [{"parts": [{"text": prompt_text}]}],
+                    "generationConfig": gen_cfg
+                }
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={gemini_key}"
+                res = _GEMINI_HTTP_SESSION.post(url, json=payload, timeout=8)
+                if not res.ok:
+                    continue
+                data = res.json()
+                candidates = data.get("candidates") or []
+                if not candidates:
+                    continue
+                parts = (candidates[0].get("content") or {}).get("parts") or []
+                text_out = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
+                if text_out:
+                    usage = data.get("usageMetadata") or {}
+                    log_api_usage(
+                        user_email=user_email,
+                        service="gemini",
+                        feature="fast_translate",
+                        model=g_model,
+                        prompt_tokens=usage.get("promptTokenCount", 0) or 0,
+                        completion_tokens=usage.get("candidatesTokenCount", 0) or 0
+                    )
+                    return text_out
+            except Exception as e_fast:
+                print(f"fast_translate_llm ({g_model}) fallback: {e_fast}", flush=True)
+
+    output_data = query_deepseek(prompt_text, max_tokens=max_output_tokens)
+    return output_data['choices'][0]['message']['content'].strip()
 
 def query_deepseek(prompt_text, max_tokens=2500, model_tier="cheap"):
     user_email = None
@@ -2186,6 +2258,24 @@ SYNTAX_DETECTION_RULES = [
         "translation": "zamiast (robić coś)...",
         "explanation": "Po wyrażeniach „instead of” oraz „rather than” czasownik przyjmuje formę z końcówką -ing (tzw. Gerund), odpowiadającą polskiemu bezokolicznikowi po słowie „zamiast”.",
         "example": "Instead of apologising, she asked a question. — Zamiast przepraszać, zadała pytanie."
+    },
+    {
+        "id": "used_to_habit",
+        "regex": re.compile(r"\b((?:(?:am|is|are|was|were|get|got|getting|become|became)\s+used\s+to\s+[a-z]+ing)|(?:used\s+to\s+(?:be|have|do|go|live|work|play|think|say|make|take|see|come|know|get|feel|[a-z]+)))\b", re.IGNORECASE),
+        "type": "Składnia · Konstrukcja 'used to / be used to'",
+        "pattern_fn": lambda m: "be/get used to + [czasownik -ing] (przywyknąć) LUB used to + [bezokolicznik] (zwykło się dawniej)",
+        "translation": "być przyzwyczajonym do... / mieć w zwyczaju (kiedyś)...",
+        "explanation": "„Used to + bezokolicznik” opisuje dawne nawyki z przeszłości (już nieaktualne), natomiast „be/get used to + -ing” oznacza bycie przyzwyczajonym lub przyzwyczajanie się do czegoś.",
+        "example": "I used to live here, so I am used to waking up early. — Kiedyś tu mieszkałem, więc jestem przyzwyczajony do wczesnego wstawania."
+    },
+    {
+        "id": "so_such_that_result",
+        "regex": re.compile(r"\b((?:so\s+[a-z]+(?:\s+[a-z]+)?|such\s+(?:a|an)?\s*[a-z]+\s+[a-z]+)\s+that\s+(?:i|you|he|she|it|we|they|there|[a-z]+))\b", re.IGNORECASE),
+        "type": "Składnia · Konstrukcja skutkowa 'so / such ... that'",
+        "pattern_fn": lambda m: "so + [przymiotnik/przysłówek] + that... / such + (a/an) + [przymiotnik + rzeczownik] + that...",
+        "translation": "tak (bardzo)..., że...",
+        "explanation": "„So” łączymy z samym przymiotnikiem lub przysłówkiem (np. so fast that...), a „such” z rzeczownikiem (np. such a good book that...), aby wyrazić skutek.",
+        "example": "It was so cold that the lake froze. — Było tak zimno, że jezioro zamarzło."
     }
 ]
 
@@ -2241,109 +2331,82 @@ def translate_text():
             return jsonify(cached)
         return jsonify({"translation": cached, "sentence_translation": ""})
 
-    is_phrase = len(text_to_translate.strip().split()) > 1
+    words_list = text_to_translate.strip().split()
+    is_phrase = len(words_list) > 1
+    is_full_sentence_no_ctx = len(words_list) > 5 and not (context_sentence and context_sentence.strip() and context_sentence.strip().lower() != text_to_translate.strip().lower())
     has_context = bool(context_sentence and context_sentence.strip() and context_sentence.strip().lower() != text_to_translate.strip().lower())
     rule_syntax = detect_sentence_syntax(context_sentence if has_context else text_to_translate, text_to_translate)
 
+    sent_cache_key = f"{(context_sentence if has_context else text_to_translate).strip().lower()}__{source_lang.lower()}__{target_lang.lower()}"
+    cached_sentence_trans = SENTENCE_TRANSLATION_CACHE.get(sent_cache_key, "")
+
+    # Szybka ścieżka: pełne zdanie bez osobnego kontekstu (np. pauza w Media Buddy lub Tłumacz Błyskawiczny), które jest już w cache zdań
+    if is_full_sentence_no_ctx and cached_sentence_trans:
+        fast_result = {
+            "translation": cached_sentence_trans,
+            "sentence_translation": "",
+            "detected_chunk": rule_syntax["chunk"] if rule_syntax else None,
+            "chunk_translation": rule_syntax["translation"] if rule_syntax else None,
+            "chunk_type": rule_syntax["type"] if rule_syntax else None,
+            "syntax_chunk": rule_syntax["chunk"] if rule_syntax else None,
+            "syntax_pattern": rule_syntax["pattern"] if rule_syntax else None,
+            "syntax_explanation": rule_syntax["explanation"] if rule_syntax else None,
+            "syntax_example": rule_syntax["example"] if rule_syntax else None,
+            "detected_syntax": rule_syntax
+        }
+        TRANSLATION_CACHE[cache_key] = fast_result
+        return jsonify(fast_result)
+
     if has_context:
+        sent_field_instr = (
+            "" if cached_sentence_trans else f',\n  "sentence_translation": "natural {target_lang} translation of the sentence"'
+        )
         if is_phrase:
             translation_prompt = (
-                f"You are an expert {source_lang}-to-{target_lang} linguistic translator specialized in the Lexical Approach (phrases, collocations, idioms) AND syntactic constructions (inversions, grammar patterns).\n"
-                f"Translate the phrase '{text_to_translate}' in the context of this sentence:\n"
-                f"Sentence: \"{context_sentence}\"\n\n"
-                f"Also check if '{text_to_translate}' or the sentence contains a notable syntactic structure worth learning (e.g. negative/emphatic inversion like 'nor did he...', 'not only did...', 'little did he know...', 'no sooner had... than', 'hardly had... when', 'had I known...', 'the more..., the more...', 'as if + past', 'would rather... than', cleft sentences).\n\n"
-                f"Respond with a strict JSON object with these exact keys:\n"
+                f"Translate {source_lang} phrase '{text_to_translate}' in sentence: \"{context_sentence}\" into {target_lang}.\n"
+                f"Return ONLY raw JSON:\n"
                 f"{{\n"
                 f'  "detected_chunk": "{text_to_translate}",\n'
-                f'  "chunk_translation": "natural {target_lang} translation of this phrase",\n'
+                f'  "chunk_translation": "contextual {target_lang} translation",\n'
                 f'  "chunk_type": "Zwrot / Kolokacja" or "Składnia / Inwersja",\n'
-                f'  "syntax_chunk": "exact syntactic segment from the sentence if a notable syntax structure exists, or null",\n'
-                f'  "syntax_pattern": "general formula for the student e.g. \'nor + [operator: did/was/can] + [osoba] + [czasownik]\' or null",\n'
-                f'  "syntax_explanation": "short, clear 1-2 sentence explanation in {target_lang} of how this syntax works so the student can easily master it, or null",\n'
-                f'  "syntax_example": "one simple example sentence in English with its {target_lang} translation separated by \' — \', or null",\n'
-                f'  "translation": "base {target_lang} translation of the phrase plus 1-2 common synonyms separated by commas",\n'
-                f'  "sentence_translation": "natural {target_lang} translation of the entire sentence"\n'
-                f"}}\n"
-                f"Respond ONLY with raw valid JSON, no markdown blocks."
+                f'  "translation": "{target_lang} translation + 1-2 synonyms"{sent_field_instr}\n'
+                f"}}"
             )
         else:
             translation_prompt = (
-                f"You are an expert {source_lang}-to-{target_lang} linguistic translator and grammar coach specialized in the Lexical Approach (phrasal verbs, collocations, idioms) AND English syntactic constructions (inversions, advanced sentence structures).\n"
-                f"The user clicked the word '{text_to_translate}' in this sentence:\n"
-                f"Sentence: \"{context_sentence}\"\n\n"
-                f"Task:\n"
-                f"1. Check if '{text_to_translate}' forms a multi-word lexical chunk (phrasal verb, natural collocation, idiom, fixed expression) OR is part of a notable syntactic/grammatical structure with neighboring words in this sentence (e.g. 'nor did he [verb]' -> inversion after nor/neither, 'not only did...' -> emphatic inversion, 'little did he know', 'no sooner had... than', 'hardly had... when', 'had I known', 'the more..., the more...', 'look forward to', 'make a decision', 'take for granted', 'used to do', 'would rather', 'as if he knew').\n"
-                f"2. If yes, extract that multi-word chunk or syntactic phrase and its natural {target_lang} translation, and classify chunk_type as 'Phrasal verb', 'Kolokacja', 'Idiom', 'Zwrot', or 'Składnia / Inwersja'.\n"
-                f"   If the word is completely standalone (e.g. 'apple' in 'I ate an apple'), set detected_chunk, chunk_translation, and chunk_type to null.\n"
-                f"3. IMPORTANT — SYNTAX DETECTION: Check if the sentence (especially around '{text_to_translate}', or anywhere in the sentence) contains a notable syntactic construction that a learner should master (such as: 'nor did he...', 'neither was she...', 'not only did...', 'little did they know...', 'no sooner had... than...', 'hardly had... when...', 'had it not been for...', 'the more..., the more...', 'as if + past tense', 'would rather... than...', 'it is high time + past tense', cleft sentence 'It was X that...').\n"
-                f"   If such a syntactic structure is present, populate:\n"
-                f"   - 'syntax_chunk': the exact words from the sentence (e.g. 'nor did he explain'),\n"
-                f"   - 'syntax_pattern': a clear, reusable formula for the student (e.g. 'nor + [operator: did/was/can] + [osoba] + [czasownik]'),\n"
-                f"   - 'syntax_explanation': a friendly 1-2 sentence explanation in {target_lang} showing how to build sentences with this structure,\n"
-                f"   - 'syntax_example': one short model sentence in English with its {target_lang} translation separated by ' — '.\n"
-                f"   If there is no special syntactic construction in the sentence, set syntax_chunk, syntax_pattern, syntax_explanation, and syntax_example to null.\n"
-                f"4. Provide the contextual {target_lang} translation of the single word '{text_to_translate}' plus 2-3 common synonyms separated by commas.\n"
-                f"5. Provide the natural {target_lang} translation of the entire sentence.\n\n"
-                f"Respond with a strict JSON object with these exact keys:\n"
+                f"User clicked word '{text_to_translate}' in {source_lang} sentence: \"{context_sentence}\".\n"
+                f"If '{text_to_translate}' forms a phrasal verb, collocation, idiom, or inversion/syntax structure with neighboring words in this sentence, put that multi-word phrase in detected_chunk (otherwise null).\n"
+                f"Return ONLY raw JSON in {target_lang}:\n"
                 f"{{\n"
-                f'  "detected_chunk": "full multi-word chunk / syntax phrase or null",\n'
-                f'  "chunk_translation": "natural translation of the chunk or null",\n'
+                f'  "detected_chunk": "multi-word chunk from sentence or null",\n'
+                f'  "chunk_translation": "{target_lang} translation of chunk or null",\n'
                 f'  "chunk_type": "Phrasal verb" or "Kolokacja" or "Idiom" or "Składnia / Inwersja" or null,\n'
-                f'  "syntax_chunk": "exact syntactic phrase from sentence or null",\n'
-                f'  "syntax_pattern": "reusable grammatical formula for the student or null",\n'
-                f'  "syntax_explanation": "clear explanation in {target_lang} or null",\n'
-                f'  "syntax_example": "Example in EN — Tłumaczenie w PL or null",\n'
-                f'  "translation": "contextual translation of the word, followed by 2-3 common synonyms separated by commas",\n'
-                f'  "sentence_translation": "natural translation of the entire sentence"\n'
-                f"}}\n"
-                f"Respond ONLY with raw valid JSON, no markdown blocks."
+                f'  "translation": "contextual {target_lang} meaning of \'{text_to_translate}\' + 2 synonyms"{sent_field_instr}\n'
+                f"}}"
             )
     else:
-        if is_phrase:
+        if is_full_sentence_no_ctx:
             translation_prompt = (
-                f"You are an expert {source_lang}-to-{target_lang} translator and grammar coach.\n"
-                f"Translate this phrase: \"{text_to_translate}\"\n"
-                f"If it is a syntactic construction (e.g. 'nor did he...', 'not only did...', 'the more..., the more...'), also provide syntax_pattern, syntax_explanation (in {target_lang}), and syntax_example.\n\n"
-                f"Respond with a strict JSON object:\n"
-                f"{{\n"
-                f'  "detected_chunk": "{text_to_translate}",\n'
-                f'  "chunk_translation": "natural {target_lang} translation of this phrase",\n'
-                f'  "chunk_type": "Fraza" or "Składnia / Inwersja",\n'
-                f'  "syntax_chunk": "phrase if syntactic structure or null",\n'
-                f'  "syntax_pattern": "grammatical formula or null",\n'
-                f'  "syntax_explanation": "short explanation in {target_lang} or null",\n'
-                f'  "syntax_example": "Example EN — PL or null",\n'
-                f'  "translation": "natural {target_lang} translation of this phrase",\n'
-                f'  "sentence_translation": ""\n'
-                f"}}\n"
-                f"Respond ONLY with raw valid JSON, no markdown blocks."
+                f"Translate this {source_lang} text into natural {target_lang}:\n"
+                f"\"{text_to_translate}\"\n"
+                f"Return ONLY raw JSON: {{\"translation\": \"...\"}}"
+            )
+        elif is_phrase:
+            translation_prompt = (
+                f"Translate {source_lang} phrase \"{text_to_translate}\" into {target_lang}.\n"
+                f"Return ONLY raw JSON: {{\"translation\": \"natural {target_lang} translation + 1-2 synonyms\", \"chunk_type\": \"Zwrot / Kolokacja\"}}"
             )
         else:
             translation_prompt = (
-                f"You are an expert {source_lang}-to-{target_lang} translator.\n"
-                f"Translate this word: '{text_to_translate}'\n\n"
-                f"Respond with a strict JSON object:\n"
-                f"{{\n"
-                f'  "detected_chunk": null,\n'
-                f'  "chunk_translation": null,\n'
-                f'  "chunk_type": null,\n'
-                f'  "syntax_chunk": null,\n'
-                f'  "syntax_pattern": null,\n'
-                f'  "syntax_explanation": null,\n'
-                f'  "syntax_example": null,\n'
-                f'  "translation": "most common {target_lang} translation, followed by 2-3 other distinct meanings separated by commas",\n'
-                f'  "sentence_translation": ""\n'
-                f"}}\n"
-                f"Respond ONLY with raw valid JSON, no markdown blocks."
+                f"Translate {source_lang} word '{text_to_translate}' into {target_lang} (main meaning + 2-3 common synonyms separated by commas).\n"
+                f"Return ONLY raw JSON: {{\"translation\": \"...\"}}"
             )
-    
+
     try:
-        output_data = query_deepseek(translation_prompt, max_tokens=None)
-        raw_text = output_data['choices'][0]['message']['content'].strip()
+        raw_text = fast_translate_llm(translation_prompt, max_output_tokens=180)
         print(f"RAW TRANSLATION RESPONSE: {repr(raw_text)}", flush=True)
 
         parsed_json = None
-        import re
         clean_text = raw_text
         if clean_text.startswith("```"):
             clean_text = re.sub(r'^```(?:json)?\s*', '', clean_text)
@@ -2363,14 +2426,16 @@ def translate_text():
 
         if parsed_json and isinstance(parsed_json, dict):
             word_translation = str(parsed_json.get("translation") or "").strip()
-            sentence_translation = str(parsed_json.get("sentence_translation") or "").strip()
+            sentence_translation = str(parsed_json.get("sentence_translation") or cached_sentence_trans or "").strip()
             detected_chunk = parsed_json.get("detected_chunk")
-            if detected_chunk:
+            if detected_chunk and str(detected_chunk).strip().lower() not in ("null", "none", ""):
                 detected_chunk = str(detected_chunk).strip()
                 if not is_phrase and detected_chunk.lower() == text_to_translate.strip().lower():
                     detected_chunk = None
-            chunk_translation = str(parsed_json.get("chunk_translation") or "").strip() if detected_chunk else None
-            chunk_type = str(parsed_json.get("chunk_type") or "").strip() if detected_chunk else None
+            else:
+                detected_chunk = text_to_translate if (is_phrase and not is_full_sentence_no_ctx) else None
+            chunk_translation = str(parsed_json.get("chunk_translation") or (word_translation if detected_chunk else "") or "").strip() if detected_chunk else None
+            chunk_type = str(parsed_json.get("chunk_type") or ("Fraza" if detected_chunk else "") or "").strip() if detected_chunk else None
 
             raw_sc = parsed_json.get("syntax_chunk")
             raw_sp = parsed_json.get("syntax_pattern")
@@ -2393,10 +2458,19 @@ def translate_text():
                 if l:
                     cleaned_lines.append(l)
             word_translation = cleaned_lines[0] if cleaned_lines else raw_text
-            sentence_translation = cleaned_lines[1] if (has_context and len(cleaned_lines) > 1) else ""
-            detected_chunk = text_to_translate if is_phrase else None
-            chunk_translation = word_translation if is_phrase else None
-            chunk_type = "Fraza" if is_phrase else None
+            sentence_translation = (cleaned_lines[1] if (has_context and len(cleaned_lines) > 1) else "") or cached_sentence_trans
+            detected_chunk = text_to_translate if (is_phrase and not is_full_sentence_no_ctx) else None
+            chunk_translation = word_translation if detected_chunk else None
+            chunk_type = "Fraza" if detected_chunk else None
+
+        if has_context and sentence_translation:
+            if len(SENTENCE_TRANSLATION_CACHE) > 5000:
+                SENTENCE_TRANSLATION_CACHE.clear()
+            SENTENCE_TRANSLATION_CACHE[sent_cache_key] = sentence_translation
+        elif is_full_sentence_no_ctx and word_translation:
+            if len(SENTENCE_TRANSLATION_CACHE) > 5000:
+                SENTENCE_TRANSLATION_CACHE.clear()
+            SENTENCE_TRANSLATION_CACHE[sent_cache_key] = word_translation
 
         # Merge with deterministic rule_syntax if available
         detected_syntax = None
@@ -2412,21 +2486,21 @@ def translate_text():
                 "pattern": syntax_pattern,
                 "translation": syntax_trans,
                 "explanation": syntax_explanation,
-                "example": syntax_example,
+                "example": rule_syntax["example"],
                 "is_clicked_word_part": rule_syntax["is_clicked_word_part"]
             }
             if not detected_chunk and rule_syntax["is_clicked_word_part"]:
                 detected_chunk = rule_syntax["chunk"]
                 chunk_translation = rule_syntax["translation"]
                 chunk_type = rule_syntax["type"]
-        elif syntax_pattern or syntax_explanation:
+        elif syntax_pattern or syntax_explanation or (chunk_type and ("składnia" in chunk_type.lower() or "inwersja" in chunk_type.lower())):
             target_sc = syntax_chunk or detected_chunk or text_to_translate
             detected_syntax = {
                 "chunk": target_sc,
                 "type": chunk_type if (chunk_type and ("składnia" in chunk_type.lower() or "inwersja" in chunk_type.lower() or "konstrukcja" in chunk_type.lower())) else "Składnia · Konstrukcja zdaniowa",
                 "pattern": syntax_pattern or target_sc,
                 "translation": chunk_translation or word_translation,
-                "explanation": syntax_explanation or "",
+                "explanation": syntax_explanation or "Konstrukcja składniowa wymagająca określonego szyku wyrazów w zdaniu.",
                 "example": syntax_example or "",
                 "is_clicked_word_part": True
             }

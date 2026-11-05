@@ -139,6 +139,24 @@ const SYNTAX_RULES = [
     translation: "ani [A], ani [B]",
     explanation: "Konstrukcja „neither... nor...” łączy dwa elementy w zdaniu przeczącym. Ponieważ w języku angielskim nie ma podwójnego przeczenia, czasownik w takim zdaniu pozostaje w formie twierdzącej.",
     example: "She likes neither coffee nor tea. — Nie lubi ani kawy, ani herbaty."
+  },
+  {
+    id: "used_to_habit",
+    regex: /\b((?:(?:am|is|are|was|were|get|got|getting|become|became)\s+used\s+to\s+[a-z]+ing)|(?:used\s+to\s+(?:be|have|do|go|live|work|play|think|say|make|take|see|come|know|get|feel|[a-z]+)))\b/i,
+    type: "Składnia · Konstrukcja 'used to / be used to'",
+    buildPattern: () => "be/get used to + [czasownik -ing] (przywyknąć) LUB used to + [bezokolicznik] (zwykło się dawniej)",
+    translation: "być przyzwyczajonym do... / mieć w zwyczaju (kiedyś)...",
+    explanation: "„Used to + bezokolicznik” opisuje dawne nawyki z przeszłości (już nieaktualne), natomiast „be/get used to + -ing” oznacza bycie przyzwyczajonym lub przyzwyczajanie się do czegoś.",
+    example: "I used to live here, so I am used to waking up early. — Kiedyś tu mieszkałem, więc jestem przyzwyczajony do wczesnego wstawania."
+  },
+  {
+    id: "so_such_that_result",
+    regex: /\b((?:so\s+[a-z]+(?:\s+[a-z]+)?|such\s+(?:a|an)?\s*[a-z]+\s+[a-z]+)\s+that\s+(?:i|you|he|she|it|we|they|there|[a-z]+))\b/i,
+    type: "Składnia · Konstrukcja skutkowa 'so / such ... that'",
+    buildPattern: () => "so + [przymiotnik/przysłówek] + that... / such + (a/an) + [przymiotnik + rzeczownik] + that...",
+    translation: "tak (bardzo)..., że...",
+    explanation: "„So” łączymy z samym przymiotnikiem lub przysłówkiem (np. so fast that...), a „such” z rzeczownikiem (np. such a good book that...), aby wyrazić skutek.",
+    example: "It was so cold that the lake froze. — Było tak zimno, że jezioro zamarzło."
   }
 ];
 
