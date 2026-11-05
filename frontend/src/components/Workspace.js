@@ -4076,9 +4076,7 @@ function Workspace({
         )}
 
         <div className="workspace-figma-top-bar">
-
-
-          {(storyParts.length > 0 || generatedText) && (
+          {(storyParts.length > 0 || generatedText) ? (
             <div className="chapter-tabs" style={{ margin: 0 }}>
               {storyParts.map((part, index) => (
                 <button
@@ -4108,7 +4106,82 @@ function Workspace({
                 {isStarterUser && <span className="chapter-pro-tag">PRO</span>}
               </button>
             </div>
-          )}
+          ) : <div />}
+
+          {/* Your learning buddy — compact top bar positioned above Words in this story */}
+          <div className="learning-buddy-card learning-buddy-top-bar">
+            <div className="learning-buddy-top-row">
+              <div className="buddy-card-header">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="buddy-sparkle-icon">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+                <h3>Your learning buddy</h3>
+              </div>
+
+              <button
+                className={`buddy-voice-ai-btn buddy-voice-ai-btn-compact ${isMasteryLocked ? 'btn-pro-locked' : ''}`}
+                onClick={() => {
+                  if (isMasteryLocked) {
+                    if (onOpenPaywall) {
+                      onOpenPaywall({ feature: 'mastery' });
+                      return;
+                    }
+                  }
+                  handleStop();
+                  setShowPracticeMode(true);
+                }}
+                title="Mastery Path — 3 steps to master this story"
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+                </svg>
+                <span>Mastery Path · 3 steps</span>
+                {isMasteryLocked && (
+                  <span style={{
+                    marginLeft: '4px',
+                    background: 'rgba(255,255,255,0.25)',
+                    padding: '1px 5px',
+                    borderRadius: '4px',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    letterSpacing: '0.05em'
+                  }}>PRO</span>
+                )}
+              </button>
+            </div>
+
+            <div className="buddy-practice-chips buddy-practice-chips-inline">
+              <button
+                className="buddy-practice-chip"
+                onClick={handleOpenFlashcards}
+                title="Practice vocabulary with flashcards"
+              >
+                Flashcards
+              </button>
+              <button
+                className="buddy-practice-chip"
+                onClick={handleOpenExercises}
+                title="AI vocabulary translation quiz"
+              >
+                Vocabulary quiz
+              </button>
+              <button
+                className="buddy-practice-chip"
+                onClick={handleOpenSummary}
+                title="Generate AI session summary"
+              >
+                Session summary
+              </button>
+              <button
+                className="buddy-practice-chip"
+                onClick={handleOpenEmail}
+                title="Export vocabulary to your email"
+              >
+                Export to email
+              </button>
+            </div>
+          </div>
         </div>
 
           <div className="workspace-figma-grid">
@@ -4360,86 +4433,7 @@ function Workspace({
                 </button>
               </div>
 
-              {/* Card 2: Your learning buddy */}
-              <div className="learning-buddy-card">
-                <div className="buddy-card-header">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="buddy-sparkle-icon">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                  <h3>Your learning buddy</h3>
-                </div>
-                <p className="buddy-card-desc">
-                  Make this story your own. Practice with Mastery Path or train your vocabulary.
-                </p>
-
-                <button
-                  className={`buddy-voice-ai-btn ${isMasteryLocked ? 'btn-pro-locked' : ''}`}
-                  onClick={() => {
-                    if (isMasteryLocked) {
-                      if (onOpenPaywall) {
-                        onOpenPaywall({ feature: 'mastery' });
-                        return;
-                      }
-                    }
-                    handleStop();
-                    setShowPracticeMode(true);
-                  }}
-                  title="Mastery Path — 3 steps to master this story"
-                >
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
-                  </svg>
-                  <span>Mastery Path · 3 steps</span>
-                  {isMasteryLocked && (
-                    <span style={{
-                      marginLeft: '6px',
-                      background: 'rgba(255,255,255,0.25)',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      fontSize: '10px',
-                      fontWeight: 800,
-                      letterSpacing: '0.05em'
-                    }}>PRO</span>
-                  )}
-                </button>
-
-                <div className="buddy-practice-section">
-                  <span className="practice-section-label">PRACTICE TOOLS</span>
-                  <div className="buddy-practice-chips">
-                    <button
-                      className="buddy-practice-chip"
-                      onClick={handleOpenFlashcards}
-                      title="Practice vocabulary with flashcards"
-                    >
-                      Flashcards
-                    </button>
-                    <button
-                      className="buddy-practice-chip"
-                      onClick={handleOpenExercises}
-                      title="AI vocabulary translation quiz"
-                    >
-                      Vocabulary quiz
-                    </button>
-                    <button
-                      className="buddy-practice-chip"
-                      onClick={handleOpenSummary}
-                      title="Generate AI session summary"
-                    >
-                      Session summary
-                    </button>
-                    <button
-                      className="buddy-practice-chip"
-                      onClick={handleOpenEmail}
-                      title="Export vocabulary to your email"
-                    >
-                      Export to email
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 3: Small steps count */}
+              {/* Card 2: Small steps count */}
               <div className="small-steps-card">
                 <div className="small-steps-header">
                   <span className="small-steps-bulb">💡</span>
