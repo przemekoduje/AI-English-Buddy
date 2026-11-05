@@ -7,6 +7,7 @@ import transcriptsData from "./transcripts.json";
 import { ensureCompleteSentences, splitBlockIntoSentences } from "./sentenceGrouping";
 import { DEMO_VIDEOS, getDemoVideoTranscript, DEMO_VIDEO_VOCAB } from "../../data/demoVideosData";
 import { DEMO_DICTIONARY, DEMO_SENTENCES } from "../../data/demoStoriesData";
+import { detectSentenceSyntax } from "../../utils/syntaxDetector";
 
 const SAMPLE_VIDEOS = DEMO_VIDEOS;
 
@@ -462,6 +463,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
   const [detectedChunk, setDetectedChunk] = useState(null);
   const [chunkTranslation, setChunkTranslation] = useState(null);
   const [chunkType, setChunkType] = useState(null);
+  const [detectedSyntax, setDetectedSyntax] = useState(null);
   const [isChunkSaved, setIsChunkSaved] = useState(false);
   const [selectedSentenceContext, setSelectedSentenceContext] = useState("");
   const [isTranslating, setIsTranslating] = useState(false);
@@ -1469,6 +1471,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     setDetectedChunk(null);
     setChunkTranslation(null);
     setChunkType(null);
+    setDetectedSyntax(null);
     setIsChunkSaved(false);
     setSelectedSentenceContext("");
     setSegmentTranslation("");
@@ -1962,15 +1965,17 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
       playerRef.current.pauseVideo();
     }
     const cleanWord = word.replace(/[^a-zA-Z'-]/g, "").toLowerCase();
+    const localSyntax = detectSentenceSyntax(sentenceContext, cleanWord);
     latestWordRef.current = word;
     justSavedWordRef.current = "";
     justSavedChunkRef.current = "";
     setSelectedWord(word);
     setWordTranslation("");
     setWordSentenceTranslation("");
-    setDetectedChunk(null);
-    setChunkTranslation(null);
-    setChunkType(null);
+    setDetectedChunk(localSyntax ? localSyntax.chunk : null);
+    setChunkTranslation(localSyntax ? localSyntax.translation : null);
+    setChunkType(localSyntax ? localSyntax.type : null);
+    setDetectedSyntax(localSyntax || null);
     setIsChunkSaved(false);
     setSelectedSentenceContext(sentenceContext || "");
     setIsTranslating(true);
@@ -1982,10 +1987,10 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
     );
     setIsSaved(alreadySaved);
 
-    // Check hidden offline dictionary (DEMO_VIDEO_VOCAB or DEMO_DICTIONARY) for zero-cost instant lookup
+    // Check hidden offline dictionary (DEMO_VIDEO_VOCAB or DEMO_DICTIONARY) for zero-cost instant lookup on demo sentences
     const offlineDef = DEMO_VIDEO_VOCAB[cleanWord] || DEMO_DICTIONARY[cleanWord];
     const offlineSentence = (sentenceContext && DEMO_SENTENCES[sentenceContext.trim()]) || "";
-    if (offlineDef) {
+    if (offlineDef && offlineSentence) {
       setTimeout(() => {
         if (latestWordRef.current !== word) return;
         const plTrans = typeof offlineDef === 'string' ? offlineDef : (offlineDef.pl || offlineDef.translation);
@@ -2008,12 +2013,33 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
         setWordTranslation(data.translation || "Brak tłumaczenia");
         setWordSentenceTranslation(data.sentence_translation || "");
 
-        if (data.detected_chunk && data.detected_chunk.toLowerCase() !== cleanWord) {
-          setDetectedChunk(data.detected_chunk);
-          setChunkTranslation(data.chunk_translation || "");
-          setChunkType(data.chunk_type || "Fraza");
+        const apiSyntax = data.detected_syntax || (data.syntax_pattern || data.syntax_explanation ? {
+          chunk: data.syntax_chunk || data.detected_chunk || (localSyntax && localSyntax.chunk) || word,
+          type: (localSyntax && localSyntax.type) || data.chunk_type || "Składnia · Konstrukcja zdaniowa",
+          pattern: data.syntax_pattern || (localSyntax && localSyntax.pattern) || "",
+          translation: (localSyntax && localSyntax.translation) || data.chunk_translation || data.translation || "",
+          explanation: data.syntax_explanation || (localSyntax && localSyntax.explanation) || "",
+          example: data.syntax_example || (localSyntax && localSyntax.example) || ""
+        } : null);
+        const mergedSyntax = apiSyntax ? { ...(localSyntax || {}), ...apiSyntax } : (localSyntax || null);
+        setDetectedSyntax(mergedSyntax);
+
+        const candidateChunk = (data.detected_chunk && data.detected_chunk.toLowerCase() !== cleanWord)
+          ? data.detected_chunk
+          : (mergedSyntax ? mergedSyntax.chunk : null);
+        const candidateTrans = (data.detected_chunk && data.detected_chunk.toLowerCase() !== cleanWord)
+          ? (data.chunk_translation || "")
+          : (mergedSyntax ? mergedSyntax.translation : null);
+        const candidateType = (data.detected_chunk && data.detected_chunk.toLowerCase() !== cleanWord)
+          ? (data.chunk_type || "Fraza")
+          : (mergedSyntax ? mergedSyntax.type : null);
+
+        if (candidateChunk) {
+          setDetectedChunk(candidateChunk);
+          setChunkTranslation(candidateTrans || "");
+          setChunkType(candidateType || "Fraza");
           const chunkSaved = notebookWords.some(
-            w => w && w.story_id && validStoryIds.has(w.story_id) && (w.original || "").trim().toLowerCase() === data.detected_chunk.trim().toLowerCase()
+            w => w && w.story_id && validStoryIds.has(w.story_id) && (w.original || "").trim().toLowerCase() === candidateChunk.trim().toLowerCase()
           );
           setIsChunkSaved(chunkSaved);
         } else {
@@ -3152,13 +3178,15 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
             {selectedWord && (
               <div className="word-translate-result animate-fade-in">
                 {detectedChunk && (
-                  <div className="media-detected-chunk-box animate-fade-in">
+                  <div className={`media-detected-chunk-box animate-fade-in ${detectedSyntax ? "media-detected-syntax-box" : ""}`}>
                     <div className="chunk-badge-row">
-                      <span className="chunk-badge-pill">
-                        <span className="chunk-sparkle">✨</span>
-                        {chunkType || "Rekomendowany zwrot"}
+                      <span className={`chunk-badge-pill ${detectedSyntax ? "syntax-badge-pill" : ""}`}>
+                        <span className="chunk-sparkle">{detectedSyntax ? "🧩" : "✨"}</span>
+                        {chunkType || (detectedSyntax ? detectedSyntax.type : "Rekomendowany zwrot")}
                       </span>
-                      <span className="chunk-hint">Ucz się zwrotów dla naturalnej płynności</span>
+                      <span className="chunk-hint">
+                        {detectedSyntax ? "Wzór składniowy do przyswojenia" : "Ucz się zwrotów dla naturalnej płynności"}
+                      </span>
                     </div>
                     <div className="chunk-content-row">
                       <div className="chunk-text-group">
@@ -3176,7 +3204,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
-                            <span>Zapisano zwrot! ✓</span>
+                            <span>{detectedSyntax ? "Zapisano składnię! ✓" : "Zapisano zwrot! ✓"}</span>
                           </>
                         ) : (
                           <>
@@ -3184,11 +3212,31 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                               <line x1="12" y1="5" x2="12" y2="19" />
                               <line x1="5" y1="12" x2="19" y2="12" />
                             </svg>
-                            <span>{isSavingChunk ? "Zapisywanie..." : "Zapisz zwrot (+)"}</span>
+                            <span>{isSavingChunk ? "Zapisywanie..." : (detectedSyntax ? "Zapisz konstrukcję (+)" : "Zapisz zwrot (+)")}</span>
                           </>
                         )}
                       </button>
                     </div>
+                    {detectedSyntax && (detectedSyntax.pattern || detectedSyntax.explanation) && (
+                      <div className="syntax-learner-breakdown">
+                        {detectedSyntax.pattern && (
+                          <div className="syntax-formula-box">
+                            <span className="syntax-formula-label">📐 Schemat:</span>
+                            <code className="syntax-formula-code">{detectedSyntax.pattern}</code>
+                          </div>
+                        )}
+                        {detectedSyntax.explanation && (
+                          <p className="syntax-explanation-text">
+                            <strong>💡 Jak to działa:</strong> {detectedSyntax.explanation}
+                          </p>
+                        )}
+                        {detectedSyntax.example && (
+                          <p className="syntax-example-text">
+                            <strong>🗣️ Przykład:</strong> <em>{detectedSyntax.example}</em>
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 

@@ -2069,6 +2069,160 @@ def get_topics():
     sampled_topics = random.sample(PREDEFINED_TOPICS, 5)
     return jsonify(sampled_topics)
 
+SYNTAX_DETECTION_RULES = [
+    {
+        "id": "inversion_nor_neither",
+        "regex": re.compile(r"\b(nor|neither)\s+(did|do|does|was|were|is|are|am|had|have|has|can|could|will|would|shall|should|may|might|must)\s+(i|you|he|she|it|we|they|there|one|anyone|anybody|someone|somebody|everyone|everybody|nobody|this|that|these|those|the\s+[a-z]+|his\s+[a-z]+|her\s+[a-z]+|their\s+[a-z]+|our\s+[a-z]+|my\s+[a-z]+|[a-z]+)(?:\s+([a-z]+(?:\s+[a-z]+)?))?", re.IGNORECASE),
+        "type": "Składnia · Inwersja po 'nor / neither'",
+        "pattern_fn": lambda m: f"{m.group(1).lower()} + [operator: {m.group(2).lower()}] + [osoba] + [czasownik]",
+        "translation": "ani też (ktoś) nie... / i również nie...",
+        "explanation": "Po słowach przeczących „nor” oraz „neither” stosujemy inwersję (szyk jak w pytaniu): operator (np. did, was, can, have) stawiamy PRZED osobą, a główny czasownik zostaje w formie podstawowej (bez dodatkowego „not”).",
+        "example": "He didn't apologize, nor did he explain why. — Nie przeprosił, ani też nie wyjaśnił dlaczego."
+    },
+    {
+        "id": "inversion_not_only",
+        "regex": re.compile(r"\b(not\s+only)\s+(did|do|does|was|were|is|are|am|had|have|has|can|could|will|would|shall|should|may|might|must)\s+(i|you|he|she|it|we|they|there|this|that|the\s+[a-z]+|[a-z]+)(?:\s+([a-z]+))?", re.IGNORECASE),
+        "type": "Składnia · Inwersja emfatyczna",
+        "pattern_fn": lambda m: f"Not only + [operator: {m.group(2).lower()}] + [osoba] + [czasownik]..., (but also...)",
+        "translation": "nie tylko..., ale również... (z mocnym akcentem)",
+        "explanation": "Gdy zdanie lub człon zaczyna się od „Not only”, w pierwszej części stosujemy szyk pytający (inwersję) — operator stawiamy przed osobą, aby podkreślić wagę wypowiedzi.",
+        "example": "Not only did she finish early, but she also helped others. — Nie dość, że skończyła wcześniej, to jeszcze pomogła innym."
+    },
+    {
+        "id": "inversion_little_did",
+        "regex": re.compile(r"\b(little)\s+(did|do|does|had|would|could)\s+(i|you|he|she|it|we|they|anyone|the\s+[a-z]+|[a-z]+)\s+(know|realize|realise|think|suspect|imagine|expect|dream|guess)", re.IGNORECASE),
+        "type": "Składnia · Inwersja z 'Little'",
+        "pattern_fn": lambda m: f"Little {m.group(2).lower()} + [osoba] + {m.group(4).lower()}...",
+        "translation": "nawet nie przypuszczał(a) / nie miał(a) pojęcia, że...",
+        "explanation": "Konstrukcja „Little did [ktoś] know / realize” oznacza, że ktoś zupełnie nie zdawał sobie sprawy z tego, co nastąpi. Po „Little” na początku zdania obowiązuje szyk pytający.",
+        "example": "Little did he know what awaited him. — Nie miał pojęcia, co go czeka."
+    },
+    {
+        "id": "inversion_no_sooner",
+        "regex": re.compile(r"\b(no\s+sooner)\s+(had|did)\s+(i|you|he|she|it|we|they|the\s+[a-z]+|[a-z]+)\s+([a-z]+)(?:[^.!?]*?\b(than)\b)?", re.IGNORECASE),
+        "type": "Składnia · Inwersja czasowa",
+        "pattern_fn": lambda m: "No sooner + had + [osoba] + [III forma czasownika] ... than ...",
+        "translation": "ledwie co..., gdy...",
+        "explanation": "Wyrażenie „No sooner... than...” opisuje czynność, po której natychmiast wydarzyła się kolejna. Wymaga szyku pytającego (zazwyczaj „had” przed osobą) oraz spójnika „than”.",
+        "example": "No sooner had he sat down than the phone rang. — Ledwie usiadł, gdy zadzwonił telefon."
+    },
+    {
+        "id": "inversion_hardly_scarcely",
+        "regex": re.compile(r"\b(hardly|scarcely|barely)\s+(had|did)\s+(i|you|he|she|it|we|they|the\s+[a-z]+|[a-z]+)\s+([a-z]+)(?:[^.!?]*?\b(when|before)\b)?", re.IGNORECASE),
+        "type": "Składnia · Inwersja czasowa",
+        "pattern_fn": lambda m: f"{m.group(1).capitalize()} + had + [osoba] + [III forma] ... when ...",
+        "translation": "zaledwie / ledwo co..., kiedy...",
+        "explanation": "Konstrukcja „Hardly / Scarcely had... when...” podkreśla, że jedno zdarzenie nastąpiło ułamek sekundy po drugim. Po przysłówku na początku zdania operator „had” stawiamy przed osobą.",
+        "example": "Hardly had I closed my eyes when the alarm went off. — Ledwie zamknąłem oczy, kiedy zadzwonił budzik."
+    },
+    {
+        "id": "inversion_negative_adverbs",
+        "regex": re.compile(r"\b(never|seldom|rarely|under\s+no\s+circumstances|on\s+no\s+account|in\s+no\s+way)\s+(did|do|does|was|were|is|are|am|had|have|has|can|could|will|would|shall|should)\s+(i|you|he|she|it|we|they|there|the\s+[a-z]+|[a-z]+)\s+([a-z]+)", re.IGNORECASE),
+        "type": "Składnia · Inwersja po przysłówku przeczącym",
+        "pattern_fn": lambda m: f"{m.group(1).capitalize()} + [operator: {m.group(2).lower()}] + [osoba] + [czasownik]",
+        "translation": "nigdy / rzadko kiedy / pod żadnym pozorem...",
+        "explanation": "Postawienie słów takich jak „Never”, „Rarely”, „Seldom” na początku zdania wymaga inwersji (operator przed osobą), co nadaje zdaniu wyrazisty, literacki lub perswazyjny ton.",
+        "example": "Never have I seen such determination. — Nigdy w życiu nie widziałem takiej determinacji."
+    },
+    {
+        "id": "inversion_only_not_until",
+        "regex": re.compile(r"\b(only\s+then|only\s+later|only\s+recently|only\s+by\s+[a-z]+ing|not\s+until\s+[^,]+)\s+(did|do|does|was|were|had|have|can|could|will|would)\s+(i|you|he|she|it|we|they|the\s+[a-z]+|[a-z]+)\s+([a-z]+)", re.IGNORECASE),
+        "type": "Składnia · Inwersja po 'Only / Not until'",
+        "pattern_fn": lambda m: f"Only [...] / Not until [...] + [{m.group(2).lower()}] + [osoba] + [czasownik]",
+        "translation": "dopiero wtedy / dopiero gdy...",
+        "explanation": "Gdy zdanie rozpoczyna się od „Only then”, „Only after...”, „Only by...” lub „Not until...”, w głównej części zdania stosujemy szyk pytający (operator przed podmiotem).",
+        "example": "Only then did I understand what she meant. — Dopiero wtedy zrozumiałem, co miała na myśli."
+    },
+    {
+        "id": "conditional_inversion_had",
+        "regex": re.compile(r"(?:^|[,;]\s*)\b(had)\s+(it\s+not\s+been\s+for|(?:i|you|he|she|it|we|they)\s+(?:not\s+)?(?:known|seen|been|done|gone|had|taken|made|come|left|stayed|listened|realized|thought|asked|told|arrived|[a-z]+ed))\b", re.IGNORECASE),
+        "type": "Składnia · Inwersja warunkowa (bez 'if')",
+        "pattern_fn": lambda m: "Had + [osoba] + [III forma czasownika]... (zamiast: If + osoba + had...)",
+        "translation": "gdyby (ktoś)... / gdyby nie...",
+        "explanation": "W eleganckim języku angielskim w III okresie warunkowym można pominąć „if”, przenosząc „Had” na początek zdania przed osobę.",
+        "example": "Had I known earlier, I would have helped you. — Gdybym wiedział wcześniej, pomógłbym ci."
+    },
+    {
+        "id": "double_comparative",
+        "regex": re.compile(r"\b(the\s+(?:more|less|fewer|better|worse|harder|faster|longer|sooner|higher|lower|older|closer|[a-z]+er)\b[^,;.!?]{1,45},\s*the\s+(?:more|less|fewer|better|worse|harder|faster|longer|sooner|higher|lower|older|closer|[a-z]+er))\b", re.IGNORECASE),
+        "type": "Składnia · Podwójny stopień wyższy",
+        "pattern_fn": lambda m: "The + [stopień wyższy], the + [stopień wyższy]",
+        "translation": "im bardziej..., tym bardziej...",
+        "explanation": "Konstrukcja „The more..., the more...” wyraża zależność przyczynowo-skutkową: im bardziej zmienia się jedna rzecz, tym bardziej zmienia się druga.",
+        "example": "The more you practice, the easier it gets. — Im więcej ćwiczysz, tym staje się to łatwiejsze."
+    },
+    {
+        "id": "as_if_past_subjunctive",
+        "regex": re.compile(r"\b(as\s+if|as\s+though)\s+(i|you|he|she|it|we|they|the\s+[a-z]+|[a-z]+)\s+(could|would|were|had|knew|owned|wanted|needed|felt|understood|did|didn't|[a-z]+ed)\b", re.IGNORECASE),
+        "type": "Składnia · Porównanie hipotetyczne (as if / as though)",
+        "pattern_fn": lambda m: f"{m.group(1).lower()} + [osoba] + [czas przeszły: {m.group(3).lower()}]",
+        "translation": "tak, jakby... (hipoteza / wyobrażenie)",
+        "explanation": "Po zwrotach „as if” oraz „as though” używamy czasu przeszłego (Past Simple / could / were), aby zaznaczyć, że sytuacja jest tylko porównaniem lub hipotezą, a nie dosłownym faktem.",
+        "example": "It was as if the AI could read his thoughts. — To było tak, jakby AI potrafiło czytać w jego myślach."
+    },
+    {
+        "id": "would_rather_had_better",
+        "regex": re.compile(r"\b((?:would|'d)\s+rather\s+(?:not\s+)?[a-z]+(?:\s+[^.!?]*?\bthan\s+[a-z]+)?|(?:had|'d)\s+better\s+(?:not\s+)?[a-z]+)\b", re.IGNORECASE),
+        "type": "Składnia · Konstrukcja 'would rather / had better'",
+        "pattern_fn": lambda m: "would rather + [czasownik podstawowy] (+ than...) / had better + [czasownik podstawowy]",
+        "translation": "wolałby(m) raczej... / lepiej żeby(ś)...",
+        "explanation": "Po wyrażeniach „would rather” (woleć) oraz „had better” (lepiej coś zrobić) czasownik główny występuje zawsze w czystej formie podstawowej (bez „to”).",
+        "example": "I would rather ask a question than stay quiet. — Wolałbym zadać pytanie niż milczeć."
+    },
+    {
+        "id": "high_time_past",
+        "regex": re.compile(r"\b(it(?:'s|\s+is|\s+was)\s+(?:high\s+|about\s+)?time)\s+(i|you|he|she|it|we|they|the\s+[a-z]+|[a-z]+)\s+([a-z]+ed|went|left|started|took|made|got|found|knew|told|spoke|did|came|began)\b", re.IGNORECASE),
+        "type": "Składnia · Konstrukcja 'It's high time'",
+        "pattern_fn": lambda m: "It's (high / about) time + [osoba] + [czasownik w Past Simple]",
+        "translation": "najwyższy czas, żeby (ktoś coś zrobił)",
+        "explanation": "Mimo że mówimy o teraźniejszości lub przyszłości, po zwrocie „It's high time” + osoba stawiamy czasownik w czasie przeszłym (Past Simple).",
+        "example": "It's high time we went home. — Najwyższy czas, żebyśmy poszli do domu."
+    },
+    {
+        "id": "instead_of_rather_than_gerund",
+        "regex": re.compile(r"\b((?:instead\s+of|rather\s+than)\s+[a-z]+ing(?:\s+[a-z]+)?)\b", re.IGNORECASE),
+        "type": "Składnia · Przyimek + forma -ing (Gerund)",
+        "pattern_fn": lambda m: "instead of / rather than + [czasownik z końcówką -ing]",
+        "translation": "zamiast (robić coś)...",
+        "explanation": "Po wyrażeniach „instead of” oraz „rather than” czasownik przyjmuje formę z końcówką -ing (tzw. Gerund), odpowiadającą polskiemu bezokolicznikowi po słowie „zamiast”.",
+        "example": "Instead of apologising, she asked a question. — Zamiast przepraszać, zadała pytanie."
+    }
+]
+
+
+def detect_sentence_syntax(sentence, clicked_word=""):
+    if not sentence or not isinstance(sentence, str):
+        return None
+    clean_sentence = sentence.strip()
+    if not clean_sentence:
+        return None
+    lower_word = re.sub(r"[^a-zA-Z'-]", "", clicked_word or "").lower()
+    matches = []
+    for rule in SYNTAX_DETECTION_RULES:
+        m = rule["regex"].search(clean_sentence)
+        if m:
+            matched_phrase = m.group(0).strip().rstrip(".,!?;:")
+            pattern_str = rule["pattern_fn"](m)
+            words_in_phrase = [w for w in re.split(r"[^a-z'-]+", matched_phrase.lower()) if w]
+            is_clicked_part = bool(lower_word and lower_word in words_in_phrase)
+            matches.append({
+                "id": rule["id"],
+                "chunk": matched_phrase,
+                "type": rule["type"],
+                "pattern": pattern_str,
+                "translation": rule["translation"],
+                "explanation": rule["explanation"],
+                "example": rule["example"],
+                "is_clicked_word_part": is_clicked_part
+            })
+    if not matches:
+        return None
+    for item in matches:
+        if item["is_clicked_word_part"]:
+            return item
+    return matches[0]
+
+
 @app.route("/api/translate", methods=['POST'])
 def translate_text():
     data = request.get_json() or {}
@@ -2080,7 +2234,7 @@ def translate_text():
         return jsonify({"error": "Brak tekstu do tłumaczenia"}), 400
 
     # 1. Sprawdź pamięć podręczną (0 tokenów, 0 kosztu, odpowiedź natychmiastowa)
-    cache_key = f"{text_to_translate.strip().lower()}__#__{source_lang.lower()}__#__{target_lang.lower()}__#__{context_sentence.strip().lower() if context_sentence else ''}"
+    cache_key = f"v2__{text_to_translate.strip().lower()}__#__{source_lang.lower()}__#__{target_lang.lower()}__#__{context_sentence.strip().lower() if context_sentence else ''}"
     if cache_key in TRANSLATION_CACHE:
         cached = TRANSLATION_CACHE[cache_key]
         if isinstance(cached, dict):
@@ -2089,18 +2243,24 @@ def translate_text():
 
     is_phrase = len(text_to_translate.strip().split()) > 1
     has_context = bool(context_sentence and context_sentence.strip() and context_sentence.strip().lower() != text_to_translate.strip().lower())
+    rule_syntax = detect_sentence_syntax(context_sentence if has_context else text_to_translate, text_to_translate)
 
     if has_context:
         if is_phrase:
             translation_prompt = (
-                f"You are an expert {source_lang}-to-{target_lang} linguistic translator specialized in the Lexical Approach (phrases, collocations, idioms).\n"
+                f"You are an expert {source_lang}-to-{target_lang} linguistic translator specialized in the Lexical Approach (phrases, collocations, idioms) AND syntactic constructions (inversions, grammar patterns).\n"
                 f"Translate the phrase '{text_to_translate}' in the context of this sentence:\n"
                 f"Sentence: \"{context_sentence}\"\n\n"
+                f"Also check if '{text_to_translate}' or the sentence contains a notable syntactic structure worth learning (e.g. negative/emphatic inversion like 'nor did he...', 'not only did...', 'little did he know...', 'no sooner had... than', 'hardly had... when', 'had I known...', 'the more..., the more...', 'as if + past', 'would rather... than', cleft sentences).\n\n"
                 f"Respond with a strict JSON object with these exact keys:\n"
                 f"{{\n"
                 f'  "detected_chunk": "{text_to_translate}",\n'
                 f'  "chunk_translation": "natural {target_lang} translation of this phrase",\n'
-                f'  "chunk_type": "Zwrot / Kolokacja",\n'
+                f'  "chunk_type": "Zwrot / Kolokacja" or "Składnia / Inwersja",\n'
+                f'  "syntax_chunk": "exact syntactic segment from the sentence if a notable syntax structure exists, or null",\n'
+                f'  "syntax_pattern": "general formula for the student e.g. \'nor + [operator: did/was/can] + [osoba] + [czasownik]\' or null",\n'
+                f'  "syntax_explanation": "short, clear 1-2 sentence explanation in {target_lang} of how this syntax works so the student can easily master it, or null",\n'
+                f'  "syntax_example": "one simple example sentence in English with its {target_lang} translation separated by \' — \', or null",\n'
                 f'  "translation": "base {target_lang} translation of the phrase plus 1-2 common synonyms separated by commas",\n'
                 f'  "sentence_translation": "natural {target_lang} translation of the entire sentence"\n'
                 f"}}\n"
@@ -2108,20 +2268,31 @@ def translate_text():
             )
         else:
             translation_prompt = (
-                f"You are an expert {source_lang}-to-{target_lang} linguistic translator specialized in the Lexical Approach (focusing on natural lexical chunks, phrasal verbs and collocations).\n"
+                f"You are an expert {source_lang}-to-{target_lang} linguistic translator and grammar coach specialized in the Lexical Approach (phrasal verbs, collocations, idioms) AND English syntactic constructions (inversions, advanced sentence structures).\n"
                 f"The user clicked the word '{text_to_translate}' in this sentence:\n"
                 f"Sentence: \"{context_sentence}\"\n\n"
                 f"Task:\n"
-                f"1. Check if '{text_to_translate}' forms a multi-word lexical chunk (phrasal verb, natural collocation, idiom, or fixed expression) with neighboring words in this sentence (e.g. 'forward' in 'look forward to' -> chunk is 'look forward to', 'decision' in 'make a decision' -> 'make a decision', 'run' in 'run out of' -> 'run out of', 'granted' in 'take for granted' -> 'take for granted', 'rain' in 'heavy rain' -> 'heavy rain', 'habit' in 'break a habit' -> 'break a habit').\n"
-                f"2. If yes, extract that multi-word chunk (in standard dictionary/base form) and its natural {target_lang} translation, and classify chunk_type as 'Phrasal verb', 'Kolokacja', 'Idiom', or 'Zwrot'.\n"
-                f"   If the word is standalone (e.g. 'apple' in 'I ate an apple'), set detected_chunk, chunk_translation, and chunk_type to null.\n"
-                f"3. Provide the contextual {target_lang} translation of the single word '{text_to_translate}' plus 2-3 common synonyms separated by commas.\n"
-                f"4. Provide the natural {target_lang} translation of the entire sentence.\n\n"
+                f"1. Check if '{text_to_translate}' forms a multi-word lexical chunk (phrasal verb, natural collocation, idiom, fixed expression) OR is part of a notable syntactic/grammatical structure with neighboring words in this sentence (e.g. 'nor did he [verb]' -> inversion after nor/neither, 'not only did...' -> emphatic inversion, 'little did he know', 'no sooner had... than', 'hardly had... when', 'had I known', 'the more..., the more...', 'look forward to', 'make a decision', 'take for granted', 'used to do', 'would rather', 'as if he knew').\n"
+                f"2. If yes, extract that multi-word chunk or syntactic phrase and its natural {target_lang} translation, and classify chunk_type as 'Phrasal verb', 'Kolokacja', 'Idiom', 'Zwrot', or 'Składnia / Inwersja'.\n"
+                f"   If the word is completely standalone (e.g. 'apple' in 'I ate an apple'), set detected_chunk, chunk_translation, and chunk_type to null.\n"
+                f"3. IMPORTANT — SYNTAX DETECTION: Check if the sentence (especially around '{text_to_translate}', or anywhere in the sentence) contains a notable syntactic construction that a learner should master (such as: 'nor did he...', 'neither was she...', 'not only did...', 'little did they know...', 'no sooner had... than...', 'hardly had... when...', 'had it not been for...', 'the more..., the more...', 'as if + past tense', 'would rather... than...', 'it is high time + past tense', cleft sentence 'It was X that...').\n"
+                f"   If such a syntactic structure is present, populate:\n"
+                f"   - 'syntax_chunk': the exact words from the sentence (e.g. 'nor did he explain'),\n"
+                f"   - 'syntax_pattern': a clear, reusable formula for the student (e.g. 'nor + [operator: did/was/can] + [osoba] + [czasownik]'),\n"
+                f"   - 'syntax_explanation': a friendly 1-2 sentence explanation in {target_lang} showing how to build sentences with this structure,\n"
+                f"   - 'syntax_example': one short model sentence in English with its {target_lang} translation separated by ' — '.\n"
+                f"   If there is no special syntactic construction in the sentence, set syntax_chunk, syntax_pattern, syntax_explanation, and syntax_example to null.\n"
+                f"4. Provide the contextual {target_lang} translation of the single word '{text_to_translate}' plus 2-3 common synonyms separated by commas.\n"
+                f"5. Provide the natural {target_lang} translation of the entire sentence.\n\n"
                 f"Respond with a strict JSON object with these exact keys:\n"
                 f"{{\n"
-                f'  "detected_chunk": "full multi-word chunk or null",\n'
+                f'  "detected_chunk": "full multi-word chunk / syntax phrase or null",\n'
                 f'  "chunk_translation": "natural translation of the chunk or null",\n'
-                f'  "chunk_type": "Phrasal verb" or "Kolokacja" or "Idiom" or null,\n'
+                f'  "chunk_type": "Phrasal verb" or "Kolokacja" or "Idiom" or "Składnia / Inwersja" or null,\n'
+                f'  "syntax_chunk": "exact syntactic phrase from sentence or null",\n'
+                f'  "syntax_pattern": "reusable grammatical formula for the student or null",\n'
+                f'  "syntax_explanation": "clear explanation in {target_lang} or null",\n'
+                f'  "syntax_example": "Example in EN — Tłumaczenie w PL or null",\n'
                 f'  "translation": "contextual translation of the word, followed by 2-3 common synonyms separated by commas",\n'
                 f'  "sentence_translation": "natural translation of the entire sentence"\n'
                 f"}}\n"
@@ -2130,13 +2301,18 @@ def translate_text():
     else:
         if is_phrase:
             translation_prompt = (
-                f"You are an expert {source_lang}-to-{target_lang} translator.\n"
-                f"Translate this phrase: \"{text_to_translate}\"\n\n"
+                f"You are an expert {source_lang}-to-{target_lang} translator and grammar coach.\n"
+                f"Translate this phrase: \"{text_to_translate}\"\n"
+                f"If it is a syntactic construction (e.g. 'nor did he...', 'not only did...', 'the more..., the more...'), also provide syntax_pattern, syntax_explanation (in {target_lang}), and syntax_example.\n\n"
                 f"Respond with a strict JSON object:\n"
                 f"{{\n"
                 f'  "detected_chunk": "{text_to_translate}",\n'
                 f'  "chunk_translation": "natural {target_lang} translation of this phrase",\n'
-                f'  "chunk_type": "Fraza",\n'
+                f'  "chunk_type": "Fraza" or "Składnia / Inwersja",\n'
+                f'  "syntax_chunk": "phrase if syntactic structure or null",\n'
+                f'  "syntax_pattern": "grammatical formula or null",\n'
+                f'  "syntax_explanation": "short explanation in {target_lang} or null",\n'
+                f'  "syntax_example": "Example EN — PL or null",\n'
                 f'  "translation": "natural {target_lang} translation of this phrase",\n'
                 f'  "sentence_translation": ""\n'
                 f"}}\n"
@@ -2151,6 +2327,10 @@ def translate_text():
                 f'  "detected_chunk": null,\n'
                 f'  "chunk_translation": null,\n'
                 f'  "chunk_type": null,\n'
+                f'  "syntax_chunk": null,\n'
+                f'  "syntax_pattern": null,\n'
+                f'  "syntax_explanation": null,\n'
+                f'  "syntax_example": null,\n'
                 f'  "translation": "most common {target_lang} translation, followed by 2-3 other distinct meanings separated by commas",\n'
                 f'  "sentence_translation": ""\n'
                 f"}}\n"
@@ -2176,6 +2356,11 @@ def translate_text():
             except Exception:
                 pass
 
+        syntax_chunk = None
+        syntax_pattern = None
+        syntax_explanation = None
+        syntax_example = None
+
         if parsed_json and isinstance(parsed_json, dict):
             word_translation = str(parsed_json.get("translation") or "").strip()
             sentence_translation = str(parsed_json.get("sentence_translation") or "").strip()
@@ -2186,6 +2371,19 @@ def translate_text():
                     detected_chunk = None
             chunk_translation = str(parsed_json.get("chunk_translation") or "").strip() if detected_chunk else None
             chunk_type = str(parsed_json.get("chunk_type") or "").strip() if detected_chunk else None
+
+            raw_sc = parsed_json.get("syntax_chunk")
+            raw_sp = parsed_json.get("syntax_pattern")
+            raw_se = parsed_json.get("syntax_explanation")
+            raw_sex = parsed_json.get("syntax_example")
+            if raw_sc and str(raw_sc).strip().lower() not in ("null", "none", ""):
+                syntax_chunk = str(raw_sc).strip()
+            if raw_sp and str(raw_sp).strip().lower() not in ("null", "none", ""):
+                syntax_pattern = str(raw_sp).strip()
+            if raw_se and str(raw_se).strip().lower() not in ("null", "none", ""):
+                syntax_explanation = str(raw_se).strip()
+            if raw_sex and str(raw_sex).strip().lower() not in ("null", "none", ""):
+                syntax_example = str(raw_sex).strip()
         else:
             lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
             cleaned_lines = []
@@ -2200,12 +2398,54 @@ def translate_text():
             chunk_translation = word_translation if is_phrase else None
             chunk_type = "Fraza" if is_phrase else None
 
+        # Merge with deterministic rule_syntax if available
+        detected_syntax = None
+        if rule_syntax:
+            syntax_chunk = syntax_chunk or rule_syntax["chunk"]
+            syntax_pattern = syntax_pattern or rule_syntax["pattern"]
+            syntax_explanation = syntax_explanation or rule_syntax["explanation"]
+            syntax_example = syntax_example or rule_syntax["example"]
+            syntax_trans = chunk_translation if (detected_chunk and detected_chunk.lower() == rule_syntax["chunk"].lower()) else rule_syntax["translation"]
+            detected_syntax = {
+                "chunk": syntax_chunk,
+                "type": rule_syntax["type"],
+                "pattern": syntax_pattern,
+                "translation": syntax_trans,
+                "explanation": syntax_explanation,
+                "example": syntax_example,
+                "is_clicked_word_part": rule_syntax["is_clicked_word_part"]
+            }
+            if not detected_chunk and rule_syntax["is_clicked_word_part"]:
+                detected_chunk = rule_syntax["chunk"]
+                chunk_translation = rule_syntax["translation"]
+                chunk_type = rule_syntax["type"]
+        elif syntax_pattern or syntax_explanation:
+            target_sc = syntax_chunk or detected_chunk or text_to_translate
+            detected_syntax = {
+                "chunk": target_sc,
+                "type": chunk_type if (chunk_type and ("składnia" in chunk_type.lower() or "inwersja" in chunk_type.lower() or "konstrukcja" in chunk_type.lower())) else "Składnia · Konstrukcja zdaniowa",
+                "pattern": syntax_pattern or target_sc,
+                "translation": chunk_translation or word_translation,
+                "explanation": syntax_explanation or "",
+                "example": syntax_example or "",
+                "is_clicked_word_part": True
+            }
+            if not detected_chunk and syntax_chunk:
+                detected_chunk = syntax_chunk
+                chunk_translation = chunk_translation or word_translation
+                chunk_type = detected_syntax["type"]
+
         result = {
             "translation": word_translation,
             "sentence_translation": sentence_translation,
             "detected_chunk": detected_chunk,
             "chunk_translation": chunk_translation,
-            "chunk_type": chunk_type
+            "chunk_type": chunk_type,
+            "syntax_chunk": detected_syntax["chunk"] if detected_syntax else None,
+            "syntax_pattern": detected_syntax["pattern"] if detected_syntax else None,
+            "syntax_explanation": detected_syntax["explanation"] if detected_syntax else None,
+            "syntax_example": detected_syntax["example"] if detected_syntax else None,
+            "detected_syntax": detected_syntax
         }
 
         # Zapisz w pamięci podręcznej (zabezpieczenie limitu rozmiaru)

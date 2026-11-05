@@ -850,7 +850,9 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                       <div className="word-primary-text">
                         {word.original}
                         {(word.item_type === "phrase" || word.original.trim().includes(" ")) && (
-                          <span className="vocab-phrase-tag">Zwrot</span>
+                          <span className="vocab-phrase-tag">
+                            {/składnia|inwersja|konstrukcja/i.test(word.chunk_type || "") ? "Składnia" : "Zwrot"}
+                          </span>
                         )}
                       </div>
                       <div className="word-sub-meta">
@@ -1033,7 +1035,9 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
                   <h3 className="active-word-title">
                     {activeWord.original}
                     {(activeWord.item_type === "phrase" || activeWord.original.trim().includes(" ")) && (
-                      <span className="vocab-phrase-tag-large">Zwrot</span>
+                      <span className="vocab-phrase-tag-large">
+                        {/składnia|inwersja|konstrukcja/i.test(activeWord.chunk_type || "") ? "Składnia" : "Zwrot"}
+                      </span>
                     )}
                   </h3>
                   <div className="active-word-phonetics">

@@ -1527,6 +1527,94 @@
   box-shadow: 0 3px 10px rgba(16, 185, 129, 0.25);
 }
 
+/* ── SYNTAX / GRAMMATICAL STRUCTURE BREAKDOWN CARD ── */
+.inline-detected-syntax-card {
+  background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
+  border: 1.5px solid #a5b4fc;
+  box-shadow: 0 4px 14px -2px rgba(79, 70, 229, 0.12);
+}
+
+.syntax-badge-pill {
+  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+}
+
+.inline-detected-syntax-card .chunk-hint {
+  color: #4338ca;
+}
+
+.inline-detected-syntax-card .chunk-phrase-title {
+  color: #1e1b4b;
+}
+
+.inline-detected-syntax-card .chunk-translation-text {
+  color: #3730a3;
+}
+
+.inline-save-syntax-btn {
+  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+  box-shadow: 0 3px 10px rgba(79, 70, 229, 0.25);
+}
+
+.inline-save-syntax-btn:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #312e81 100%);
+  box-shadow: 0 5px 14px rgba(79, 70, 229, 0.35);
+}
+
+.syntax-learner-breakdown {
+  margin-top: 0.7rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed rgba(99, 102, 241, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+}
+
+.syntax-formula-box {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+}
+
+.syntax-formula-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #3730a3;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.syntax-formula-code {
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: #1e1b4b;
+  background: transparent;
+}
+
+.syntax-explanation-text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #1e293b;
+}
+
+.syntax-example-text {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.55);
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  border-left: 3px solid #6366f1;
+}
+
 .inline-word-label {
   font-size: 0.78rem;
   color: #64748b;

@@ -12,6 +12,7 @@ import SessionSummaryModal from "./Notebook/SessionSummaryModal";
 import PronunciationPracticeModal from "./Notebook/PronunciationPracticeModal";
 import { calculateCEFRLevel } from "./Story/SavedStories";
 import { DEMO_STORIES, DEMO_DICTIONARY, DEMO_SENTENCES } from "../data/demoStoriesData";
+import { detectSentenceSyntax } from "../utils/syntaxDetector";
 
 // Curated vocabulary metadata for rich inline word card details & key story words
 const VOCABULARY_INFO = {
@@ -2656,8 +2657,9 @@ function Workspace({
 
     const demoWord = DEMO_DICTIONARY[lowerClean];
     const demoSentenceTrans = DEMO_SENTENCES[sentenceContext.trim()] || "";
+    const localSyntax = detectSentenceSyntax(sentenceContext, cleanWord);
 
-    if (demoWord) {
+    if (demoWord && demoSentenceTrans) {
       const initialData = {
         word: cleanWord,
         phonetic: demoWord.phonetic || meta.phonetic || `/${lowerClean}/`,
@@ -2667,9 +2669,10 @@ function Workspace({
         enDef: demoWord.enDef || meta.enDef || "",
         sentence: sentenceContext,
         sentenceTranslation: demoSentenceTrans || "",
-        detectedChunk: null,
-        chunkTranslation: null,
-        chunkType: null,
+        detectedChunk: localSyntax && localSyntax.isClickedWordPart ? localSyntax.chunk : null,
+        chunkTranslation: localSyntax && localSyntax.isClickedWordPart ? localSyntax.translation : null,
+        chunkType: localSyntax && localSyntax.isClickedWordPart ? localSyntax.type : null,
+        syntaxInfo: localSyntax || null,
         paragraphIndex: pIdx
       };
       setInlineWordData(initialData);
@@ -2690,16 +2693,17 @@ function Workspace({
 
     const initialData = {
       word: cleanWord,
-      phonetic: meta.phonetic || `/${cleanWord.toLowerCase()}/`,
-      pos: meta.pos || "word",
-      level: meta.level || "B2",
-      pl: meta.pl || "Wczytuję...",
-      enDef: meta.enDef || "",
+      phonetic: (demoWord && demoWord.phonetic) || meta.phonetic || `/${cleanWord.toLowerCase()}/`,
+      pos: (demoWord && demoWord.pos) || meta.pos || "word",
+      level: (demoWord && demoWord.level) || meta.level || "B2",
+      pl: (demoWord && demoWord.pl) || meta.pl || "Wczytuję...",
+      enDef: (demoWord && demoWord.enDef) || meta.enDef || "",
       sentence: sentenceContext,
-      sentenceTranslation: "",
-      detectedChunk: null,
-      chunkTranslation: null,
-      chunkType: null,
+      sentenceTranslation: demoSentenceTrans || "",
+      detectedChunk: localSyntax && localSyntax.isClickedWordPart ? localSyntax.chunk : null,
+      chunkTranslation: localSyntax && localSyntax.isClickedWordPart ? localSyntax.translation : null,
+      chunkType: localSyntax && localSyntax.isClickedWordPart ? localSyntax.type : null,
+      syntaxInfo: localSyntax || null,
       paragraphIndex: pIdx
     };
     setInlineWordData(initialData);
@@ -2717,13 +2721,23 @@ function Workspace({
       const data = await response.json();
       setInlineWordData(prev => {
         if (!prev || prev.word.toLowerCase() !== cleanWord.toLowerCase()) return prev;
+        const apiSyntax = data.detected_syntax || (data.syntax_pattern || data.syntax_explanation ? {
+          chunk: data.syntax_chunk || data.detected_chunk || (localSyntax && localSyntax.chunk) || cleanWord,
+          type: (localSyntax && localSyntax.type) || data.chunk_type || "Składnia · Konstrukcja zdaniowa",
+          pattern: data.syntax_pattern || (localSyntax && localSyntax.pattern) || "",
+          translation: (localSyntax && localSyntax.translation) || data.chunk_translation || data.translation || "",
+          explanation: data.syntax_explanation || (localSyntax && localSyntax.explanation) || "",
+          example: data.syntax_example || (localSyntax && localSyntax.example) || ""
+        } : null);
+        const mergedSyntax = apiSyntax ? { ...(localSyntax || {}), ...apiSyntax } : (localSyntax || null);
         return {
           ...prev,
-          pl: data.translation || meta.pl || "Brak tłumaczenia",
-          sentenceTranslation: data.sentence_translation || "",
-          detectedChunk: data.detected_chunk || null,
-          chunkTranslation: data.chunk_translation || null,
-          chunkType: data.chunk_type || null
+          pl: data.translation || (demoWord && demoWord.pl) || meta.pl || "Brak tłumaczenia",
+          sentenceTranslation: data.sentence_translation || demoSentenceTrans || "",
+          detectedChunk: data.detected_chunk || prev.detectedChunk || null,
+          chunkTranslation: data.chunk_translation || prev.chunkTranslation || null,
+          chunkType: data.chunk_type || prev.chunkType || null,
+          syntaxInfo: mergedSyntax
         };
       });
     } catch (err) {
@@ -3233,11 +3247,88 @@ function Workspace({
   const renderInlineCard = () => {
     if (!inlineWordData) return null;
     const isSaved = isWordInNotebook(inlineWordData.word);
-    const hasChunk = Boolean(inlineWordData.detectedChunk && inlineWordData.chunkTranslation);
+    const syntaxInfo = inlineWordData.syntaxInfo || null;
+    const hasSyntax = Boolean(syntaxInfo && (syntaxInfo.pattern || syntaxInfo.explanation));
+    const isChunkSameAsSyntax = Boolean(
+      hasSyntax &&
+      inlineWordData.detectedChunk &&
+      syntaxInfo.chunk &&
+      inlineWordData.detectedChunk.trim().toLowerCase() === syntaxInfo.chunk.trim().toLowerCase()
+    );
+    const hasChunk = Boolean(inlineWordData.detectedChunk && inlineWordData.chunkTranslation && !isChunkSameAsSyntax);
     const isChunkSaved = hasChunk ? isWordInNotebook(inlineWordData.detectedChunk) : false;
+    const syntaxTargetText = hasSyntax ? (syntaxInfo.chunk || syntaxInfo.pattern) : "";
+    const isSyntaxSaved = hasSyntax && syntaxTargetText ? isWordInNotebook(syntaxTargetText) : false;
 
     return (
       <div className="workspace-inline-word-card">
+        {hasSyntax && (
+          <div className="inline-detected-chunk-card inline-detected-syntax-card animate-fade-in">
+            <div className="chunk-badge-row">
+              <span className="chunk-badge-pill syntax-badge-pill">
+                <span className="chunk-sparkle">🧩</span>
+                {syntaxInfo.type || "Konstrukcja składniowa"}
+              </span>
+              <span className="chunk-hint">Wzór składniowy w tym zdaniu — przyswój schemat!</span>
+            </div>
+            <div className="chunk-content-row">
+              <div className="chunk-text-group">
+                <span className="chunk-phrase-title">{syntaxInfo.chunk}</span>
+                {syntaxInfo.translation && (
+                  <span className="chunk-translation-text">{syntaxInfo.translation}</span>
+                )}
+              </div>
+              <button
+                type="button"
+                className={`inline-save-chunk-btn inline-save-syntax-btn ${isSyntaxSaved ? "saved" : ""}`}
+                onClick={() => handleToggleWordSaved({
+                  word: syntaxTargetText,
+                  translation: `${syntaxInfo.translation || ""} (${syntaxInfo.pattern || "konstrukcja składniowa"})`.trim(),
+                  pos: syntaxInfo.type || "Składnia",
+                  level: inlineWordData.level || "B2",
+                  sentence: inlineWordData.sentence,
+                  item_type: "phrase"
+                })}
+              >
+                {isSyntaxSaved ? (
+                  <>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span>Zapisano składnię! ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span>Zapisz konstrukcję (+)</span>
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="syntax-learner-breakdown">
+              {syntaxInfo.pattern && (
+                <div className="syntax-formula-box">
+                  <span className="syntax-formula-label">📐 Schemat:</span>
+                  <code className="syntax-formula-code">{syntaxInfo.pattern}</code>
+                </div>
+              )}
+              {syntaxInfo.explanation && (
+                <p className="syntax-explanation-text">
+                  <strong>💡 Jak to działa:</strong> {syntaxInfo.explanation}
+                </p>
+              )}
+              {syntaxInfo.example && (
+                <p className="syntax-example-text">
+                  <strong>🗣️ Przykład:</strong> <em>{syntaxInfo.example}</em>
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {hasChunk && (
           <div className="inline-detected-chunk-card animate-fade-in">
             <div className="chunk-badge-row">
