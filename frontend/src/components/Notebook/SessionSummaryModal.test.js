@@ -83,7 +83,7 @@ describe("SessionSummaryModal", () => {
     // Verify mispronounced drills
     expect(screen.getByText("Science")).toBeInTheDocument();
     expect(screen.getByText("Nauka")).toBeInTheDocument();
-    expect(screen.getByText("Słaba wymowa ⚠️")).toBeInTheDocument();
+    expect(screen.getByText("Słaba wymowa")).toBeInTheDocument();
 
     // Verify vocabulary
     expect(screen.getByText("✓ fluency")).toBeInTheDocument();

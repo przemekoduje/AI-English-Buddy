@@ -138,9 +138,9 @@ const VocabularyExerciseModal = ({ notebookWords, user, onClose }) => {
             ) : (
               <div className={`exercise-result ${exerciseResult.status}`} style={{ marginTop: "1rem", padding: "1.5rem", borderRadius: "8px", background: exerciseResult.status === 'correct' ? '#ecfdf5' : exerciseResult.status === 'acceptable' ? '#fffbeb' : '#fef2f2', border: `1px solid ${exerciseResult.status === 'correct' ? '#10b981' : exerciseResult.status === 'acceptable' ? '#f59e0b' : '#ef4444'}` }}>
                 <h4 style={{ color: exerciseResult.status === 'correct' ? '#047857' : exerciseResult.status === 'acceptable' ? '#b45309' : '#b91c1c', marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  {exerciseResult.status === 'correct' && "✅ Rewelacja!"}
-                  {exerciseResult.status === 'acceptable' && "⚠️ Dobrze, ale można lepiej!"}
-                  {exerciseResult.status === 'incorrect' && "❌ Spróbuj jeszcze raz!"}
+                  {exerciseResult.status === 'correct' && "✓ Rewelacja!"}
+                  {exerciseResult.status === 'acceptable' && "Dobrze, ale można lepiej!"}
+                  {exerciseResult.status === 'incorrect' && "✕ Spróbuj jeszcze raz!"}
                 </h4>
                 <p style={{ fontSize: "1rem", whiteSpace: "pre-wrap", color: "var(--slate-800)", lineHeight: "1.5" }}>{exerciseResult.feedback}</p>
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>

@@ -223,7 +223,7 @@ const CURATED_VIDEOS = DEMO_VIDEOS.map((vid) => ({
 const CURATED_SOURCES = [
   {
     id: "dry_bar_comedy",
-    name: "🎭 Dry Bar Comedy (Humor, stand-up)",
+    name: "Dry Bar Comedy (Humor, stand-up)",
     videos: [
       {
         youtubeId: "cqjhCC4sP4Q",
@@ -255,7 +255,7 @@ const CURATED_SOURCES = [
   },
   {
     id: "tech_fireship",
-    name: "💻 Fireship (Technologie, szybkie tempo)",
+    name: "Fireship (Technologie, szybkie tempo)",
     videos: [
       {
         youtubeId: "Sxxw3qtb3_g",
@@ -271,7 +271,7 @@ const CURATED_SOURCES = [
   },
   {
     id: "james_veitch",
-    name: "✉️ James Veitch (Rozrywka, e-maile)",
+    name: "James Veitch (Rozrywka, e-maile)",
     videos: [
       {
         youtubeId: "_QdPW8JrYzQ",
@@ -2666,7 +2666,11 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           >
             {isStarterUser ? (
               <span className="media-pro-btn-content">
-                <span>🔒 Add media</span>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <span>Add media</span>
                 <span className="media-pro-badge">PRO</span>
               </span>
             ) : (
@@ -2748,7 +2752,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
             <div className="media-selector-row my-custom-videos-row">
               <div className="media-selector-row-header">
                 <div className="media-selector-row-title">
-                  <span>🎬 Moje dodane filmy ({customVideos.length})</span>
+                  <span>Moje dodane filmy ({customVideos.length})</span>
                 </div>
               </div>
               <div className="media-selector-scroll-wrapper">
@@ -2816,7 +2820,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           <div className="media-selector-row">
             <div className="media-selector-row-header">
               <div className="media-selector-row-title">
-                <span>🕒 Ostatnio oglądane</span>
+                <span>Ostatnio oglądane</span>
               </div>
               <div className="media-selector-sort-controls">
                 <span className="sort-label">Sortowanie:</span>
@@ -2903,7 +2907,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
           <div className="media-selector-row">
             <div className="media-selector-row-header">
               <div className="media-selector-row-title">
-                <span>📺 Nieoglądane</span>
+                <span>Nieoglądane</span>
               </div>
               <div className="media-selector-sort-controls">
                 <span className="sort-label">Sortowanie:</span>
@@ -2924,7 +2928,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
               </div>
             </div>
             {unwatchedVideos.length === 0 ? (
-              <div className="media-selector-empty-text">Wszystkie wideo zostały obejrzane! 🎉</div>
+              <div className="media-selector-empty-text">Wszystkie wideo zostały obejrzane!</div>
             ) : (
               <div className="media-selector-scroll-wrapper">
                 <button
@@ -3041,7 +3045,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                           disabled={isLoadingCustom}
                           title={isStarterUser ? "Ładowanie filmów z zewnętrznych kanałów wymaga pakietu PRO" : "Załaduj wideo"}
                         >
-                          {isStarterUser ? "🔒 Załaduj (PRO)" : "Załaduj wideo ▶"}
+                          {isStarterUser ? "Załaduj (PRO)" : "Załaduj wideo"}
                         </button>
                       </div>
                     </div>
@@ -3181,7 +3185,15 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                   <div className={`media-detected-chunk-box animate-fade-in ${detectedSyntax ? "media-detected-syntax-box" : ""}`}>
                     <div className="chunk-badge-row">
                       <span className={`chunk-badge-pill ${detectedSyntax ? "syntax-badge-pill" : ""}`}>
-                        <span className="chunk-sparkle">{detectedSyntax ? "🧩" : "✨"}</span>
+                        <span className="chunk-sparkle" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            {detectedSyntax ? (
+                              <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                            ) : (
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                            )}
+                          </svg>
+                        </span>
                         {chunkType || (detectedSyntax ? detectedSyntax.type : "Rekomendowany zwrot")}
                       </span>
                       <span className="chunk-hint">
@@ -3221,18 +3233,18 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                       <div className="syntax-learner-breakdown">
                         {detectedSyntax.pattern && (
                           <div className="syntax-formula-box">
-                            <span className="syntax-formula-label">📐 Schemat:</span>
+                            <span className="syntax-formula-label">Schemat:</span>
                             <code className="syntax-formula-code">{detectedSyntax.pattern}</code>
                           </div>
                         )}
                         {detectedSyntax.explanation && (
                           <p className="syntax-explanation-text">
-                            <strong>💡 Jak to działa:</strong> {detectedSyntax.explanation}
+                            <strong>Jak to działa:</strong> {detectedSyntax.explanation}
                           </p>
                         )}
                         {detectedSyntax.example && (
                           <p className="syntax-example-text">
-                            <strong>🗣️ Przykład:</strong> <em>{detectedSyntax.example}</em>
+                            <strong>Przykład:</strong> <em>{detectedSyntax.example}</em>
                           </p>
                         )}
                       </div>
@@ -3251,7 +3263,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                     title="Szczegółowe objaśnienie słownikowe"
                     onClick={() => setExplanationWord(selectedWord)}
                   >
-                    Więcej szczegółów 💡
+                    Więcej szczegółów
                   </button>
                 </div>
                 {isTranslating ? (
@@ -3365,9 +3377,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                       ) : (
                         <div className={`exercise-result ${exerciseResult.status}`}>
                           <h5>
-                            {exerciseResult.status === 'correct' && "✅ Rewelacja!"}
-                            {exerciseResult.status === 'acceptable' && "⚠️ Dobrze, ale można lepiej!"}
-                            {exerciseResult.status === 'incorrect' && "❌ Spróbuj jeszcze raz!"}
+                            {exerciseResult.status === 'correct' && "✓ Rewelacja!"}
+                            {exerciseResult.status === 'acceptable' && "Dobrze, ale można lepiej!"}
+                            {exerciseResult.status === 'incorrect' && "✕ Spróbuj jeszcze raz!"}
                           </h5>
                           <p>{exerciseResult.feedback}</p>
                           <button
@@ -3445,7 +3457,13 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                   setBlurChallengeEnabled(prev => !prev);
                   setSegmentBlurOverrides({});
                 }}>
-                  <span className="switch-icon-target">🎯</span>
+                  <span className="switch-icon-target" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="6" />
+                      <circle cx="12" cy="12" r="2" />
+                    </svg>
+                  </span>
                   Blur oryginału
                 </span>
                 <button
@@ -3573,7 +3591,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                     </svg>
-                    {isChunkSaved ? `Zapisano zwrot "${detectedChunk}" ✓` : `✨ Zapisz zwrot "${detectedChunk}"`}
+                    {isChunkSaved ? `Zapisano zwrot "${detectedChunk}" ✓` : `Zapisz zwrot "${detectedChunk}"`}
                   </button>
                   <button
                     type="button"
@@ -3743,7 +3761,13 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                   {/* Error State */}
                   {extractionError && !isExtractingSubtitles && (
                     <div className="add-media-error-card animate-fade-in">
-                      <div className="error-icon">⚠️</div>
+                      <div className="error-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                      </div>
                       <div className="error-details">
                         <strong>{extractionError}</strong>
                         <p>Jeśli film nie posiada angielskich napisów na YouTube, możesz wkleić transkrypcję ręcznie:</p>
@@ -3773,9 +3797,9 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                         <div className="preview-meta">
                           <span className="preview-ready-badge">
                             {extractedData.source && extractedData.source.startsWith('ai_audio')
-                              ? "✨ Wygenerowano ze ścieżki audio przez AI"
+                              ? "✓ Wygenerowano ze ścieżki audio przez AI"
                               : extractedData.from_cache
-                                ? "⚡ Wczytano błyskawicznie z pamięci"
+                                ? "✓ Wczytano błyskawicznie z pamięci"
                                 : "✓ Napisy gotowe"}
                           </span>
                           <h4 className="preview-title">{extractedData.title}</h4>
@@ -3867,7 +3891,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
                   {extractionError && (
                     <div className="add-media-error-card small animate-fade-in">
-                      <span>⚠️ {extractionError}</span>
+                      <span>{extractionError}</span>
                     </div>
                   )}
 
@@ -3904,7 +3928,11 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                       onChange={handleFileUpload}
                       style={{ display: "none" }}
                     />
-                    <div className="dropzone-icon">📁</div>
+                    <div className="dropzone-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                      </svg>
+                    </div>
                     <strong>Kliknij, aby wybrać plik .srt, .vtt lub .txt</strong>
                     <span>lub przeciągnij plik tutaj</span>
                   </div>
@@ -3912,7 +3940,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
                   {uploadedFileStatus && (
                     <div className="uploaded-file-summary animate-fade-in">
                       <div className="summary-info">
-                        <span className="file-name">📄 {uploadedFileStatus.name}</span>
+                        <span className="file-name">{uploadedFileStatus.name}</span>
                         <span className="segments-badge">{uploadedFileStatus.segmentsCount} zdań rozpoznano</span>
                       </div>
                       <button
@@ -3927,7 +3955,7 @@ function MediaBuddy({ user, subscription, onOpenPaywall, onNavigate }) {
 
                   {extractionError && (
                     <div className="add-media-error-card small animate-fade-in">
-                      <span>⚠️ {extractionError}</span>
+                      <span>{extractionError}</span>
                     </div>
                   )}
                 </div>

@@ -590,7 +590,7 @@ const VocabularyView = ({ user, onNavigateToWorkspace }) => {
 
       {error && (
         <div style={{ background: "#fef2f2", color: "#b91c1c", padding: "0.75rem 1rem", borderRadius: "10px", marginBottom: "1rem", border: "1px solid #fecaca", fontSize: "0.85rem" }}>
-          ⚠️ {error}
+          {error}
         </div>
       )}
 

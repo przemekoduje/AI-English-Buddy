@@ -256,7 +256,7 @@ const AdminDashboard = ({ user, subscription, onSubscriptionUpdated = () => {} }
       {/* SEKCJA TESTERA UPRAWNIEŃ I PAKIETÓW DLA ADMINA */}
       <div className="admin-simulator-card glass-panel animate-fade-in">
         <div className="simulator-header">
-          <div className="simulator-badge">🛠️ TESTER UPRAWNIEŃ & BLOKAD</div>
+          <div className="simulator-badge">TESTER UPRAWNIEŃ & BLOKAD</div>
           <h3 className="simulator-title">Przełącznik trybu testowego aplikacji</h3>
           <p className="simulator-subtitle">
             Wciel się natychmiast w dowolną rolę, aby przetestować działanie przycisków, blokad paywalla, 5 historii demonstracyjnych i ograniczeń wideo bez przechodzenia przez Stripe.
@@ -270,7 +270,11 @@ const AdminDashboard = ({ user, subscription, onSubscriptionUpdated = () => {} }
             onClick={() => handleSetRole('admin')}
             disabled={roleUpdating}
           >
-            <span className="role-icon">👑</span>
+            <span className="role-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </span>
             <div className="role-text">
               <span className="role-name">Administrator</span>
               <span className="role-desc">Pełny dostęp do wszystkiego (9999 min)</span>
@@ -283,7 +287,11 @@ const AdminDashboard = ({ user, subscription, onSubscriptionUpdated = () => {} }
             onClick={() => handleSetRole('starter')}
             disabled={roleUpdating}
           >
-            <span className="role-icon">🆓</span>
+            <span className="role-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+              </svg>
+            </span>
             <div className="role-text">
               <span className="role-name">Starter (Free)</span>
               <span className="role-desc">Test blokad: 5 historii demo, blokada YouTube & tworzenia</span>
@@ -296,7 +304,11 @@ const AdminDashboard = ({ user, subscription, onSubscriptionUpdated = () => {} }
             onClick={() => handleSetRole('pro')}
             disabled={roleUpdating}
           >
-            <span className="role-icon">✨</span>
+            <span className="role-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            </span>
             <div className="role-text">
               <span className="role-name">Pro (150 min)</span>
               <span className="role-desc">Tworzenie historii, YouTube i Mastery Path odblokowane</span>
@@ -309,7 +321,11 @@ const AdminDashboard = ({ user, subscription, onSubscriptionUpdated = () => {} }
             onClick={() => handleSetRole('intensive')}
             disabled={roleUpdating}
           >
-            <span className="role-icon">🚀</span>
+            <span className="role-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            </span>
             <div className="role-text">
               <span className="role-name">Intensive (400 min)</span>
               <span className="role-desc">Wszystko + symulacje branżowe</span>
@@ -331,7 +347,7 @@ const AdminDashboard = ({ user, subscription, onSubscriptionUpdated = () => {} }
             onClick={handleResetMinutes}
             disabled={roleUpdating}
           >
-            🔄 Zresetuj zużyte minuty na 0
+            Zresetuj zużyte minuty na 0
           </button>
         </div>
       </div>

@@ -466,7 +466,7 @@ const VocabularyDrawer = ({ user }) => {
                                     className={`exercise-tab-btn ${activeExerciseTabs[wordId] === 'pl_to_en' ? 'active' : ''}`}
                                     onClick={() => setActiveExerciseTabs(prev => ({ ...prev, [wordId]: 'pl_to_en' }))}
                                   >
-                                    PL ➡️ EN
+                                    PL → EN
                                   </button>
                                   <button
                                     type="button"
@@ -508,7 +508,7 @@ const VocabularyDrawer = ({ user }) => {
                                       >
                                         {option.text}
                                         {hasAnswered && option.translation && ` (${option.translation})`}
-                                        {hasAnswered && option.is_correct && " ➡️ POPRAWNA"}
+                                        {hasAnswered && option.is_correct && " → POPRAWNA"}
                                       </button>
                                     );
                                   })}
@@ -744,7 +744,7 @@ const VocabularyDrawer = ({ user }) => {
                             disabled={loadingQuizIds[wordId]}
                             onClick={(e) => handleToggleQuiz(e, item)}
                           >
-                            {loadingQuizIds[wordId] ? "Generowanie..." : "✨ Generuj Quiz i Ćwiczenia"}
+                            {loadingQuizIds[wordId] ? "Generowanie..." : "Generuj Quiz i Ćwiczenia"}
                           </button>
                         )}
                       </div>

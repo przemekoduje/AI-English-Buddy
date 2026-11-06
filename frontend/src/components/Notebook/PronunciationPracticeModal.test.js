@@ -148,8 +148,8 @@ describe("PronunciationPracticeModal", () => {
     expect(screen.getByText("Tempo dobre, lecz popracuj nad akcentem.")).toBeInTheDocument();
     expect(screen.getByText('"curse of knowledge is real"')).toBeInTheDocument();
     expect(screen.getByText("Zwróć uwagę na słowa: curse, real")).toBeInTheDocument();
-    expect(screen.getByText("⚠️ curse")).toBeInTheDocument();
-    expect(screen.getByText("⚠️ real")).toBeInTheDocument();
+    expect(screen.getByText("curse")).toBeInTheDocument();
+    expect(screen.getByText("real")).toBeInTheDocument();
 
     // Verify callbacks are triggered
     expect(mockOnLogActivity).toHaveBeenCalledWith({

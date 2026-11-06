@@ -294,7 +294,7 @@ const PronunciationPracticeModal = ({ targetText, user, onClose, onLogActivity, 
                     <div className="mispronounced-chips">
                       {evaluation.mispronounced_words.map((word, idx) => (
                         <span key={idx} className="mispronounced-chip">
-                          ⚠️ {word}
+                          {word}
                         </span>
                       ))}
                     </div>
@@ -304,7 +304,7 @@ const PronunciationPracticeModal = ({ targetText, user, onClose, onLogActivity, 
 
               {evaluation.corrections === "Brak błędów" && (
                 <div className="evaluation-detail-section perfect">
-                  <p className="perfect-text">🎉 Idealna wymowa! Brak wykrytych błędów.</p>
+                  <p className="perfect-text">✓ Idealna wymowa! Brak wykrytych błędów.</p>
                 </div>
               )}
             </div>

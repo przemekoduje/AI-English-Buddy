@@ -838,7 +838,7 @@ export class GeminiLiveClient {
         this.finalizeUserTurn();
         this.onTranscript({
           sender: 'bot',
-          text: '🎙️ Speaking...',
+          text: 'Speaking...',
           isFinal: false
         });
       }

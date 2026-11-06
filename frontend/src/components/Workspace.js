@@ -245,9 +245,9 @@ const GENERATION_PHASES = [
 ];
 
 const PREMIUM_VOICES = [
-  { voiceURI: 'en-US-BrianNeural', name: 'Brian (US - Male) 🌟', lang: 'en-US' },
-  { voiceURI: 'en-US-AriaNeural', name: 'Aria (US - Female) 🌟', lang: 'en-US' },
-  { voiceURI: 'en-US-EmmaMultilingualNeural', name: 'Emma (US - Multilingual) 🌟', lang: 'en-US' },
+  { voiceURI: 'en-US-BrianNeural', name: 'Brian (US - Male)', lang: 'en-US' },
+  { voiceURI: 'en-US-AriaNeural', name: 'Aria (US - Female)', lang: 'en-US' },
+  { voiceURI: 'en-US-EmmaMultilingualNeural', name: 'Emma (US - Multilingual)', lang: 'en-US' },
   { voiceURI: 'en-GB-RyanNeural', name: 'Ryan (UK - Male)', lang: 'en-GB' },
   { voiceURI: 'en-GB-SoniaNeural', name: 'Sonia (UK - Female)', lang: 'en-GB' },
 ];
@@ -3293,7 +3293,10 @@ function Workspace({
           <div className="inline-detected-chunk-card inline-detected-syntax-card animate-fade-in">
             <div className="chunk-badge-row">
               <span className="chunk-badge-pill syntax-badge-pill">
-                <span className="chunk-sparkle">🧩</span>
+                <svg className="chunk-sparkle-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="16 18 22 12 16 6" />
+                  <polyline points="8 6 2 12 8 18" />
+                </svg>
                 {syntaxInfo.type || "Konstrukcja składniowa"}
               </span>
               <span className="chunk-hint">Wzór składniowy w tym zdaniu — przyswój schemat!</span>
@@ -3322,7 +3325,7 @@ function Workspace({
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    <span>Zapisano składnię! ✓</span>
+                    <span>Zapisano składnię!</span>
                   </>
                 ) : (
                   <>
@@ -3338,18 +3341,18 @@ function Workspace({
             <div className="syntax-learner-breakdown">
               {syntaxInfo.pattern && (
                 <div className="syntax-formula-box">
-                  <span className="syntax-formula-label">📐 Schemat:</span>
+                  <span className="syntax-formula-label">Schemat:</span>
                   <code className="syntax-formula-code">{syntaxInfo.pattern}</code>
                 </div>
               )}
               {syntaxInfo.explanation && (
                 <p className="syntax-explanation-text">
-                  <strong>💡 Jak to działa:</strong> {syntaxInfo.explanation}
+                  <strong>Jak to działa:</strong> {syntaxInfo.explanation}
                 </p>
               )}
               {syntaxInfo.example && (
                 <p className="syntax-example-text">
-                  <strong>🗣️ Przykład:</strong> <em>{syntaxInfo.example}</em>
+                  <strong>Przykład:</strong> <em>{syntaxInfo.example}</em>
                 </p>
               )}
             </div>
@@ -3360,7 +3363,9 @@ function Workspace({
           <div className="inline-detected-chunk-card animate-fade-in">
             <div className="chunk-badge-row">
               <span className="chunk-badge-pill">
-                <span className="chunk-sparkle">✨</span>
+                <svg className="chunk-sparkle-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
                 {inlineWordData.chunkType || "Rekomendowany zwrot"}
               </span>
               <span className="chunk-hint">Ucz się całych fraz — to klucz do płynności!</span>
@@ -4436,7 +4441,13 @@ function Workspace({
               {/* Card 2: Small steps count */}
               <div className="small-steps-card">
                 <div className="small-steps-header">
-                  <span className="small-steps-bulb">💡</span>
+                  <span className="small-steps-bulb">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 18h6" />
+                      <path d="M10 22h4" />
+                      <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.55.59 2.97 1.5 4 .76.76 1.23 1.52 1.41 2.5h6.18z" />
+                    </svg>
+                  </span>
                   <h3>Small steps count</h3>
                 </div>
                 <p className="small-steps-text">

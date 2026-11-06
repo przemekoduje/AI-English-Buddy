@@ -642,28 +642,16 @@
 }
 
 .sentence-action-icon-circle.play-all-icon {
-  background: var(--primary-600, #4f46e5);
+  background: #0f172a;
   color: #ffffff;
 }
 
-.sentence-action-icon-circle.play-single-icon {
-  background: rgba(16, 185, 129, 0.15);
-  color: #059669;
-}
-
-.sentence-action-icon-circle.stop-icon {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.sentence-action-icon-circle.translate-icon {
-  background: rgba(2, 132, 199, 0.12);
-  color: #0284c7;
-}
-
+.sentence-action-icon-circle.play-single-icon,
+.sentence-action-icon-circle.stop-icon,
+.sentence-action-icon-circle.translate-icon,
 .sentence-action-icon-circle.mic-icon {
-  background: rgba(245, 158, 11, 0.15);
-  color: #d97706;
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 .sentence-action-text-group {
@@ -1782,7 +1770,7 @@
 
 .buddy-sparkle-icon {
   font-size: 1.25rem;
-  color: #8b5cf6;
+  color: #0f172a;
 }
 
 .buddy-card-header h3 {
@@ -2087,7 +2075,10 @@
 }
 
 .small-steps-bulb {
-  font-size: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0f172a;
 }
 
 .small-steps-header h3 {

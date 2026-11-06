@@ -118,16 +118,28 @@ const TopBar = ({
         >
           <span className="plan-pill-badge">{tier.toUpperCase()}</span>
           <span className="plan-pill-mins">{isPlatformAdmin ? '∞' : `${remaining.toFixed(1)}m`}</span>
-          <span className="plan-pill-action">{isPlatformAdmin ? 'Pełny dostęp' : (tier === 'starter' ? '⚡ Uaktualnij' : 'Plan')}</span>
+          <span className="plan-pill-divider" aria-hidden="true" />
+          <span className="plan-pill-action">
+            {!isPlatformAdmin && tier === 'starter' && (
+              <svg className="plan-pill-bolt-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            )}
+            <span>{isPlatformAdmin ? 'Pełny dostęp' : (tier === 'starter' ? 'Uaktualnij' : 'Plan')}</span>
+          </span>
         </button>
 
         <button className="topbar-lang-pill" title="Zmień język docelowy (EN → PL)">
-          <span className="lang-icon">🌐</span>
+          <svg className="lang-icon-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+          </svg>
           <span className="lang-text">EN → PL</span>
         </button>
 
         <button className="topbar-icon-btn" title="Powiadomienia">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
             <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>

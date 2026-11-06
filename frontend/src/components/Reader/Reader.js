@@ -786,9 +786,9 @@ const Reader = ({
                   </div>
                 </button>
                 <div className="practice-live-status-label">
-                  {chatOrbStatus === "thinking" && "✨ AI przygotowuje pytanie..."}
+                  {chatOrbStatus === "thinking" && "AI przygotowuje pytanie..."}
                   {chatOrbStatus === "speaking" && "AI mówi... (kliknij kulę, by przerwać)"}
-                  {(chatOrbStatus === "listening" || isChatRecording) && "🎙️ Słucham... (kliknij kulę, by wysłać)"}
+                  {(chatOrbStatus === "listening" || isChatRecording) && "Słucham... (kliknij kulę, by wysłać)"}
                   {chatOrbStatus === "inactive" && "Kliknij kulę, by odpowiedzieć"}
                 </div>
               </div>

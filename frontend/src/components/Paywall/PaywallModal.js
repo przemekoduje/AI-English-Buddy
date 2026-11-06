@@ -249,7 +249,7 @@ const PaywallModal = ({
   const getSelectedPlanDetails = (planKey) => {
     if (planKey === 'topup_60') {
       return {
-        badge: '⚡ DOŁADOWANIE MINUT',
+        badge: 'DOŁADOWANIE MINUT',
         name: 'Paczka dodatkowych 60 minut Live Orb',
         pricePrimary: '29 zł',
         pricePeriod: 'jednorazowo',
@@ -263,7 +263,7 @@ const PaywallModal = ({
     }
     if (planKey === 'intensive') {
       return {
-        badge: '🔥 PAKIET INTENSIVE / FLUENCY',
+        badge: 'PAKIET INTENSIVE / FLUENCY',
         name: 'Speakling Intensive',
         pricePrimary: hasUsedTrial ? '99 zł' : '0 zł',
         pricePeriod: hasUsedTrial ? '/ miesięcznie' : 'dzisiaj · 7 dni testu',
@@ -280,7 +280,7 @@ const PaywallModal = ({
     }
     // Domyślnie Pro
     return {
-      badge: '✨ REKOMENDOWANY PAKIET',
+      badge: 'REKOMENDOWANY PAKIET',
       name: 'Speakling Pro',
       pricePrimary: hasUsedTrial ? '49 zł' : '0 zł',
       pricePeriod: hasUsedTrial ? '/ miesięcznie' : 'dzisiaj · 7 dni testu',
@@ -424,11 +424,19 @@ const PaywallModal = ({
             {/* Pasek gwarancji i zaufania */}
             <div className="checkout-guarantee-bar">
               <div className="guarantee-item">
-                <span className="guarantee-icon">🛡️</span>
+                <span className="guarantee-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                </span>
                 <span><strong>0 zł dzisiaj:</strong> Karta nie zostanie obciążona przed końcem 7 dni</span>
               </div>
               <div className="guarantee-item">
-                <span className="guarantee-icon">⚡</span>
+                <span className="guarantee-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                </span>
                 <span><strong>Natychmiastowy dostęp:</strong> Minuty i funkcje odblokowane od razu</span>
               </div>
               <div className="guarantee-item">
@@ -494,7 +502,11 @@ const PaywallModal = ({
             {/* Nagłówek modalny */}
             <div className="paywall-header">
               <div className="paywall-badge-pill">
-                <span className="badge-sparkle">✨</span>
+                <span className="badge-sparkle" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                </span>
                 <span className="badge-text">{headline.badge}</span>
               </div>
               <h2 className="paywall-title">{headline.title}</h2>
@@ -760,7 +772,11 @@ const PaywallModal = ({
               <div className="addon-card glass-subpanel">
                 <div className="addon-info">
                   <div className="addon-title-row">
-                    <span className="addon-icon">⚡</span>
+                    <span className="addon-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                      </svg>
+                    </span>
                     <span className="addon-title">Paczka dodatkowych 60 minut Live Orb</span>
                     <span className="addon-price">29 zł jednorazowo</span>
                   </div>

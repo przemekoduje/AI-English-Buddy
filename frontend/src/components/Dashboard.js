@@ -109,7 +109,7 @@ export const EXERCISE_TYPES = [
   },
   {
     id: "business_english",
-    icon: "💼",
+    icon: "",
     name: "Business English & Negotiations",
     badge: "Business",
     tierRequired: "intensive",
@@ -117,7 +117,7 @@ export const EXERCISE_TYPES = [
   },
   {
     id: "tech_interview",
-    icon: "⚡",
+    icon: "",
     name: "Technical & Job Interview Prep",
     badge: "Interview",
     tierRequired: "intensive",
@@ -1607,7 +1607,14 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
       {/* Floating Error Banner */}
       {errorMessage && (
         <div className="tutor-error-banner animate-fade-in">
-          <span>⚠️ {errorMessage}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            {errorMessage}
+          </span>
           <button onClick={() => setErrorMessage(null)} className="error-close-btn">×</button>
         </div>
       )}
@@ -1630,7 +1637,15 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
               >
                 <span className="plan-pill-badge">{subscription?.tier?.toUpperCase()}</span>
                 <span className="plan-pill-mins">{(subscription?.minutes_remaining ?? 5).toFixed(1)} min</span>
-                <span className="plan-pill-action">{subscription?.tier === 'starter' ? '⚡ Uaktualnij' : 'Doładuj'}</span>
+                <span className="plan-pill-divider" aria-hidden="true" />
+                <span className="plan-pill-action">
+                  {subscription?.tier === 'starter' && (
+                    <svg className="plan-pill-bolt-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                    </svg>
+                  )}
+                  <span>{subscription?.tier === 'starter' ? 'Uaktualnij' : 'Doładuj'}</span>
+                </span>
               </span>
             )}
           </div>

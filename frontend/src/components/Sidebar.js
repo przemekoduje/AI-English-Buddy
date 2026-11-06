@@ -396,7 +396,7 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
               <span className="practice-card-title">Your daily practice</span>
               {isEffectiveAdmin && (
                 <span className="admin-practice-badge" title="Dokładny podgląd co do sekundy w trybie administratora">
-                  ADMIN ⏱️
+                  ADMIN
                 </span>
               )}
             </div>
