@@ -2267,10 +2267,7 @@ function LiveSettingsModal({ currentSettings, serverConfig, onSave, onSwitchToCl
                   onChange={(e) => setModel(e.target.value)}
                   className="settings-select"
                 >
-                  <option value="gemini-2.5-flash-native-audio-latest">Gemini 2.5 Flash Native Audio (Zalecany - najszybszy)</option>
-                  <option value="gemini-3.8-live">Gemini 3.8 Live (Nowa generacja)</option>
-                  <option value="gemini-3.1-flash-live-preview">Gemini 3.1 Flash Live</option>
-                  <option value="gemini-2.5-flash-native-audio-preview-09-2025">Gemini 2.5 Flash Preview</option>
+                  <option value="gemini-2.5-flash-native-audio-latest">Gemini 2.5 Flash Native Audio</option>
                 </select>
               </div>
 

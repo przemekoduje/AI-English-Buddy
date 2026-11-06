@@ -706,35 +706,15 @@ else:
 import secrets
 
 def log_api_usage(user_email, service, feature, model, prompt_tokens=0, completion_tokens=0, quantity=0, **kwargs):
-    if not user_email:
-        user_email = "guest@speakling.ai"
+    if not user_email or user_email == "guest@speakling.ai":
+        return
     try:
         from datetime import datetime
         cost_usd = 0.0
         service_normalized = str(service).lower()
         model_str = str(model).lower()
 
-        if service_normalized == 'openai':
-            if 'gpt-4o-mini' in model_str:
-                cost_usd = (prompt_tokens * 0.00000015) + (completion_tokens * 0.0000006)
-            elif 'gpt-4o' in model_str:
-                cost_usd = (prompt_tokens * 0.0000025) + (completion_tokens * 0.00001)
-            elif 'whisper' in model_str:
-                # $0.006 per minute = $0.0001 per second
-                cost_usd = quantity * 0.0001
-            elif 'tts' in model_str:
-                # $15.00 per 1M characters
-                cost_usd = quantity * 0.000015
-            else:
-                cost_usd = (prompt_tokens * 0.00000015) + (completion_tokens * 0.0000006)
-
-        elif service_normalized == 'deepseek':
-            if 'reasoner' in model_str or 'r1' in model_str:
-                cost_usd = (prompt_tokens * 0.00000055) + (completion_tokens * 0.00000219)
-            else:
-                cost_usd = (prompt_tokens * 0.00000014) + (completion_tokens * 0.00000028)
-
-        elif service_normalized in ['google_gemini', 'gemini', 'vertex_ai']:
+        if service_normalized in ['google_gemini', 'gemini', 'vertex_ai']:
             # Cennik Google Gemini Multimodal Live API oraz modeli Flash:
             # Wejście audio: $3.00 / 1M tokenów audio ($0.000003/tok)
             # Wyjście audio: $12.00 / 1M tokenów audio ($0.000012/tok)
@@ -750,6 +730,8 @@ def log_api_usage(user_email, service, feature, model, prompt_tokens=0, completi
                     cost_usd = quantity * 0.00045
             else:
                 cost_usd = (prompt_tokens * 0.000000075) + (completion_tokens * 0.0000003)
+        else:
+            cost_usd = (prompt_tokens * 0.000000075) + (completion_tokens * 0.0000003)
 
         cost_pln = cost_usd * 4.0
 
@@ -808,7 +790,7 @@ def track_chat_completion(user_email, feature, messages, response_format=None, c
     candidates = get_candidate_providers(custom_client, custom_model, model_tier)
     if not candidates:
         if client and not isinstance(client, MockOpenAIClient):
-            candidates = [('default', client, custom_model or ("gemini-pro-latest" if model_tier == "advanced" else "gemini-flash-lite-latest"))]
+            candidates = [('gemini', client, custom_model or ("gemini-3.5-flash" if model_tier == "advanced" else "gemini-flash-lite-latest"))]
 
     if not candidates:
         raise Exception("Brak skonfigurowanych dostawców AI.")
@@ -1042,6 +1024,192 @@ def admin_reset_minutes():
     }), 200
 
 
+ACTIVE_MODEL_IDS = {
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash",
+    "gemini-3.5-transcribe",
+    "gemini-2.5-flash-native-audio-latest"
+}
+
+ACTIVE_PROJECT_MODELS = [
+    {
+        "key": "gemini_fast",
+        "id": "gemini-flash-lite-latest",
+        "service": "gemini",
+        "name": "Gemini Flash Lite",
+        "role": "Główny model tekstowy (tłumaczenia, historie, słownik, quizy)"
+    },
+    {
+        "key": "gemini_advanced",
+        "id": "gemini-3.5-flash",
+        "service": "gemini",
+        "name": "Gemini 3.5 Flash",
+        "role": "Model zaawansowany (ewaluacja odpowiedzi i czat kontekstowy)"
+    },
+    {
+        "key": "gemini_stt",
+        "id": "gemini-3.5-transcribe",
+        "service": "gemini",
+        "name": "Gemini 3.5 Transcribe",
+        "role": "Transkrypcja mowy na tekst (ASR / STT)"
+    },
+    {
+        "key": "gemini_live",
+        "id": "gemini-2.5-flash-native-audio-latest",
+        "service": "google_gemini",
+        "name": "Gemini 2.5 Flash Native Audio",
+        "role": "Konwersacje głosowe w czasie rzeczywistym (Live Orb)"
+    }
+]
+
+
+def _delete_firestore_refs_in_batches(refs):
+    """Usuwa listę DocumentReference w paczkach po max 450 dokumentów."""
+    if not refs or 'db' not in globals() or db is None or not hasattr(db, 'batch'):
+        return 0
+    deleted = 0
+    for i in range(0, len(refs), 450):
+        batch = db.batch()
+        chunk = refs[i:i + 450]
+        for ref in chunk:
+            batch.delete(ref)
+        batch.commit()
+        deleted += len(chunk)
+    return deleted
+
+
+@app.route("/api/admin/verify-accounts", methods=['POST'])
+def admin_verify_accounts():
+    """Weryfikuje konta w kolekcji 'users' w Firestore oraz usuwa wszelkie pozostałości po nieistniejących/usuniętych kontach."""
+    user_email = get_user_from_request()
+    if not user_email or not is_admin(user_email):
+        return jsonify({"error": "Brak uprawnień administratora"}), 403
+
+    try:
+        valid_emails = set()
+        invalid_user_refs = []
+        users_docs = db.collection('users').stream()
+        for doc in users_docs:
+            u_data = doc.to_dict() or {}
+            em = (u_data.get('email') or doc.id or '').strip()
+            if em and '@' in em and u_data.get('password_hash'):
+                valid_emails.add(em)
+            else:
+                invalid_user_refs.append(doc.reference)
+
+        orphan_refs = list(invalid_user_refs)
+        orphaned_emails = set()
+
+        # Kolekcje z polem user_email
+        for col_name in ['api_usage', 'vocabulary', 'stories', 'user_custom_videos']:
+            for doc in db.collection(col_name).stream():
+                d_data = doc.to_dict() or {}
+                em = d_data.get('user_email')
+                if not em or em not in valid_emails:
+                    orphan_refs.append(doc.reference)
+                    if em:
+                        orphaned_emails.add(str(em))
+
+        # Kolekcja sessions (pole email)
+        for doc in db.collection('sessions').stream():
+            d_data = doc.to_dict() or {}
+            em = d_data.get('email')
+            if not em or em not in valid_emails:
+                orphan_refs.append(doc.reference)
+                if em:
+                    orphaned_emails.add(str(em))
+
+        # Kolekcje user_settings i user_media_state (doc.id lub email/user_email)
+        for col_name in ['user_settings', 'user_media_state']:
+            for doc in db.collection(col_name).stream():
+                d_data = doc.to_dict() or {}
+                em = d_data.get('user_email') or d_data.get('email') or doc.id
+                if not em or em not in valid_emails:
+                    orphan_refs.append(doc.reference)
+                    if em:
+                        orphaned_emails.add(str(em))
+
+        deleted_count = _delete_firestore_refs_in_batches(orphan_refs)
+
+        return jsonify({
+            "success": True,
+            "verified_users_count": len(valid_emails),
+            "valid_emails": sorted(list(valid_emails)),
+            "orphaned_docs_deleted": deleted_count,
+            "orphaned_emails_cleaned": sorted(list(orphaned_emails))
+        }), 200
+    except Exception as e:
+        print(f"Error verifying accounts: {e}", flush=True)
+        return jsonify({"error": f"Błąd weryfikacji kont: {str(e)}"}), 500
+
+
+@app.route("/api/admin/verify-models", methods=['POST'])
+def admin_verify_models():
+    """Weryfikuje aktywne modele językowe w projekcie i usuwa z api_usage wpisy dotyczące wycofanych modeli."""
+    user_email = get_user_from_request()
+    if not user_email or not is_admin(user_email):
+        return jsonify({"error": "Brak uprawnień administratora"}), 403
+
+    try:
+        legacy_refs = []
+        removed_models = set()
+        for doc in db.collection('api_usage').stream():
+            us_data = doc.to_dict() or {}
+            m_name = us_data.get('model')
+            if not m_name or m_name not in ACTIVE_MODEL_IDS:
+                legacy_refs.append(doc.reference)
+                if m_name:
+                    removed_models.add(str(m_name))
+
+        deleted_legacy = _delete_firestore_refs_in_batches(legacy_refs)
+
+        return jsonify({
+            "success": True,
+            "active_models": ACTIVE_PROJECT_MODELS,
+            "legacy_docs_deleted": deleted_legacy,
+            "legacy_models_removed": sorted(list(removed_models))
+        }), 200
+    except Exception as e:
+        print(f"Error verifying models: {e}", flush=True)
+        return jsonify({"error": f"Błąd weryfikacji modeli: {str(e)}"}), 500
+
+
+@app.route("/api/admin/users/<target_email>", methods=['DELETE'])
+def admin_delete_user(target_email):
+    """Usuwa wskazane konto użytkownika z Firestore wraz ze wszystkimi powiązanymi danymi."""
+    user_email = get_user_from_request()
+    if not user_email or not is_admin(user_email):
+        return jsonify({"error": "Brak uprawnień administratora"}), 403
+
+    target_email = (target_email or "").strip()
+    if not target_email:
+        return jsonify({"error": "Brak adresu e-mail"}), 400
+    if target_email == user_email or target_email == "przemek.rakotny@gmail.com":
+        return jsonify({"error": "Nie można usunąć głównego konta administratora."}), 400
+
+    try:
+        refs_to_delete = [
+            db.collection('users').document(target_email),
+            db.collection('user_settings').document(target_email),
+            db.collection('user_media_state').document(target_email)
+        ]
+        for col_name in ['api_usage', 'vocabulary', 'stories', 'user_custom_videos']:
+            for doc in db.collection(col_name).where('user_email', '==', target_email).stream():
+                refs_to_delete.append(doc.reference)
+        for doc in db.collection('sessions').where('email', '==', target_email).stream():
+            refs_to_delete.append(doc.reference)
+
+        deleted_count = _delete_firestore_refs_in_batches(refs_to_delete)
+        return jsonify({
+            "success": True,
+            "deleted_email": target_email,
+            "deleted_docs_count": deleted_count
+        }), 200
+    except Exception as e:
+        print(f"Error deleting user {target_email}: {e}", flush=True)
+        return jsonify({"error": f"Błąd usuwania konta: {str(e)}"}), 500
+
+
 @app.route("/api/admin/stats", methods=['GET'])
 def admin_stats():
     user_email = get_user_from_request()
@@ -1050,20 +1218,31 @@ def admin_stats():
 
     try:
         users_list = []
+        valid_emails = set()
         users_docs = db.collection('users').get()
         for doc in users_docs:
-            u_data = doc.to_dict()
-            users_list.append({
-                'email': u_data.get('email'),
-                'created_at': str(u_data.get('created_at', ''))
-            })
+            u_data = doc.to_dict() or {}
+            em = (u_data.get('email') or doc.id or '').strip()
+            if em and '@' in em and u_data.get('password_hash'):
+                valid_emails.add(em)
+                users_list.append({
+                    'email': em,
+                    'full_name': u_data.get('full_name', ''),
+                    'created_at': str(u_data.get('created_at', ''))
+                })
 
         usage_list = []
         usage_docs = db.collection('api_usage').get()
         for doc in usage_docs:
-            us_data = doc.to_dict()
+            us_data = doc.to_dict() or {}
+            u_em = us_data.get('user_email')
+            m_name = us_data.get('model')
+            # Zwracaj wyłącznie dane dla istniejących w Firestore kont i aktywnych w projekcie modeli
+            if not u_em or u_em not in valid_emails:
+                continue
+            if not m_name or m_name not in ACTIVE_MODEL_IDS:
+                continue
             if 'timestamp' in us_data and us_data['timestamp']:
-                # Handle Firestore datetime vs mock ISO string
                 if hasattr(us_data['timestamp'], 'isoformat'):
                     us_data['timestamp'] = us_data['timestamp'].isoformat()
                 else:
@@ -1073,17 +1252,17 @@ def admin_stats():
         vocab_counts = {}
         vocab_docs = db.collection('vocabulary').get()
         for doc in vocab_docs:
-            v_data = doc.to_dict()
+            v_data = doc.to_dict() or {}
             u_email = v_data.get('user_email')
-            if u_email:
+            if u_email and u_email in valid_emails:
                 vocab_counts[u_email] = vocab_counts.get(u_email, 0) + 1
 
         story_counts = {}
         story_docs = db.collection('stories').get()
         for doc in story_docs:
-            s_data = doc.to_dict()
+            s_data = doc.to_dict() or {}
             u_email = s_data.get('user_email')
-            if u_email:
+            if u_email and u_email in valid_emails:
                 story_counts[u_email] = story_counts.get(u_email, 0) + 1
 
         return jsonify({
@@ -1091,13 +1270,12 @@ def admin_stats():
             'usage': usage_list,
             'vocab_counts': vocab_counts,
             'story_counts': story_counts,
+            'active_models': ACTIVE_PROJECT_MODELS,
             'current_models': {
-                'openai': "gpt-4o-mini",
-                'deepseek': "deepseek-chat",
-                'gemini': "gemini-flash-lite-latest",
-                'gemini_advanced': "gemini-pro-latest",
-                'tts': "tts-1",
-                'whisper': "whisper-1"
+                'gemini_fast': "gemini-flash-lite-latest",
+                'gemini_advanced': "gemini-3.5-flash",
+                'gemini_stt': "gemini-3.5-transcribe",
+                'gemini_live': "gemini-2.5-flash-native-audio-latest"
             }
         }), 200
     except Exception as e:
@@ -1987,15 +2165,13 @@ def fast_translate_llm(prompt_text, max_output_tokens=220):
             pass
         user_email = user_email or "guest@speakling.ai"
 
-        for g_model in ("gemini-2.0-flash-lite", "gemini-flash-lite-latest"):
+        for g_model in ("gemini-flash-lite-latest",):
             try:
                 gen_cfg = {
                     "temperature": 0.1,
                     "maxOutputTokens": max_output_tokens,
                     "responseMimeType": "application/json"
                 }
-                if "2.0" not in g_model:
-                    gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
                 payload = {
                     "contents": [{"parts": [{"text": prompt_text}]}],
                     "generationConfig": gen_cfg
@@ -3832,7 +4008,7 @@ def transcribe_youtube_audio_ai(video_id, user_email=None):
                     '[{"start": 0.0, "end": 2.5, "text": "First sentence."}]'
                 )
 
-                for g_model in ["gemini-flash-latest", "gemini-3.8-flash", "gemini-flash-lite-latest"]:
+                for g_model in ["gemini-3.5-flash", "gemini-flash-lite-latest"]:
                     try:
                         url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={gemini_key}"
                         payload = {
@@ -5951,7 +6127,6 @@ def generate_vocabulary_exercise():
         ai_response = track_chat_completion(
             user_email=user_email,
             feature="vocabulary_exercise",
-            custom_model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": "Wygeneruj ćwiczenie zgodnie z instrukcją."}
@@ -7956,9 +8131,7 @@ def get_live_config():
             {"id": "Kore", "name": "Kore (Naturalny żeński)", "gender": "female"}
         ],
         "models": [
-            {"id": "gemini-2.5-flash-native-audio-latest", "name": "Gemini 2.5 Flash Native Audio (Zalecany - najszybszy)"},
-            {"id": "gemini-3.8-live", "name": "Gemini 3.8 Live (Nowa generacja)"},
-            {"id": "gemini-3.1-flash-live-preview", "name": "Gemini 3.1 Flash Live"},
+            {"id": "gemini-2.5-flash-native-audio-latest", "name": "Gemini 2.5 Flash Native Audio"}
         ]
     })
 
