@@ -1,4 +1,4 @@
-﻿# PowerShell Deployment Script for Windows
+# PowerShell Deployment Script for Windows
 
 $ErrorActionPreference = "Stop"
 
@@ -34,6 +34,28 @@ Write-Host "=== 3b. Konfiguracja Portalu Głównego przemokoduje.com ==="
 Copy-Item -Force frontend/build/index.html frontend/build/speakling.html
 if (Test-Path portal/index.html) {
     Copy-Item -Force portal/index.html frontend/build/index.html
+}
+
+Write-Host "=== 3c. Integracja aplikacji KeepGoals (/keepgoals) ==="
+$KeepGoalsDir = $null
+if (Test-Path "../KeepGoals/frontend") {
+    $KeepGoalsDir = "../KeepGoals"
+} elseif (Test-Path "../keepGoals/frontend") {
+    $KeepGoalsDir = "../keepGoals"
+}
+if ($KeepGoalsDir) {
+    if (-not (Test-Path "$KeepGoalsDir/frontend/dist/index.html")) {
+        Write-Host "Budowanie frontendu KeepGoals..."
+        npm run build --prefix "$KeepGoalsDir/frontend"
+    }
+    if (Test-Path "$KeepGoalsDir/frontend/dist") {
+        if (Test-Path frontend/build/keepgoals) {
+            Remove-Item -Recurse -Force frontend/build/keepgoals
+        }
+        New-Item -ItemType Directory -Force -Path frontend/build/keepgoals | Out-Null
+        Copy-Item -Recurse -Force "$KeepGoalsDir/frontend/dist/*" frontend/build/keepgoals/
+        Write-Host "[OK] Skopiowano KeepGoals do frontend/build/keepgoals" -ForegroundColor Green
+    }
 }
 
 # === 4. Publikacja aplikacji na Firebase Hosting ===

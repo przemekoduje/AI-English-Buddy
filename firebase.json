@@ -83,6 +83,18 @@
         "destination": "/speakling/mobile/index.html"
       },
       {
+        "source": "/keepgoals",
+        "destination": "/keepgoals/index.html"
+      },
+      {
+        "source": "/keepgoals/",
+        "destination": "/keepgoals/index.html"
+      },
+      {
+        "source": "/keepgoals/**",
+        "destination": "/keepgoals/index.html"
+      },
+      {
         "source": "/speakling",
         "destination": "/speakling.html"
       },
