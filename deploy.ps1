@@ -1,4 +1,4 @@
-# PowerShell Deployment Script for Windows
+﻿# PowerShell Deployment Script for Windows
 
 $ErrorActionPreference = "Stop"
 
@@ -37,14 +37,14 @@ if (Test-Path portal/index.html) {
 }
 
 # === 4. Publikacja aplikacji na Firebase Hosting ===
-# Używamy jednego wskazanego projektu Firebase (domyślnie projekt aktywny/zastępczy: speakling-live-temp)
 $TargetProject = if ($env:FIREBASE_PROJECT) { $env:FIREBASE_PROJECT } else { "speakling-live-temp" }
 Write-Host "Wdrażanie na projekt Firebase: $TargetProject..." -ForegroundColor Cyan
 npx firebase-tools deploy --only hosting --project $TargetProject
 
+Write-Host "Wdrażanie na projekt Firebase: przemokoduje-online..." -ForegroundColor Cyan
+npx firebase-tools deploy --only hosting --project przemokoduje-online
+
 Write-Host "=== WDROŻENIE ZAKOŃCZONE SUKCESEM! ===" -ForegroundColor Green
 Write-Host "Adres działający (Hosting): https://$TargetProject.web.app/speakling"
+Write-Host "Adres główny (przemokoduje): https://przemokoduje-online.web.app/speakling (https://przemokoduje.com/speakling)"
 Write-Host "Adres mobilny: https://$TargetProject.web.app/speakling/mobile/"
-if ($TargetProject -eq "ai-english-buddy-150e5") {
-    Write-Host "Domena główna: https://przemokoduje.com/speakling"
-}
