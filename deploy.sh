@@ -28,26 +28,11 @@ if [ -f "portal/index.html" ]; then
   cp portal/index.html frontend/build/index.html
 fi
 
-echo "=== 3c. Integracja aplikacji KeepGoals (/keepgoals) ==="
-KEEPGOALS_DIR=""
-if [ -d "../KeepGoals/frontend" ]; then
-  KEEPGOALS_DIR="../KeepGoals"
-elif [ -d "../keepGoals/frontend" ]; then
-  KEEPGOALS_DIR="../keepGoals"
-elif [ -d "../keepgoals/frontend" ]; then
-  KEEPGOALS_DIR="../keepgoals"
-fi
-if [ -n "$KEEPGOALS_DIR" ]; then
-  if [ ! -f "$KEEPGOALS_DIR/frontend/dist/index.html" ]; then
-    echo "Budowanie frontendu KeepGoals..."
-    (cd "$KEEPGOALS_DIR/frontend" && npm run build)
-  fi
-  if [ -d "$KEEPGOALS_DIR/frontend/dist" ]; then
-    rm -rf frontend/build/keepgoals
-    mkdir -p frontend/build/keepgoals
-    cp -r "$KEEPGOALS_DIR/frontend/dist/." frontend/build/keepgoals/
-    echo "[OK] Skopiowano KeepGoals do frontend/build/keepgoals"
-  fi
+echo "=== 3c. Synchronizacja KeepGoals i weryfikacja integralności całego ekosystemu ==="
+if command -v python3 >/dev/null 2>&1; then
+  python3 scripts/sync-and-verify-bundle.py
+else
+  python scripts/sync-and-verify-bundle.py
 fi
 
 # === 4. Publikacja aplikacji na Firebase Hosting ===

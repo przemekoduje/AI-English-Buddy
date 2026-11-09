@@ -1,4 +1,4 @@
-# PowerShell Deployment Script for Windows
+﻿# PowerShell Deployment Script for Windows
 
 $ErrorActionPreference = "Stop"
 
@@ -36,26 +36,14 @@ if (Test-Path portal/index.html) {
     Copy-Item -Force portal/index.html frontend/build/index.html
 }
 
-Write-Host "=== 3c. Integracja aplikacji KeepGoals (/keepgoals) ==="
-$KeepGoalsDir = $null
-if (Test-Path "../KeepGoals/frontend") {
-    $KeepGoalsDir = "../KeepGoals"
-} elseif (Test-Path "../keepGoals/frontend") {
-    $KeepGoalsDir = "../keepGoals"
+Write-Host "=== 3c. Synchronizacja KeepGoals i weryfikacja integralności całego ekosystemu ==="
+if (Get-Command python -ErrorAction SilentlyContinue) {
+    python scripts/sync-and-verify-bundle.py
+} else {
+    python3 scripts/sync-and-verify-bundle.py
 }
-if ($KeepGoalsDir) {
-    if (-not (Test-Path "$KeepGoalsDir/frontend/dist/index.html")) {
-        Write-Host "Budowanie frontendu KeepGoals..."
-        npm run build --prefix "$KeepGoalsDir/frontend"
-    }
-    if (Test-Path "$KeepGoalsDir/frontend/dist") {
-        if (Test-Path frontend/build/keepgoals) {
-            Remove-Item -Recurse -Force frontend/build/keepgoals
-        }
-        New-Item -ItemType Directory -Force -Path frontend/build/keepgoals | Out-Null
-        Copy-Item -Recurse -Force "$KeepGoalsDir/frontend/dist/*" frontend/build/keepgoals/
-        Write-Host "[OK] Skopiowano KeepGoals do frontend/build/keepgoals" -ForegroundColor Green
-    }
+if ($LASTEXITCODE -ne 0) {
+    throw "Weryfikacja integralności pakietu nie powiodła się — wdrożenie przerwane."
 }
 
 # === 4. Publikacja aplikacji na Firebase Hosting ===
