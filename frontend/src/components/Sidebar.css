@@ -149,6 +149,80 @@
   height: 18px;
 }
 
+.nav-submenu-chevron {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  transition: transform 0.18s ease;
+}
+
+.nav-submenu-chevron.open {
+  transform: rotate(180deg);
+}
+
+.sidebar-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 2.35rem;
+  padding-right: 0.75rem;
+  margin-bottom: 4px;
+}
+
+.sidebar-submenu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #475569;
+  font-family: var(--font-main);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.sidebar-submenu-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #e2e8f0;
+}
+
+.submenu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0f172a;
+}
+
+.submenu-label {
+  white-space: nowrap;
+}
+
+.submenu-pill {
+  margin-left: auto;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.38rem;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+@media (max-width: 768px) {
+  .sidebar-submenu,
+  .nav-submenu-chevron {
+    display: none !important;
+  }
+}
+
 /* ── Footer / User Card ───────────────────────────────────── */
 .sidebar-footer {
   margin-top: auto;

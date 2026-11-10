@@ -13,7 +13,7 @@ import MediaBuddy from './components/Media/MediaBuddy';
 import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 import AdminDashboard from './components/Admin/AdminDashboard';
-import GoodToKnow from './components/GoodToKnow';
+import GoodToKnow, { DualNBackModal } from './components/GoodToKnow';
 import HelpFeedback from './components/Help/HelpFeedback';
 import PaywallModal from './components/Paywall/PaywallModal';
 
@@ -44,6 +44,7 @@ function App() {
   });
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [paywallReason, setPaywallReason] = useState(null);
+  const [nBackModalOpen, setNBackModalOpen] = useState(false);
 
   const openPaywall = (reason = null) => {
     setPaywallReason(reason);
@@ -358,6 +359,7 @@ function App() {
         isAdmin={isAdmin}
         subscription={subscription}
         onOpenPaywall={openPaywall}
+        onOpenNBack={() => setNBackModalOpen(true)}
       />
       
       <main className="main-content">
@@ -429,7 +431,7 @@ function App() {
               onNavigate={handleNavigate} 
             />
           ) : currentView === 'good-to-know' ? (
-            <GoodToKnow />
+            <GoodToKnow onOpenNBack={() => setNBackModalOpen(true)} />
           ) : (
             <Workspace 
               onNavigateToDashboard={() => handleNavigate('dashboard')} 
@@ -517,6 +519,12 @@ function App() {
         subscription={subscription}
         initialReason={paywallReason}
         onSubscriptionUpdated={(newSub) => setSubscription(newSub)}
+      />
+
+      {/* Modal gry naukowej Dual N-Back */}
+      <DualNBackModal
+        isOpen={nBackModalOpen}
+        onClose={() => setNBackModalOpen(false)}
       />
 
       {customAlert && (

@@ -6,11 +6,12 @@ import './Sidebar.css';
 
 const DAILY_GOAL_MINUTES = 20;
 
-const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscription, onOpenPaywall }) => {
+const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscription, onOpenPaywall, onOpenNBack }) => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const stored = localStorage.getItem('buddy_sidebar_collapsed');
     return stored ? JSON.parse(stored) : false;
   });
+  const [gtkSubmenuOpen, setGtkSubmenuOpen] = useState(true);
 
   const getTodayStr = () => {
     const d = new Date();
@@ -344,6 +345,13 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
 
   const handleItemClick = (item) => {
     if (item.disabled) return;
+    if (item.id === 'good-to-know') {
+      if (currentView === 'good-to-know') {
+        setGtkSubmenuOpen(prev => !prev);
+      } else {
+        setGtkSubmenuOpen(true);
+      }
+    }
     onNavigate(item.id);
   };
 
@@ -358,19 +366,56 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
 
       <nav className="sidebar-nav">
         {menuItems.map((item) => (
-          <button
-            key={item.id}
-            className={`nav-item nav-item-${item.id} ${currentView === item.id ? 'active' : ''} ${item.disabled ? 'disabled' : ''}`}
-            onClick={() => handleItemClick(item)}
-            disabled={item.disabled}
-            title={item.disabled ? `${item.label} (Wkrótce / Coming Soon)` : (isCollapsed ? item.label : undefined)}
-          >
-            <span className="nav-icon">{item.icon}</span>
-            <span className="nav-label">{item.label}</span>
-            {item.badge && !isCollapsed && (
-              <span className="nav-badge-pill">{item.badge}</span>
+          <React.Fragment key={item.id}>
+            <button
+              className={`nav-item nav-item-${item.id} ${currentView === item.id ? 'active' : ''} ${item.disabled ? 'disabled' : ''}`}
+              onClick={() => handleItemClick(item)}
+              disabled={item.disabled}
+              title={item.disabled ? `${item.label} (Wkrótce / Coming Soon)` : (isCollapsed ? item.label : undefined)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
+              {item.id === 'good-to-know' && !isCollapsed && (
+                <span
+                  className={`nav-submenu-chevron ${gtkSubmenuOpen ? 'open' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setGtkSubmenuOpen(prev => !prev);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </span>
+              )}
+              {item.badge && !isCollapsed && (
+                <span className="nav-badge-pill">{item.badge}</span>
+              )}
+            </button>
+
+            {item.id === 'good-to-know' && gtkSubmenuOpen && !isCollapsed && (
+              <div className="sidebar-submenu">
+                <button
+                  type="button"
+                  className="sidebar-submenu-item"
+                  onClick={() => {
+                    if (onOpenNBack) onOpenNBack();
+                  }}
+                >
+                  <span className="submenu-icon">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7" rx="1" />
+                      <rect x="14" y="3" width="7" height="7" rx="1" />
+                      <rect x="14" y="14" width="7" height="7" rx="1" />
+                      <rect x="3" y="14" width="7" height="7" rx="1" />
+                    </svg>
+                  </span>
+                  <span className="submenu-label">Dual N-Back</span>
+                  <span className="submenu-pill">GRA</span>
+                </button>
+              </div>
             )}
-          </button>
+          </React.Fragment>
         ))}
       </nav>
 

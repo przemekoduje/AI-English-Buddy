@@ -17,7 +17,7 @@
 
 .gtk-header {
   text-align: center;
-  margin-bottom: 2.75rem;
+  margin-bottom: 2.5rem;
 }
 
 .gtk-eyebrow {
@@ -45,8 +45,70 @@
   color: #64748b;
   font-size: 1.02rem;
   max-width: 660px;
-  margin: 0 auto;
+  margin: 0 auto 1.35rem;
   line-height: 1.5;
+}
+
+/* Submenu bar inside GoodToKnow */
+.gtk-submenu-bar {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.gtk-submenu-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 36px;
+  padding: 0 0.95rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gtk-submenu-item:hover {
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+.gtk-submenu-item.active {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #e2e8f0;
+}
+
+.gtk-submenu-nback-btn {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+.gtk-submenu-nback-btn:hover {
+  background: #1e293b;
+  color: #ffffff;
+}
+
+.gtk-submenu-pill {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 0.12rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }
 
 .gtk-section {
@@ -78,6 +140,100 @@
   flex-shrink: 0;
 }
 
+/* Launcher Card inside GoodToKnow Grid */
+.gtk-card-nback-launcher {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+}
+
+.gtk-card-nback-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+
+.gtk-card-nback-top h4 {
+  margin-bottom: 0 !important;
+}
+
+.gtk-nback-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
+.gtk-open-nback-btn {
+  margin-top: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 38px;
+  padding: 0 1rem;
+  border-radius: 999px;
+  border: 1px solid #0f172a;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  align-self: flex-start;
+}
+
+.gtk-open-nback-btn:hover {
+  background: #1e293b;
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   Dual N-Back Modal Overlay & Dialog
+   ========================================================================== */
+.nback-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  overflow-y: auto;
+  animation: nbackModalFadeIn 0.18s ease-out;
+}
+
+@keyframes nbackModalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.nback-modal-dialog {
+  width: 100%;
+  max-width: 780px;
+  max-height: calc(100vh - 2.5rem);
+  overflow-y: auto;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  animation: nbackDialogSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes nbackDialogSlideUp {
+  from { transform: translateY(12px) scale(0.98); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
 /* ==========================================================================
    Dual N-Back Scientific Cognitive Game Card
    ========================================================================== */
@@ -89,12 +245,42 @@
   box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
 }
 
+.nback-modal-card {
+  border-radius: 20px;
+}
+
 .nback-top-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1.25rem;
   margin-bottom: 1.25rem;
+}
+
+.nback-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.nback-modal-close-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nback-modal-close-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
 }
 
 .nback-title-group {
@@ -142,8 +328,8 @@
 }
 
 .nback-scientific-desc {
-  font-size: 0.92rem;
-  line-height: 1.6;
+  font-size: 0.9rem;
+  line-height: 1.55;
   color: #475569;
   margin: 0;
 }
@@ -222,7 +408,7 @@
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.15rem;
 }
 
 .nback-control-group {
@@ -303,13 +489,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1.25rem 1rem 0.5rem;
+  padding: 0.75rem 0.5rem 0.25rem;
 }
 
 .nback-status-strip {
   width: 100%;
   max-width: 480px;
-  margin-bottom: 1.15rem;
+  margin-bottom: 1rem;
 }
 
 .nback-step-counter {
@@ -364,14 +550,14 @@
 /* 3x3 Spatial Grid */
 .nback-grid {
   display: grid;
-  grid-template-columns: repeat(3, 88px);
-  grid-template-rows: repeat(3, 88px);
+  grid-template-columns: repeat(3, 84px);
+  grid-template-rows: repeat(3, 84px);
   gap: 10px;
   padding: 12px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 18px;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.35rem;
   user-select: none;
 }
 
@@ -544,8 +730,8 @@
 
 /* Round Result Summary */
 .nback-results-box {
-  margin-top: 1.5rem;
-  padding: 1.25rem;
+  margin-top: 1.35rem;
+  padding: 1.15rem;
   border-radius: 14px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;

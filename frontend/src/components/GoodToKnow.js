@@ -36,7 +36,6 @@ const generateNBackSequence = (nLevel, baseTrials = 20) => {
     isLetterMatch: false,
   }));
 
-  // Pick exact indices (from nLevel to totalLength - 1) that MUST be matches
   const evaluableIndices = [];
   for (let i = nLevel; i < totalLength; i++) {
     evaluableIndices.push(i);
@@ -81,7 +80,7 @@ const generateNBackSequence = (nLevel, baseTrials = 20) => {
   return seq;
 };
 
-const DualNBackGame = () => {
+export const DualNBackGame = ({ onClose }) => {
   const [nLevel, setNLevel] = useState(2);
   const [stepDurationMs, setStepDurationMs] = useState(2500);
   const [audioEnabled, setAudioEnabled] = useState(true);
@@ -238,7 +237,6 @@ const DualNBackGame = () => {
       const currentItem = seq[stepIdx];
       speakLetter(currentItem.letter);
 
-      // Turn off visual square highlight slightly before the next step
       const flashDuration = Math.min(950, Math.floor(stepDurationMs * 0.45));
       flashTimerRef.current = setTimeout(() => {
         setIsFlashActive(false);
@@ -267,7 +265,7 @@ const DualNBackGame = () => {
     runStep(0);
   };
 
-  const stopGame = () => {
+  const stopGame = useCallback(() => {
     clearTimers();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -278,7 +276,7 @@ const DualNBackGame = () => {
     setCurrentStep(-1);
     setPosFeedback(null);
     setLetterFeedback(null);
-  };
+  }, [clearTimers]);
 
   useEffect(() => {
     return () => {
@@ -295,7 +293,6 @@ const DualNBackGame = () => {
     const n = nLevelRef.current;
     const seq = sequenceRef.current;
 
-    // Responses are only evaluated once at least N steps have passed
     if (stepIdx < n || stepIdx >= seq.length) return;
 
     const currentItem = seq[stepIdx];
@@ -317,6 +314,11 @@ const DualNBackGame = () => {
 
   useEffect(() => {
     const onKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) {
+        stopGame();
+        onClose();
+        return;
+      }
       if (!isRunningRef.current) return;
       if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
 
@@ -332,7 +334,7 @@ const DualNBackGame = () => {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleUserResponse]);
+  }, [handleUserResponse, onClose, stopGame]);
 
   const activeItem =
     isRunning && currentStep >= 0 && currentStep < sequence.length
@@ -347,7 +349,7 @@ const DualNBackGame = () => {
       : 0;
 
   return (
-    <div className="nback-card">
+    <div className="nback-card nback-modal-card">
       <div className="nback-top-row">
         <div className="nback-title-group">
           <div className="nback-badge-row">
@@ -365,22 +367,42 @@ const DualNBackGame = () => {
           </div>
           <h3>N-Back (Dual N-Back)</h3>
           <p className="nback-scientific-desc">
-            Darmowa aplikacja/gra naukowa trenująca fizyczną pojemność bufora pamięci roboczej (śledzenie pozycji kwadratu na siatce i jednoczesne zapamiętywanie liter sprzed <strong>N kroków</strong>). Udowodniono, że regularny trening N-Back zwiększa gęstość receptorów dopaminowych w <strong>dlPFC</strong> (grzbietowo-bocznej korze przedczołowej), co bezpośrednio przyspiesza przetwarzanie zdań i rozumienie mowy w języku angielskim.
+            Darmowa aplikacja/gra naukowa trenująca fizyczną pojemność bufora pamięci roboczej (śledzenie pozycji kwadratu na siatce i jednoczesne zapamiętywanie liter sprzed <strong>N kroków</strong>). Udowodniono, że regularny trening N-Back zwiększa gęstość receptorów dopaminowych w <strong>dlPFC</strong>.
           </p>
         </div>
 
-        <button
-          type="button"
-          className="nback-help-toggle"
-          onClick={() => setShowInstructions((prev) => !prev)}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-          {showInstructions ? 'Ukryj instrukcję' : 'Jak grać?'}
-        </button>
+        <div className="nback-header-actions">
+          <button
+            type="button"
+            className="nback-help-toggle"
+            onClick={() => setShowInstructions((prev) => !prev)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            {showInstructions ? 'Ukryj instrukcję' : 'Jak grać?'}
+          </button>
+
+          {onClose && (
+            <button
+              type="button"
+              className="nback-modal-close-btn"
+              onClick={() => {
+                stopGame();
+                onClose();
+              }}
+              title="Zamknij (Esc)"
+              aria-label="Zamknij modal"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {showInstructions && (
@@ -653,6 +675,25 @@ const DualNBackGame = () => {
   );
 };
 
+export const DualNBackModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="nback-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && onClose) {
+          onClose();
+        }
+      }}
+    >
+      <div className="nback-modal-dialog" role="dialog" aria-modal="true" aria-label="Gra naukowa Dual N-Back">
+        <DualNBackGame onClose={onClose} />
+      </div>
+    </div>
+  );
+};
+
 const BreathingExercise = () => {
   const [phase, setPhase] = useState('idle'); // idle, inhale, hold, exhale
   const [timeLeft, setTimeLeft] = useState(0);
@@ -713,7 +754,17 @@ const BreathingExercise = () => {
   );
 };
 
-const GoodToKnow = () => {
+const GoodToKnow = ({ onOpenNBack }) => {
+  const [localModalOpen, setLocalModalOpen] = useState(false);
+
+  const handleOpenGame = () => {
+    if (onOpenNBack) {
+      onOpenNBack();
+    } else {
+      setLocalModalOpen(true);
+    }
+  };
+
   return (
     <div className="good-to-know-container">
       <div className="good-to-know-content">
@@ -721,21 +772,62 @@ const GoodToKnow = () => {
           <span className="gtk-eyebrow">NEURONAUKA I TRENING POZNAWCZY</span>
           <h2>Jak przygotować mózg do angielskiego</h2>
           <p className="subtitle">
-            Praktyczny trening pamięci roboczej (Dual N-Back) oraz zasady przyswajania języka oparte na neurobiologii.
+            Proste zasady dla maksymalnych efektów oparte na neuronauce oraz treningu pamięci roboczej.
           </p>
+
+          {/* Submenu Bar in GoodToKnow */}
+          <div className="gtk-submenu-bar">
+            <button
+              type="button"
+              className="gtk-submenu-item active"
+              onClick={() => {
+                const el = document.getElementById('gtk-sec-1');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18h6" />
+                <path d="M10 22h4" />
+                <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.55.59 2.97 1.5 4 .76.76 1.23 1.52 1.41 2.5h6.18z" />
+              </svg>
+              <span>Zasady neuronauki</span>
+            </button>
+
+            <button
+              type="button"
+              className="gtk-submenu-item"
+              onClick={() => {
+                const el = document.getElementById('gtk-breathing');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span>Oddech 4-7-8</span>
+            </button>
+
+            <button
+              type="button"
+              className="gtk-submenu-item gtk-submenu-nback-btn"
+              onClick={handleOpenGame}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+              </svg>
+              <span>N-Back (Dual N-Back)</span>
+              <span className="gtk-submenu-pill">GRA</span>
+            </button>
+          </div>
         </div>
 
         <div className="gtk-body">
-          {/* Interactive Dual N-Back Cognitive Training Section */}
-          <div className="gtk-section">
-            <h3 className="section-title">
-              <span className="section-number">1</span> Trening pojemności pamięci roboczej (Dual N-Back)
-            </h3>
-            <DualNBackGame />
-          </div>
-
-          <div className="gtk-section">
-            <h3 className="section-title"><span className="section-number">2</span> Wyciszenie i start (Reset układu nerwowego)</h3>
+          <div className="gtk-section" id="gtk-sec-1">
+            <h3 className="section-title"><span className="section-number">1</span> Wyciszenie i start (Reset układu nerwowego)</h3>
             <div className="gtk-cards">
               <div className="gtk-card">
                 <h4>Zresetuj stres w 30 sekund</h4>
@@ -757,12 +849,32 @@ const GoodToKnow = () => {
                 <h4>Mikro-odpoczynek po sesji</h4>
                 <p>Po skończonej nauce posiedź 3 minuty w ciszy bez telefonu. W tym czasie mózg utrwala nowo powstałe połączenia nerwowe.</p>
               </div>
+              <div className="gtk-card gtk-card-nback-launcher">
+                <div className="gtk-card-nback-top">
+                  <h4>N-Back (Dual N-Back)</h4>
+                  <span className="gtk-nback-tag">dlPFC</span>
+                </div>
+                <p>
+                  Darmowa aplikacja/gra naukowa trenująca fizyczną pojemność bufora pamięci roboczej (śledzenie pozycji kwadratu na siatce i jednoczesne zapamiętywanie liter sprzed N kroków). Udowodniono, że regularny trening N-Back zwiększa gęstość receptorów dopaminowych w <strong>dlPFC</strong>.
+                </p>
+                <button type="button" className="gtk-open-nback-btn" onClick={handleOpenGame}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                  <span>Otwórz grę Dual N-Back</span>
+                </button>
+              </div>
             </div>
-            <BreathingExercise />
+            <div id="gtk-breathing">
+              <BreathingExercise />
+            </div>
           </div>
 
           <div className="gtk-section">
-            <h3 className="section-title"><span className="section-number">3</span> Trening tematyczny i przyswajanie</h3>
+            <h3 className="section-title"><span className="section-number">2</span> Trening tematyczny i przyswajanie</h3>
             <div className="gtk-cards">
               <div className="gtk-card">
                 <h4>Zasada wąskiego kontekstu (Narrow Input)</h4>
@@ -772,7 +884,7 @@ const GoodToKnow = () => {
           </div>
 
           <div className="gtk-section">
-            <h3 className="section-title"><span className="section-number">4</span> Czytanie bez słownika (Wzorce zamiast analizy)</h3>
+            <h3 className="section-title"><span className="section-number">3</span> Czytanie bez słownika (Wzorce zamiast analizy)</h3>
             <div className="gtk-cards">
               <div className="gtk-card">
                 <h4>Poluj na szkielet zdania</h4>
@@ -794,7 +906,7 @@ const GoodToKnow = () => {
           </div>
 
           <div className="gtk-section">
-            <h3 className="section-title"><span className="section-number">5</span> Rozumienie ze słuchu (Wyłapywanie rytmu)</h3>
+            <h3 className="section-title"><span className="section-number">4</span> Rozumienie ze słuchu (Wyłapywanie rytmu)</h3>
             <div className="gtk-cards">
               <div className="gtk-card">
                 <h4>Słuchaj tylko słów z akcentem</h4>
@@ -816,7 +928,7 @@ const GoodToKnow = () => {
           </div>
 
           <div className="gtk-section">
-            <h3 className="section-title"><span className="section-number">6</span> Mówienie bez paraliżu (Komunikacja, nie egzamin)</h3>
+            <h3 className="section-title"><span className="section-number">5</span> Mówienie bez paraliżu (Komunikacja, nie egzamin)</h3>
             <div className="gtk-cards">
               <div className="gtk-card">
                 <h4>Reguła 80% prostoty</h4>
@@ -843,6 +955,10 @@ const GoodToKnow = () => {
 
         </div>
       </div>
+
+      {!onOpenNBack && (
+        <DualNBackModal isOpen={localModalOpen} onClose={() => setLocalModalOpen(false)} />
+      )}
     </div>
   );
 };
