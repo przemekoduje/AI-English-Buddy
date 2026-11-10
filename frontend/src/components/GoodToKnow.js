@@ -815,11 +815,656 @@ export const BreathingModal = ({ isOpen, onClose }) => {
   );
 };
 
-const GoodToKnow = ({ onOpenNBack, onOpenBreathing }) => {
+const PHONEMIC_LETTERS = ['K', 'S', 'P', 'M', 'B', 'T', 'C', 'R', 'D', 'W', 'F', 'L'];
+const PHONEMIC_STORAGE_KEY = 'speakling_phonemic_fluency_v1';
+
+export const PhonemicFluencyGame = ({ onClose }) => {
+  const [selectedLetter, setSelectedLetter] = useState('K');
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [isRunning, setIsRunning] = useState(false);
+  const [wordCount, setWordCount] = useState(0);
+  const [wordsList, setWordsList] = useState([]);
+  const [wordInput, setWordInput] = useState('');
+  const [inputError, setInputError] = useState('');
+  const [roundFinished, setRoundFinished] = useState(false);
+  const [bestScore, setBestScore] = useState(() => {
+    try {
+      return parseInt(localStorage.getItem(PHONEMIC_STORAGE_KEY), 10) || 0;
+    } catch (e) {
+      return 0;
+    }
+  });
+
+  useEffect(() => {
+    if (!isRunning) return;
+    if (timeLeft > 0) {
+      const timer = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
+      return () => clearTimeout(timer);
+    } else {
+      setIsRunning(false);
+      setRoundFinished(true);
+      if (wordCount > bestScore) {
+        setBestScore(wordCount);
+        try {
+          localStorage.setItem(PHONEMIC_STORAGE_KEY, String(wordCount));
+        } catch (e) {}
+      }
+    }
+  }, [isRunning, timeLeft, wordCount, bestScore]);
+
+  const startRound = () => {
+    setWordCount(0);
+    setWordsList([]);
+    setWordInput('');
+    setInputError('');
+    setRoundFinished(false);
+    setTimeLeft(60);
+    setIsRunning(true);
+  };
+
+  const stopRound = useCallback(() => {
+    setIsRunning(false);
+    if (timeLeft < 60 && wordCount > 0) {
+      setRoundFinished(true);
+      if (wordCount > bestScore) {
+        setBestScore(wordCount);
+        try {
+          localStorage.setItem(PHONEMIC_STORAGE_KEY, String(wordCount));
+        } catch (e) {}
+      }
+    }
+  }, [timeLeft, wordCount, bestScore]);
+
+  const randomizeLetter = () => {
+    if (isRunning) return;
+    const candidates = PHONEMIC_LETTERS.filter((l) => l !== selectedLetter);
+    const next = candidates[Math.floor(Math.random() * candidates.length)];
+    setSelectedLetter(next);
+    setRoundFinished(false);
+    setWordCount(0);
+    setWordsList([]);
+  };
+
+  const handleIncrementVoiceCount = useCallback(() => {
+    if (!isRunning) return;
+    setWordCount((c) => c + 1);
+    setInputError('');
+  }, [isRunning]);
+
+  const handleAddTypedWord = (e) => {
+    e.preventDefault();
+    if (!isRunning) return;
+    const cleaned = wordInput.trim();
+    if (!cleaned) return;
+
+    if (cleaned[0].toUpperCase() !== selectedLetter.toUpperCase()) {
+      setInputError(`Słowo musi zaczynać się na literę „${selectedLetter}”.`);
+      return;
+    }
+    if (wordsList.some((w) => w.toLowerCase() === cleaned.toLowerCase())) {
+      setInputError('To słowo zostało już zapisane.');
+      return;
+    }
+
+    setInputError('');
+    setWordsList((prev) => [cleaned, ...prev]);
+    setWordCount((c) => c + 1);
+    setWordInput('');
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) {
+        setIsRunning(false);
+        onClose();
+        return;
+      }
+      if (!isRunning) return;
+      if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        handleIncrementVoiceCount();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isRunning, onClose, handleIncrementVoiceCount]);
+
+  const progressPct = Math.round(((60 - timeLeft) / 60) * 100);
+
+  return (
+    <div className="nback-card nback-modal-card fluency-modal-card">
+      <div className="nback-top-row">
+        <div className="nback-title-group">
+          <div className="nback-badge-row">
+            <span className="nback-mono-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 7V4h16v3" />
+                <path d="M9 20h6" />
+                <path d="M12 4v16" />
+              </svg>
+              DOSTĘP LEKSYKALNY (OŚRODEK BROKI)
+            </span>
+            <span className="nback-stat-pill">Norma: 12–15 słów / 60s</span>
+            <span className="nback-stat-pill">Rekord: {bestScore} słów</span>
+          </div>
+          <h3>Płynność fonemiczna</h3>
+          <p className="nback-scientific-desc">
+            Ustaw stoper na <strong>60 sekund</strong>. Wymień na głos jak najwięcej słów na jedną literę (np. na literę „<strong>{selectedLetter}</strong>”, omijając imiona i nazwy własne). Norma to <strong>12–15 słów</strong>.
+          </p>
+        </div>
+
+        <div className="nback-header-actions">
+          <button
+            type="button"
+            className="nback-help-toggle"
+            disabled={isRunning}
+            onClick={randomizeLetter}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 3 21 3 21 8" />
+              <line x1="4" y1="20" x2="21" y2="3" />
+              <polyline points="21 16 21 21 16 21" />
+              <line x1="15" y1="15" x2="21" y2="21" />
+              <line x1="4" y1="4" x2="9" y2="9" />
+            </svg>
+            Losuj literę
+          </button>
+
+          {onClose && (
+            <button
+              type="button"
+              className="nback-modal-close-btn"
+              onClick={() => {
+                setIsRunning(false);
+                onClose();
+              }}
+              title="Zamknij (Esc)"
+              aria-label="Zamknij modal"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Letter Selector Toolbar */}
+      <div className="nback-toolbar">
+        <div className="nback-control-group" style={{ flexWrap: 'wrap' }}>
+          <span className="nback-control-label">Wybierz literę:</span>
+          <div className="nback-segmented fluency-letter-pills">
+            {PHONEMIC_LETTERS.map((ltr) => (
+              <button
+                key={ltr}
+                type="button"
+                disabled={isRunning}
+                className={`nback-seg-btn ${selectedLetter === ltr ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedLetter(ltr);
+                  setRoundFinished(false);
+                }}
+              >
+                {ltr}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Fluency Arena */}
+      <div className="fluency-arena">
+        <div className="fluency-metrics-row">
+          <div className="fluency-hero-box">
+            <span className="fluency-box-label">LITERA DOCELOWA</span>
+            <span className="fluency-big-value">{selectedLetter}</span>
+          </div>
+
+          <div className={`fluency-hero-box ${isRunning ? 'active-timer' : ''}`}>
+            <span className="fluency-box-label">POZOSTAŁY CZAS</span>
+            <span className="fluency-big-value">{timeLeft}s</span>
+          </div>
+
+          <div className="fluency-hero-box">
+            <span className="fluency-box-label">WYMIENIONE SŁOWA</span>
+            <span className="fluency-big-value">{wordCount}</span>
+          </div>
+        </div>
+
+        <div className="nback-progress-track" style={{ maxWidth: '520px', marginBottom: '1.25rem' }}>
+          <div className="nback-progress-fill" style={{ width: `${progressPct}%` }} />
+        </div>
+
+        <div className="fluency-controls-row">
+          {!isRunning ? (
+            <button type="button" className="nback-primary-btn" onClick={startRound}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <polygon points="6 4 20 12 6 20 6 4" />
+              </svg>
+              <span>Start 60 sekund (Litera „{selectedLetter}”)</span>
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="fluency-tap-btn"
+                onClick={handleIncrementVoiceCount}
+              >
+                <div className="nback-match-btn-top">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  <span>Zalicz wypowiedziane słowo (+1)</span>
+                  <kbd className="nback-kbd">Spacja</kbd>
+                </div>
+                <span className="nback-match-sub">Kliknij lub naciśnij Spację po każdym wypowiedzianym na głos słowie</span>
+              </button>
+
+              <button type="button" className="nback-stop-btn" onClick={stopRound}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+                <span>Zakończ</span>
+              </button>
+            </>
+          )}
+        </div>
+
+        {isRunning && (
+          <form className="fluency-word-form" onSubmit={handleAddTypedWord}>
+            <input
+              type="text"
+              className="fluency-word-input"
+              placeholder={`Opcjonalnie wpisz słowo na „${selectedLetter}” i naciśnij Enter...`}
+              value={wordInput}
+              onChange={(e) => setWordInput(e.target.value)}
+            />
+            <button type="submit" className="fluency-word-submit">Dodaj</button>
+          </form>
+        )}
+        {inputError && <div className="fluency-input-error">{inputError}</div>}
+
+        {wordsList.length > 0 && (
+          <div className="fluency-tags-list">
+            {wordsList.map((w, idx) => (
+              <span key={idx} className="fluency-word-tag">{w}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {roundFinished && !isRunning && (
+        <div className="nback-results-box">
+          <div className="nback-results-header">
+            <div>
+              <span className="nback-results-eyebrow">PODSUMOWANIE — LITERA „{selectedLetter}”</span>
+              <h4>Wynik: {wordCount} {wordCount === 1 ? 'słowo' : 'słów'} w 60 sekund</h4>
+            </div>
+            <div className="nback-recommendation-pill">
+              {wordCount >= 16
+                ? 'Powyżej normy (16+ słów)! Błyskawiczny dostęp do słownika mentalnego.'
+                : wordCount >= 12
+                ? 'Wynik w normie (12–15 słów). Twój bufor werbalny pracuje prawidłowo.'
+                : 'Poniżej normy (<12 słów). Spróbuj jeszcze raz, mówiąc po angielsku lub po polsku!'}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const PhonemicFluencyModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="nback-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && onClose) {
+          onClose();
+        }
+      }}
+    >
+      <div className="nback-modal-dialog" role="dialog" aria-modal="true" aria-label="Ćwiczenie Płynności Fonemicznej">
+        <PhonemicFluencyGame onClose={onClose} />
+      </div>
+    </div>
+  );
+};
+
+const SEMANTIC_CATEGORIES = [
+  { id: 'tools', label: 'Narzędzia warsztatowe', hintEn: 'Workshop tools (hammer, drill, wrench...)' },
+  { id: 'trees', label: 'Drzewa i rośliny', hintEn: 'Trees & plants (oak, pine, birch...)' },
+  { id: 'africa', label: 'Zwierzęta afrykańskie', hintEn: 'African animals (lion, giraffe, zebra...)' },
+  { id: 'kitchen', label: 'Wyposażenie kuchni', hintEn: 'Kitchen items (pan, blender, kettle...)' },
+  { id: 'transport', label: 'Środki transportu', hintEn: 'Means of transport (train, ferry, tram...)' },
+  { id: 'jobs', label: 'Zawody i profesje', hintEn: 'Professions & jobs (architect, surgeon, pilot...)' },
+  { id: 'fruits', label: 'Owoce i warzywa', hintEn: 'Fruits & vegetables (peach, broccoli, plum...)' },
+  { id: 'office', label: 'Przedmioty w biurze', hintEn: 'Office supplies (stapler, folder, monitor...)' },
+];
+const SEMANTIC_STORAGE_KEY = 'speakling_semantic_fluency_v1';
+
+export const SemanticFluencyGame = ({ onClose }) => {
+  const [selectedCat, setSelectedCat] = useState(SEMANTIC_CATEGORIES[0]);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [isRunning, setIsRunning] = useState(false);
+  const [itemCount, setItemCount] = useState(0);
+  const [itemsList, setItemsList] = useState([]);
+  const [itemInput, setItemInput] = useState('');
+  const [roundFinished, setRoundFinished] = useState(false);
+  const [bestScore, setBestScore] = useState(() => {
+    try {
+      return parseInt(localStorage.getItem(SEMANTIC_STORAGE_KEY), 10) || 0;
+    } catch (e) {
+      return 0;
+    }
+  });
+
+  useEffect(() => {
+    if (!isRunning) return;
+    if (timeLeft > 0) {
+      const timer = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
+      return () => clearTimeout(timer);
+    } else {
+      setIsRunning(false);
+      setRoundFinished(true);
+      if (itemCount > bestScore) {
+        setBestScore(itemCount);
+        try {
+          localStorage.setItem(SEMANTIC_STORAGE_KEY, String(itemCount));
+        } catch (e) {}
+      }
+    }
+  }, [isRunning, timeLeft, itemCount, bestScore]);
+
+  const startRound = () => {
+    setItemCount(0);
+    setItemsList([]);
+    setItemInput('');
+    setRoundFinished(false);
+    setTimeLeft(60);
+    setIsRunning(true);
+  };
+
+  const stopRound = useCallback(() => {
+    setIsRunning(false);
+    if (timeLeft < 60 && itemCount > 0) {
+      setRoundFinished(true);
+      if (itemCount > bestScore) {
+        setBestScore(itemCount);
+        try {
+          localStorage.setItem(SEMANTIC_STORAGE_KEY, String(itemCount));
+        } catch (e) {}
+      }
+    }
+  }, [timeLeft, itemCount, bestScore]);
+
+  const randomizeCategory = () => {
+    if (isRunning) return;
+    const candidates = SEMANTIC_CATEGORIES.filter((c) => c.id !== selectedCat.id);
+    const next = candidates[Math.floor(Math.random() * candidates.length)];
+    setSelectedCat(next);
+    setRoundFinished(false);
+    setItemCount(0);
+    setItemsList([]);
+  };
+
+  const handleIncrementVoiceCount = useCallback(() => {
+    if (!isRunning) return;
+    setItemCount((c) => c + 1);
+  }, [isRunning]);
+
+  const handleAddTypedItem = (e) => {
+    e.preventDefault();
+    if (!isRunning) return;
+    const cleaned = itemInput.trim();
+    if (!cleaned) return;
+    if (itemsList.some((w) => w.toLowerCase() === cleaned.toLowerCase())) {
+      setItemInput('');
+      return;
+    }
+    setItemsList((prev) => [cleaned, ...prev]);
+    setItemCount((c) => c + 1);
+    setItemInput('');
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) {
+        setIsRunning(false);
+        onClose();
+        return;
+      }
+      if (!isRunning) return;
+      if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        handleIncrementVoiceCount();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isRunning, onClose, handleIncrementVoiceCount]);
+
+  const progressPct = Math.round(((60 - timeLeft) / 60) * 100);
+
+  return (
+    <div className="nback-card nback-modal-card fluency-modal-card">
+      <div className="nback-top-row">
+        <div className="nback-title-group">
+          <div className="nback-badge-row">
+            <span className="nback-mono-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+              SIECI SKOJARZENIOWE (PŁAT SKRONIOWY)
+            </span>
+            <span className="nback-stat-pill">Czas: 60s</span>
+            <span className="nback-stat-pill">Rekord: {bestScore} obiektów</span>
+          </div>
+          <h3>Płynność semantyczna</h3>
+          <p className="nback-scientific-desc">
+            <strong>60 sekund</strong> na wymienienie jak największej liczby obiektów z jednej kategorii (np. „narzędzia warsztatowe”, „drzewa”, „zwierzęta afrykańskie”). Ćwiczenie odblokowuje szybkie przeszukiwanie kategorii pojęciowych podczas mówienia po angielsku.
+          </p>
+        </div>
+
+        <div className="nback-header-actions">
+          <button
+            type="button"
+            className="nback-help-toggle"
+            disabled={isRunning}
+            onClick={randomizeCategory}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 3 21 3 21 8" />
+              <line x1="4" y1="20" x2="21" y2="3" />
+              <polyline points="21 16 21 21 16 21" />
+              <line x1="15" y1="15" x2="21" y2="21" />
+              <line x1="4" y1="4" x2="9" y2="9" />
+            </svg>
+            Losuj kategorię
+          </button>
+
+          {onClose && (
+            <button
+              type="button"
+              className="nback-modal-close-btn"
+              onClick={() => {
+                setIsRunning(false);
+                onClose();
+              }}
+              title="Zamknij (Esc)"
+              aria-label="Zamknij modal"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Category Selector Toolbar */}
+      <div className="nback-toolbar">
+        <div className="nback-control-group" style={{ flexWrap: 'wrap', width: '100%' }}>
+          <span className="nback-control-label">Kategoria:</span>
+          <div className="fluency-category-chips">
+            {SEMANTIC_CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                disabled={isRunning}
+                className={`nback-icon-chip ${selectedCat.id === cat.id ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedCat(cat);
+                  setRoundFinished(false);
+                }}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Fluency Arena */}
+      <div className="fluency-arena">
+        <div className="fluency-category-banner">
+          <span className="fluency-box-label">AKTYWNA KATEGORIA</span>
+          <strong>{selectedCat.label}</strong>
+          <span className="fluency-category-en">{selectedCat.hintEn}</span>
+        </div>
+
+        <div className="fluency-metrics-row">
+          <div className={`fluency-hero-box ${isRunning ? 'active-timer' : ''}`}>
+            <span className="fluency-box-label">POZOSTAŁY CZAS</span>
+            <span className="fluency-big-value">{timeLeft}s</span>
+          </div>
+
+          <div className="fluency-hero-box">
+            <span className="fluency-box-label">WYMIENIONE OBIEKTY</span>
+            <span className="fluency-big-value">{itemCount}</span>
+          </div>
+        </div>
+
+        <div className="nback-progress-track" style={{ maxWidth: '520px', marginBottom: '1.25rem' }}>
+          <div className="nback-progress-fill" style={{ width: `${progressPct}%` }} />
+        </div>
+
+        <div className="fluency-controls-row">
+          {!isRunning ? (
+            <button type="button" className="nback-primary-btn" onClick={startRound}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <polygon points="6 4 20 12 6 20 6 4" />
+              </svg>
+              <span>Start 60 sekund ({selectedCat.label})</span>
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="fluency-tap-btn"
+                onClick={handleIncrementVoiceCount}
+              >
+                <div className="nback-match-btn-top">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  <span>Zalicz wypowiedziany obiekt (+1)</span>
+                  <kbd className="nback-kbd">Spacja</kbd>
+                </div>
+                <span className="nback-match-sub">Kliknij lub naciśnij Spację po każdym wypowiedzianym na głos obiekcie</span>
+              </button>
+
+              <button type="button" className="nback-stop-btn" onClick={stopRound}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+                <span>Zakończ</span>
+              </button>
+            </>
+          )}
+        </div>
+
+        {isRunning && (
+          <form className="fluency-word-form" onSubmit={handleAddTypedItem}>
+            <input
+              type="text"
+              className="fluency-word-input"
+              placeholder={`Opcjonalnie wpisz obiekt z kategorii „${selectedCat.label}” i naciśnij Enter...`}
+              value={itemInput}
+              onChange={(e) => setItemInput(e.target.value)}
+            />
+            <button type="submit" className="fluency-word-submit">Dodaj</button>
+          </form>
+        )}
+
+        {itemsList.length > 0 && (
+          <div className="fluency-tags-list">
+            {itemsList.map((w, idx) => (
+              <span key={idx} className="fluency-word-tag">{w}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {roundFinished && !isRunning && (
+        <div className="nback-results-box">
+          <div className="nback-results-header">
+            <div>
+              <span className="nback-results-eyebrow">PODSUMOWANIE — {selectedCat.label.toUpperCase()}</span>
+              <h4>Wynik: {itemCount} {itemCount === 1 ? 'obiekt' : 'obiektów'} w 60 sekund</h4>
+            </div>
+            <div className="nback-recommendation-pill">
+              {itemCount >= 18
+                ? 'Znakomita płynność semantyczna (18+ obiektów)! Sieci skojarzeń są w pełni rozgrzane.'
+                : itemCount >= 12
+                ? 'Dobry wynik (12–17 obiektów). Kontynuuj rozgrzewkę na kolejnej kategorii.'
+                : 'Rozgrzewka (<12 obiektów). Spróbuj wizualizować miejsce związane z tą kategorią!'}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const SemanticFluencyModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="nback-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && onClose) {
+          onClose();
+        }
+      }}
+    >
+      <div className="nback-modal-dialog" role="dialog" aria-modal="true" aria-label="Ćwiczenie Płynności Semantycznej">
+        <SemanticFluencyGame onClose={onClose} />
+      </div>
+    </div>
+  );
+};
+
+const GoodToKnow = ({ onOpenNBack, onOpenBreathing, onOpenPhonemic, onOpenSemantic }) => {
   const [localModalOpen, setLocalModalOpen] = useState(false);
   const [localBreathingOpen, setLocalBreathingOpen] = useState(false);
+  const [localPhonemicOpen, setLocalPhonemicOpen] = useState(false);
+  const [localSemanticOpen, setLocalSemanticOpen] = useState(false);
+  const [gamesMenuOpen, setGamesMenuOpen] = useState(false);
 
   const handleOpenGame = () => {
+    setGamesMenuOpen(false);
     if (onOpenNBack) {
       onOpenNBack();
     } else {
@@ -828,10 +1473,29 @@ const GoodToKnow = ({ onOpenNBack, onOpenBreathing }) => {
   };
 
   const handleOpenBreathing = () => {
+    setGamesMenuOpen(false);
     if (onOpenBreathing) {
       onOpenBreathing();
     } else {
       setLocalBreathingOpen(true);
+    }
+  };
+
+  const handleOpenPhonemic = () => {
+    setGamesMenuOpen(false);
+    if (onOpenPhonemic) {
+      onOpenPhonemic();
+    } else {
+      setLocalPhonemicOpen(true);
+    }
+  };
+
+  const handleOpenSemantic = () => {
+    setGamesMenuOpen(false);
+    if (onOpenSemantic) {
+      onOpenSemantic();
+    } else {
+      setLocalSemanticOpen(true);
     }
   };
 
@@ -842,7 +1506,7 @@ const GoodToKnow = ({ onOpenNBack, onOpenBreathing }) => {
           <span className="gtk-eyebrow">NEURONAUKA I TRENING POZNAWCZY</span>
           <h2>Jak przygotować mózg do angielskiego</h2>
           <p className="subtitle">
-            Proste zasady dla maksymalnych efektów oparte na neuronauce oraz treningu pamięci roboczej.
+            Proste zasady dla maksymalnych efektów oparte na neuronauce oraz treningu pamięci roboczej i płynności słownej.
           </p>
 
           {/* Submenu Bar in GoodToKnow */}
@@ -851,6 +1515,7 @@ const GoodToKnow = ({ onOpenNBack, onOpenBreathing }) => {
               type="button"
               className="gtk-submenu-item active"
               onClick={() => {
+                setGamesMenuOpen(false);
                 const el = document.getElementById('gtk-sec-1');
                 if (el) el.scrollIntoView({ behavior: 'smooth' });
               }}
@@ -876,20 +1541,79 @@ const GoodToKnow = ({ onOpenNBack, onOpenBreathing }) => {
               <span className="gtk-submenu-pill">RELAKS</span>
             </button>
 
-            <button
-              type="button"
-              className="gtk-submenu-item gtk-submenu-nback-btn"
-              onClick={handleOpenGame}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-              </svg>
-              <span>N-Back (Dual N-Back)</span>
-              <span className="gtk-submenu-pill">GRA</span>
-            </button>
+            {/* Expandable Gry Dropdown in Submenu */}
+            <div className="gtk-games-dropdown-wrapper">
+              <button
+                type="button"
+                className="gtk-submenu-item gtk-submenu-nback-btn"
+                onClick={() => setGamesMenuOpen((prev) => !prev)}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                </svg>
+                <span>Gry poznawcze (3)</span>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    transform: gamesMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.18s ease',
+                  }}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {gamesMenuOpen && (
+                <div className="gtk-games-dropdown-menu">
+                  <button type="button" className="gtk-dropdown-game-item" onClick={handleOpenGame}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7" rx="1" />
+                      <rect x="14" y="3" width="7" height="7" rx="1" />
+                      <rect x="14" y="14" width="7" height="7" rx="1" />
+                      <rect x="3" y="14" width="7" height="7" rx="1" />
+                    </svg>
+                    <div className="gtk-dropdown-game-text">
+                      <strong>Dual N-Back</strong>
+                      <span>Pojemność pamięci roboczej (dlPFC)</span>
+                    </div>
+                  </button>
+
+                  <button type="button" className="gtk-dropdown-game-item" onClick={handleOpenPhonemic}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 7V4h16v3" />
+                      <path d="M9 20h6" />
+                      <path d="M12 4v16" />
+                    </svg>
+                    <div className="gtk-dropdown-game-text">
+                      <strong>Płynność fonemiczna</strong>
+                      <span>Słowa na jedną literę w 60s (norma 12–15)</span>
+                    </div>
+                  </button>
+
+                  <button type="button" className="gtk-dropdown-game-item" onClick={handleOpenSemantic}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="2" y1="12" x2="22" y2="12" />
+                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                    </svg>
+                    <div className="gtk-dropdown-game-text">
+                      <strong>Płynność semantyczna</strong>
+                      <span>Obiekty z jednej kategorii w 60s</span>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -949,6 +1673,40 @@ const GoodToKnow = ({ onOpenNBack, onOpenBreathing }) => {
                     <rect x="3" y="14" width="7" height="7" rx="1" />
                   </svg>
                   <span>Otwórz grę Dual N-Back</span>
+                </button>
+              </div>
+              <div className="gtk-card gtk-card-nback-launcher">
+                <div className="gtk-card-nback-top">
+                  <h4>Płynność fonemiczna</h4>
+                  <span className="gtk-nback-tag">60s</span>
+                </div>
+                <p>
+                  Ustaw stoper na 60 sekund. Wymień na głos jak najwięcej słów na jedną literę (np. na literę „K”, omijając imiona). Norma to <strong>12–15 słów</strong>.
+                </p>
+                <button type="button" className="gtk-open-nback-btn" onClick={handleOpenPhonemic}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 7V4h16v3" />
+                    <path d="M9 20h6" />
+                    <path d="M12 4v16" />
+                  </svg>
+                  <span>Otwórz Płynność fonemiczną</span>
+                </button>
+              </div>
+              <div className="gtk-card gtk-card-nback-launcher">
+                <div className="gtk-card-nback-top">
+                  <h4>Płynność semantyczna</h4>
+                  <span className="gtk-nback-tag">60s</span>
+                </div>
+                <p>
+                  60 sekund na wymienienie jak największej liczby obiektów z jednej kategorii (np. „narzędzia warsztatowe”, „drzewa”, „zwierzęta afrykańskie”).
+                </p>
+                <button type="button" className="gtk-open-nback-btn" onClick={handleOpenSemantic}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                  </svg>
+                  <span>Otwórz Płynność semantyczną</span>
                 </button>
               </div>
             </div>
@@ -1042,6 +1800,12 @@ const GoodToKnow = ({ onOpenNBack, onOpenBreathing }) => {
       )}
       {!onOpenBreathing && (
         <BreathingModal isOpen={localBreathingOpen} onClose={() => setLocalBreathingOpen(false)} />
+      )}
+      {!onOpenPhonemic && (
+        <PhonemicFluencyModal isOpen={localPhonemicOpen} onClose={() => setLocalPhonemicOpen(false)} />
+      )}
+      {!onOpenSemantic && (
+        <SemanticFluencyModal isOpen={localSemanticOpen} onClose={() => setLocalSemanticOpen(false)} />
       )}
     </div>
   );

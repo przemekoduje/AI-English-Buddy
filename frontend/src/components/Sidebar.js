@@ -6,12 +6,13 @@ import './Sidebar.css';
 
 const DAILY_GOAL_MINUTES = 20;
 
-const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscription, onOpenPaywall, onOpenNBack, onOpenBreathing }) => {
+const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscription, onOpenPaywall, onOpenNBack, onOpenBreathing, onOpenPhonemic, onOpenSemantic }) => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const stored = localStorage.getItem('buddy_sidebar_collapsed');
     return stored ? JSON.parse(stored) : false;
   });
   const [gtkSubmenuOpen, setGtkSubmenuOpen] = useState(true);
+  const [gtkGamesOpen, setGtkGamesOpen] = useState(true);
 
   const getTodayStr = () => {
     const d = new Date();
@@ -411,12 +412,11 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
                   <span className="submenu-label">Oddech 4-7-8</span>
                   <span className="submenu-pill">RELAKS</span>
                 </button>
+
                 <button
                   type="button"
-                  className="sidebar-submenu-item"
-                  onClick={() => {
-                    if (onOpenNBack) onOpenNBack();
-                  }}
+                  className={`sidebar-submenu-item sidebar-submenu-group-btn ${gtkGamesOpen ? 'open' : ''}`}
+                  onClick={() => setGtkGamesOpen(prev => !prev)}
                 >
                   <span className="submenu-icon">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -426,9 +426,50 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
                       <rect x="3" y="14" width="7" height="7" rx="1" />
                     </svg>
                   </span>
-                  <span className="submenu-label">Dual N-Back</span>
-                  <span className="submenu-pill">GRA</span>
+                  <span className="submenu-label">Gry</span>
+                  <span className={`nav-submenu-chevron ${gtkGamesOpen ? 'open' : ''}`}>
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </span>
                 </button>
+
+                {gtkGamesOpen && (
+                  <div className="sidebar-nested-games">
+                    <button
+                      type="button"
+                      className="sidebar-submenu-item nested-game-item"
+                      onClick={() => {
+                        if (onOpenNBack) onOpenNBack();
+                      }}
+                    >
+                      <span className="submenu-dot" />
+                      <span className="submenu-label">Dual N-Back</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="sidebar-submenu-item nested-game-item"
+                      onClick={() => {
+                        if (onOpenPhonemic) onOpenPhonemic();
+                      }}
+                    >
+                      <span className="submenu-dot" />
+                      <span className="submenu-label">Płynność fonemiczna</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="sidebar-submenu-item nested-game-item"
+                      onClick={() => {
+                        if (onOpenSemantic) onOpenSemantic();
+                      }}
+                    >
+                      <span className="submenu-dot" />
+                      <span className="submenu-label">Płynność semantyczna</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </React.Fragment>

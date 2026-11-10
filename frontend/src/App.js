@@ -13,7 +13,7 @@ import MediaBuddy from './components/Media/MediaBuddy';
 import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 import AdminDashboard from './components/Admin/AdminDashboard';
-import GoodToKnow, { DualNBackModal, BreathingModal } from './components/GoodToKnow';
+import GoodToKnow, { DualNBackModal, BreathingModal, PhonemicFluencyModal, SemanticFluencyModal } from './components/GoodToKnow';
 import HelpFeedback from './components/Help/HelpFeedback';
 import PaywallModal from './components/Paywall/PaywallModal';
 
@@ -46,6 +46,8 @@ function App() {
   const [paywallReason, setPaywallReason] = useState(null);
   const [nBackModalOpen, setNBackModalOpen] = useState(false);
   const [breathingModalOpen, setBreathingModalOpen] = useState(false);
+  const [phonemicModalOpen, setPhonemicModalOpen] = useState(false);
+  const [semanticModalOpen, setSemanticModalOpen] = useState(false);
 
   const openPaywall = (reason = null) => {
     setPaywallReason(reason);
@@ -362,6 +364,8 @@ function App() {
         onOpenPaywall={openPaywall}
         onOpenNBack={() => setNBackModalOpen(true)}
         onOpenBreathing={() => setBreathingModalOpen(true)}
+        onOpenPhonemic={() => setPhonemicModalOpen(true)}
+        onOpenSemantic={() => setSemanticModalOpen(true)}
       />
       
       <main className="main-content">
@@ -436,6 +440,8 @@ function App() {
             <GoodToKnow
               onOpenNBack={() => setNBackModalOpen(true)}
               onOpenBreathing={() => setBreathingModalOpen(true)}
+              onOpenPhonemic={() => setPhonemicModalOpen(true)}
+              onOpenSemantic={() => setSemanticModalOpen(true)}
             />
           ) : (
             <Workspace 
@@ -536,6 +542,18 @@ function App() {
       <BreathingModal
         isOpen={breathingModalOpen}
         onClose={() => setBreathingModalOpen(false)}
+      />
+
+      {/* Modal ćwiczenia Płynności fonemicznej */}
+      <PhonemicFluencyModal
+        isOpen={phonemicModalOpen}
+        onClose={() => setPhonemicModalOpen(false)}
+      />
+
+      {/* Modal ćwiczenia Płynności semantycznej */}
+      <SemanticFluencyModal
+        isOpen={semanticModalOpen}
+        onClose={() => setSemanticModalOpen(false)}
       />
 
       {customAlert && (

@@ -216,6 +216,33 @@
   color: #ffffff;
 }
 
+.sidebar-nested-games {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 1rem;
+  margin-left: 0.45rem;
+  border-left: 1px solid #e2e8f0;
+}
+
+.nested-game-item {
+  padding: 0.4rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.submenu-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #64748b;
+  flex-shrink: 0;
+}
+
+.nested-game-item:hover .submenu-dot {
+  background: #0f172a;
+}
+
 @media (max-width: 768px) {
   .sidebar-submenu,
   .nav-submenu-chevron {

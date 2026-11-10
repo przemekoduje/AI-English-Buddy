@@ -1010,6 +1010,258 @@
   background: #fef2f2;
 }
 
+/* ==========================================================================
+   Expandable Gry Dropdown in Submenu Bar
+   ========================================================================== */
+.gtk-games-dropdown-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.gtk-games-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.45rem;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: left;
+}
+
+.gtk-dropdown-game-item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #0f172a;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.gtk-dropdown-game-item:hover {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.gtk-dropdown-game-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.gtk-dropdown-game-text strong {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.gtk-dropdown-game-text span {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+/* ==========================================================================
+   Phonemic & Semantic Fluency Modals
+   ========================================================================== */
+.fluency-arena {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem 0.5rem 0.25rem;
+}
+
+.fluency-category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.fluency-category-banner {
+  width: 100%;
+  max-width: 520px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.85rem 1.1rem;
+  text-align: center;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.fluency-category-banner strong {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.fluency-category-en {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.fluency-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.85rem;
+  width: 100%;
+  max-width: 520px;
+  margin-bottom: 1rem;
+}
+
+.fluency-hero-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.fluency-hero-box.active-timer {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.fluency-hero-box.active-timer .fluency-box-label,
+.fluency-hero-box.active-timer .fluency-big-value {
+  color: #ffffff;
+}
+
+.fluency-box-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+
+.fluency-big-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.1;
+}
+
+.fluency-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  width: 100%;
+  max-width: 520px;
+  margin-bottom: 1rem;
+}
+
+.fluency-tap-btn {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.85rem 1.15rem;
+  border-radius: 14px;
+  border: 1px solid #0f172a;
+  background: #0f172a;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fluency-tap-btn:hover {
+  background: #1e293b;
+  transform: translateY(-1px);
+}
+
+.fluency-tap-btn .nback-match-sub {
+  color: #cbd5e1;
+}
+
+.fluency-word-form {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 520px;
+  margin-bottom: 0.5rem;
+}
+
+.fluency-word-input {
+  flex: 1;
+  height: 40px;
+  padding: 0 0.9rem;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.88rem;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.fluency-word-input:focus {
+  outline: none;
+  border-color: #0f172a;
+}
+
+.fluency-word-submit {
+  height: 40px;
+  padding: 0 1rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fluency-word-submit:hover {
+  background: #f1f5f9;
+}
+
+.fluency-input-error {
+  font-size: 0.8rem;
+  color: #dc2626;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.fluency-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 520px;
+  margin-top: 0.4rem;
+}
+
+.fluency-word-tag {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+}
+
 @media (max-width: 768px) {
   .gtk-header h2 {
     font-size: 1.7rem;
