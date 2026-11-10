@@ -1,5 +1,657 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './GoodToKnow.css';
+
+const LETTERS = ['C', 'H', 'K', 'L', 'Q', 'R', 'S', 'T'];
+const GRID_POSITIONS = [0, 1, 2, 3, 5, 6, 7, 8]; // 8 outer cells around center fixation cross (index 4)
+const STORAGE_KEY = 'speakling_dual_nback_stats_v1';
+
+const loadStats = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { sessions: 0, bestScore: 0, maxLevelUnlocked: 2, history: [] };
+    return JSON.parse(raw);
+  } catch (e) {
+    return { sessions: 0, bestScore: 0, maxLevelUnlocked: 2, history: [] };
+  }
+};
+
+const saveStats = (stats) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
+  } catch (e) {
+    // ignore storage errors
+  }
+};
+
+/**
+ * Generates a scientifically balanced Dual N-Back sequence of length (20 + N).
+ * Ensures ~6 position matches and ~6 audio letter matches across the 20 evaluable trials.
+ */
+const generateNBackSequence = (nLevel, baseTrials = 20) => {
+  const totalLength = baseTrials + nLevel;
+  const seq = Array.from({ length: totalLength }, () => ({
+    pos: GRID_POSITIONS[Math.floor(Math.random() * GRID_POSITIONS.length)],
+    letter: LETTERS[Math.floor(Math.random() * LETTERS.length)],
+    isPosMatch: false,
+    isLetterMatch: false,
+  }));
+
+  // Pick exact indices (from nLevel to totalLength - 1) that MUST be matches
+  const evaluableIndices = [];
+  for (let i = nLevel; i < totalLength; i++) {
+    evaluableIndices.push(i);
+  }
+
+  const pickRandomSubset = (arr, count) => {
+    const copy = [...arr];
+    const picked = new Set();
+    while (picked.size < count && copy.length > 0) {
+      const idx = Math.floor(Math.random() * copy.length);
+      picked.add(copy.splice(idx, 1)[0]);
+    }
+    return picked;
+  };
+
+  const targetCount = 6; // 30% of 20 trials
+  const posMatchIndices = pickRandomSubset(evaluableIndices, targetCount);
+  const letterMatchIndices = pickRandomSubset(evaluableIndices, targetCount);
+
+  for (let i = nLevel; i < totalLength; i++) {
+    const prev = seq[i - nLevel];
+
+    if (posMatchIndices.has(i)) {
+      seq[i].pos = prev.pos;
+      seq[i].isPosMatch = true;
+    } else {
+      const otherPos = GRID_POSITIONS.filter((p) => p !== prev.pos);
+      seq[i].pos = otherPos[Math.floor(Math.random() * otherPos.length)];
+      seq[i].isPosMatch = false;
+    }
+
+    if (letterMatchIndices.has(i)) {
+      seq[i].letter = prev.letter;
+      seq[i].isLetterMatch = true;
+    } else {
+      const otherLetters = LETTERS.filter((l) => l !== prev.letter);
+      seq[i].letter = otherLetters[Math.floor(Math.random() * otherLetters.length)];
+      seq[i].isLetterMatch = false;
+    }
+  }
+
+  return seq;
+};
+
+const DualNBackGame = () => {
+  const [nLevel, setNLevel] = useState(2);
+  const [stepDurationMs, setStepDurationMs] = useState(2500);
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [showLetterHint, setShowLetterHint] = useState(true);
+  const [showInstructions, setShowInstructions] = useState(false);
+
+  const [isRunning, setIsRunning] = useState(false);
+  const [sequence, setSequence] = useState([]);
+  const [currentStep, setCurrentStep] = useState(-1);
+  const [isFlashActive, setIsFlashActive] = useState(false);
+
+  // User responses for the current step: null | 'hit' | 'false_alarm'
+  const [posFeedback, setPosFeedback] = useState(null);
+  const [letterFeedback, setLetterFeedback] = useState(null);
+
+  // Cumulative round metrics
+  const [roundResult, setRoundResult] = useState(null);
+  const [stats, setStats] = useState(loadStats);
+
+  // Refs for accurate synchronous tracking inside timers/key handlers
+  const responsesRef = useRef({});
+  const sequenceRef = useRef([]);
+  const currentStepRef = useRef(-1);
+  const isRunningRef = useRef(false);
+  const nLevelRef = useRef(nLevel);
+  const audioEnabledRef = useRef(audioEnabled);
+  const stepTimerRef = useRef(null);
+  const flashTimerRef = useRef(null);
+
+  useEffect(() => {
+    nLevelRef.current = nLevel;
+  }, [nLevel]);
+
+  useEffect(() => {
+    audioEnabledRef.current = audioEnabled;
+  }, [audioEnabled]);
+
+  const speakLetter = useCallback((letter) => {
+    if (!audioEnabledRef.current || typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return;
+    }
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(letter.toLowerCase());
+      utterance.lang = 'en-US';
+      utterance.rate = 1.05;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      // ignore speech synthesis errors
+    }
+  }, []);
+
+  const clearTimers = useCallback(() => {
+    if (stepTimerRef.current) {
+      clearTimeout(stepTimerRef.current);
+      stepTimerRef.current = null;
+    }
+    if (flashTimerRef.current) {
+      clearTimeout(flashTimerRef.current);
+      flashTimerRef.current = null;
+    }
+  }, []);
+
+  const finishRound = useCallback(() => {
+    clearTimers();
+    isRunningRef.current = false;
+    setIsRunning(false);
+    setIsFlashActive(false);
+
+    const seq = sequenceRef.current;
+    const n = nLevelRef.current;
+    const resp = responsesRef.current;
+
+    let posHits = 0;
+    let posMisses = 0;
+    let posFalseAlarms = 0;
+
+    let letterHits = 0;
+    let letterMisses = 0;
+    let letterFalseAlarms = 0;
+
+    for (let i = n; i < seq.length; i++) {
+      const item = seq[i];
+      const userResp = resp[i] || { posPressed: false, letterPressed: false };
+
+      if (item.isPosMatch) {
+        if (userResp.posPressed) posHits++;
+        else posMisses++;
+      } else if (userResp.posPressed) {
+        posFalseAlarms++;
+      }
+
+      if (item.isLetterMatch) {
+        if (userResp.letterPressed) letterHits++;
+        else letterMisses++;
+      } else if (userResp.letterPressed) {
+        letterFalseAlarms++;
+      }
+    }
+
+    const posDenom = posHits + posMisses + posFalseAlarms;
+    const letterDenom = letterHits + letterMisses + letterFalseAlarms;
+
+    const posAccuracy = posDenom > 0 ? Math.round((posHits / posDenom) * 100) : 100;
+    const letterAccuracy = letterDenom > 0 ? Math.round((letterHits / letterDenom) * 100) : 100;
+    const totalAccuracy = Math.round((posAccuracy + letterAccuracy) / 2);
+
+    const summary = {
+      nLevel: n,
+      totalAccuracy,
+      posAccuracy,
+      letterAccuracy,
+      posHits,
+      posMisses,
+      posFalseAlarms,
+      letterHits,
+      letterMisses,
+      letterFalseAlarms,
+      timestamp: new Date().toISOString(),
+    };
+
+    setRoundResult(summary);
+
+    setStats((prev) => {
+      const updated = {
+        sessions: (prev.sessions || 0) + 1,
+        bestScore: Math.max(prev.bestScore || 0, totalAccuracy),
+        maxLevelUnlocked:
+          totalAccuracy >= 80
+            ? Math.max(prev.maxLevelUnlocked || 2, Math.min(6, n + 1))
+            : prev.maxLevelUnlocked || 2,
+        history: [summary, ...(prev.history || [])].slice(0, 10),
+      };
+      saveStats(updated);
+      return updated;
+    });
+  }, [clearTimers]);
+
+  const runStep = useCallback(
+    (stepIdx) => {
+      const seq = sequenceRef.current;
+      if (!isRunningRef.current || stepIdx >= seq.length) {
+        finishRound();
+        return;
+      }
+
+      currentStepRef.current = stepIdx;
+      setCurrentStep(stepIdx);
+      setPosFeedback(null);
+      setLetterFeedback(null);
+      setIsFlashActive(true);
+
+      const currentItem = seq[stepIdx];
+      speakLetter(currentItem.letter);
+
+      // Turn off visual square highlight slightly before the next step
+      const flashDuration = Math.min(950, Math.floor(stepDurationMs * 0.45));
+      flashTimerRef.current = setTimeout(() => {
+        setIsFlashActive(false);
+      }, flashDuration);
+
+      stepTimerRef.current = setTimeout(() => {
+        runStep(stepIdx + 1);
+      }, stepDurationMs);
+    },
+    [finishRound, speakLetter, stepDurationMs]
+  );
+
+  const startGame = () => {
+    clearTimers();
+    const newSeq = generateNBackSequence(nLevel, 20);
+    sequenceRef.current = newSeq;
+    responsesRef.current = {};
+    currentStepRef.current = -1;
+    isRunningRef.current = true;
+
+    setSequence(newSeq);
+    setRoundResult(null);
+    setIsRunning(true);
+    setCurrentStep(0);
+
+    runStep(0);
+  };
+
+  const stopGame = () => {
+    clearTimers();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    isRunningRef.current = false;
+    setIsRunning(false);
+    setIsFlashActive(false);
+    setCurrentStep(-1);
+    setPosFeedback(null);
+    setLetterFeedback(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      clearTimers();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [clearTimers]);
+
+  const handleUserResponse = useCallback((type) => {
+    if (!isRunningRef.current) return;
+    const stepIdx = currentStepRef.current;
+    const n = nLevelRef.current;
+    const seq = sequenceRef.current;
+
+    // Responses are only evaluated once at least N steps have passed
+    if (stepIdx < n || stepIdx >= seq.length) return;
+
+    const currentItem = seq[stepIdx];
+    const existing = responsesRef.current[stepIdx] || {
+      posPressed: false,
+      letterPressed: false,
+    };
+
+    if (type === 'pos' && !existing.posPressed) {
+      existing.posPressed = true;
+      responsesRef.current[stepIdx] = existing;
+      setPosFeedback(currentItem.isPosMatch ? 'hit' : 'false_alarm');
+    } else if (type === 'letter' && !existing.letterPressed) {
+      existing.letterPressed = true;
+      responsesRef.current[stepIdx] = existing;
+      setLetterFeedback(currentItem.isLetterMatch ? 'hit' : 'false_alarm');
+    }
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (!isRunningRef.current) return;
+      if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+
+      const key = e.key.toLowerCase();
+      if (key === 'a' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handleUserResponse('pos');
+      } else if (key === 'l' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleUserResponse('letter');
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleUserResponse]);
+
+  const activeItem =
+    isRunning && currentStep >= 0 && currentStep < sequence.length
+      ? sequence[currentStep]
+      : null;
+
+  const totalSteps = sequence.length || 20 + nLevel;
+  const canRespond = isRunning && currentStep >= nLevel;
+  const progressPercent =
+    isRunning && currentStep >= 0
+      ? Math.min(100, Math.round(((currentStep + 1) / totalSteps) * 100))
+      : 0;
+
+  return (
+    <div className="nback-card">
+      <div className="nback-top-row">
+        <div className="nback-title-group">
+          <div className="nback-badge-row">
+            <span className="nback-mono-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+              </svg>
+              TRENING PAMIĘCI ROBOCZEJ (dlPFC)
+            </span>
+            <span className="nback-stat-pill">Sesje: {stats.sessions}</span>
+            <span className="nback-stat-pill">Rekord: {stats.bestScore}%</span>
+          </div>
+          <h3>N-Back (Dual N-Back)</h3>
+          <p className="nback-scientific-desc">
+            Darmowa aplikacja/gra naukowa trenująca fizyczną pojemność bufora pamięci roboczej (śledzenie pozycji kwadratu na siatce i jednoczesne zapamiętywanie liter sprzed <strong>N kroków</strong>). Udowodniono, że regularny trening N-Back zwiększa gęstość receptorów dopaminowych w <strong>dlPFC</strong> (grzbietowo-bocznej korze przedczołowej), co bezpośrednio przyspiesza przetwarzanie zdań i rozumienie mowy w języku angielskim.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="nback-help-toggle"
+          onClick={() => setShowInstructions((prev) => !prev)}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          {showInstructions ? 'Ukryj instrukcję' : 'Jak grać?'}
+        </button>
+      </div>
+
+      {showInstructions && (
+        <div className="nback-instructions-panel">
+          <div className="nback-instruction-step">
+            <span className="nback-step-num">1</span>
+            <div>
+              <strong>Obserwuj i słuchaj:</strong> Co {stepDurationMs / 1000}s na siatce 3×3 podświetla się jeden kwadrat oraz wypowiadana jest angielska litera.
+            </div>
+          </div>
+          <div className="nback-instruction-step">
+            <span className="nback-step-num">2</span>
+            <div>
+              <strong>Porównuj z krokiem N wstecz:</strong> Dla poziomu <strong>{nLevel}-Back</strong> porównujesz obecny bodziec z tym, który pojawił się dokładnie <strong>{nLevel} {nLevel === 1 ? 'krok' : 'kroki'} temu</strong>.
+            </div>
+          </div>
+          <div className="nback-instruction-step">
+            <span className="nback-step-num">3</span>
+            <div>
+              <strong>Reaguj:</strong> Naciśnij <strong>Pozycja [A]</strong> jeśli kwadrat zapalił się w tym samym miejscu co {nLevel} {nLevel === 1 ? 'krok' : 'kroki'} temu, lub <strong>Litera [L]</strong> jeśli usłyszałeś tę samą literę. Możesz nacisnąć oba!
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Control Bar */}
+      <div className="nback-toolbar">
+        <div className="nback-control-group">
+          <span className="nback-control-label">Poziom N:</span>
+          <div className="nback-segmented">
+            {[1, 2, 3, 4].map((lvl) => (
+              <button
+                key={lvl}
+                type="button"
+                disabled={isRunning}
+                className={`nback-seg-btn ${nLevel === lvl ? 'active' : ''}`}
+                onClick={() => setNLevel(lvl)}
+              >
+                {lvl}-Back
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="nback-control-group">
+          <span className="nback-control-label">Tempo:</span>
+          <div className="nback-segmented">
+            {[
+              { label: '2.0s', val: 2000 },
+              { label: '2.5s', val: 2500 },
+              { label: '3.0s', val: 3000 },
+            ].map((t) => (
+              <button
+                key={t.val}
+                type="button"
+                disabled={isRunning}
+                className={`nback-seg-btn ${stepDurationMs === t.val ? 'active' : ''}`}
+                onClick={() => setStepDurationMs(t.val)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="nback-control-group nback-toggles">
+          <button
+            type="button"
+            className={`nback-icon-chip ${audioEnabled ? 'active' : ''}`}
+            onClick={() => setAudioEnabled((prev) => !prev)}
+            title="Dźwięk lektora (Web Speech EN)"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {audioEnabled ? (
+                <>
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                </>
+              ) : (
+                <>
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </>
+              )}
+            </svg>
+            <span>Audio {audioEnabled ? 'ON' : 'OFF'}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`nback-icon-chip ${showLetterHint ? 'active' : ''}`}
+            onClick={() => setShowLetterHint((prev) => !prev)}
+            title="Pokazuj literę na środku siatki"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 7V4h16v3" />
+              <path d="M9 20h6" />
+              <path d="M12 4v16" />
+            </svg>
+            <span>Litera {showLetterHint ? 'ON' : 'OFF'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Arena */}
+      <div className="nback-arena">
+        <div className="nback-status-strip">
+          <div className="nback-step-counter">
+            {isRunning ? (
+              <>
+                <span className="nback-live-dot" />
+                <span>
+                  Krok <strong>{currentStep + 1}</strong> z {totalSteps}
+                </span>
+                {currentStep < nLevel && (
+                  <span className="nback-warmup-tag">
+                    Buforowanie pierwszych {nLevel} {nLevel === 1 ? 'kroku' : 'kroków'}...
+                  </span>
+                )}
+              </>
+            ) : (
+              <span>Gotowy do sesji Dual {nLevel}-Back ({20 + nLevel} kroków)</span>
+            )}
+          </div>
+          <div className="nback-progress-track">
+            <div className="nback-progress-fill" style={{ width: `${progressPercent}%` }} />
+          </div>
+        </div>
+
+        {/* 3x3 Spatial Grid */}
+        <div className="nback-grid" role="grid" aria-label="Siatka 3 na 3 Dual N-Back">
+          {Array.from({ length: 9 }).map((_, idx) => {
+            const isCenter = idx === 4;
+            const isHighlighted = isRunning && isFlashActive && activeItem && activeItem.pos === idx;
+
+            return (
+              <div
+                key={idx}
+                className={`nback-cell ${isCenter ? 'center-cell' : ''} ${
+                  isHighlighted ? 'active' : ''
+                }`}
+              >
+                {isCenter && (
+                  <div className="nback-center-indicator">
+                    {isRunning && isFlashActive && activeItem && showLetterHint ? (
+                      <span className="nback-center-letter">{activeItem.letter}</span>
+                    ) : (
+                      <span className="nback-crosshair">+</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Response Controls */}
+        <div className="nback-actions-row">
+          <button
+            type="button"
+            disabled={!canRespond}
+            className={`nback-match-btn ${posFeedback ? `feedback-${posFeedback}` : ''}`}
+            onClick={() => handleUserResponse('pos')}
+          >
+            <div className="nback-match-btn-top">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <rect x="7" y="7" width="4" height="4" fill="currentColor" />
+              </svg>
+              <span>Pozycja</span>
+              <kbd className="nback-kbd">A</kbd>
+            </div>
+            <span className="nback-match-sub">
+              {posFeedback === 'hit'
+                ? 'Trafienie!'
+                : posFeedback === 'false_alarm'
+                ? 'Pomyłka'
+                : `Taka sama pozycja co ${nLevel} wstecz`}
+            </span>
+          </button>
+
+          {!isRunning ? (
+            <button type="button" className="nback-primary-btn" onClick={startGame}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <polygon points="6 4 20 12 6 20 6 4" />
+              </svg>
+              <span>Start Dual {nLevel}-Back</span>
+            </button>
+          ) : (
+            <button type="button" className="nback-stop-btn" onClick={stopGame}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+              <span>Zatrzymaj</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            disabled={!canRespond}
+            className={`nback-match-btn ${letterFeedback ? `feedback-${letterFeedback}` : ''}`}
+            onClick={() => handleUserResponse('letter')}
+          >
+            <div className="nback-match-btn-top">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+              <span>Litera / Dźwięk</span>
+              <kbd className="nback-kbd">L</kbd>
+            </div>
+            <span className="nback-match-sub">
+              {letterFeedback === 'hit'
+                ? 'Trafienie!'
+                : letterFeedback === 'false_alarm'
+                ? 'Pomyłka'
+                : `Taka sama litera co ${nLevel} wstecz`}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Round Result Summary */}
+      {roundResult && !isRunning && (
+        <div className="nback-results-box">
+          <div className="nback-results-header">
+            <div>
+              <span className="nback-results-eyebrow">WYNIK SESJI DUAL {roundResult.nLevel}-BACK</span>
+              <h4>Skuteczność całkowita: {roundResult.totalAccuracy}%</h4>
+            </div>
+            <div className="nback-recommendation-pill">
+              {roundResult.totalAccuracy >= 80
+                ? `Świetny wynik! Twój bufor jest gotowy na poziom ${Math.min(4, roundResult.nLevel + 1)}-Back.`
+                : roundResult.totalAccuracy >= 50
+                ? `Optymalna strefa neuroplastyczności. Kontynuuj poziom ${roundResult.nLevel}-Back.`
+                : `Zalecana rozgrzewka na poziomie ${Math.max(1, roundResult.nLevel - 1)}-Back.`}
+            </div>
+          </div>
+
+          <div className="nback-results-grid">
+            <div className="nback-metric-card">
+              <div className="nback-metric-top">
+                <span>Pamięć przestrzenna (Pozycja)</span>
+                <strong>{roundResult.posAccuracy}%</strong>
+              </div>
+              <div className="nback-metric-details">
+                <span>Trafienia: <strong>{roundResult.posHits}</strong></span>
+                <span>Pominięcia: <strong>{roundResult.posMisses}</strong></span>
+                <span>Błędy: <strong>{roundResult.posFalseAlarms}</strong></span>
+              </div>
+            </div>
+
+            <div className="nback-metric-card">
+              <div className="nback-metric-top">
+                <span>Pamięć fonologiczna (Litery EN)</span>
+                <strong>{roundResult.letterAccuracy}%</strong>
+              </div>
+              <div className="nback-metric-details">
+                <span>Trafienia: <strong>{roundResult.letterHits}</strong></span>
+                <span>Pominięcia: <strong>{roundResult.letterMisses}</strong></span>
+                <span>Błędy: <strong>{roundResult.letterFalseAlarms}</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const BreathingExercise = () => {
   const [phase, setPhase] = useState('idle'); // idle, inhale, hold, exhale
@@ -66,14 +718,24 @@ const GoodToKnow = () => {
     <div className="good-to-know-container">
       <div className="good-to-know-content">
         <div className="gtk-header">
+          <span className="gtk-eyebrow">NEURONAUKA I TRENING POZNAWCZY</span>
           <h2>Jak przygotować mózg do angielskiego</h2>
-          <p className="subtitle">Proste zasady dla maksymalnych efektów oparte na neuronauce.</p>
+          <p className="subtitle">
+            Praktyczny trening pamięci roboczej (Dual N-Back) oraz zasady przyswajania języka oparte na neurobiologii.
+          </p>
         </div>
 
         <div className="gtk-body">
-          
+          {/* Interactive Dual N-Back Cognitive Training Section */}
           <div className="gtk-section">
-            <h3 className="section-title"><span className="section-number">1</span> Wyciszenie i start (Reset układu nerwowego)</h3>
+            <h3 className="section-title">
+              <span className="section-number">1</span> Trening pojemności pamięci roboczej (Dual N-Back)
+            </h3>
+            <DualNBackGame />
+          </div>
+
+          <div className="gtk-section">
+            <h3 className="section-title"><span className="section-number">2</span> Wyciszenie i start (Reset układu nerwowego)</h3>
             <div className="gtk-cards">
               <div className="gtk-card">
                 <h4>Zresetuj stres w 30 sekund</h4>
@@ -100,7 +762,7 @@ const GoodToKnow = () => {
           </div>
 
           <div className="gtk-section">
-            <h3 className="section-title"><span className="section-number">2</span> Trening tematyczny i przyswajanie</h3>
+            <h3 className="section-title"><span className="section-number">3</span> Trening tematyczny i przyswajanie</h3>
             <div className="gtk-cards">
               <div className="gtk-card">
                 <h4>Zasada wąskiego kontekstu (Narrow Input)</h4>
@@ -110,7 +772,7 @@ const GoodToKnow = () => {
           </div>
 
           <div className="gtk-section">
-            <h3 className="section-title"><span className="section-number">3</span> Czytanie bez słownika (Wzorce zamiast analizy)</h3>
+            <h3 className="section-title"><span className="section-number">4</span> Czytanie bez słownika (Wzorce zamiast analizy)</h3>
             <div className="gtk-cards">
               <div className="gtk-card">
                 <h4>Poluj na szkielet zdania</h4>
@@ -132,7 +794,7 @@ const GoodToKnow = () => {
           </div>
 
           <div className="gtk-section">
-            <h3 className="section-title"><span className="section-number">4</span> Rozumienie ze słuchu (Wyłapywanie rytmu)</h3>
+            <h3 className="section-title"><span className="section-number">5</span> Rozumienie ze słuchu (Wyłapywanie rytmu)</h3>
             <div className="gtk-cards">
               <div className="gtk-card">
                 <h4>Słuchaj tylko słów z akcentem</h4>
@@ -154,7 +816,7 @@ const GoodToKnow = () => {
           </div>
 
           <div className="gtk-section">
-            <h3 className="section-title"><span className="section-number">5</span> Mówienie bez paraliżu (Komunikacja, nie egzamin)</h3>
+            <h3 className="section-title"><span className="section-number">6</span> Mówienie bez paraliżu (Komunikacja, nie egzamin)</h3>
             <div className="gtk-cards">
               <div className="gtk-card">
                 <h4>Reguła 80% prostoty</h4>
