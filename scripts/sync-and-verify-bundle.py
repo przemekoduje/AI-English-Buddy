@@ -148,3 +148,4 @@ if __name__ == "__main__":
     sync_and_build_keepgoals()
     record_speakling_commit()
     verify_bundle_integrity()
+
