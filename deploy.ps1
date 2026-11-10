@@ -1,4 +1,4 @@
-﻿# PowerShell Deployment Script for Windows
+# PowerShell Deployment Script for Windows
 
 $ErrorActionPreference = "Stop"
 
@@ -13,11 +13,11 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
 }
 Set-Location ..
 
-Write-Host "=== 2. Budowanie aplikacji przeglądarkowej (React Web) ==="
+Write-Host "=== 2. Budowanie aplikacji przegladarkowej (React Web) ==="
 $env:REACT_APP_API_URL=""
 npm run build --prefix frontend
 
-Write-Host "=== 3. Łączenie buildów (kopiowanie wersji mobilnej do /speakling/mobile oraz /mobile) ==="
+Write-Host "=== 3. Laczenie buildow (kopiowanie wersji mobilnej do /speakling/mobile oraz /mobile) ==="
 if (Test-Path frontend/build/speakling/mobile) {
     Remove-Item -Recurse -Force frontend/build/speakling/mobile
 }
@@ -30,31 +30,34 @@ if (Test-Path frontend/build/mobile) {
 New-Item -ItemType Directory -Force -Path frontend/build/mobile
 Copy-Item -Recurse -Force mobile/dist/* frontend/build/mobile/
 
-Write-Host "=== 3b. Konfiguracja Portalu Głównego przemokoduje.com ==="
+Write-Host "=== 3b. Konfiguracja Portalu Glownego przemokoduje.com ==="
 Copy-Item -Force frontend/build/index.html frontend/build/speakling.html
 if (Test-Path portal/index.html) {
     Copy-Item -Force portal/index.html frontend/build/index.html
 }
 
-Write-Host "=== 3c. Synchronizacja KeepGoals i weryfikacja integralności całego ekosystemu ==="
+$CurrentCommit = (git rev-parse HEAD).Trim()
+[System.IO.File]::WriteAllText((Join-Path $PSScriptRoot "frontend/build/.speakling-commit"), $CurrentCommit)
+
+Write-Host "=== 3c. Synchronizacja KeepGoals i weryfikacja integralnosci calego ekosystemu ==="
 if (Get-Command python -ErrorAction SilentlyContinue) {
     python scripts/sync-and-verify-bundle.py
 } else {
     python3 scripts/sync-and-verify-bundle.py
 }
 if ($LASTEXITCODE -ne 0) {
-    throw "Weryfikacja integralności pakietu nie powiodła się — wdrożenie przerwane."
+    throw "Weryfikacja integralnosci pakietu nie powiodla sie - wdrozenie przerwane."
 }
 
 # === 4. Publikacja aplikacji na Firebase Hosting ===
 $TargetProject = if ($env:FIREBASE_PROJECT) { $env:FIREBASE_PROJECT } else { "speakling-live-temp" }
-Write-Host "Wdrażanie na projekt Firebase: $TargetProject..." -ForegroundColor Cyan
+Write-Host "Wdrazanie na projekt Firebase: $TargetProject..." -ForegroundColor Cyan
 npx firebase-tools deploy --only hosting --project $TargetProject
 
-Write-Host "Wdrażanie na projekt Firebase: przemokoduje-online..." -ForegroundColor Cyan
+Write-Host "Wdrazanie na projekt Firebase: przemokoduje-online..." -ForegroundColor Cyan
 npx firebase-tools deploy --only hosting --project przemokoduje-online
 
-Write-Host "=== WDROŻENIE ZAKOŃCZONE SUKCESEM! ===" -ForegroundColor Green
-Write-Host "Adres działający (Hosting): https://$TargetProject.web.app/speakling"
-Write-Host "Adres główny (przemokoduje): https://przemokoduje-online.web.app/speakling (https://przemokoduje.com/speakling)"
+Write-Host "=== WDROZENIE ZAKONCZONE SUKCESEM! ===" -ForegroundColor Green
+Write-Host "Adres dzialajacy (Hosting): https://$TargetProject.web.app/speakling"
+Write-Host "Adres glowny (przemokoduje): https://przemokoduje-online.web.app/speakling (https://przemokoduje.com/speakling)"
 Write-Host "Adres mobilny: https://$TargetProject.web.app/speakling/mobile/"
