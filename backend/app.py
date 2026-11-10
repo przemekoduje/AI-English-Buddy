@@ -6203,6 +6203,105 @@ def check_translation():
         return jsonify({"error": f"Błąd sprawdzania tłumaczenia: {str(e)}"}), 500
 
 
+FLUENCY_VALIDATION_CACHE = {}
+
+@app.route("/api/fluency/validate", methods=['POST'])
+def validate_fluency_word():
+    user_email = None
+    try:
+        user_email = get_user_from_request()
+    except Exception:
+        pass
+    if not user_email:
+        user_email = "guest@speakling.ai"
+
+    data = request.get_json(silent=True) or {}
+    test_type = (data.get('type') or 'semantic').strip().lower()  # 'phonemic' or 'semantic'
+    word = (data.get('word') or '').strip().lower()
+    target = (data.get('target') or '').strip().lower()  # letter (np. 'k') lub category id ('tools')
+    category_label = (data.get('category_label') or '').strip()
+    language = (data.get('language') or 'en').strip().lower()
+
+    if not word or not target:
+        return jsonify({"valid": False, "reason": "Brakujące słowo lub cel", "word": word}), 400
+
+    cache_key = f"{test_type}::{target}::{word}::{language}"
+    if cache_key in FLUENCY_VALIDATION_CACHE:
+        return jsonify(FLUENCY_VALIDATION_CACHE[cache_key]), 200
+
+    if test_type == 'phonemic':
+        # Sprawdzenie pierwszej litery
+        first_char = word[0] if word else ''
+        if first_char != target:
+            res = {
+                "valid": False,
+                "reason": f"Słowo '{word}' nie zaczyna się na literę '{target.upper()}'",
+                "word": word,
+                "is_proper_noun": False
+            }
+            FLUENCY_VALIDATION_CACHE[cache_key] = res
+            return jsonify(res), 200
+
+        system_prompt = (
+            "Jesteś precyzyjnym egzaminatorem neuropsychologicznym w teście płynności fonemicznej (dostęp leksykalny, ośrodek Broki).\n"
+            f"Docelowa litera: '{target.upper()}'.\n"
+            "Zadanie: Zbadaj słowo podane przez użytkownika w języku angielskim lub polskim.\n"
+            "ZASADY TESTU FONEMICZNEGO:\n"
+            "1. Słowo musi być autentycznym, istniejącym w słowniku wyrazem (rzeczownik, czasownik, przymiotnik, przysłówek itp.).\n"
+            "2. IMIONA ORAZ NAZWY WŁASNE (ludzie, miasta, kraje, firmy, marki - np. Kamil, Kevin, Kraków, Polska, Nike) są w tym teście BEZWZGLĘDNIE ZAKAZANE. Jeśli to nazwa własna, ustaw 'is_proper_noun': true i 'valid': false.\n"
+            "3. Zwróć wyłącznie poprawny obiekt JSON:\n"
+            "{\n"
+            "  \"valid\": true,\n"
+            "  \"is_proper_noun\": false,\n"
+            "  \"reason\": \"Krótki powód po polsku (max 1 zdanie)\",\n"
+            "  \"normalized\": \"forma podstawowa słowa\"\n"
+            "}"
+        )
+        user_prompt = f"Oceń słowo fonemiczne: '{word}' na literę '{target.upper()}'"
+
+    else:
+        # Płynność semantyczna
+        system_prompt = (
+            "Jesteś precyzyjnym egzaminatorem neuropsychologicznym w teście płynności semantycznej (wyszukiwanie pojęciowe w płacie skroniowym).\n"
+            f"Kategoria docelowa: '{category_label}' (identyfikator: '{target}').\n"
+            "Zadanie: Zbadaj czy podane słowo (w języku angielskim lub polskim) rzeczywiście i logicznie należy do tej kategorii pojęciowej.\n"
+            "ZASADY TESTU SEMANTYCZNEGO:\n"
+            "1. Słowo musi być obiektem, elementem, przedstawicielem lub pojęciem wchodzącym w skład tej kategorii.\n"
+            "2. Jeśli słowo jest z zupełnie innej kategorii lub jest bezsensowne, ustaw 'valid': false.\n"
+            "3. Zwróć wyłącznie poprawny obiekt JSON:\n"
+            "{\n"
+            "  \"valid\": true,\n"
+            "  \"reason\": \"Krótki powód po polsku (np. 'Należy do kategorii narzędzia' lub 'Nie pasuje do tej kategorii')\",\n"
+            "  \"normalized\": \"forma podstawowa słowa\"\n"
+            "}"
+        )
+        user_prompt = f"Oceń czy słowo '{word}' należy do kategorii '{category_label}'"
+
+    try:
+        ai_response = track_chat_completion(
+            user_email=user_email,
+            feature=f"fluency_{test_type}",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"},
+            model_tier="cheap"
+        )
+        content = ai_response.choices[0].message.content.strip()
+        result_json = json.loads(content)
+        result_json["word"] = word
+        if len(FLUENCY_VALIDATION_CACHE) > 5000:
+            FLUENCY_VALIDATION_CACHE.clear()
+        FLUENCY_VALIDATION_CACHE[cache_key] = result_json
+        return jsonify(result_json), 200
+    except Exception as e:
+        print(f"Error in validate_fluency_word: {e}", flush=True)
+        valid = True if test_type == 'semantic' else (word[0] == target)
+        reason = "Zaakceptowano (weryfikacja lokalna)" if valid else f"Nie zaczyna się na '{target.upper()}'"
+        return jsonify({"valid": valid, "reason": reason, "word": word, "normalized": word}), 200
+
+
 # ### NOWY ENDPOINT: WYSYŁANIE SŁÓW Z NOTATNIKA NA E-MAIL ###
 @app.route("/api/send-notebook-email", methods=['POST'])
 def send_notebook_email():

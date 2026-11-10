@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { API_BASE_URL } from '../config';
 import './GoodToKnow.css';
 
 const LETTERS = ['C', 'H', 'K', 'L', 'Q', 'R', 'S', 'T'];
@@ -818,12 +819,90 @@ export const BreathingModal = ({ isOpen, onClose }) => {
 const PHONEMIC_LETTERS = ['K', 'S', 'P', 'M', 'B', 'T', 'C', 'R', 'D', 'W', 'F', 'L'];
 const PHONEMIC_STORAGE_KEY = 'speakling_phonemic_fluency_v1';
 
+// Speech Recognition support check
+const SpeechRecognition = typeof window !== 'undefined'
+  ? (window.SpeechRecognition || window.webkitSpeechRecognition)
+  : null;
+
+// Normalize stem / plural to eliminate duplicate forms (e.g. cat vs cats, drill vs drilling)
+const normalizeStem = (word) => {
+  if (!word) return '';
+  let w = word.toLowerCase().trim();
+  if (w.endsWith('ies') && w.length > 4) return w.slice(0, -3) + 'y';
+  if (w.endsWith('es') && w.length > 4 && (w.endsWith('shes') || w.endsWith('ches') || w.endsWith('xes') || w.endsWith('sses'))) return w.slice(0, -2);
+  if (w.endsWith('s') && !w.endsWith('ss') && w.length > 3) return w.slice(0, -1);
+  if (w.endsWith('ing') && w.length > 5) return w.slice(0, -3);
+  if (w.endsWith('ed') && w.length > 4) return w.slice(0, -2);
+  if (w.endsWith('ami') && w.length > 5) return w.slice(0, -3);
+  if (w.endsWith('ach') && w.length > 5) return w.slice(0, -3);
+  if (w.endsWith('ów') && w.length > 4) return w.slice(0, -2);
+  if (w.endsWith('om') && w.length > 4) return w.slice(0, -2);
+  if (w.endsWith('y') && w.length > 4) return w.slice(0, -1);
+  if (w.endsWith('i') && w.length > 4) return w.slice(0, -1);
+  if (w.endsWith('e') && w.length > 4) return w.slice(0, -1);
+  return w;
+};
+
+// Acoustic feedback chime (Web Audio API)
+const playChime = (type = 'success') => {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    if (type === 'success') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.2);
+    } else if (type === 'duplicate') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(320, ctx.currentTime);
+      osc.frequency.setValueAtTime(260, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.22);
+    } else {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, ctx.currentTime);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.18);
+    }
+  } catch (e) {
+    // audio context restrictions
+  }
+};
+
+const COMMON_SEMANTIC_WORDS = {
+  tools: new Set(['hammer', 'drill', 'screwdriver', 'wrench', 'saw', 'pliers', 'axe', 'chisel', 'level', 'tape measure', 'sander', 'vise', 'nail', 'screw', 'bolt', 'spanner', 'file', 'plane', 'crowbar', 'młotek', 'wiertarka', 'śrubokręt', 'piła', 'klucz', 'kombinerki', 'szczypce', 'siekiera', 'dłuto', 'poziomica', 'imadło', 'pilnik', 'strug', 'gwóźdź', 'śruba', 'wkrętarka', 'szlifierka', 'cęgi', 'lutownica', 'miarka']),
+  trees: new Set(['oak', 'pine', 'birch', 'maple', 'willow', 'spruce', 'beech', 'elm', 'ash', 'poplar', 'cedar', 'fir', 'chestnut', 'linden', 'palm', 'cactus', 'fern', 'rose', 'tulip', 'daisy', 'dąb', 'sosna', 'brzoza', 'klon', 'wierzba', 'świerk', 'buk', 'wiąz', 'jesion', 'topola', 'cedr', 'jodła', 'kasztan', 'lipa', 'palma', 'paproć', 'róża', 'tulipan', 'modrzew', 'olcha', 'jarzębina', 'kaktus', 'orchidea', 'fiołek']),
+  africa: new Set(['lion', 'giraffe', 'zebra', 'elephant', 'cheetah', 'leopard', 'rhino', 'hippo', 'hyena', 'buffalo', 'antelope', 'gorilla', 'chimpanzee', 'baboon', 'ostrich', 'warthog', 'crocodile', 'meerkat', 'gazelle', 'lew', 'żyrafa', 'zebra', 'słoń', 'gepard', 'lampart', 'nosorożec', 'hipopotam', 'hiena', 'bawół', 'antylopa', 'goryl', 'szympans', 'pawian', 'struś', 'guziec', 'krokodyl', 'surykatka', 'gazela', 'kobra', 'flaming']),
+  kitchen: new Set(['pan', 'pot', 'knife', 'fork', 'spoon', 'kettle', 'blender', 'toaster', 'microwave', 'fridge', 'oven', 'stove', 'plate', 'bowl', 'cup', 'mug', 'glass', 'cutting board', 'spatula', 'whisk', 'colander', 'garnek', 'patelnia', 'nóż', 'widelec', 'łyżka', 'czajnik', 'blender', 'toster', 'mikrofalówka', 'lodówka', 'piekarnik', 'kuchenka', 'talerz', 'miska', 'kubek', 'filiżanka', 'szklanka', 'deska', 'łopatka', 'trzepaczka', 'durszlak', 'chlebak']),
+  transport: new Set(['car', 'bus', 'train', 'plane', 'bicycle', 'bike', 'motorcycle', 'boat', 'ship', 'tram', 'subway', 'metro', 'helicopter', 'ferry', 'truck', 'scooter', 'taxi', 'van', 'samochód', 'auto', 'autobus', 'pociąg', 'samolot', 'rower', 'motocykl', 'łódź', 'statek', 'tramwaj', 'metro', 'helikopter', 'śmigłowiec', 'prom', 'ciężarówka', 'hulajnoga', 'taksówka', 'furgonetka']),
+  jobs: new Set(['doctor', 'teacher', 'engineer', 'lawyer', 'nurse', 'chef', 'cook', 'pilot', 'architect', 'artist', 'driver', 'police officer', 'firefighter', 'dentist', 'programmer', 'accountant', 'scientist', 'mechanic', 'lekarz', 'nauczyciel', 'inżynier', 'prawnik', 'pielęgniarka', 'kucharz', 'szef kuchni', 'pilot', 'architekt', 'artysta', 'kierowca', 'policjant', 'strażak', 'dentysta', 'programista', 'księgowy', 'naukowiec', 'mechanik', 'aktor', 'pisarz']),
+  fruits: new Set(['apple', 'banana', 'orange', 'strawberry', 'carrot', 'potato', 'tomato', 'cucumber', 'grape', 'peach', 'plum', 'pear', 'lemon', 'watermelon', 'onion', 'garlic', 'broccoli', 'pepper', 'cabbage', 'jabłko', 'banan', 'pomarańcza', 'truskawka', 'marchew', 'marchewka', 'ziemniak', 'pomidor', 'ogórek', 'winogrono', 'brzoskwinia', 'śliwka', 'gruszka', 'cytryna', 'arbuz', 'cebula', 'czosnek', 'brokuł', 'papryka', 'kapusta', 'malina', 'jagoda', 'borówka']),
+  office: new Set(['desk', 'chair', 'computer', 'laptop', 'monitor', 'keyboard', 'mouse', 'printer', 'stapler', 'paper', 'pen', 'pencil', 'notebook', 'folder', 'binder', 'scissors', 'tape', 'envelope', 'calendar', 'biurko', 'krzesło', 'fotel', 'komputer', 'laptop', 'monitor', 'klawiatura', 'myszka', 'drukarka', 'zszywacz', 'papier', 'długopis', 'ołówek', 'zeszyt', 'notatnik', 'segregator', 'nożyczki', 'taśma', 'koperta', 'kalendarz', 'teczka'])
+};
+
 export const PhonemicFluencyGame = ({ onClose }) => {
   const [selectedLetter, setSelectedLetter] = useState('K');
   const [timeLeft, setTimeLeft] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [wordsList, setWordsList] = useState([]);
+  const [rejectedWords, setRejectedWords] = useState([]);
+  const [duplicatesCount, setDuplicatesCount] = useState(0);
   const [wordInput, setWordInput] = useState('');
   const [inputError, setInputError] = useState('');
   const [roundFinished, setRoundFinished] = useState(false);
@@ -835,6 +914,35 @@ export const PhonemicFluencyGame = ({ onClose }) => {
     }
   });
 
+  // Speech Recognition state
+  const [isMicActive, setIsMicActive] = useState(true);
+  const [speechLang, setSpeechLang] = useState('en-US'); // 'en-US' or 'pl-PL'
+  const [liveTranscript, setLiveTranscript] = useState('');
+  const [micError, setMicError] = useState('');
+  const [feedbackNotice, setFeedbackNotice] = useState(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+
+  // Synchronous refs for accurate duplicate rejection
+  const acceptedSetRef = useRef(new Set());
+  const recognitionRef = useRef(null);
+  const isRunningRef = useRef(false);
+  const isMicActiveRef = useRef(true);
+  const speechLangRef = useRef('en-US');
+  const selectedLetterRef = useRef(selectedLetter);
+  const noticeTimerRef = useRef(null);
+
+  useEffect(() => {
+    selectedLetterRef.current = selectedLetter;
+  }, [selectedLetter]);
+
+  useEffect(() => {
+    isMicActiveRef.current = isMicActive;
+  }, [isMicActive]);
+
+  useEffect(() => {
+    speechLangRef.current = speechLang;
+  }, [speechLang]);
+
   useEffect(() => {
     if (!isRunning) return;
     if (timeLeft > 0) {
@@ -842,6 +950,7 @@ export const PhonemicFluencyGame = ({ onClose }) => {
       return () => clearTimeout(timer);
     } else {
       setIsRunning(false);
+      isRunningRef.current = false;
       setRoundFinished(true);
       if (wordCount > bestScore) {
         setBestScore(wordCount);
@@ -852,18 +961,227 @@ export const PhonemicFluencyGame = ({ onClose }) => {
     }
   }, [isRunning, timeLeft, wordCount, bestScore]);
 
+  const showFeedback = useCallback((notice) => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    setFeedbackNotice(notice);
+    noticeTimerRef.current = setTimeout(() => {
+      setFeedbackNotice(null);
+    }, 3800);
+  }, []);
+
+  const evaluateWord = useCallback(async (rawWord) => {
+    if (!rawWord) return;
+    const clean = rawWord.toLowerCase().replace(/[^a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ'-]/g, '').trim();
+    if (!clean || clean.length < 2) return;
+
+    const stem = normalizeStem(clean);
+
+    // 1. DUPLICATE CHECK (Odrzucanie powtórzeń)
+    if (acceptedSetRef.current.has(clean) || acceptedSetRef.current.has(stem)) {
+      playChime('duplicate');
+      setDuplicatesCount((prev) => prev + 1);
+      showFeedback({
+        type: 'duplicate',
+        word: clean,
+        message: `Powtórzenie: słowo „${clean}” padło już wcześniej! (0 pkt)`
+      });
+      setRejectedWords((prev) => [
+        { word: clean, reason: 'Powtórzenie (już zaliczone)', type: 'duplicate', timestamp: Date.now() },
+        ...prev.filter((r) => r.word !== clean)
+      ]);
+      return;
+    }
+
+    // 2. PHONEMIC LETTER CHECK
+    const targetChar = selectedLetterRef.current.toLowerCase();
+    if (clean[0] !== targetChar) {
+      playChime('error');
+      showFeedback({
+        type: 'error',
+        word: clean,
+        message: `Błąd: „${clean}” nie zaczyna się na literę „${selectedLetterRef.current}”! (0 pkt)`
+      });
+      setRejectedWords((prev) => [
+        { word: clean, reason: `Nie zaczyna się na „${selectedLetterRef.current}”`, type: 'wrong_letter', timestamp: Date.now() },
+        ...prev.filter((r) => r.word !== clean)
+      ]);
+      return;
+    }
+
+    // 3. AI VALIDATION VIA BACKEND
+    setIsEvaluating(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/fluency/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'phonemic',
+          word: clean,
+          target: targetChar,
+          language: speechLangRef.current.startsWith('pl') ? 'pl' : 'en'
+        })
+      });
+      const data = await res.json();
+      if (data.valid) {
+        acceptedSetRef.current.add(clean);
+        acceptedSetRef.current.add(stem);
+        if (data.normalized) {
+          acceptedSetRef.current.add(normalizeStem(data.normalized.toLowerCase()));
+        }
+        playChime('success');
+        setWordsList((prev) => [
+          { word: clean, normalized: data.normalized || clean, reason: data.reason || 'Poprawne słowo', timestamp: Date.now() },
+          ...prev
+        ]);
+        setWordCount((c) => c + 1);
+        showFeedback({
+          type: 'success',
+          word: clean,
+          message: `Zaakceptowano: „${clean}” (+1)`
+        });
+        setInputError('');
+      } else {
+        playChime('error');
+        setRejectedWords((prev) => [
+          { word: clean, reason: data.reason || 'Odrzucone przez AI', type: data.is_proper_noun ? 'proper_noun' : 'invalid', timestamp: Date.now() },
+          ...prev.filter((r) => r.word !== clean)
+        ]);
+        showFeedback({
+          type: 'error',
+          word: clean,
+          message: data.reason || `Odrzucono słowo „${clean}” (0 pkt)`
+        });
+      }
+    } catch (err) {
+      // offline/fallback: word starts with correct letter
+      acceptedSetRef.current.add(clean);
+      acceptedSetRef.current.add(stem);
+      playChime('success');
+      setWordsList((prev) => [
+        { word: clean, normalized: clean, reason: 'Zaakceptowano', timestamp: Date.now() },
+        ...prev
+      ]);
+      setWordCount((c) => c + 1);
+      showFeedback({
+        type: 'success',
+        word: clean,
+        message: `Zaakceptowano: „${clean}” (+1)`
+      });
+      setInputError('');
+    } finally {
+      setIsEvaluating(false);
+    }
+  }, [showFeedback]);
+
+  // Continuous Speech Recognition listener
+  useEffect(() => {
+    if (!isRunning || !isMicActive || !SpeechRecognition) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.onerror = null;
+          recognitionRef.current.stop();
+        } catch (e) {}
+        recognitionRef.current = null;
+      }
+      return;
+    }
+
+    let isMounted = true;
+    let rec = null;
+
+    try {
+      rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = speechLang;
+      rec.maxAlternatives = 1;
+
+      rec.onresult = (event) => {
+        if (!isRunningRef.current) return;
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const res = event.results[i];
+          const text = res[0].transcript;
+          if (res.isFinal) {
+            const tokens = text.trim().split(/\s+/);
+            tokens.forEach((tok) => {
+              const clean = tok.toLowerCase().replace(/[^a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ'-]/g, '').trim();
+              if (clean && clean.length >= 2) {
+                evaluateWord(clean);
+              }
+            });
+          } else {
+            interim += ' ' + text;
+          }
+        }
+        setLiveTranscript(interim.trim());
+      };
+
+      rec.onerror = (e) => {
+        if (e.error === 'not-allowed') {
+          setMicError('Brak uprawnień do mikrofonu w przeglądarce.');
+          setIsMicActive(false);
+        }
+      };
+
+      rec.onend = () => {
+        if (isMounted && isRunningRef.current && isMicActiveRef.current) {
+          try {
+            rec.start();
+          } catch (e) {
+            setTimeout(() => {
+              if (isMounted && isRunningRef.current && isMicActiveRef.current) {
+                try { rec.start(); } catch (err) {}
+              }
+            }, 200);
+          }
+        }
+      };
+
+      rec.start();
+      recognitionRef.current = rec;
+      setMicError('');
+    } catch (err) {
+      console.warn('Speech recognition init error:', err);
+      setMicError('Nie udało się uruchomić nasłuchu mowy.');
+    }
+
+    return () => {
+      isMounted = false;
+      if (rec) {
+        try {
+          rec.onend = null;
+          rec.onerror = null;
+          rec.stop();
+        } catch (e) {}
+      }
+      recognitionRef.current = null;
+    };
+  }, [isRunning, isMicActive, speechLang, evaluateWord]);
+
   const startRound = () => {
+    acceptedSetRef.current = new Set();
     setWordCount(0);
     setWordsList([]);
+    setRejectedWords([]);
+    setDuplicatesCount(0);
     setWordInput('');
     setInputError('');
+    setFeedbackNotice(null);
+    setLiveTranscript('');
     setRoundFinished(false);
     setTimeLeft(60);
+    isRunningRef.current = true;
     setIsRunning(true);
   };
 
   const stopRound = useCallback(() => {
+    isRunningRef.current = false;
     setIsRunning(false);
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (e) {}
+    }
     if (timeLeft < 60 && wordCount > 0) {
       setRoundFinished(true);
       if (wordCount > bestScore) {
@@ -883,12 +1201,16 @@ export const PhonemicFluencyGame = ({ onClose }) => {
     setRoundFinished(false);
     setWordCount(0);
     setWordsList([]);
+    setRejectedWords([]);
+    setDuplicatesCount(0);
+    acceptedSetRef.current = new Set();
   };
 
-  const handleIncrementVoiceCount = useCallback(() => {
+  const handleManualIncrement = useCallback(() => {
     if (!isRunning) return;
     setWordCount((c) => c + 1);
     setInputError('');
+    playChime('success');
   }, [isRunning]);
 
   const handleAddTypedWord = (e) => {
@@ -896,25 +1218,14 @@ export const PhonemicFluencyGame = ({ onClose }) => {
     if (!isRunning) return;
     const cleaned = wordInput.trim();
     if (!cleaned) return;
-
-    if (cleaned[0].toUpperCase() !== selectedLetter.toUpperCase()) {
-      setInputError(`Słowo musi zaczynać się na literę „${selectedLetter}”.`);
-      return;
-    }
-    if (wordsList.some((w) => w.toLowerCase() === cleaned.toLowerCase())) {
-      setInputError('To słowo zostało już zapisane.');
-      return;
-    }
-
-    setInputError('');
-    setWordsList((prev) => [cleaned, ...prev]);
-    setWordCount((c) => c + 1);
+    evaluateWord(cleaned);
     setWordInput('');
   };
 
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === 'Escape' && onClose) {
+        isRunningRef.current = false;
         setIsRunning(false);
         onClose();
         return;
@@ -923,12 +1234,12 @@ export const PhonemicFluencyGame = ({ onClose }) => {
       if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
       if (e.code === 'Space') {
         e.preventDefault();
-        handleIncrementVoiceCount();
+        handleManualIncrement();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isRunning, onClose, handleIncrementVoiceCount]);
+  }, [isRunning, onClose, handleManualIncrement]);
 
   const progressPct = Math.round(((60 - timeLeft) / 60) * 100);
 
@@ -950,7 +1261,7 @@ export const PhonemicFluencyGame = ({ onClose }) => {
           </div>
           <h3>Płynność fonemiczna</h3>
           <p className="nback-scientific-desc">
-            Ustaw stoper na <strong>60 sekund</strong>. Wymień na głos jak najwięcej słów na jedną literę (np. na literę „<strong>{selectedLetter}</strong>”, omijając imiona i nazwy własne). Norma to <strong>12–15 słów</strong>.
+            Ustaw stoper na <strong>60 sekund</strong>. Wymieniaj na głos słowa na literę „<strong>{selectedLetter}</strong>”. <strong>AI automatycznie nasłuchuje Twojego głosu</strong>, zlicza poprawne słowa, odrzuca powtórzenia i nazwy własne.
           </p>
         </div>
 
@@ -976,6 +1287,7 @@ export const PhonemicFluencyGame = ({ onClose }) => {
               type="button"
               className="nback-modal-close-btn"
               onClick={() => {
+                isRunningRef.current = false;
                 setIsRunning(false);
                 onClose();
               }}
@@ -1012,6 +1324,29 @@ export const PhonemicFluencyGame = ({ onClose }) => {
             ))}
           </div>
         </div>
+
+        {/* Language & Voice Selector */}
+        <div className="nback-control-group nback-toggles">
+          <span className="nback-control-label">Język mowy:</span>
+          <div className="nback-segmented">
+            <button
+              type="button"
+              className={`nback-seg-btn ${speechLang === 'en-US' ? 'active' : ''}`}
+              onClick={() => setSpeechLang('en-US')}
+              title="Rozpoznawaj słowa w języku angielskim"
+            >
+              🇺🇸 EN
+            </button>
+            <button
+              type="button"
+              className={`nback-seg-btn ${speechLang === 'pl-PL' ? 'active' : ''}`}
+              onClick={() => setSpeechLang('pl-PL')}
+              title="Rozpoznawaj słowa w języku polskim"
+            >
+              🇵🇱 PL
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Main Fluency Arena */}
@@ -1028,14 +1363,93 @@ export const PhonemicFluencyGame = ({ onClose }) => {
           </div>
 
           <div className="fluency-hero-box">
-            <span className="fluency-box-label">WYMIENIONE SŁOWA</span>
+            <span className="fluency-box-label">ZAAKCEPTOWANE SŁOWA</span>
             <span className="fluency-big-value">{wordCount}</span>
           </div>
         </div>
 
-        <div className="nback-progress-track" style={{ maxWidth: '520px', marginBottom: '1.25rem' }}>
+        <div className="nback-progress-track" style={{ maxWidth: '560px', marginBottom: '1rem' }}>
           <div className="nback-progress-fill" style={{ width: `${progressPct}%` }} />
         </div>
+
+        {/* Live Microphone Panel during round */}
+        {isRunning && (
+          <div className={`fluency-mic-panel ${isMicActive ? 'listening' : 'muted'}`}>
+            <div className="fluency-mic-header">
+              <div className="fluency-mic-status-wrap">
+                <span className={`fluency-mic-dot ${isMicActive ? 'active' : ''}`} />
+                <div className="fluency-mic-info">
+                  <strong>
+                    {isMicActive ? 'AI nasłuchuje Twojego głosu' : 'Mikrofon wyciszony'}
+                  </strong>
+                  <span>
+                    {isMicActive
+                      ? `Mów płynnie na literę „${selectedLetter}” (${speechLang === 'en-US' ? 'angielski' : 'polski'}). AI automatycznie zlicza słowa i odrzuca powtórzenia.`
+                      : 'Włącz mikrofon lub wpisuj słowa w formularzu poniżej.'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`fluency-mic-toggle-btn ${isMicActive ? 'active' : ''}`}
+                onClick={() => setIsMicActive((prev) => !prev)}
+                title={isMicActive ? 'Wycisz mikrofon' : 'Włącz mikrofon'}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  {isMicActive ? (
+                    <>
+                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8" y1="23" x2="16" y2="23" />
+                    </>
+                  ) : (
+                    <>
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8" y1="23" x2="16" y2="23" />
+                    </>
+                  )}
+                </svg>
+                <span>{isMicActive ? 'Mikrofon ON' : 'Włącz nasłuch'}</span>
+              </button>
+            </div>
+
+            {liveTranscript && (
+              <div className="fluency-live-transcript">
+                <span className="live-hearing-tag">Słyszę:</span> „{liveTranscript}”
+              </div>
+            )}
+            {micError && <div className="fluency-mic-error">{micError}</div>}
+          </div>
+        )}
+
+        {/* Live Evaluation Notice / Toast */}
+        {feedbackNotice && (
+          <div className={`fluency-feedback-banner ${feedbackNotice.type}`}>
+            {feedbackNotice.type === 'success' && (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+            {feedbackNotice.type === 'duplicate' && (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            )}
+            {feedbackNotice.type === 'error' && (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            )}
+            <span>{feedbackNotice.message}</span>
+          </div>
+        )}
 
         <div className="fluency-controls-row">
           {!isRunning ? (
@@ -1043,24 +1457,25 @@ export const PhonemicFluencyGame = ({ onClose }) => {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                 <polygon points="6 4 20 12 6 20 6 4" />
               </svg>
-              <span>Start 60 sekund (Litera „{selectedLetter}”)</span>
+              <span>Start 60 sekund z nasłuchem AI (Litera „{selectedLetter}”)</span>
             </button>
           ) : (
             <>
               <button
                 type="button"
-                className="fluency-tap-btn"
-                onClick={handleIncrementVoiceCount}
+                className="fluency-tap-btn fluency-manual-btn"
+                onClick={handleManualIncrement}
+                title="Ręczne zaliczenie słowa (np. gdy brak mikrofonu)"
               >
                 <div className="nback-match-btn-top">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="12" y1="5" x2="12" y2="19" />
                     <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
-                  <span>Zalicz wypowiedziane słowo (+1)</span>
+                  <span>Zalicz ręcznie (+1)</span>
                   <kbd className="nback-kbd">Spacja</kbd>
                 </div>
-                <span className="nback-match-sub">Kliknij lub naciśnij Spację po każdym wypowiedzianym na głos słowie</span>
+                <span className="nback-match-sub">Opcjonalny przycisk ręczny (AI zlicza mowę automatycznie)</span>
               </button>
 
               <button type="button" className="nback-stop-btn" onClick={stopRound}>
@@ -1078,20 +1493,52 @@ export const PhonemicFluencyGame = ({ onClose }) => {
             <input
               type="text"
               className="fluency-word-input"
-              placeholder={`Opcjonalnie wpisz słowo na „${selectedLetter}” i naciśnij Enter...`}
+              placeholder={`Możesz też wpisać słowo na „${selectedLetter}” i nacisnąć Enter...`}
               value={wordInput}
+              disabled={isEvaluating}
               onChange={(e) => setWordInput(e.target.value)}
             />
-            <button type="submit" className="fluency-word-submit">Dodaj</button>
+            <button type="submit" className="fluency-word-submit" disabled={isEvaluating || !wordInput.trim()}>
+              {isEvaluating ? 'Sprawdzam...' : 'Dodaj'}
+            </button>
           </form>
         )}
         {inputError && <div className="fluency-input-error">{inputError}</div>}
 
+        {/* Accepted words list */}
         {wordsList.length > 0 && (
-          <div className="fluency-tags-list">
-            {wordsList.map((w, idx) => (
-              <span key={idx} className="fluency-word-tag">{w}</span>
-            ))}
+          <div className="fluency-list-wrap">
+            <span className="fluency-list-heading">
+              Zaakceptowane słowa ({wordsList.length}):
+            </span>
+            <div className="fluency-tags-list">
+              {wordsList.map((item, idx) => (
+                <span key={idx} className="fluency-word-tag accepted">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <strong>{item.word}</strong>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Rejected or Duplicate words list */}
+        {rejectedWords.length > 0 && (
+          <div className="fluency-list-wrap rejected-wrap">
+            <span className="fluency-list-heading rejected-heading">
+              Odrzucone lub powtórzenia ({rejectedWords.length}):
+            </span>
+            <div className="fluency-tags-list">
+              {rejectedWords.map((item, idx) => (
+                <span key={idx} className={`fluency-word-tag ${item.type}`}>
+                  <span>{item.type === 'duplicate' ? '⚠️' : '✕'}</span>
+                  <span>{item.word}</span>
+                  <em className="fluency-reject-reason">({item.reason})</em>
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -1102,6 +1549,11 @@ export const PhonemicFluencyGame = ({ onClose }) => {
             <div>
               <span className="nback-results-eyebrow">PODSUMOWANIE — LITERA „{selectedLetter}”</span>
               <h4>Wynik: {wordCount} {wordCount === 1 ? 'słowo' : 'słów'} w 60 sekund</h4>
+              {duplicatesCount > 0 && (
+                <span className="fluency-dups-note">
+                  (AI odrzuciło {duplicatesCount} {duplicatesCount === 1 ? 'powtórzenie' : 'powtórzeń'})
+                </span>
+              )}
             </div>
             <div className="nback-recommendation-pill">
               {wordCount >= 16
@@ -1154,7 +1606,10 @@ export const SemanticFluencyGame = ({ onClose }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [itemCount, setItemCount] = useState(0);
   const [itemsList, setItemsList] = useState([]);
+  const [rejectedItems, setRejectedItems] = useState([]);
+  const [duplicatesCount, setDuplicatesCount] = useState(0);
   const [itemInput, setItemInput] = useState('');
+  const [inputError, setInputError] = useState('');
   const [roundFinished, setRoundFinished] = useState(false);
   const [bestScore, setBestScore] = useState(() => {
     try {
@@ -1164,6 +1619,35 @@ export const SemanticFluencyGame = ({ onClose }) => {
     }
   });
 
+  // Speech Recognition state
+  const [isMicActive, setIsMicActive] = useState(true);
+  const [speechLang, setSpeechLang] = useState('en-US'); // 'en-US' or 'pl-PL'
+  const [liveTranscript, setLiveTranscript] = useState('');
+  const [micError, setMicError] = useState('');
+  const [feedbackNotice, setFeedbackNotice] = useState(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+
+  // Synchronous refs
+  const acceptedSetRef = useRef(new Set());
+  const recognitionRef = useRef(null);
+  const isRunningRef = useRef(false);
+  const isMicActiveRef = useRef(true);
+  const speechLangRef = useRef('en-US');
+  const selectedCatRef = useRef(selectedCat);
+  const noticeTimerRef = useRef(null);
+
+  useEffect(() => {
+    selectedCatRef.current = selectedCat;
+  }, [selectedCat]);
+
+  useEffect(() => {
+    isMicActiveRef.current = isMicActive;
+  }, [isMicActive]);
+
+  useEffect(() => {
+    speechLangRef.current = speechLang;
+  }, [speechLang]);
+
   useEffect(() => {
     if (!isRunning) return;
     if (timeLeft > 0) {
@@ -1171,6 +1655,7 @@ export const SemanticFluencyGame = ({ onClose }) => {
       return () => clearTimeout(timer);
     } else {
       setIsRunning(false);
+      isRunningRef.current = false;
       setRoundFinished(true);
       if (itemCount > bestScore) {
         setBestScore(itemCount);
@@ -1181,17 +1666,233 @@ export const SemanticFluencyGame = ({ onClose }) => {
     }
   }, [isRunning, timeLeft, itemCount, bestScore]);
 
+  const showFeedback = useCallback((notice) => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    setFeedbackNotice(notice);
+    noticeTimerRef.current = setTimeout(() => {
+      setFeedbackNotice(null);
+    }, 3800);
+  }, []);
+
+  const evaluateItem = useCallback(async (rawItem) => {
+    if (!rawItem) return;
+    const clean = rawItem.toLowerCase().replace(/[^a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ'-]/g, '').trim();
+    if (!clean || clean.length < 2) return;
+
+    const stem = normalizeStem(clean);
+
+    // 1. DUPLICATE CHECK (Odrzucanie powtórzeń)
+    if (acceptedSetRef.current.has(clean) || acceptedSetRef.current.has(stem)) {
+      playChime('duplicate');
+      setDuplicatesCount((prev) => prev + 1);
+      showFeedback({
+        type: 'duplicate',
+        word: clean,
+        message: `Powtórzenie: „${clean}” padło już wcześniej! (0 pkt)`
+      });
+      setRejectedItems((prev) => [
+        { word: clean, reason: 'Powtórzenie (już zaliczone)', type: 'duplicate', timestamp: Date.now() },
+        ...prev.filter((r) => r.word !== clean)
+      ]);
+      return;
+    }
+
+    // 2. FAST LOCAL CATEGORY CHECK (Zero-latency hit for common words)
+    const activeCatId = selectedCatRef.current.id;
+    const commonSet = COMMON_SEMANTIC_WORDS[activeCatId];
+    if (commonSet && (commonSet.has(clean) || commonSet.has(stem))) {
+      acceptedSetRef.current.add(clean);
+      acceptedSetRef.current.add(stem);
+      playChime('success');
+      setItemsList((prev) => [
+        { word: clean, normalized: clean, reason: `Kategoria: ${selectedCatRef.current.label}`, timestamp: Date.now() },
+        ...prev
+      ]);
+      setItemCount((c) => c + 1);
+      showFeedback({
+        type: 'success',
+        word: clean,
+        message: `Zaakceptowano: „${clean}” (+1)`
+      });
+      setInputError('');
+      return;
+    }
+
+    // 3. AI VALIDATION VIA BACKEND
+    setIsEvaluating(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/fluency/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'semantic',
+          word: clean,
+          target: activeCatId,
+          category_label: selectedCatRef.current.label,
+          language: speechLangRef.current.startsWith('pl') ? 'pl' : 'en'
+        })
+      });
+      const data = await res.json();
+      if (data.valid) {
+        acceptedSetRef.current.add(clean);
+        acceptedSetRef.current.add(stem);
+        if (data.normalized) {
+          acceptedSetRef.current.add(normalizeStem(data.normalized.toLowerCase()));
+        }
+        playChime('success');
+        setItemsList((prev) => [
+          { word: clean, normalized: data.normalized || clean, reason: data.reason || `Kategoria: ${selectedCatRef.current.label}`, timestamp: Date.now() },
+          ...prev
+        ]);
+        setItemCount((c) => c + 1);
+        showFeedback({
+          type: 'success',
+          word: clean,
+          message: `Zaakceptowano: „${clean}” (+1)`
+        });
+        setInputError('');
+      } else {
+        playChime('error');
+        setRejectedItems((prev) => [
+          { word: clean, reason: data.reason || `Nie pasuje do kategorii: ${selectedCatRef.current.label}`, type: 'invalid_category', timestamp: Date.now() },
+          ...prev.filter((r) => r.word !== clean)
+        ]);
+        showFeedback({
+          type: 'error',
+          word: clean,
+          message: data.reason || `Słowo „${clean}” nie należy do tej kategorii (0 pkt)`
+        });
+      }
+    } catch (err) {
+      // fallback
+      acceptedSetRef.current.add(clean);
+      acceptedSetRef.current.add(stem);
+      playChime('success');
+      setItemsList((prev) => [
+        { word: clean, normalized: clean, reason: 'Zaakceptowano', timestamp: Date.now() },
+        ...prev
+      ]);
+      setItemCount((c) => c + 1);
+      showFeedback({
+        type: 'success',
+        word: clean,
+        message: `Zaakceptowano: „${clean}” (+1)`
+      });
+      setInputError('');
+    } finally {
+      setIsEvaluating(false);
+    }
+  }, [showFeedback]);
+
+  // Continuous Speech Recognition listener
+  useEffect(() => {
+    if (!isRunning || !isMicActive || !SpeechRecognition) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.onerror = null;
+          recognitionRef.current.stop();
+        } catch (e) {}
+        recognitionRef.current = null;
+      }
+      return;
+    }
+
+    let isMounted = true;
+    let rec = null;
+
+    try {
+      rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = speechLang;
+      rec.maxAlternatives = 1;
+
+      rec.onresult = (event) => {
+        if (!isRunningRef.current) return;
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const res = event.results[i];
+          const text = res[0].transcript;
+          if (res.isFinal) {
+            const tokens = text.trim().split(/\s+/);
+            tokens.forEach((tok) => {
+              const clean = tok.toLowerCase().replace(/[^a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ'-]/g, '').trim();
+              if (clean && clean.length >= 2) {
+                evaluateItem(clean);
+              }
+            });
+          } else {
+            interim += ' ' + text;
+          }
+        }
+        setLiveTranscript(interim.trim());
+      };
+
+      rec.onerror = (e) => {
+        if (e.error === 'not-allowed') {
+          setMicError('Brak uprawnień do mikrofonu w przeglądarce.');
+          setIsMicActive(false);
+        }
+      };
+
+      rec.onend = () => {
+        if (isMounted && isRunningRef.current && isMicActiveRef.current) {
+          try {
+            rec.start();
+          } catch (e) {
+            setTimeout(() => {
+              if (isMounted && isRunningRef.current && isMicActiveRef.current) {
+                try { rec.start(); } catch (err) {}
+              }
+            }, 200);
+          }
+        }
+      };
+
+      rec.start();
+      recognitionRef.current = rec;
+      setMicError('');
+    } catch (err) {
+      console.warn('Speech recognition init error:', err);
+      setMicError('Nie udało się uruchomić nasłuchu mowy.');
+    }
+
+    return () => {
+      isMounted = false;
+      if (rec) {
+        try {
+          rec.onend = null;
+          rec.onerror = null;
+          rec.stop();
+        } catch (e) {}
+      }
+      recognitionRef.current = null;
+    };
+  }, [isRunning, isMicActive, speechLang, evaluateItem]);
+
   const startRound = () => {
+    acceptedSetRef.current = new Set();
     setItemCount(0);
     setItemsList([]);
+    setRejectedItems([]);
+    setDuplicatesCount(0);
     setItemInput('');
+    setInputError('');
+    setFeedbackNotice(null);
+    setLiveTranscript('');
     setRoundFinished(false);
     setTimeLeft(60);
+    isRunningRef.current = true;
     setIsRunning(true);
   };
 
   const stopRound = useCallback(() => {
+    isRunningRef.current = false;
     setIsRunning(false);
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (e) {}
+    }
     if (timeLeft < 60 && itemCount > 0) {
       setRoundFinished(true);
       if (itemCount > bestScore) {
@@ -1211,11 +1912,16 @@ export const SemanticFluencyGame = ({ onClose }) => {
     setRoundFinished(false);
     setItemCount(0);
     setItemsList([]);
+    setRejectedItems([]);
+    setDuplicatesCount(0);
+    acceptedSetRef.current = new Set();
   };
 
-  const handleIncrementVoiceCount = useCallback(() => {
+  const handleManualIncrement = useCallback(() => {
     if (!isRunning) return;
     setItemCount((c) => c + 1);
+    setInputError('');
+    playChime('success');
   }, [isRunning]);
 
   const handleAddTypedItem = (e) => {
@@ -1223,18 +1929,14 @@ export const SemanticFluencyGame = ({ onClose }) => {
     if (!isRunning) return;
     const cleaned = itemInput.trim();
     if (!cleaned) return;
-    if (itemsList.some((w) => w.toLowerCase() === cleaned.toLowerCase())) {
-      setItemInput('');
-      return;
-    }
-    setItemsList((prev) => [cleaned, ...prev]);
-    setItemCount((c) => c + 1);
+    evaluateItem(cleaned);
     setItemInput('');
   };
 
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === 'Escape' && onClose) {
+        isRunningRef.current = false;
         setIsRunning(false);
         onClose();
         return;
@@ -1243,12 +1945,12 @@ export const SemanticFluencyGame = ({ onClose }) => {
       if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
       if (e.code === 'Space') {
         e.preventDefault();
-        handleIncrementVoiceCount();
+        handleManualIncrement();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isRunning, onClose, handleIncrementVoiceCount]);
+  }, [isRunning, onClose, handleManualIncrement]);
 
   const progressPct = Math.round(((60 - timeLeft) / 60) * 100);
 
@@ -1270,7 +1972,7 @@ export const SemanticFluencyGame = ({ onClose }) => {
           </div>
           <h3>Płynność semantyczna</h3>
           <p className="nback-scientific-desc">
-            <strong>60 sekund</strong> na wymienienie jak największej liczby obiektów z jednej kategorii (np. „narzędzia warsztatowe”, „drzewa”, „zwierzęta afrykańskie”). Ćwiczenie odblokowuje szybkie przeszukiwanie kategorii pojęciowych podczas mówienia po angielsku.
+            <strong>60 sekund</strong> na wymienienie jak największej liczby obiektów z kategorii „<strong>{selectedCat.label}</strong>”. <strong>AI aktywnie nasłuchuje</strong>, weryfikuje czy słowa pasują do kategorii i odrzuca powtórzenia.
           </p>
         </div>
 
@@ -1296,6 +1998,7 @@ export const SemanticFluencyGame = ({ onClose }) => {
               type="button"
               className="nback-modal-close-btn"
               onClick={() => {
+                isRunningRef.current = false;
                 setIsRunning(false);
                 onClose();
               }}
@@ -1332,6 +2035,29 @@ export const SemanticFluencyGame = ({ onClose }) => {
             ))}
           </div>
         </div>
+
+        {/* Language Selector */}
+        <div className="nback-control-group nback-toggles" style={{ marginTop: '0.4rem' }}>
+          <span className="nback-control-label">Język mowy:</span>
+          <div className="nback-segmented">
+            <button
+              type="button"
+              className={`nback-seg-btn ${speechLang === 'en-US' ? 'active' : ''}`}
+              onClick={() => setSpeechLang('en-US')}
+              title="Rozpoznawaj słowa w języku angielskim"
+            >
+              🇺🇸 EN
+            </button>
+            <button
+              type="button"
+              className={`nback-seg-btn ${speechLang === 'pl-PL' ? 'active' : ''}`}
+              onClick={() => setSpeechLang('pl-PL')}
+              title="Rozpoznawaj słowa w języku polskim"
+            >
+              🇵🇱 PL
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Main Fluency Arena */}
@@ -1349,14 +2075,93 @@ export const SemanticFluencyGame = ({ onClose }) => {
           </div>
 
           <div className="fluency-hero-box">
-            <span className="fluency-box-label">WYMIENIONE OBIEKTY</span>
+            <span className="fluency-box-label">ZAAKCEPTOWANE OBIEKTY</span>
             <span className="fluency-big-value">{itemCount}</span>
           </div>
         </div>
 
-        <div className="nback-progress-track" style={{ maxWidth: '520px', marginBottom: '1.25rem' }}>
+        <div className="nback-progress-track" style={{ maxWidth: '560px', marginBottom: '1rem' }}>
           <div className="nback-progress-fill" style={{ width: `${progressPct}%` }} />
         </div>
+
+        {/* Live Microphone Panel during round */}
+        {isRunning && (
+          <div className={`fluency-mic-panel ${isMicActive ? 'listening' : 'muted'}`}>
+            <div className="fluency-mic-header">
+              <div className="fluency-mic-status-wrap">
+                <span className={`fluency-mic-dot ${isMicActive ? 'active' : ''}`} />
+                <div className="fluency-mic-info">
+                  <strong>
+                    {isMicActive ? 'AI nasłuchuje Twojego głosu' : 'Mikrofon wyciszony'}
+                  </strong>
+                  <span>
+                    {isMicActive
+                      ? `Mów na głos obiekty z kategorii „${selectedCat.label}”. AI sprawdza poprawność i odrzuca powtórzenia.`
+                      : 'Włącz mikrofon lub wpisuj obiekty poniżej.'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`fluency-mic-toggle-btn ${isMicActive ? 'active' : ''}`}
+                onClick={() => setIsMicActive((prev) => !prev)}
+                title={isMicActive ? 'Wycisz mikrofon' : 'Włącz mikrofon'}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  {isMicActive ? (
+                    <>
+                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8" y1="23" x2="16" y2="23" />
+                    </>
+                  ) : (
+                    <>
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8" y1="23" x2="16" y2="23" />
+                    </>
+                  )}
+                </svg>
+                <span>{isMicActive ? 'Mikrofon ON' : 'Włącz nasłuch'}</span>
+              </button>
+            </div>
+
+            {liveTranscript && (
+              <div className="fluency-live-transcript">
+                <span className="live-hearing-tag">Słyszę:</span> „{liveTranscript}”
+              </div>
+            )}
+            {micError && <div className="fluency-mic-error">{micError}</div>}
+          </div>
+        )}
+
+        {/* Live Evaluation Notice / Toast */}
+        {feedbackNotice && (
+          <div className={`fluency-feedback-banner ${feedbackNotice.type}`}>
+            {feedbackNotice.type === 'success' && (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+            {feedbackNotice.type === 'duplicate' && (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            )}
+            {feedbackNotice.type === 'error' && (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            )}
+            <span>{feedbackNotice.message}</span>
+          </div>
+        )}
 
         <div className="fluency-controls-row">
           {!isRunning ? (
@@ -1364,24 +2169,25 @@ export const SemanticFluencyGame = ({ onClose }) => {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                 <polygon points="6 4 20 12 6 20 6 4" />
               </svg>
-              <span>Start 60 sekund ({selectedCat.label})</span>
+              <span>Start 60 sekund z nasłuchem AI ({selectedCat.label})</span>
             </button>
           ) : (
             <>
               <button
                 type="button"
-                className="fluency-tap-btn"
-                onClick={handleIncrementVoiceCount}
+                className="fluency-tap-btn fluency-manual-btn"
+                onClick={handleManualIncrement}
+                title="Ręczne zaliczenie obiektu (np. gdy brak mikrofonu)"
               >
                 <div className="nback-match-btn-top">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="12" y1="5" x2="12" y2="19" />
                     <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
-                  <span>Zalicz wypowiedziany obiekt (+1)</span>
+                  <span>Zalicz ręcznie (+1)</span>
                   <kbd className="nback-kbd">Spacja</kbd>
                 </div>
-                <span className="nback-match-sub">Kliknij lub naciśnij Spację po każdym wypowiedzianym na głos obiekcie</span>
+                <span className="nback-match-sub">Opcjonalny przycisk ręczny (AI zlicza mowę automatycznie)</span>
               </button>
 
               <button type="button" className="nback-stop-btn" onClick={stopRound}>
@@ -1399,19 +2205,52 @@ export const SemanticFluencyGame = ({ onClose }) => {
             <input
               type="text"
               className="fluency-word-input"
-              placeholder={`Opcjonalnie wpisz obiekt z kategorii „${selectedCat.label}” i naciśnij Enter...`}
+              placeholder={`Możesz też wpisać obiekt z kategorii „${selectedCat.label}” i nacisnąć Enter...`}
               value={itemInput}
+              disabled={isEvaluating}
               onChange={(e) => setItemInput(e.target.value)}
             />
-            <button type="submit" className="fluency-word-submit">Dodaj</button>
+            <button type="submit" className="fluency-word-submit" disabled={isEvaluating || !itemInput.trim()}>
+              {isEvaluating ? 'Sprawdzam...' : 'Dodaj'}
+            </button>
           </form>
         )}
+        {inputError && <div className="fluency-input-error">{inputError}</div>}
 
+        {/* Accepted items list */}
         {itemsList.length > 0 && (
-          <div className="fluency-tags-list">
-            {itemsList.map((w, idx) => (
-              <span key={idx} className="fluency-word-tag">{w}</span>
-            ))}
+          <div className="fluency-list-wrap">
+            <span className="fluency-list-heading">
+              Zaakceptowane obiekty ({itemsList.length}):
+            </span>
+            <div className="fluency-tags-list">
+              {itemsList.map((item, idx) => (
+                <span key={idx} className="fluency-word-tag accepted">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <strong>{item.word}</strong>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Rejected or Duplicate items list */}
+        {rejectedItems.length > 0 && (
+          <div className="fluency-list-wrap rejected-wrap">
+            <span className="fluency-list-heading rejected-heading">
+              Odrzucone lub powtórzenia ({rejectedItems.length}):
+            </span>
+            <div className="fluency-tags-list">
+              {rejectedItems.map((item, idx) => (
+                <span key={idx} className={`fluency-word-tag ${item.type}`}>
+                  <span>{item.type === 'duplicate' ? '⚠️' : '✕'}</span>
+                  <span>{item.word}</span>
+                  <em className="fluency-reject-reason">({item.reason})</em>
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -1422,6 +2261,11 @@ export const SemanticFluencyGame = ({ onClose }) => {
             <div>
               <span className="nback-results-eyebrow">PODSUMOWANIE — {selectedCat.label.toUpperCase()}</span>
               <h4>Wynik: {itemCount} {itemCount === 1 ? 'obiekt' : 'obiektów'} w 60 sekund</h4>
+              {duplicatesCount > 0 && (
+                <span className="fluency-dups-note">
+                  (AI odrzuciło {duplicatesCount} {duplicatesCount === 1 ? 'powtórzenie' : 'powtórzeń'})
+                </span>
+              )}
             </div>
             <div className="nback-recommendation-pill">
               {itemCount >= 18
