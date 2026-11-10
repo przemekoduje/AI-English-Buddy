@@ -13,7 +13,7 @@ import MediaBuddy from './components/Media/MediaBuddy';
 import Flashcards from './components/Flashcards';
 import { API_BASE_URL } from './config';
 import AdminDashboard from './components/Admin/AdminDashboard';
-import GoodToKnow, { DualNBackModal } from './components/GoodToKnow';
+import GoodToKnow, { DualNBackModal, BreathingModal } from './components/GoodToKnow';
 import HelpFeedback from './components/Help/HelpFeedback';
 import PaywallModal from './components/Paywall/PaywallModal';
 
@@ -45,6 +45,7 @@ function App() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [paywallReason, setPaywallReason] = useState(null);
   const [nBackModalOpen, setNBackModalOpen] = useState(false);
+  const [breathingModalOpen, setBreathingModalOpen] = useState(false);
 
   const openPaywall = (reason = null) => {
     setPaywallReason(reason);
@@ -360,6 +361,7 @@ function App() {
         subscription={subscription}
         onOpenPaywall={openPaywall}
         onOpenNBack={() => setNBackModalOpen(true)}
+        onOpenBreathing={() => setBreathingModalOpen(true)}
       />
       
       <main className="main-content">
@@ -431,7 +433,10 @@ function App() {
               onNavigate={handleNavigate} 
             />
           ) : currentView === 'good-to-know' ? (
-            <GoodToKnow onOpenNBack={() => setNBackModalOpen(true)} />
+            <GoodToKnow
+              onOpenNBack={() => setNBackModalOpen(true)}
+              onOpenBreathing={() => setBreathingModalOpen(true)}
+            />
           ) : (
             <Workspace 
               onNavigateToDashboard={() => handleNavigate('dashboard')} 
@@ -525,6 +530,12 @@ function App() {
       <DualNBackModal
         isOpen={nBackModalOpen}
         onClose={() => setNBackModalOpen(false)}
+      />
+
+      {/* Modal ćwiczenia oddechowego 4-7-8 */}
+      <BreathingModal
+        isOpen={breathingModalOpen}
+        onClose={() => setBreathingModalOpen(false)}
       />
 
       {customAlert && (

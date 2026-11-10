@@ -6,7 +6,7 @@ import './Sidebar.css';
 
 const DAILY_GOAL_MINUTES = 20;
 
-const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscription, onOpenPaywall, onOpenNBack }) => {
+const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscription, onOpenPaywall, onOpenNBack, onOpenBreathing }) => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const stored = localStorage.getItem('buddy_sidebar_collapsed');
     return stored ? JSON.parse(stored) : false;
@@ -395,6 +395,22 @@ const Sidebar = ({ currentView, onNavigate, user, onLogout, isAdmin, subscriptio
 
             {item.id === 'good-to-know' && gtkSubmenuOpen && !isCollapsed && (
               <div className="sidebar-submenu">
+                <button
+                  type="button"
+                  className="sidebar-submenu-item"
+                  onClick={() => {
+                    if (onOpenBreathing) onOpenBreathing();
+                  }}
+                >
+                  <span className="submenu-icon">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                  </span>
+                  <span className="submenu-label">Oddech 4-7-8</span>
+                  <span className="submenu-pill">RELAKS</span>
+                </button>
                 <button
                   type="button"
                   className="sidebar-submenu-item"

@@ -694,9 +694,21 @@ export const DualNBackModal = ({ isOpen, onClose }) => {
   );
 };
 
-const BreathingExercise = () => {
+export const BreathingExercise = ({ onClose }) => {
   const [phase, setPhase] = useState('idle'); // idle, inhale, hold, exhale
   const [timeLeft, setTimeLeft] = useState(0);
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) {
+        setPhase('idle');
+        setTimeLeft(0);
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
     if (phase === 'idle') return;
@@ -736,9 +748,39 @@ const BreathingExercise = () => {
   };
 
   return (
-    <div className="breathing-widget">
+    <div className="breathing-widget breathing-modal-card">
+      <div className="breathing-modal-header">
+        <span className="nback-mono-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          PARASYMPATYCZNY RESET UKŁADU NERWOWEGO
+        </span>
+        {onClose && (
+          <button
+            type="button"
+            className="nback-modal-close-btn"
+            onClick={() => {
+              setPhase('idle');
+              setTimeLeft(0);
+              onClose();
+            }}
+            title="Zamknij (Esc)"
+            aria-label="Zamknij modal ćwiczenia oddechowego"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        )}
+      </div>
+
       <h4>Ćwiczenie Oddechowe (4-7-8)</h4>
-      <p className="breathing-hint">Przed sesją zrób kilka cykli. To wyciszy Twój układ nerwowy.</p>
+      <p className="breathing-hint">
+        Przed sesją zrób 3–4 cykle (wdech nosem 4s, zatrzymanie 7s, długi wydech ustami 8s). To fizycznie obniża tętno i wycisza Twój układ nerwowy.
+      </p>
       
       <div className="breathing-circle-container">
         <div className={`breathing-circle ${phase}`} onClick={toggleExercise}>
@@ -754,14 +796,42 @@ const BreathingExercise = () => {
   );
 };
 
-const GoodToKnow = ({ onOpenNBack }) => {
+export const BreathingModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="nback-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && onClose) {
+          onClose();
+        }
+      }}
+    >
+      <div className="nback-modal-dialog breathing-modal-dialog" role="dialog" aria-modal="true" aria-label="Ćwiczenie Oddechowe 4-7-8">
+        <BreathingExercise onClose={onClose} />
+      </div>
+    </div>
+  );
+};
+
+const GoodToKnow = ({ onOpenNBack, onOpenBreathing }) => {
   const [localModalOpen, setLocalModalOpen] = useState(false);
+  const [localBreathingOpen, setLocalBreathingOpen] = useState(false);
 
   const handleOpenGame = () => {
     if (onOpenNBack) {
       onOpenNBack();
     } else {
       setLocalModalOpen(true);
+    }
+  };
+
+  const handleOpenBreathing = () => {
+    if (onOpenBreathing) {
+      onOpenBreathing();
+    } else {
+      setLocalBreathingOpen(true);
     }
   };
 
@@ -795,17 +865,15 @@ const GoodToKnow = ({ onOpenNBack }) => {
 
             <button
               type="button"
-              className="gtk-submenu-item"
-              onClick={() => {
-                const el = document.getElementById('gtk-breathing');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }}
+              className="gtk-submenu-item gtk-submenu-nback-btn"
+              onClick={handleOpenBreathing}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="12 6 12 12 16 14" />
               </svg>
               <span>Oddech 4-7-8</span>
+              <span className="gtk-submenu-pill">RELAKS</span>
             </button>
 
             <button
@@ -851,6 +919,22 @@ const GoodToKnow = ({ onOpenNBack }) => {
               </div>
               <div className="gtk-card gtk-card-nback-launcher">
                 <div className="gtk-card-nback-top">
+                  <h4>Ćwiczenie Oddechowe (4-7-8)</h4>
+                  <span className="gtk-nback-tag">4-7-8</span>
+                </div>
+                <p>
+                  Interaktywny trenażer oddechu (wdech 4s, zatrzymanie 7s, wydech 8s). Wykonaj kilka cykli przed nauką, aby wyciszyć układ współczulny i przygotować mózg do skupienia.
+                </p>
+                <button type="button" className="gtk-open-nback-btn" onClick={handleOpenBreathing}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span>Otwórz ćwiczenie 4-7-8</span>
+                </button>
+              </div>
+              <div className="gtk-card gtk-card-nback-launcher">
+                <div className="gtk-card-nback-top">
                   <h4>N-Back (Dual N-Back)</h4>
                   <span className="gtk-nback-tag">dlPFC</span>
                 </div>
@@ -867,9 +951,6 @@ const GoodToKnow = ({ onOpenNBack }) => {
                   <span>Otwórz grę Dual N-Back</span>
                 </button>
               </div>
-            </div>
-            <div id="gtk-breathing">
-              <BreathingExercise />
             </div>
           </div>
 
@@ -958,6 +1039,9 @@ const GoodToKnow = ({ onOpenNBack }) => {
 
       {!onOpenNBack && (
         <DualNBackModal isOpen={localModalOpen} onClose={() => setLocalModalOpen(false)} />
+      )}
+      {!onOpenBreathing && (
+        <BreathingModal isOpen={localBreathingOpen} onClose={() => setLocalBreathingOpen(false)} />
       )}
     </div>
   );
