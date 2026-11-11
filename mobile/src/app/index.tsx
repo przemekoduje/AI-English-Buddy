@@ -254,9 +254,11 @@ export default function HomeScreen() {
 
   // Helper function to build grounded tutor prompts for mobile Live Chat
   function buildMobileTutorPrompts(storyTitle?: string, storyText?: string, exerciseType: string = 'vocabulary_quiz', userSavedVocab: any[] = []) {
+    const polishInsertionRule = `\nPOLISH INSERTIONS & CODE-SWITCHING CORRECTION (IMPORTANT):\n- The student is a Polish native speaker practicing English. Whenever they mix any Polish word or phrase into their English speech (e.g. "I went to sklep"), always gently teach them the exact natural English equivalent right away in English (e.g. "Quick tip: for 'sklep', we say 'a store' or 'a shop' — so you can say 'I went to the store.'") and smoothly continue with a short follow-up question.`;
+
     if (!storyText || !storyText.trim()) {
       return {
-        systemInstruction: "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone. Speak only in English.",
+        systemInstruction: `You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone. Conduct the conversation in English.${polishInsertionRule}`,
         greetingPrompt: "Hello! Please greet me warmly in English as my friendly tutor, introduce yourself briefly in 1-2 natural sentences, and ask how my day is going."
       };
     }
@@ -337,7 +339,8 @@ Please greet me warmly in English as my friendly tutor. Mention enthusiastically
 Your goal is to conduct an engaging, interactive spoken English session with a student who is learning ENGLISH.
 Speak with a natural, friendly native tone.
 Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, always giving the student plenty of speaking time.
-Speak only in English.
+Conduct the conversation in English.
+${polishInsertionRule}
 
 STRICT CONSTRAINTS & GROUNDING (MUST FOLLOW AT ALL TIMES):
 1. MANDATORY STORY FAMILIARITY & BOUNDARY: You must thoroughly read, familiarize yourself with, and memorize the selected story text provided below ("${title}"). You MUST ONLY refer to, discuss, ask about, and use content, characters, facts, and events from THIS SPECIFIC STORY. Absolutely NO inventing outside stories, external topics, or hallucinating facts outside this text ("Bez wymyślania nowych treści"). If the student asks you what the text is about, give a clear, accurate summary of the story text below.

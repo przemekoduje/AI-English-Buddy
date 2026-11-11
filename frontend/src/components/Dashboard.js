@@ -185,6 +185,12 @@ export function extractStoryTargetWords(story, userSavedVocab = []) {
   return result;
 }
 
+const POLISH_INSERTION_CORRECTION_RULE = `
+POLISH INSERTIONS & CODE-SWITCHING CORRECTION (IMPORTANT):
+- The student is a Polish native speaker practicing English. Sometimes when they don't know a word, they insert a Polish word or phrase into their English sentence (for example: "I went to sklep" or "My szef was angry").
+- Whenever you hear any Polish word or Polish expression in the student's speech, ALWAYS gently and warmly correct it right away in your spoken reply (in English): tell them the natural English equivalent and model the corrected phrase naturally (e.g., "Quick tip: for 'sklep', we say 'a store' or 'a shop' — so you can say 'I went to the store.'"), and then smoothly continue the conversation with a short follow-up question.
+- Keep your overall response concise (2-3 short spoken sentences), supportive, and never scolding.`;
+
 export function buildTutorPrompts(story, exerciseType, userSavedVocab = [], activeStarterId = "small-talk") {
   if (activeStarterId === "small-talk") {
     return {
@@ -194,9 +200,10 @@ MODE: SMALL TALK, BIG PROGRESS (Everyday English · A2-B1).
 - Conduct a natural, friendly everyday English small talk conversation.
 - Ask about the student's day, daily routine, weekend plans, hobbies, favorite food, weather, or simple everyday feelings.
 - Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, always giving the student plenty of speaking time.
-- Speak with a natural, friendly native tone. Speak only in English.
+- Speak with a natural, friendly native tone. Conduct the conversation in English.
 - If the student makes a grammatical slip, gently model the natural phrasing in your response while keeping the conversation flowing smoothly.
-- Show genuine curiosity and warmth.`,
+- Show genuine curiosity and warmth.
+${POLISH_INSERTION_CORRECTION_RULE}`,
       greetingPrompt: `Hello! Please greet me warmly in English as my friendly tutor in 1-2 natural, spoken sentences. Enthusiastically invite me to have a quick small talk to practice everyday English today, and ask me how my day is going or what I've been doing so far.`
     };
   }
@@ -209,15 +216,17 @@ MODE: A WEEKEND IN KRAKÓW (Travel & Planning · B1).
 - The student is planning a weekend trip to Kraków, Poland (or exploring the city).
 - Discuss itinerary ideas, visiting the historic Main Market Square, Wawel Castle, Kazimierz Jewish quarter, trying local food, asking for hotel recommendations, or giving travel directions.
 - Keep your spoken responses concise (1-2 sentences at a time), interactive, and encouraging.
-- Speak with a natural, friendly tone. Speak only in English.
-- Offer useful travel expressions and natural vocabulary when appropriate.`,
+- Speak with a natural, friendly tone. Conduct the conversation in English.
+- Offer useful travel expressions and natural vocabulary when appropriate.
+${POLISH_INSERTION_CORRECTION_RULE}`,
       greetingPrompt: `Hello! Greet me warmly as my English tutor. Enthusiastically propose that we practice English by planning an exciting weekend in Kraków together, and ask me what kind of places, sights, or activities I'd love to explore in Kraków in 1-2 friendly sentences.`
     };
   }
 
   if (!story) {
     return {
-      systemInstruction: "You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone. Speak only in English.",
+      systemInstruction: `You are Speakling, an enthusiastic, friendly and warm native English tutor. Your goal is to help the student practice speaking English naturally. Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, giving the student plenty of speaking time. Speak with a natural, friendly tone. Conduct the conversation in English.
+${POLISH_INSERTION_CORRECTION_RULE}`,
       greetingPrompt: "Hello! Please greet me warmly in English as my friendly tutor, introduce yourself briefly in 1-2 natural sentences, and ask how my day is going."
     };
   }
@@ -342,7 +351,8 @@ CRITICAL RULES FOR VOCABULARY EXERCISES (MUST FOLLOW AT ALL COSTS):
 Your goal is to conduct an engaging, interactive spoken English session with a student who is learning ENGLISH.
 Speak with a natural, friendly native tone.
 Keep your spoken responses concise (1-2 sentences at a time), conversational, and encouraging, always giving the student plenty of speaking time.
-Speak only in English.
+Conduct the conversation in English.
+${POLISH_INSERTION_CORRECTION_RULE}
 
 STRICT CONSTRAINTS & GROUNDING (MUST FOLLOW AT ALL TIMES):
 1. MANDATORY STORY FAMILIARITY & BOUNDARY: You must thoroughly read, familiarize yourself with, and memorize the selected story text provided below ("${title}"). You MUST ONLY refer to, discuss, ask about, and use content, characters, facts, and events from THIS SPECIFIC STORY. Absolutely NO inventing outside stories, external topics, or hallucinating facts outside this text ("Bez wymyślania nowych treści"). If the student asks you what the text is about, give a clear, accurate summary of the story text below.
