@@ -500,6 +500,7 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   const [showTranscript, setShowTranscript] = useState(false);
   const [voiceSummary, setVoiceSummary] = useState(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [pendingSummaryHistory, setPendingSummaryHistory] = useState(null);
 
   // Refs do płynnej, sprzętowo akcelerowanej animacji orba na GPU bez re-renderowania komponentu
   const orbButtonRef = useRef(null);
@@ -1500,42 +1501,61 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
     setIsChatActive(false);
 
     // Pobieramy historię z refa, aby uniknąć problemu z przestarzałym domknięciem stanu
-    const messagesToSummarize = chatMessagesRef.current || [];
+    const messagesToSummarize = (chatMessagesRef.current || []).map((msg) => ({
+      sender: msg.sender,
+      text: msg.text,
+    }));
 
     // Generowanie podsumowania, jeśli są jakiekolwiek wiadomości
     if (messagesToSummarize.length > 0) {
-      setIsGeneratingSummary(true);
-      try {
+      await generateVoiceSummary(messagesToSummarize);
+    } else {
+      setPendingSummaryHistory(null);
+      setErrorMessage("Rozmowa była zbyt krótka, aby wygenerować podsumowanie. Porozmawiaj chwilę z lektorem i spróbuj ponownie!");
+    }
+  };
+
+  const generateVoiceSummary = async (historyPayload) => {
+    if (!Array.isArray(historyPayload) || historyPayload.length === 0) return;
+    setIsGeneratingSummary(true);
+    setErrorMessage(null);
+    try {
+      const maxAttempts = 2;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const response = await fetch(`${API_BASE_URL}/api/chat-free/summary`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "X-Session-Token": user?.token || "",
           },
-          body: JSON.stringify({
-            history: messagesToSummarize.map((msg) => ({
-              sender: msg.sender,
-              text: msg.text,
-            })),
-          }),
+          body: JSON.stringify({ history: historyPayload }),
         });
 
         if (response.ok) {
           const summaryData = await response.json();
+          setPendingSummaryHistory(null);
           setVoiceSummary(summaryData);
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          console.error("Błąd tworzenia podsumowania:", errData);
-          setErrorMessage(errData.error || "Serwer nie mógł przygotować podsumowania rozmowy.");
+          return;
         }
-      } catch (err) {
-        console.error("Błąd podczas tworzenia podsumowania sesji:", err);
-        setErrorMessage("Błąd połączenia z serwerem podczas generowania podsumowania.");
-      } finally {
-        setIsGeneratingSummary(false);
+
+        const isTransient = [502, 503, 504].includes(response.status);
+        if (isTransient && attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 1500));
+          continue;
+        }
+
+        const errData = await response.json().catch(() => ({}));
+        console.error("Błąd tworzenia podsumowania:", errData);
+        setPendingSummaryHistory(historyPayload);
+        setErrorMessage(errData.error || "Serwer nie mógł przygotować podsumowania rozmowy.");
+        return;
       }
-    } else {
-      setErrorMessage("Rozmowa była zbyt krótka, aby wygenerować podsumowanie. Porozmawiaj chwilę z lektorem i spróbuj ponownie!");
+    } catch (err) {
+      console.error("Błąd podczas tworzenia podsumowania sesji:", err);
+      setPendingSummaryHistory(historyPayload);
+      setErrorMessage("Błąd połączenia z serwerem podczas generowania podsumowania.");
+    } finally {
+      setIsGeneratingSummary(false);
     }
   };
 
@@ -1615,7 +1635,29 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
             </svg>
             {errorMessage}
           </span>
-          <button onClick={() => setErrorMessage(null)} className="error-close-btn">×</button>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            {pendingSummaryHistory && (
+              <button
+                type="button"
+                onClick={() => generateVoiceSummary(pendingSummaryHistory)}
+                disabled={isGeneratingSummary}
+                style={{
+                  background: 'rgba(255,255,255,0.92)',
+                  color: '#991b1b',
+                  border: '1px solid rgba(153,27,27,0.25)',
+                  borderRadius: '999px',
+                  padding: '4px 12px',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {isGeneratingSummary ? "Ponawianie..." : "Ponów podsumowanie"}
+              </button>
+            )}
+            <button onClick={() => { setErrorMessage(null); setPendingSummaryHistory(null); }} className="error-close-btn">×</button>
+          </div>
         </div>
       )}
 

@@ -771,70 +771,118 @@ def log_api_usage(user_email, service, feature, model, prompt_tokens=0, completi
 
 EXHAUSTED_PROVIDERS = {}
 
+DEFAULT_CHEAP_GEMINI_MODELS = [
+    "gemini-flash-lite-latest",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-3.5-flash",
+]
+DEFAULT_ADVANCED_GEMINI_MODELS = [
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+    "gemini-flash-lite-latest",
+    "gemini-2.5-flash-lite",
+]
+
+
+def _dedupe_models(models):
+    seen = set()
+    ordered = []
+    for m in models:
+        if m and m not in seen:
+            seen.add(m)
+            ordered.append(m)
+    return ordered
+
+
+def _is_transient_ai_error(err_str):
+    lower = (err_str or "").lower()
+    return any(k in lower for k in (
+        "503", "unavailable", "high demand", "overloaded", "try again later",
+        "429", "resource_exhausted", "rate limit", "too many requests",
+        "500", "502", "504", "timeout", "timed out", "connection reset",
+    ))
+
+
+def _is_model_not_found_error(err_str):
+    lower = (err_str or "").lower()
+    return any(k in lower for k in ("404", "not found", "does not exist", "is not supported for"))
+
+
 def get_candidate_providers(custom_client=None, custom_model=None, model_tier="cheap"):
+    tier_defaults = DEFAULT_ADVANCED_GEMINI_MODELS if model_tier == "advanced" else DEFAULT_CHEAP_GEMINI_MODELS
+    model_chain = _dedupe_models([custom_model] + tier_defaults) if custom_model else list(tier_defaults)
+
     if custom_client:
-        return [("custom", custom_client, custom_model or ("gemini-3.5-flash" if model_tier == "advanced" else "gemini-flash-lite-latest"))]
+        if custom_model:
+            return [("custom", custom_client, custom_model)]
+        return [("custom", custom_client, m) for m in model_chain]
 
-    gemini_model = "gemini-3.5-flash" if model_tier == "advanced" else "gemini-flash-lite-latest"
+    active_cli = gemini_client or (client if client and not isinstance(client, MockOpenAIClient) else None)
+    if not active_cli:
+        return []
 
-    all_available = []
-    if gemini_client:
-        all_available.append(("gemini", gemini_client, gemini_model))
-    elif client and not isinstance(client, MockOpenAIClient):
-        all_available.append(("gemini", client, gemini_model))
-
-    return all_available
+    return [("gemini", active_cli, m) for m in model_chain]
 
 
 def track_chat_completion(user_email, feature, messages, response_format=None, custom_client=None, custom_model=None, model_tier="cheap", **kwargs):
     candidates = get_candidate_providers(custom_client, custom_model, model_tier)
-    if not candidates:
-        if client and not isinstance(client, MockOpenAIClient):
-            candidates = [('gemini', client, custom_model or ("gemini-3.5-flash" if model_tier == "advanced" else "gemini-flash-lite-latest"))]
+    if not candidates and client and not isinstance(client, MockOpenAIClient):
+        tier_defaults = DEFAULT_ADVANCED_GEMINI_MODELS if model_tier == "advanced" else DEFAULT_CHEAP_GEMINI_MODELS
+        model_chain = _dedupe_models([custom_model] + tier_defaults) if custom_model else list(tier_defaults)
+        candidates = [('gemini', client, m) for m in model_chain]
 
     if not candidates:
         raise Exception("Brak skonfigurowanych dostawców AI.")
 
     last_error = None
-    for service, cli, model in candidates:
-        try:
-            req_kwargs = {
-                "model": model,
-                "messages": messages,
-                **kwargs
-            }
-            if "gemini" in model.lower() and "max_tokens" in req_kwargs:
-                del req_kwargs["max_tokens"]
-                
-            if response_format:
-                req_kwargs["response_format"] = response_format
+    retryable_candidates = list(candidates)
 
-            ai_response = cli.chat.completions.create(**req_kwargs)
-
+    for attempt_pass in range(2):
+        next_pass_candidates = []
+        for service, cli, model in retryable_candidates:
             try:
-                usage = getattr(ai_response, 'usage', None)
-                if usage:
-                    log_api_usage(
-                        user_email=user_email or "guest@speakling.ai",
-                        service=service,
-                        feature=feature,
-                        model=model,
-                        prompt_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
-                        completion_tokens=getattr(usage, 'completion_tokens', 0) or 0
-                    )
-            except Exception as e_log:
-                print(f"Error logging chat completion: {e_log}", flush=True)
+                req_kwargs = {
+                    "model": model,
+                    "messages": messages,
+                    **kwargs
+                }
+                if "gemini" in model.lower() and "max_tokens" in req_kwargs:
+                    del req_kwargs["max_tokens"]
 
-            return ai_response
-        except Exception as e_prov:
-            err_str = str(e_prov).lower()
-            if any(k in err_str for k in ["credit", "quota", "balance", "429", "402", "insufficient"]):
-                EXHAUSTED_PROVIDERS[service] = time.time() + 600
-                print(f"Dostawca {service} zgłosił brak środków/quota ({e_prov}). Oznaczony na 10 min. Przełączam na zapasowego dostawcę...", flush=True)
-            else:
-                print(f"Błąd dostawcy AI {service} ({model}): {e_prov}. Próbuję kolejnego...", flush=True)
-            last_error = e_prov
-            continue
+                if response_format:
+                    req_kwargs["response_format"] = response_format
+
+                ai_response = cli.chat.completions.create(**req_kwargs)
+
+                try:
+                    usage = getattr(ai_response, 'usage', None)
+                    if usage:
+                        log_api_usage(
+                            user_email=user_email or "guest@speakling.ai",
+                            service=service,
+                            feature=feature,
+                            model=model,
+                            prompt_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
+                            completion_tokens=getattr(usage, 'completion_tokens', 0) or 0
+                        )
+                except Exception as e_log:
+                    print(f"Error logging chat completion: {e_log}", flush=True)
+
+                return ai_response
+            except Exception as e_prov:
+                err_str = str(e_prov)
+                last_error = e_prov
+                print(f"Błąd dostawcy AI {service} ({model}, próba {attempt_pass + 1}): {err_str}. Próbuję kolejnego...", flush=True)
+                if not _is_model_not_found_error(err_str) and _is_transient_ai_error(err_str):
+                    next_pass_candidates.append((service, cli, model))
+                continue
+
+        if attempt_pass == 0 and next_pass_candidates:
+            time.sleep(0.9)
+            retryable_candidates = next_pass_candidates
+        else:
+            break
 
     if last_error:
         raise last_error
@@ -8274,12 +8322,13 @@ def generate_chat_summary():
         ai_response = track_chat_completion(
             user_email=user_email,
             feature="chat_free_summary",
+            response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ]
         )
-        content = ai_response.choices[0].message.content.strip()
+        content = (ai_response.choices[0].message.content or "").strip()
         if content.startswith("```"):
             lines = content.split("\n")
             if lines[0].startswith("```"):
@@ -8288,11 +8337,22 @@ def generate_chat_summary():
                 lines = lines[:-1]
             content = "\n".join(lines).strip()
 
-        summary_json = json.loads(content)
+        try:
+            summary_json = json.loads(content)
+        except json.JSONDecodeError:
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if not json_match:
+                raise
+            summary_json = json.loads(json_match.group(0))
         return jsonify(summary_json), 200
     except Exception as e:
-        print(f"Error generating chat summary: {e}")
-        return jsonify({"error": f"Błąd generowania podsumowania czatu: {str(e)}"}), 500
+        err_msg = str(e)
+        print(f"Error generating chat summary: {err_msg}", flush=True)
+        if _is_transient_ai_error(err_msg):
+            return jsonify({
+                "error": "Serwery AI Google są chwilowo przeciążone (503). Odczekaj chwilę i kliknij „Ponów podsumowanie”."
+            }), 503
+        return jsonify({"error": f"Błąd generowania podsumowania czatu: {err_msg}"}), 500
 
 
 def create_gemini_ephemeral_token(api_key, model="gemini-2.5-flash-native-audio-latest"):
