@@ -782,11 +782,14 @@ export const BreathingExercise = ({ onClose }) => {
 
   const selectSoundscape = (nextScene) => {
     setSoundscape(nextScene);
+    const engine = getAudioEngine();
+    engine.setVolume(volume);
+    engine.setMuted(isMuted);
     if (phase !== 'idle') {
-      const engine = getAudioEngine();
-      engine.setVolume(volume);
-      engine.setMuted(isMuted);
+      engine.cancelPreviewTimeout();
       engine.startAmbience(nextScene.id);
+    } else if (!isMuted) {
+      engine.previewAmbience(nextScene.id, 5500);
     }
   };
 
@@ -798,8 +801,8 @@ export const BreathingExercise = ({ onClose }) => {
   const toggleExercise = () => {
     const engine = getAudioEngine();
     if (phase === 'idle') {
-      // Pick fresh random lo-fi nature scene on each new start if user hasn't locked one
       const activeScene = soundscape || pickRandomSoundscape();
+      engine.cancelPreviewTimeout();
       engine.setVolume(volume);
       engine.setMuted(isMuted);
       engine.startAmbience(activeScene.id);
