@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '../config';
+import {
+  LOFI_SOUNDSCAPES,
+  pickRandomSoundscape,
+  LoFiBreathingEngine,
+} from '../utils/lofiBreathingAudio';
 import './GoodToKnow.css';
 
 const LETTERS = ['C', 'H', 'K', 'L', 'Q', 'R', 'S', 'T'];
@@ -698,10 +703,33 @@ export const DualNBackModal = ({ isOpen, onClose }) => {
 export const BreathingExercise = ({ onClose }) => {
   const [phase, setPhase] = useState('idle'); // idle, inhale, hold, exhale
   const [timeLeft, setTimeLeft] = useState(0);
+  const [cycles, setCycles] = useState(0);
+  const [soundscape, setSoundscape] = useState(() => pickRandomSoundscape());
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(0.65);
+
+  const audioEngineRef = useRef(null);
+  const getAudioEngine = useCallback(() => {
+    if (!audioEngineRef.current) {
+      audioEngineRef.current = new LoFiBreathingEngine();
+    }
+    return audioEngineRef.current;
+  }, []);
+
+  // Cleanup Web Audio engine when widget/modal unmounts
+  useEffect(() => {
+    return () => {
+      if (audioEngineRef.current) {
+        audioEngineRef.current.destroy();
+        audioEngineRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === 'Escape' && onClose) {
+        audioEngineRef.current?.stopAll();
         setPhase('idle');
         setTimeLeft(0);
         onClose();
@@ -711,11 +739,12 @@ export const BreathingExercise = ({ onClose }) => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
+  // Countdown timer and 4-7-8 phase transitions
   useEffect(() => {
     if (phase === 'idle') return;
 
     if (timeLeft > 0) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+      const timer = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
       return () => clearTimeout(timer);
     } else {
       if (phase === 'inhale') {
@@ -725,17 +754,60 @@ export const BreathingExercise = ({ onClose }) => {
         setPhase('exhale');
         setTimeLeft(8);
       } else if (phase === 'exhale') {
+        setCycles((c) => c + 1);
         setPhase('inhale');
         setTimeLeft(4);
       }
     }
   }, [phase, timeLeft]);
 
-  const toggleExercise = () => {
+  // Trigger distinct Lo-Fi phase sound cues on every phase transition
+  useEffect(() => {
+    const engine = audioEngineRef.current;
+    if (!engine) return;
     if (phase === 'idle') {
+      engine.stopAll();
+    } else {
+      engine.playPhaseCue(phase);
+    }
+  }, [phase]);
+
+  // Keep mute and volume synchronized
+  useEffect(() => {
+    const engine = audioEngineRef.current;
+    if (!engine) return;
+    engine.setVolume(volume);
+    engine.setMuted(isMuted);
+  }, [volume, isMuted]);
+
+  const selectSoundscape = (nextScene) => {
+    setSoundscape(nextScene);
+    if (phase !== 'idle') {
+      const engine = getAudioEngine();
+      engine.setVolume(volume);
+      engine.setMuted(isMuted);
+      engine.startAmbience(nextScene.id);
+    }
+  };
+
+  const randomizeSoundscape = () => {
+    const nextScene = pickRandomSoundscape(soundscape.id);
+    selectSoundscape(nextScene);
+  };
+
+  const toggleExercise = () => {
+    const engine = getAudioEngine();
+    if (phase === 'idle') {
+      // Pick fresh random lo-fi nature scene on each new start if user hasn't locked one
+      const activeScene = soundscape || pickRandomSoundscape();
+      engine.setVolume(volume);
+      engine.setMuted(isMuted);
+      engine.startAmbience(activeScene.id);
+      setCycles(0);
       setPhase('inhale');
       setTimeLeft(4);
     } else {
+      engine.stopAll();
       setPhase('idle');
       setTimeLeft(0);
     }
@@ -763,6 +835,7 @@ export const BreathingExercise = ({ onClose }) => {
             type="button"
             className="nback-modal-close-btn"
             onClick={() => {
+              audioEngineRef.current?.stopAll();
               setPhase('idle');
               setTimeLeft(0);
               onClose();
@@ -780,18 +853,110 @@ export const BreathingExercise = ({ onClose }) => {
 
       <h4>Ćwiczenie Oddechowe (4-7-8)</h4>
       <p className="breathing-hint">
-        Przed sesją zrób 3–4 cykle (wdech nosem 4s, zatrzymanie 7s, długi wydech ustami 8s). To fizycznie obniża tętno i wycisza Twój układ nerwowy.
+        Zamknij oczy i podążaj za kojącymi dźwiękami lo-fi. Każda faza ma swój unikalny sygnał dźwiękowy, więc nie musisz patrzeć w ekran.
       </p>
-      
+
+      {/* Lo-Fi Soundscape Panel */}
+      <div className="breathing-lofi-panel">
+        <div className="breathing-lofi-top">
+          <div className="breathing-lofi-active">
+            <span className="breathing-lofi-icon" aria-hidden="true">{soundscape.icon}</span>
+            <div className="breathing-lofi-meta">
+              <span className="breathing-lofi-title">{soundscape.label} <span className="breathing-lofi-tag">LO-FI</span></span>
+              <span className="breathing-lofi-desc">{soundscape.description}</span>
+            </div>
+          </div>
+          <div className="breathing-lofi-controls">
+            <button
+              type="button"
+              className="breathing-lofi-btn"
+              onClick={randomizeSoundscape}
+              title="Wylosuj inną scenerię dźwiękową"
+            >
+              🎲 Losuj
+            </button>
+            <button
+              type="button"
+              className={`breathing-lofi-btn ${isMuted ? 'is-muted' : ''}`}
+              onClick={() => setIsMuted((m) => !m)}
+              title={isMuted ? 'Włącz dźwięk' : 'Wycisz dźwięk'}
+              aria-label={isMuted ? 'Włącz dźwięk' : 'Wycisz dźwięk'}
+            >
+              {isMuted ? '🔇' : '🔊'}
+            </button>
+          </div>
+        </div>
+
+        <div className="breathing-lofi-scenes" role="group" aria-label="Wybór dźwięków tła lo-fi">
+          {LOFI_SOUNDSCAPES.map((scene) => (
+            <button
+              key={scene.id}
+              type="button"
+              className={`breathing-scene-pill ${soundscape.id === scene.id ? 'active' : ''}`}
+              onClick={() => selectSoundscape(scene)}
+            >
+              <span>{scene.icon}</span>
+              <span>{scene.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="breathing-lofi-volume-row">
+          <span className="breathing-volume-label">Głośność</span>
+          <input
+            type="range"
+            min="0.1"
+            max="1"
+            step="0.05"
+            value={isMuted ? 0 : volume}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              setIsMuted(false);
+              setVolume(val);
+            }}
+            className="breathing-volume-slider"
+            aria-label="Głośność dźwięków lo-fi"
+          />
+          {cycles > 0 && (
+            <span className="breathing-cycles-badge">Cykle: {cycles}</span>
+          )}
+        </div>
+      </div>
+
       <div className="breathing-circle-container">
         <div className={`breathing-circle ${phase}`} onClick={toggleExercise}>
           <span className="breathing-text">{getPhaseText()}</span>
           {phase !== 'idle' && <span className="breathing-timer">{timeLeft}s</span>}
         </div>
       </div>
-      
+
+      {/* Screen-free Audio Phase Legend */}
+      <div className="breathing-audio-legend">
+        <div className={`breathing-legend-item ${phase === 'inhale' ? 'is-current' : ''}`}>
+          <span className="legend-arrow">↗</span>
+          <div>
+            <strong>Wdech 4s</strong>
+            <span>rosnący akord</span>
+          </div>
+        </div>
+        <div className={`breathing-legend-item ${phase === 'hold' ? 'is-current' : ''}`}>
+          <span className="legend-arrow">⏸</span>
+          <div>
+            <strong>Pauza 7s</strong>
+            <span>ciepły gong</span>
+          </div>
+        </div>
+        <div className={`breathing-legend-item ${phase === 'exhale' ? 'is-current' : ''}`}>
+          <span className="legend-arrow">↘</span>
+          <div>
+            <strong>Wydech 8s</strong>
+            <span>opadający akord</span>
+          </div>
+        </div>
+      </div>
+
       <button className={`btn-breathing ${phase !== 'idle' ? 'active' : ''}`} onClick={toggleExercise}>
-        {phase === 'idle' ? 'Rozpocznij relaks' : 'Zakończ ćwiczenie'}
+        {phase === 'idle' ? 'Rozpocznij relaks z Lo-Fi' : 'Zakończ ćwiczenie'}
       </button>
     </div>
   );

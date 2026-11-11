@@ -903,18 +903,172 @@
 
 .breathing-hint {
   color: #64748b;
-  font-size: 0.92rem;
-  line-height: 1.55;
-  max-width: 420px;
-  margin: 0 auto 1.75rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  max-width: 440px;
+  margin: 0 auto 1.15rem;
+}
+
+.breathing-lofi-panel {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.1rem;
+  text-align: left;
+}
+
+.breathing-lofi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.breathing-lofi-active {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.breathing-lofi-icon {
+  font-size: 1.45rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.breathing-lofi-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.breathing-lofi-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.breathing-lofi-tag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.breathing-lofi-desc {
+  font-size: 0.77rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breathing-lofi-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.breathing-lofi-btn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.32rem 0.6rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.breathing-lofi-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.breathing-lofi-btn.is-muted {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+.breathing-lofi-scenes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+
+.breathing-scene-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #475569;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.breathing-scene-pill:hover {
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.breathing-scene-pill.active {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+.breathing-lofi-volume-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.breathing-volume-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.breathing-volume-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: #0f172a;
+  cursor: pointer;
+}
+
+.breathing-cycles-badge {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #0f172a;
+  background: #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
 .breathing-circle-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 230px;
-  margin-bottom: 1.5rem;
+  height: 205px;
+  margin-bottom: 1.15rem;
 }
 
 .breathing-circle {
@@ -977,6 +1131,78 @@
   margin-top: 2px;
   pointer-events: none;
   line-height: 1;
+}
+
+.breathing-audio-legend {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+  margin-bottom: 1.15rem;
+}
+
+.breathing-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  text-align: left;
+  transition: all 0.25s ease;
+}
+
+.breathing-legend-item.is-current {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
+}
+
+.breathing-legend-item .legend-arrow {
+  font-size: 0.95rem;
+  font-weight: 700;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2e8f0;
+  color: #0f172a;
+  flex-shrink: 0;
+}
+
+.breathing-legend-item.is-current .legend-arrow {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.breathing-legend-item > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.breathing-legend-item strong {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.15;
+}
+
+.breathing-legend-item.is-current strong {
+  color: #ffffff;
+}
+
+.breathing-legend-item span {
+  font-size: 0.68rem;
+  color: #64748b;
+  line-height: 1.2;
+}
+
+.breathing-legend-item.is-current span {
+  color: #cbd5e1;
 }
 
 .btn-breathing {
