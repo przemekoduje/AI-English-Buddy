@@ -4544,6 +4544,54 @@ def parse_story_response(generated_content):
     return title, story
 
 
+def extract_requested_word_count(text):
+    """Wyciąga żądaną minimalną liczbę słów z promptu użytkownika (PL/EN).
+    Zwraca krotkę (min_words, aim_words) lub (None, None).
+    """
+    if not text or not isinstance(text, str):
+        return None, None
+
+    normalized = text.lower()
+    # Obsługa spacji w zapisie tysięcznym, np. "1 000 słów" -> "1000 słów"
+    normalized = re.sub(r'(\d)[\s\u00a0]+(\d{3})\b', r'\1\2', normalized)
+    # Obsługa przecinków w zapisie angielskim, np. "1,000 words" -> "1000 words"
+    normalized = re.sub(r'(\d),(\d{3})\b', r'\1\2', normalized)
+
+    unit_pattern = r'(?:words?|word-long|sł[oó]w(?:a|o)?|slow(?:a|o)?|wyraz(?:[oó]w|y)?)'
+    candidates = []
+
+    # 1) Zakresy np. "500-700 words", "od 500 do 700 słów"
+    def _collect_range(match):
+        low_val = int(match.group(1))
+        high_val = int(match.group(2))
+        if 20 <= low_val <= 4000:
+            aim = max(low_val, (low_val + high_val) // 2) if high_val >= low_val else low_val
+            candidates.append((low_val, min(4500, aim)))
+        return " "
+
+    cleaned_for_single = re.sub(
+        rf'(\d{{2,4}})\s*(?:-|–|—|to|do)\s*(\d{{2,4}})\s*{unit_pattern}\b',
+        _collect_range,
+        normalized,
+    )
+
+    # 2) Bezpośrednia liczba przed jednostką, np. "600 słów", "800-word", "co najmniej 1000 wyrazów"
+    for m in re.finditer(rf'(?:^|[^\d])(\d{{2,4}})\s*-?\s*{unit_pattern}\b', cleaned_for_single):
+        val = int(m.group(1))
+        if 20 <= val <= 4000:
+            candidates.append((val, min(4500, int(val * 1.12) + 20)))
+
+    # 3) Odwrotna kolejność, np. "liczba słów: 600", "word count: 700", "words: 600"
+    for m in re.finditer(rf'(?:word\s*count|words|liczba\s+s[łl][oó]w|ilo[śs][ćc]\s+s[łl][oó]w)\s*[:=-]?\s*(\d{{2,4}})\b', cleaned_for_single):
+        val = int(m.group(1))
+        if 20 <= val <= 4000:
+            candidates.append((val, min(4500, int(val * 1.12) + 20)))
+
+    if not candidates:
+        return None, None
+    return max(candidates, key=lambda pair: pair[0])
+
+
 @app.route("/api/generate", methods=['POST'])
 def generate_text():
     user_email = get_user_from_request()
@@ -4729,14 +4777,24 @@ def generate_text():
     else:
         user_prompt += "Language level: Intermediate. Use standard everyday vocabulary, phrasal verbs, and moderate sentence structures (B1-B2 level).\n"
 
-    # Scoping Length
-    length = settings.get("length", "medium")
-    if length == "short":
-        user_prompt += "Length: Short (about 120-150 words).\n"
-    elif length == "long":
-        user_prompt += "Length: Long (about 400-500 words).\n"
+    # Scoping Length (user-specified word count in prompt overrides default dropdown length)
+    requested_min_words, requested_aim_words = extract_requested_word_count(custom_details)
+    if requested_min_words:
+        user_prompt += (
+            f"\nCRITICAL WORD COUNT REQUIREMENT:\n"
+            f"- The user explicitly requested AT LEAST {requested_min_words} words.\n"
+            f"- The English 'story' field MUST contain AT LEAST {requested_min_words} words "
+            f"(aim for roughly {requested_min_words} to {requested_aim_words} words).\n"
+            f"- Do NOT summarize or end prematurely. Develop full scenes, vivid descriptions, dialogue, and narrative depth.\n"
+        )
     else:
-        user_prompt += "Length: Medium (about 250-300 words).\n"
+        length = settings.get("length", "medium")
+        if length == "short":
+            user_prompt += "Length: Short (about 120-150 words).\n"
+        elif length == "long":
+            user_prompt += "Length: Long (about 400-500 words).\n"
+        else:
+            user_prompt += "Length: Medium (about 250-300 words).\n"
 
     # Factuality
     if settings.get("is_factual"):
@@ -4789,10 +4847,62 @@ def generate_text():
             user_prompt += "- Connect the scientific concept directly to language acquisition challenges, fluency development, and the adaptability/agility needed to translate and simplify concepts.\n"
 
     try:
-        output_data = query_deepseek_with_system(system_prompt, user_prompt)
+        generation_max_tokens = 2500
+        if requested_min_words:
+            generation_max_tokens = max(2500, min(8000, int(requested_aim_words * 2.2) + 800))
+
+        output_data = query_deepseek_with_system(system_prompt, user_prompt, max_tokens=generation_max_tokens)
         generated_content = output_data['choices'][0]['message']['content'].strip()
 
         title, story_text = parse_story_response(generated_content)
+
+        # Verify & enforce minimum word count if user explicitly specified one in the prompt
+        if requested_min_words:
+            max_expansions = 3
+            for attempt in range(max_expansions):
+                current_word_count = len(story_text.split())
+                if current_word_count >= requested_min_words:
+                    break
+                missing_words = requested_min_words - current_word_count
+                target_addition = max(80, missing_words + 75)
+                print(
+                    f"[WordCountEnforcement] Story has {current_word_count} words (< {requested_min_words}). "
+                    f"Expanding by ~{target_addition} words (attempt {attempt + 1}/{max_expansions})...",
+                    flush=True,
+                )
+                expand_system = (
+                    "You are an expert English teacher seamlessly expanding an educational story. "
+                    "Respond ONLY with valid JSON containing a single key: 'continuation'. "
+                    "Do NOT include markdown code blocks or any text outside the JSON object."
+                )
+                level_hint = f" at CEFR level {str(explicit_cefr).upper().strip()}" if explicit_cefr else ""
+                expand_user = (
+                    f"Existing English story ({current_word_count} words):\n\n"
+                    f"{story_text}\n\n"
+                    f"REQUIREMENT: The story MUST be at least {requested_min_words} words long in total, "
+                    f"so at least {missing_words} additional words are needed.\n"
+                    f"Write a seamless continuation / next scene of AT LEAST {target_addition} words{level_hint} "
+                    f"that continues naturally after the final paragraph above without repeating anything already told. "
+                    f"Respond with JSON: {{\"continuation\": \"...\"}}"
+                )
+                exp_max_tokens = max(1800, min(6000, int(target_addition * 2.2) + 500))
+                exp_out = query_deepseek_with_system(expand_system, expand_user, max_tokens=exp_max_tokens)
+                exp_raw = exp_out['choices'][0]['message']['content'].strip()
+                cleaned_exp = re.sub(r'^```(?:json)?\s*|\s*```$', '', exp_raw, flags=re.IGNORECASE).strip()
+                extra_text = ""
+                try:
+                    parsed_exp = json.loads(cleaned_exp)
+                    extra_text = (parsed_exp.get("continuation") or parsed_exp.get("story") or "").strip()
+                except Exception:
+                    m_cont = re.search(r'"continuation"\s*:\s*"(.*)', cleaned_exp, re.DOTALL)
+                    if m_cont:
+                        extra_text = re.sub(r'"\s*\}?\s*$', '', m_cont.group(1)).replace('\\n', '\n').replace('\\"', '"').strip()
+                    elif not cleaned_exp.startswith('{'):
+                        extra_text = cleaned_exp
+                if extra_text and len(extra_text.split()) >= 15:
+                    story_text = story_text.rstrip() + "\n\n" + extra_text
+                else:
+                    break
 
         # Zapisz wygenerowaną historię do Firestore
         text_hash = hashlib.sha256(story_text.encode('utf-8')).hexdigest()
