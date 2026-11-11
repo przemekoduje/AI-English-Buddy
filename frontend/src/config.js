@@ -15,6 +15,21 @@ export const getApiBaseUrl = () => {
 
 export const API_BASE_URL = getApiBaseUrl();
 
+export const getAuthHeaders = (extra = {}) => {
+  const headers = { ...extra };
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem('buddy_user');
+      const token = raw ? JSON.parse(raw)?.token : null;
+      if (token) {
+        headers['X-Session-Token'] = token;
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+  } catch (e) {}
+  return headers;
+};
+
 export const STRIPE_PUBLISHABLE_KEY =
   process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY ||
   'pk_test_51UQUViEvr5fdmAgWFbwgVcCm14xZwO6Re6F9oN6yafLc0Jem1kmNBiwAx7fFgoQM3zTO4Tm2dL9qjckHKMN6lW0s00PXyJf6YY';

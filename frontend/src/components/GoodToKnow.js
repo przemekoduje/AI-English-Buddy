@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, getAuthHeaders } from '../config';
 import {
   LOFI_SOUNDSCAPES,
   pickRandomSoundscape,
@@ -98,12 +98,7 @@ const fetchNBackLetterAudio = async (letter, audioCtx = null) => {
   NBACK_PREFETCH_INFLIGHT.add(key);
 
   try {
-    let headers = { 'Content-Type': 'application/json' };
-    try {
-      const userRaw = localStorage.getItem('buddy_user');
-      const token = userRaw ? JSON.parse(userRaw)?.token : null;
-      if (token) headers.Authorization = `Bearer ${token}`;
-    } catch (e) {}
+    let headers = getAuthHeaders({ 'Content-Type': 'application/json' });
 
     const res = await fetch(`${API_BASE_URL}/api/tts`, {
       method: 'POST',
@@ -1436,7 +1431,7 @@ export const PhonemicFluencyGame = ({ onClose }) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/fluency/validate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           type: 'phonemic',
           word: clean,
@@ -2146,7 +2141,7 @@ export const SemanticFluencyGame = ({ onClose }) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/fluency/validate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           type: 'semantic',
           word: clean,

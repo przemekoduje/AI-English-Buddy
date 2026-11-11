@@ -13,7 +13,9 @@ import edge_tts
 import firebase_admin
 from firebase_admin import credentials, firestore
 import hashlib
+import hmac
 import smtplib
+from concurrent.futures import ThreadPoolExecutor
 from email.mime.text import MIMEText
 import random
 import json
@@ -705,6 +707,103 @@ else:
 
 import secrets
 
+USAGE_LOG_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+_RATE_LIMIT_LOCK = threading.Lock()
+_RATE_LIMIT_BUCKETS = {}
+_DAILY_QUOTA_BUCKETS = {}
+
+def get_client_ip():
+    xff = (request.headers.get("X-Forwarded-For") or "").strip()
+    if xff:
+        return xff.split(",")[0].strip()
+    return (request.remote_addr or "unknown").strip()
+
+def check_rate_limit(bucket_key, max_calls, window_seconds):
+    """Thread-safe sliding window rate limiter returning (allowed, retry_after_seconds)."""
+    now = time.time()
+    with _RATE_LIMIT_LOCK:
+        if len(_RATE_LIMIT_BUCKETS) > 10000:
+            cutoff_global = now - 3600
+            stale = [k for k, ts in _RATE_LIMIT_BUCKETS.items() if not ts or ts[-1] < cutoff_global]
+            for k in stale[:5000]:
+                _RATE_LIMIT_BUCKETS.pop(k, None)
+        timestamps = _RATE_LIMIT_BUCKETS.get(bucket_key, [])
+        cutoff = now - window_seconds
+        timestamps = [t for t in timestamps if t > cutoff]
+        if len(timestamps) >= max_calls:
+            retry_after = max(1, int(timestamps[0] + window_seconds - now) + 1)
+            _RATE_LIMIT_BUCKETS[bucket_key] = timestamps
+            return False, retry_after
+        timestamps.append(now)
+        _RATE_LIMIT_BUCKETS[bucket_key] = timestamps
+        return True, 0
+
+def enforce_user_ai_quota(user_email, category="llm"):
+    """Enforces burst & daily rate limits per authenticated user to stop runaway loops or cost abuse."""
+    if not user_email:
+        return False, (jsonify({"error": "Wymagane zalogowanie"}), 401)
+
+    if is_admin(user_email):
+        allowed, retry = check_rate_limit(f"admin:{user_email}:{category}", 180, 60)
+        if not allowed:
+            return False, (jsonify({"error": f"Przekroczono limit bezpieczeństwa zapytań ({retry}s)."}), 429)
+        return True, None
+
+    sub = get_user_subscription(user_email)
+    tier = sub.get("tier", "starter")
+    is_paid = tier in ("pro", "intensive") and sub.get("status") in ("active", "trialing")
+
+    burst_limits = {
+        "llm": (35 if is_paid else 20, 60),
+        "tts": (60 if is_paid else 30, 60),
+        "stt": (35 if is_paid else 20, 60),
+        "email": (5 if is_paid else 3, 3600),
+        "live_token": (15 if is_paid else 6, 3600),
+        "gcp_tts": (20 if is_paid else 10, 3600),
+    }
+    daily_caps = {
+        "llm": 600 if is_paid else 80,
+        "tts": 1200 if is_paid else 150,
+        "stt": 600 if is_paid else 80,
+        "email": 25 if is_paid else 5,
+        "live_token": 40 if is_paid else 12,
+        "gcp_tts": 60 if is_paid else 15,
+    }
+
+    burst_max, burst_win = burst_limits.get(category, (30, 60))
+    ok_burst, retry = check_rate_limit(f"burst:{user_email}:{category}", burst_max, burst_win)
+    if not ok_burst:
+        return False, (jsonify({"error": f"Zbyt wiele zapytań. Spróbuj ponownie za {retry} s."}), 429)
+
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    daily_key = f"{today_str}:{user_email}:{category}"
+    daily_limit = daily_caps.get(category, 200)
+    with _RATE_LIMIT_LOCK:
+        if len(_DAILY_QUOTA_BUCKETS) > 10000:
+            stale_days = [k for k in _DAILY_QUOTA_BUCKETS if not k.startswith(today_str)]
+            for k in stale_days:
+                _DAILY_QUOTA_BUCKETS.pop(k, None)
+        used_today = _DAILY_QUOTA_BUCKETS.get(daily_key, 0)
+        if used_today >= daily_limit:
+            return False, (jsonify({"error": "Osiągnięto dzienny limit bezpieczeństwa dla tej funkcji. Spróbuj ponownie jutro lub przejdź na wyższy pakiet."}), 429)
+        _DAILY_QUOTA_BUCKETS[daily_key] = used_today + 1
+
+    return True, None
+
+def _get_grant_signing_secret():
+    raw = os.getenv("ADMIN_GRANT_SECRET") or os.getenv("EMAIL_PASSWORD") or os.getenv("GEMINI_API_KEY") or "speakling_internal_hmac_secret"
+    return hashlib.sha256(str(raw).encode("utf-8")).digest()
+
+def _sign_mode_grant_token(email, mode):
+    msg = f"{email.strip().lower()}:{mode.strip()}".encode("utf-8")
+    return hmac.new(_get_grant_signing_secret(), msg, hashlib.sha256).hexdigest()
+
+def _verify_mode_grant_token(email, mode, provided_token):
+    if not provided_token or not email or not mode:
+        return False
+    expected = _sign_mode_grant_token(email, mode)
+    return hmac.compare_digest(str(provided_token).strip(), expected)
+
 def log_api_usage(user_email, service, feature, model, prompt_tokens=0, completion_tokens=0, quantity=0, **kwargs):
     if not user_email or user_email == "guest@speakling.ai":
         return
@@ -764,7 +863,7 @@ def log_api_usage(user_email, service, feature, model, prompt_tokens=0, completi
             except Exception as e_inner:
                 print(f"Error logging API usage (async): {e_inner}", flush=True)
 
-        threading.Thread(target=_persist_usage, daemon=True).start()
+        USAGE_LOG_EXECUTOR.submit(_persist_usage)
     except Exception as e:
         print(f"Error logging API usage: {e}", flush=True)
 
@@ -836,53 +935,72 @@ def track_chat_completion(user_email, feature, messages, response_format=None, c
         raise Exception("Brak skonfigurowanych dostawców AI.")
 
     last_error = None
-    retryable_candidates = list(candidates)
+    # Maksymalnie 3 modele i bez wielokrotnego mnożenia wywołań (ochrona przed pętlami retry)
+    retryable_candidates = list(candidates)[:3]
+    transient_candidates = []
 
-    for attempt_pass in range(2):
-        next_pass_candidates = []
-        for service, cli, model in retryable_candidates:
+    for service, cli, model in retryable_candidates:
+        try:
+            req_kwargs = {
+                "model": model,
+                "messages": messages,
+                **kwargs
+            }
+            if "gemini" in model.lower() and "max_tokens" in req_kwargs:
+                del req_kwargs["max_tokens"]
+
+            if response_format:
+                req_kwargs["response_format"] = response_format
+
+            ai_response = cli.chat.completions.create(**req_kwargs)
+
             try:
-                req_kwargs = {
-                    "model": model,
-                    "messages": messages,
-                    **kwargs
-                }
-                if "gemini" in model.lower() and "max_tokens" in req_kwargs:
-                    del req_kwargs["max_tokens"]
+                usage = getattr(ai_response, 'usage', None)
+                if usage:
+                    log_api_usage(
+                        user_email=user_email or "guest@speakling.ai",
+                        service=service,
+                        feature=feature,
+                        model=model,
+                        prompt_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
+                        completion_tokens=getattr(usage, 'completion_tokens', 0) or 0
+                    )
+            except Exception as e_log:
+                print(f"Error logging chat completion: {e_log}", flush=True)
 
-                if response_format:
-                    req_kwargs["response_format"] = response_format
+            return ai_response
+        except Exception as e_prov:
+            err_str = str(e_prov)
+            last_error = e_prov
+            print(f"Błąd dostawcy AI {service} ({model}): {err_str}. Próbuję kolejnego...", flush=True)
+            if not _is_model_not_found_error(err_str) and _is_transient_ai_error(err_str):
+                transient_candidates.append((service, cli, model))
+            continue
 
-                ai_response = cli.chat.completions.create(**req_kwargs)
-
-                try:
-                    usage = getattr(ai_response, 'usage', None)
-                    if usage:
-                        log_api_usage(
-                            user_email=user_email or "guest@speakling.ai",
-                            service=service,
-                            feature=feature,
-                            model=model,
-                            prompt_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
-                            completion_tokens=getattr(usage, 'completion_tokens', 0) or 0
-                        )
-                except Exception as e_log:
-                    print(f"Error logging chat completion: {e_log}", flush=True)
-
-                return ai_response
-            except Exception as e_prov:
-                err_str = str(e_prov)
-                last_error = e_prov
-                print(f"Błąd dostawcy AI {service} ({model}, próba {attempt_pass + 1}): {err_str}. Próbuję kolejnego...", flush=True)
-                if not _is_model_not_found_error(err_str) and _is_transient_ai_error(err_str):
-                    next_pass_candidates.append((service, cli, model))
-                continue
-
-        if attempt_pass == 0 and next_pass_candidates:
-            time.sleep(0.9)
-            retryable_candidates = next_pass_candidates
-        else:
-            break
+    # Pojedynczy dodatkowy retry wyłącznie dla pierwszego kandydata przy chwilowym błędzie 503/429
+    if transient_candidates:
+        service, cli, model = transient_candidates[0]
+        try:
+            time.sleep(0.8)
+            req_kwargs = {"model": model, "messages": messages, **kwargs}
+            if "gemini" in model.lower() and "max_tokens" in req_kwargs:
+                del req_kwargs["max_tokens"]
+            if response_format:
+                req_kwargs["response_format"] = response_format
+            ai_response = cli.chat.completions.create(**req_kwargs)
+            usage = getattr(ai_response, 'usage', None)
+            if usage:
+                log_api_usage(
+                    user_email=user_email or "guest@speakling.ai",
+                    service=service,
+                    feature=feature,
+                    model=model,
+                    prompt_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
+                    completion_tokens=getattr(usage, 'completion_tokens', 0) or 0
+                )
+            return ai_response
+        except Exception as e_retry:
+            last_error = e_retry
 
     if last_error:
         raise last_error
@@ -938,16 +1056,16 @@ def _normalize_audio_mime(mime_type):
 
 
 def transcribe_audio_bytes(audio_bytes, mime_type="audio/webm", user_email=None, feature="transcribe", timeout=20):
-    """Zamienia mowę na tekst: najpierw Google Gemini, potem Hugging Face Whisper jako zapas.
-    Zwraca pusty string, jeśli nic nie rozpoznano lub wszystkie usługi zawiodły."""
-    if not audio_bytes:
+    """Zamienia mowę na tekst przez Google Gemini STT (maks. 2 modele, z limitem rozmiaru)."""
+    if not audio_bytes or len(audio_bytes) > 12 * 1024 * 1024:
         return ""
     mime = _normalize_audio_mime(mime_type)
 
     gemini_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
     if gemini_key:
         audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
-        for g_model in GEMINI_TRANSCRIBE_MODELS:
+        # Ograniczenie do 2 najlepszych modeli bez mnożenia 4 nieudanych prób
+        for g_model in GEMINI_TRANSCRIBE_MODELS[:2]:
             try:
                 parts = [{"inline_data": {"mime_type": mime, "data": audio_b64}}]
                 if "transcribe" not in g_model:
@@ -959,6 +1077,8 @@ def transcribe_audio_bytes(audio_bytes, mime_type="audio/webm", user_email=None,
                 res = requests.post(url, json=payload, timeout=timeout)
                 if not res.ok:
                     print(f"Gemini STT ({g_model}) error {res.status_code}: {res.text[:300]}", flush=True)
+                    if res.status_code in (400, 401, 403):
+                        return ""
                     continue
                 data = res.json()
                 text_chunks = []
@@ -989,10 +1109,19 @@ def transcribe_audio_bytes(audio_bytes, mime_type="audio/webm", user_email=None,
 
 SESSION_TOKEN_CACHE = {}
 
+def _extract_session_token_from_headers():
+    token = (request.headers.get("X-Session-Token") or "").strip()
+    if token:
+        return token
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return None
+
 def get_user_from_request():
     if 'db' not in globals() or db is None:
         return None
-    token = request.headers.get("X-Session-Token")
+    token = _extract_session_token_from_headers()
     if not token:
         return None
     now = time.time()
@@ -1565,14 +1694,15 @@ def get_subscription_status():
 def track_subscription_live_time():
     """Śledzi czas trwania sesji Live i odlicza minuty z twardego limitu w czasie rzeczywistym."""
     user_email = get_user_from_request()
-    req_data = request.get_json(silent=True) or {}
     if not user_email:
-        user_email = req_data.get("user_email") or "guest@speakling.ai"
+        return jsonify({"error": "Wymagane zalogowanie"}), 401
+    req_data = request.get_json(silent=True) or {}
 
     seconds = float(req_data.get("duration_seconds", 0) or 0)
     minutes = float(req_data.get("minutes", 0) or 0)
     if seconds > 0:
         minutes += seconds / 60.0
+    minutes = max(0.0, min(minutes, 30.0))
 
     if minutes <= 0:
         sub = get_user_subscription(user_email)
@@ -1638,8 +1768,10 @@ def create_stripe_checkout_session():
                 "subscription": get_user_subscription(user_email)
             }), 200
 
-    # Tryb symulacyjny (gdy klucz Stripe nie został skonfigurowany w środowisku produkcyjnym)
+    # Tryb testowy dozwolony WYŁĄCZNIE dla administratora, gdy Stripe nie jest skonfigurowany
     if not STRIPE_SECRET_KEY:
+        if not is_admin(user_email):
+            return jsonify({"error": "Bramka płatności Stripe nie jest obecnie skonfigurowana na serwerze."}), 503
         now = datetime.utcnow()
         if plan == "topup_60":
             current_extra = sub.get("extra_live_minutes", 0.0)
@@ -1787,6 +1919,8 @@ def create_stripe_checkout_session():
 def verify_stripe_session():
     """Weryfikuje sesję Checkout po powrocie z bramki Stripe i natychmiast aktywuje pakiet użytkownika."""
     user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Wymagane zalogowanie"}), 401
     req_data = request.get_json(silent=True) or {}
     session_id = req_data.get("session_id", "").strip()
 
@@ -1797,8 +1931,14 @@ def verify_stripe_session():
     try:
         stripe.api_key = stripe_sec
         session = stripe.checkout.Session.retrieve(session_id)
-        email = session.metadata.get("user_email") or user_email or (session.customer_details.email if session.customer_details else None)
-        plan = session.metadata.get("plan", "pro")
+        sess_status = getattr(session, "status", None)
+        pay_status = getattr(session, "payment_status", None)
+        if sess_status != "complete" and pay_status not in ("paid", "no_payment_required"):
+            return jsonify({"success": False, "error": "Sesja płatności nie została jeszcze opłacona."}), 400
+        email = (session.metadata.get("user_email") if getattr(session, "metadata", None) else None) or user_email or (session.customer_details.email if session.customer_details else None)
+        if email and email.lower() != user_email.lower() and not is_admin(user_email):
+            return jsonify({"success": False, "error": "Sesja płatności nie należy do tego konta."}), 403
+        plan = (session.metadata.get("plan", "pro") if getattr(session, "metadata", None) else "pro")
 
         if email:
             sub = get_user_subscription(email)
@@ -1914,10 +2054,8 @@ def stripe_webhook():
             print(f"Błąd weryfikacji podpisu Stripe Webhook: {e}")
             return jsonify({"error": "Nieprawidłowy podpis"}), 400
     else:
-        try:
-            event = json.loads(payload.decode('utf-8'))
-        except Exception:
-            return jsonify({"error": "Nieprawidłowy payload"}), 400
+        print("ODRZUCONO Stripe Webhook: brak STRIPE_WEBHOOK_SECRET w środowisku.", flush=True)
+        return jsonify({"error": "Stripe webhook secret nie jest skonfigurowany"}), 503
 
     event_type = event.get("type", "")
     data_object = event.get("data", {}).get("object", {})
@@ -2033,30 +2171,35 @@ def stripe_webhook():
 
 @app.route("/api/subscription/simulate-activate", methods=['POST'])
 def simulate_activate_subscription():
-    """Umożliwia błyskawiczne testowanie przełączania pakietów oraz symulacji 7-dniowego okresu próbnego."""
+    """Umożliwia bezpieczne przełączenie na Starter; wyższe pakiety/reset limitów tylko dla administratora."""
     user_email = get_user_from_request()
-    req_data = request.get_json(silent=True) or {}
-    if not user_email:
-        user_email = req_data.get("user_email")
     if not user_email:
         return jsonify({"error": "Wymagane zalogowanie"}), 401
+    req_data = request.get_json(silent=True) or {}
 
     tier = req_data.get("tier", "starter").lower().strip()
     if tier not in SUBSCRIPTION_PLANS:
         return jsonify({"error": "Nieznany pakiet subskrypcyjny"}), 400
 
+    admin_user = is_admin(user_email)
+    if tier != "starter" and not admin_user:
+        return jsonify({"error": "Aktywacja płatnego pakietu wymaga opłacenia subskrypcji przez Stripe."}), 403
+
     plan_info = SUBSCRIPTION_PLANS[tier]
     now = datetime.utcnow()
-    trial_end = (now + timedelta(days=7)).isoformat() if plan_info.get("trial_days") else None
+    trial_end = (now + timedelta(days=7)).isoformat() if (admin_user and plan_info.get("trial_days")) else None
 
-    update_user_subscription(user_email, {
+    updates = {
         "tier": tier,
         "status": "trialing" if trial_end else ("free" if tier == "starter" else "active"),
         "trial_ends_at": trial_end,
         "live_minutes_limit": plan_info["live_minutes_limit"],
-        "live_minutes_used": 0.0,
         "billing_cycle_start": now.isoformat()
-    })
+    }
+    if admin_user:
+        updates["live_minutes_used"] = 0.0
+
+    update_user_subscription(user_email, updates)
 
     return jsonify({
         "success": True,
@@ -2069,13 +2212,17 @@ def simulate_activate_subscription():
 def register():
     if 'db' not in globals() or db is None:
         return jsonify({"error": "Database is not available"}), 500
+    client_ip = get_client_ip()
+    ok_ip, retry_ip = check_rate_limit(f"reg_ip:{client_ip}", 5, 86400)
+    if not ok_ip:
+        return jsonify({"error": f"Too many accounts created from this network. Try again later ({retry_ip}s)."}), 429
     data = request.get_json() or {}
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
     full_name = data.get("full_name", "").strip()
 
-    if not email or not password:
-        return jsonify({"error": "Email and password are required"}), 400
+    if not email or not password or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return jsonify({"error": "Valid email and password are required"}), 400
 
     try:
         # Sprawdź czy użytkownik istnieje
@@ -2123,6 +2270,10 @@ def register():
 def login():
     if 'db' not in globals() or db is None:
         return jsonify({"error": "Database is not available"}), 500
+    client_ip = get_client_ip()
+    ok_ip, retry_ip = check_rate_limit(f"login_ip:{client_ip}", 25, 600)
+    if not ok_ip:
+        return jsonify({"error": f"Too many login attempts. Please wait {retry_ip} seconds."}), 429
     data = request.get_json() or {}
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
@@ -2166,8 +2317,9 @@ def login():
 def logout():
     if 'db' not in globals() or db is None:
         return jsonify({"error": "Baza danych nie jest dostępna"}), 500
-    token = request.headers.get("X-Session-Token")
+    token = _extract_session_token_from_headers()
     if token:
+        SESSION_TOKEN_CACHE.pop(token, None)
         try:
             db.collection('sessions').document(token).delete()
         except Exception as e:
@@ -2545,9 +2697,13 @@ def detect_sentence_syntax(sentence, clicked_word=""):
 
 @app.route("/api/translate", methods=['POST'])
 def translate_text():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
     data = request.get_json() or {}
-    text_to_translate = data.get("text")
-    context_sentence = data.get("context")
+    text_to_translate = (data.get("text") or "")[:5000]
+    context_sentence = (data.get("context") or "")[:5000] if data.get("context") else None
     source_lang = data.get("source_lang", "English").strip() or "English"
     target_lang = data.get("target_lang", "Polish").strip() or "Polish"
     if not text_to_translate:
@@ -2560,6 +2716,10 @@ def translate_text():
         if isinstance(cached, dict):
             return jsonify(cached)
         return jsonify({"translation": cached, "sentence_translation": ""})
+
+    ok_q, err_q = enforce_user_ai_quota(user_email, "llm")
+    if not ok_q:
+        return err_q
 
     words_list = text_to_translate.strip().split()
     is_phrase = len(words_list) > 1
@@ -2767,12 +2927,19 @@ def translate_text():
 
 @app.route("/api/translate/ai-assistant", methods=['POST'])
 def translate_ai_assistant():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    ok_q, err_q = enforce_user_ai_quota(user_email, "llm")
+    if not ok_q:
+        return err_q
+
     data = request.get_json() or {}
-    text = data.get("text", "").strip()
-    translation = data.get("translation", "").strip()
+    text = (data.get("text") or "").strip()[:2000]
+    translation = (data.get("translation") or "").strip()[:2000]
     source_lang = data.get("source_lang", "English").strip() or "English"
     target_lang = data.get("target_lang", "Polish").strip() or "Polish"
-    question = data.get("question", "").strip()
+    question = (data.get("question") or "").strip()[:600]
 
     if not text:
         return jsonify({"error": "Brak tekstu źródłowego"}), 400
@@ -3445,8 +3612,12 @@ def semantic_group_transcript(entries):
     # Przygotuj wpisy z indeksami
     indexed_entries = [{"id": i, "text": entry["text"], "start": entry["start"], "end": entry["end"]} for i, entry in enumerate(entries)]
     
+    # Ochrona kosztów: maksymalnie 15 chunków LLM (900 segmentów); reszta grupowana regułowo bez kosztów API
+    max_ai_chunks = 15
     chunk_size = 60
-    chunks = [indexed_entries[i:i+chunk_size] for i in range(0, len(indexed_entries), chunk_size)]
+    all_chunks = [indexed_entries[i:i+chunk_size] for i in range(0, len(indexed_entries), chunk_size)]
+    chunks = all_chunks[:max_ai_chunks]
+    overflow_entries = [item for ch in all_chunks[max_ai_chunks:] for item in ch]
     
     system_prompt = (
         "You are an expert audio transcription editor. Your job is to take a list of sequential transcript segments "
@@ -3525,7 +3696,10 @@ def semantic_group_transcript(entries):
                 grouped_results.extend(chunk_results)
             except Exception as fut_err:
                 print(f"Błąd krytyczny wątku w chunk {idx}: {fut_err}")
-                
+
+    if overflow_entries:
+        grouped_results.extend(aggregate_transcript(overflow_entries))
+
     return aggregate_transcript(grouped_results)
 
 
@@ -4360,25 +4534,8 @@ def debug_youtube_transcript():
 
 
 def get_user_email_from_request():
-    email = get_user_from_request()
-    if email:
-        return email
-    token = request.headers.get("X-Session-Token")
-    if token and 'db' in globals() and db is not None:
-        try:
-            session_ref = db.collection('sessions').document(token).get()
-            if session_ref.exists:
-                session_data = session_ref.to_dict() or {}
-                if session_data.get("email"):
-                    return session_data.get("email")
-        except Exception:
-            pass
-    if request.args.get("user_email"):
-        return request.args.get("user_email")
-    req_data = request.get_json(silent=True) or {}
-    if req_data.get("user_email"):
-        return req_data.get("user_email")
-    return None
+    # Ufamy wyłącznie zweryfikowanemu tokenowi sesji (X-Session-Token lub Authorization: Bearer)
+    return get_user_from_request()
 
 
 @app.route("/api/media/custom-videos", methods=['GET', 'POST'])
@@ -4651,6 +4808,9 @@ def generate_text():
     user_email = get_user_from_request()
     if not user_email:
         return jsonify({"error": "Brak autoryzacji"}), 401
+    ok_q, err_q = enforce_user_ai_quota(user_email, "llm")
+    if not ok_q:
+        return err_q
 
     data = request.get_json() or {}
     
@@ -5178,9 +5338,6 @@ def handle_daily_practice():
     """Zarządza licznikiem dziennego czasu ćwiczeń (Your daily practice) użytkownika."""
     user_email = get_user_from_request()
     if not user_email:
-        req_data = request.get_json(silent=True) or {}
-        user_email = req_data.get("user_email")
-    if not user_email:
         return jsonify({"error": "Brak autoryzacji"}), 401
 
     today_str = datetime.utcnow().strftime("%Y-%m-%d")
@@ -5238,12 +5395,15 @@ def handle_daily_practice():
 def submit_user_feedback():
     """Zapisuje zgłoszenie feedbacku, uwagi lub błędu od użytkownika w Firestore."""
     user_email = get_user_from_request()
-    req_data = request.get_json(silent=True) or {}
     if not user_email:
-        user_email = req_data.get("email") or "guest@speakling.ai"
+        return jsonify({"error": "Wymagane zalogowanie"}), 401
+    ok_fb, retry_fb = check_rate_limit(f"feedback:{user_email}", 10, 3600)
+    if not ok_fb:
+        return jsonify({"error": f"Zbyt wiele zgłoszeń. Odczekaj {retry_fb} s."}), 429
+    req_data = request.get_json(silent=True) or {}
 
-    category = str(req_data.get("category", "suggestion") or "suggestion").strip()
-    message = str(req_data.get("message", "") or "").strip()
+    category = str(req_data.get("category", "suggestion") or "suggestion").strip()[:50]
+    message = str(req_data.get("message", "") or "").strip()[:3000]
     if not message:
         return jsonify({"error": "Treść wiadomości nie może być pusta."}), 400
 
@@ -6371,20 +6531,16 @@ FLUENCY_VALIDATION_CACHE = {}
 
 @app.route("/api/fluency/validate", methods=['POST'])
 def validate_fluency_word():
-    user_email = None
-    try:
-        user_email = get_user_from_request()
-    except Exception:
-        pass
+    user_email = get_user_from_request()
     if not user_email:
-        user_email = "guest@speakling.ai"
+        return jsonify({"error": "Brak autoryzacji"}), 401
 
     data = request.get_json(silent=True) or {}
     test_type = (data.get('type') or 'semantic').strip().lower()  # 'phonemic' or 'semantic'
-    word = (data.get('word') or '').strip().lower()
-    target = (data.get('target') or '').strip().lower()  # letter (np. 'k') lub category id ('tools')
-    category_label = (data.get('category_label') or '').strip()
-    language = (data.get('language') or 'en').strip().lower()
+    word = (data.get('word') or '').strip().lower()[:60]
+    target = (data.get('target') or '').strip().lower()[:60]  # letter (np. 'k') lub category id ('tools')
+    category_label = (data.get('category_label') or '').strip()[:100]
+    language = (data.get('language') or 'en').strip().lower()[:10]
 
     if not word or not target:
         return jsonify({"valid": False, "reason": "Brakujące słowo lub cel", "word": word}), 400
@@ -6392,6 +6548,10 @@ def validate_fluency_word():
     cache_key = f"{test_type}::{target}::{word}::{language}"
     if cache_key in FLUENCY_VALIDATION_CACHE:
         return jsonify(FLUENCY_VALIDATION_CACHE[cache_key]), 200
+
+    ok_q, err_q = enforce_user_ai_quota(user_email, "llm")
+    if not ok_q:
+        return err_q
 
     if test_type == 'phonemic':
         # Sprawdzenie pierwszej litery
@@ -6469,12 +6629,19 @@ def validate_fluency_word():
 # ### NOWY ENDPOINT: WYSYŁANIE SŁÓW Z NOTATNIKA NA E-MAIL ###
 @app.route("/api/send-notebook-email", methods=['POST'])
 def send_notebook_email():
-    data = request.get_json(silent=True) or {}
-    recipient_email = data.get('recipient_email')
-    notebook_words = data.get('notebook_words') # To będzie lista obiektów {original, translated}
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    ok_q, err_q = enforce_user_ai_quota(user_email, "email")
+    if not ok_q:
+        return err_q
 
-    if not recipient_email or not notebook_words:
-        return jsonify({"error": "Adres e-mail odbiorcy i słowa z notatnika są wymagane."}), 400
+    data = request.get_json(silent=True) or {}
+    recipient_email = (data.get('recipient_email') or '').strip()
+    notebook_words = (data.get('notebook_words') or [])[:100] # Limit 100 słów na e-mail
+
+    if not recipient_email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", recipient_email) or not notebook_words:
+        return jsonify({"error": "Poprawny adres e-mail odbiorcy i słowa z notatnika są wymagane."}), 400
     
     if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
         return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Skonfiguruj zmienne w Cloud Run (GCP)."}), 400
@@ -6734,12 +6901,19 @@ def generate_summary():
 
 @app.route("/api/send-summary-email", methods=['POST'])
 def send_summary_email():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    ok_q, err_q = enforce_user_ai_quota(user_email, "email")
+    if not ok_q:
+        return err_q
+
     data = request.get_json(silent=True) or {}
-    recipient_email = data.get('recipient_email')
+    recipient_email = (data.get('recipient_email') or '').strip()
     summary = data.get('summary')
 
-    if not recipient_email or not summary:
-        return jsonify({"error": "Adres e-mail odbiorcy i podsumowanie są wymagane."}), 400
+    if not recipient_email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", recipient_email) or not summary:
+        return jsonify({"error": "Poprawny adres e-mail odbiorcy i podsumowanie są wymagane."}), 400
     
     if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
         return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Skonfiguruj zmienne w Cloud Run (GCP)."}), 400
@@ -6845,8 +7019,15 @@ def send_summary_email():
 
 @app.route("/api/analyze-grammar", methods=['POST'])
 def analyze_grammar():
-    data = request.get_json()
-    text = data.get('text')
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    ok_q, err_q = enforce_user_ai_quota(user_email, "llm")
+    if not ok_q:
+        return err_q
+
+    data = request.get_json() or {}
+    text = (data.get('text') or '').strip()[:8000]
 
     if not text:
         return jsonify({"error": "Tekst do analizy gramatycznej jest wymagany."}), 400
@@ -6920,6 +7101,11 @@ def analyze_grammar():
 @app.route("/api/mastery-prepare", methods=['POST'])
 def prepare_mastery_content():
     user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    ok_q, err_q = enforce_user_ai_quota(user_email, "llm")
+    if not ok_q:
+        return err_q
     sub = get_user_subscription(user_email)
     if not sub.get("can_access_mastery"):
         return jsonify({
@@ -7057,6 +7243,11 @@ def prepare_mastery_content():
 @app.route('/api/mastery-evaluate', methods=['POST'])
 def evaluate_mastery():
     user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    ok_q, err_q = enforce_user_ai_quota(user_email, "stt")
+    if not ok_q:
+        return err_q
     sub = get_user_subscription(user_email)
     if not sub.get("can_access_mastery"):
         return jsonify({
@@ -7380,28 +7571,37 @@ def generate_gtts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
         print(f"gTTS fallback error: {e_gtts}", flush=True)
         return b""
 
-def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural"):
-    if gcp_tts_client:
-        try:
-            from google.cloud import texttospeech
-            is_pl = ('pl-PL' in voice_name or 'Marek' in voice_name or 'Zofia' in voice_name)
-            gcp_voice_name = "pl-PL-Wavenet-B" if is_pl else "en-US-Neural2-D"
-            lang_code = "pl-PL" if is_pl else "en-US"
-            
-            s_input = texttospeech.SynthesisInput(text=text_to_speak)
-            s_voice = texttospeech.VoiceSelectionParams(language_code=lang_code, name=gcp_voice_name)
-            s_audio_config = texttospeech.AudioConfig(
-                audio_encoding=texttospeech.AudioEncoding.MP3,
-                speaking_rate=1.0
-            )
-            response = gcp_tts_client.synthesize_speech(
-                request={'input': s_input, 'voice': s_voice, 'audio_config': s_audio_config}
-            )
-            if response.audio_content and len(response.audio_content) > 100:
-                print(f"Google Cloud TTS generated male voice audio ({gcp_voice_name})", flush=True)
-                return response.audio_content
-        except Exception as e_gcp:
-            print(f"Google Cloud TTS error: {e_gcp}, falling back...", flush=True)
+def generate_gcp_male_tts_bytes(text_to_speak, voice_name="en-US-BrianNeural", user_email=None):
+    if gcp_tts_client and user_email:
+        ok_gcp, _ = enforce_user_ai_quota(user_email, "gcp_tts")
+        if ok_gcp:
+            try:
+                from google.cloud import texttospeech
+                is_pl = ('pl-PL' in voice_name or 'Marek' in voice_name or 'Zofia' in voice_name)
+                gcp_voice_name = "pl-PL-Wavenet-B" if is_pl else "en-US-Neural2-D"
+                lang_code = "pl-PL" if is_pl else "en-US"
+                
+                s_input = texttospeech.SynthesisInput(text=text_to_speak)
+                s_voice = texttospeech.VoiceSelectionParams(language_code=lang_code, name=gcp_voice_name)
+                s_audio_config = texttospeech.AudioConfig(
+                    audio_encoding=texttospeech.AudioEncoding.MP3,
+                    speaking_rate=1.0
+                )
+                response = gcp_tts_client.synthesize_speech(
+                    request={'input': s_input, 'voice': s_voice, 'audio_config': s_audio_config}
+                )
+                if response.audio_content and len(response.audio_content) > 100:
+                    print(f"Google Cloud TTS generated male voice audio ({gcp_voice_name})", flush=True)
+                    log_api_usage(
+                        user_email=user_email,
+                        service="gcp_tts",
+                        feature="tts_fallback",
+                        model=gcp_voice_name,
+                        quantity=len(text_to_speak)
+                    )
+                    return response.audio_content
+            except Exception as e_gcp:
+                print(f"Google Cloud TTS error: {e_gcp}, falling back...", flush=True)
 
     gtts_audio = generate_gtts_bytes(text_to_speak, voice_name)
     if gtts_audio and len(gtts_audio) > 100:
@@ -7449,6 +7649,7 @@ def set_cached_tts(voice, text, base64_data):
 def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_email=None):
     if not text:
         return ""
+    text = str(text)[:2000]
 
     if "Neural" not in voice:
         voice = "en-US-BrianNeural"
@@ -7505,12 +7706,18 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
         try:
             data = asyncio.run(get_edge_audio_with_retry(full_clean_text, voice))
             if not data:
-                data = generate_gcp_male_tts_bytes(full_clean_text, voice)
-            return base64.b64encode(data).decode('utf-8')
+                data = generate_gcp_male_tts_bytes(full_clean_text, voice, user_email=user_email)
+            b64_out = base64.b64encode(data).decode('utf-8') if data else ""
+            if b64_out:
+                set_cached_tts(voice, text, b64_out)
+            return b64_out
         except Exception as e:
             print(f"Error generating TTS in single helper: {e}, using GCP male fallback...", flush=True)
-            data = generate_gcp_male_tts_bytes(full_clean_text, voice)
-            return base64.b64encode(data).decode('utf-8')
+            data = generate_gcp_male_tts_bytes(full_clean_text, voice, user_email=user_email)
+            b64_out = base64.b64encode(data).decode('utf-8') if data else ""
+            if b64_out:
+                set_cached_tts(voice, text, b64_out)
+            return b64_out
 
     # Otherwise, split by tags
     en_voice, pl_voice = get_voice_pair(voice)
@@ -7562,7 +7769,7 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
         if data:
             return data
             
-        return generate_gcp_male_tts_bytes(segment_text, segment_voice)
+        return generate_gcp_male_tts_bytes(segment_text, segment_voice, user_email=user_email)
         
     async def get_all_audio():
         tasks = []
@@ -7575,26 +7782,43 @@ def generate_tts_base64(text, voice="en-US-BrianNeural", ai_mode="free", user_em
     try:
         data = asyncio.run(get_all_audio())
         if not data:
-            data = generate_gcp_male_tts_bytes(text, voice)
-        return base64.b64encode(data).decode('utf-8')
+            data = generate_gcp_male_tts_bytes(text, voice, user_email=user_email)
+        b64_out = base64.b64encode(data).decode('utf-8') if data else ""
+        if b64_out:
+            set_cached_tts(voice, text, b64_out)
+        return b64_out
     except Exception as e:
         print(f"Error generating TTS in bilingual helper: {e}, using GCP male fallback...", flush=True)
-        data = generate_gcp_male_tts_bytes(text, voice)
-        return base64.b64encode(data).decode('utf-8')
+        data = generate_gcp_male_tts_bytes(text, voice, user_email=user_email)
+        b64_out = base64.b64encode(data).decode('utf-8') if data else ""
+        if b64_out:
+            set_cached_tts(voice, text, b64_out)
+        return b64_out
 
 @app.route("/api/tts", methods=['GET', 'POST'])
 def get_tts_audio():
     user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
     if request.method == 'POST':
         data = request.get_json() or {}
-        text = data.get("text", "")
-        voice = data.get("voice", "en-US-BrianNeural")
+        text = (data.get("text") or "").strip()[:2000]
+        voice = (data.get("voice") or "en-US-BrianNeural").strip()
     else:
-        text = request.args.get("text", "")
-        voice = request.args.get("voice", "en-US-BrianNeural")
+        text = (request.args.get("text") or "").strip()[:2000]
+        voice = (request.args.get("voice") or "en-US-BrianNeural").strip()
 
     if not text:
         return jsonify({"error": "Brak parametru text"}), 400
+
+    cached_audio = get_cached_tts(voice if "Neural" in voice else "en-US-BrianNeural", text)
+    if cached_audio:
+        return jsonify({"audio_base64": cached_audio})
+
+    ok_q, err_q = enforce_user_ai_quota(user_email, "tts")
+    if not ok_q:
+        return err_q
 
     base64_data = generate_tts_base64(text, voice, user_email=user_email)
     if not base64_data:
@@ -7977,6 +8201,9 @@ def chat_free():
     user_email = get_user_from_request()
     if not user_email:
         return jsonify({"error": "Brak autoryzacji"}), 401
+    ok_q, err_q = enforce_user_ai_quota(user_email, "llm")
+    if not ok_q:
+        return err_q
 
     history_str = request.form.get('history', '[]').strip()
     transcription = request.form.get('transcription', '').strip()
@@ -8282,10 +8509,15 @@ def chat_free():
 
 @app.route("/api/chat-free/summary", methods=['POST'])
 def generate_chat_summary():
-    user_email = get_user_from_request() or "guest@speakling.ai"
-        
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    ok_q, err_q = enforce_user_ai_quota(user_email, "llm")
+    if not ok_q:
+        return err_q
+
     data = request.get_json() or {}
-    history = data.get("history", [])
+    history = (data.get("history") or [])[:100]
 
     if not history:
         return jsonify({"error": "Brak historii rozmowy do podsumowania."}), 400
@@ -8432,6 +8664,10 @@ def get_live_config():
 @app.route("/api/live/transcribe", methods=['POST'])
 def live_transcribe():
     """Transcribes an audio turn (WAV / PCM) from Gemini Live for display in the chat transcript."""
+    u_email = get_user_from_request()
+    if not u_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+
     audio_file = request.files.get('audio')
     if not audio_file:
         return jsonify({"text": ""}), 200
@@ -8439,10 +8675,15 @@ def live_transcribe():
     audio_bytes = audio_file.read()
     if not audio_bytes or len(audio_bytes) < 300:
         return jsonify({"text": ""}), 200
+    if len(audio_bytes) > 4 * 1024 * 1024:
+        return jsonify({"error": "Plik audio jest zbyt duży (maks. 4 MB)."}), 413
+
+    ok_q, err_q = enforce_user_ai_quota(u_email, "stt")
+    if not ok_q:
+        return err_q
 
     get_gemini_api_key()  # upewnij się, że klucz Gemini jest załadowany
-    u_email = get_user_from_request() or request.form.get("user_email") or "guest@speakling.ai"
-    # Gemini (gemini-3.5-transcribe -> gemini-flash-lite-latest), zapas: Hugging Face Whisper
+    # Gemini (gemini-3.5-transcribe -> gemini-flash-lite-latest)
     text = transcribe_audio_bytes(
         audio_bytes,
         mime_type="audio/wav",
@@ -8466,16 +8707,16 @@ def live_transcribe():
 def log_live_usage():
     """Zapisuje zużycie tokenów i czas trwania sesji Gemini Live (Google AI Studio / Vertex AI) do api_usage."""
     user_email = get_user_from_request()
-    req_data = request.get_json(silent=True) or {}
     if not user_email:
-        user_email = req_data.get("user_email") or "guest@speakling.ai"
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    req_data = request.get_json(silent=True) or {}
 
     provider = req_data.get("provider", "google_ai_studio")
     service = "vertex_ai" if provider == "vertex_ai" else "google_gemini"
-    model = req_data.get("model", "gemini-2.5-flash-native-audio-latest")
-    prompt_tokens = int(req_data.get("prompt_tokens", 0) or 0)
-    completion_tokens = int(req_data.get("completion_tokens", 0) or 0)
-    duration_seconds = float(req_data.get("duration_seconds", 0) or 0)
+    model = str(req_data.get("model", "gemini-2.5-flash-native-audio-latest"))[:120]
+    prompt_tokens = max(0, min(int(req_data.get("prompt_tokens", 0) or 0), 500000))
+    completion_tokens = max(0, min(int(req_data.get("completion_tokens", 0) or 0), 500000))
+    duration_seconds = max(0.0, min(float(req_data.get("duration_seconds", 0) or 0), 7200.0))
 
     # Jeśli Gemini nie zwróciło tokenów w ramce WebSocket, estymujemy z czasu sesji
     if prompt_tokens == 0 and completion_tokens == 0 and duration_seconds > 0:
@@ -8512,11 +8753,13 @@ def log_live_usage():
 
 @app.route("/api/live/save-key", methods=['POST'])
 def save_live_key():
-    """Zapisuje podany przez użytkownika klucz GEMINI_API_KEY do pliku .env i do pamięci procesu."""
+    """Zapisuje klucz GEMINI_API_KEY serwera (wyłącznie administrator)."""
     global GEMINI_API_KEY
     user_email = get_user_from_request()
     if not user_email:
         return jsonify({"error": "Brak autoryzacji"}), 401
+    if not is_admin(user_email):
+        return jsonify({"error": "Tylko administrator może zmieniać klucz API serwera."}), 403
 
     req_data = request.get_json(silent=True) or {}
     key = req_data.get("api_key", "").strip()
@@ -8555,9 +8798,12 @@ def save_live_key():
 def get_live_token():
     """Generuje token efemeryczny dla połączenia WebSocket z Gemini Live API (Google AI Studio)."""
     user_email = get_user_from_request()
-    req_data = request.get_json(silent=True) or {}
     if not user_email:
-        user_email = req_data.get("user_email") or "guest@speakling.ai"
+        return jsonify({"error": "Wymagane zalogowanie"}), 401
+    ok_q, err_q = enforce_user_ai_quota(user_email, "live_token")
+    if not ok_q:
+        return err_q
+    req_data = request.get_json(silent=True) or {}
 
     # Sprawdzenie twardego limitu minut sesji Live AI
     sub = get_user_subscription(user_email)
@@ -8600,11 +8846,13 @@ def get_live_token():
 
 @app.route("/api/live/vertex-token", methods=['POST', 'GET'])
 def get_vertex_live_token():
-    """Generuje token OAuth2 dla połączenia z Vertex AI (Google Cloud Platform)."""
+    """Generuje token OAuth2 dla połączenia z Vertex AI (wyłącznie administrator)."""
     user_email = get_user_from_request()
-    req_data = request.get_json(silent=True) or {}
     if not user_email:
-        user_email = req_data.get("user_email") or "guest@speakling.ai"
+        return jsonify({"error": "Wymagane zalogowanie"}), 401
+    if not is_admin(user_email):
+        return jsonify({"error": "Tryb Vertex AI OAuth jest dostępny wyłącznie dla administratora."}), 403
+    req_data = request.get_json(silent=True) or {}
 
     # Sprawdzenie twardego limitu minut sesji Live AI
     sub = get_user_subscription(user_email)
@@ -8648,12 +8896,19 @@ def get_vertex_live_token():
 
 @app.route("/api/send-chat-summary-email", methods=['POST'])
 def send_chat_summary_email():
+    user_email = get_user_from_request()
+    if not user_email:
+        return jsonify({"error": "Brak autoryzacji"}), 401
+    ok_q, err_q = enforce_user_ai_quota(user_email, "email")
+    if not ok_q:
+        return err_q
+
     data = request.get_json(silent=True) or {}
-    recipient_email = data.get('recipient_email')
+    recipient_email = (data.get('recipient_email') or '').strip()
     summary = data.get('summary', {})
 
-    if not recipient_email or not summary:
-        return jsonify({"error": "Adres e-mail odbiorcy i podsumowanie są wymagane."}), 400
+    if not recipient_email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", recipient_email) or not summary:
+        return jsonify({"error": "Poprawny adres e-mail odbiorcy i podsumowanie są wymagane."}), 400
     
     if not all([EMAIL_HOST, EMAIL_USERNAME, EMAIL_PASSWORD]):
         return jsonify({"error": "Brak konfiguracji poczty na serwerze (EMAIL_USERNAME/EMAIL_PASSWORD). Skonfiguruj zmienne w Cloud Run (GCP)."}), 400
@@ -8761,7 +9016,8 @@ def request_mode_access():
         return jsonify({"error": "Niepoprawny tryb"}), 400
     try:
         host_url = request.host_url.rstrip('/')
-        confirm_url = f"{host_url}/api/grant-mode-access?email={user_email}&mode={requested_mode}&token=speakling_secure_grant_key"
+        grant_sig = _sign_mode_grant_token(user_email, requested_mode)
+        confirm_url = f"{host_url}/api/grant-mode-access?email={urllib.parse.quote(user_email)}&mode={urllib.parse.quote(requested_mode)}&token={urllib.parse.quote(grant_sig)}"
         subject = f"[Speakling] Prosba o dostep do trybu {requested_mode} od {user_email}"
         email_html = f"""
         <html>
@@ -8793,7 +9049,8 @@ def grant_mode_access():
     email = request.args.get("email", "").strip().lower()
     mode = request.args.get("mode", "").strip()
     token = request.args.get("token", "").strip()
-    if token != "speakling_secure_grant_key":
+    admin_email = get_user_from_request()
+    if not ((admin_email and is_admin(admin_email)) or _verify_mode_grant_token(email, mode, token)):
         return "Brak autoryzacji", 403
     if not email or mode not in ['hybrid', 'openai_full']:
         return "Niepoprawne parametry", 400

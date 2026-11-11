@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { API_BASE_URL } from '../../config';
+import { API_BASE_URL, getAuthHeaders } from '../../config';
 import "./PronunciationPracticeModal.css";
 
 const PronunciationPracticeModal = ({ targetText, user, onClose, onLogActivity, onLogPronunciationError }) => {
@@ -45,7 +45,7 @@ const PronunciationPracticeModal = ({ targetText, user, onClose, onLogActivity, 
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           text: targetText,
           voice: "en-US-BrianNeural"

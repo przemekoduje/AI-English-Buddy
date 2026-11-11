@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './TopBar.css';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, getAuthHeaders } from '../config';
 import { ShortcutsTriggerButton } from '../features/hints';
 
 const AVAILABLE_NARRATORS = [
@@ -76,7 +76,7 @@ const TopBar = ({
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           text: "Hello! I am your Speakling voice tutor. Ready to practice?",
           voice: v

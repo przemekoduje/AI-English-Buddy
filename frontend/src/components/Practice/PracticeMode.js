@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { API_BASE_URL } from '../../config';
+import { API_BASE_URL, getAuthHeaders } from '../../config';
 import "./PracticeMode.css";
 import { SmartHintPill, useRegisterHintContext, emitHintUsed } from '../../features/hints';
 
@@ -304,7 +304,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           text: textToSpeak,
           voice: voiceToUse
@@ -814,7 +814,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     try {
       const res = await fetch(`${API_BASE_URL}/api/tts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           text: textToSpeak,
           voice: selectedVoiceURI || "en-US-BrianNeural"

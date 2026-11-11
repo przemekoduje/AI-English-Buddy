@@ -593,6 +593,8 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   const isBotSpeakingRef = useRef(false);
   const isRecordingRef = useRef(false);
   const isProcessingRef = useRef(false);
+  const classicConsecutiveErrorRef = useRef(0);
+  const classicEmptyTurnsRef = useRef(0);
 
   // Płynna pętla interpolacji skali orba na GPU (60 FPS bez dotykania React Virtual DOM)
   const startScaleLoop = useCallback(() => {
@@ -712,8 +714,8 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
       setCustomApiKey(trimmedKey);
       localStorage.setItem("buddy_gemini_api_key", trimmedKey);
 
-      // Zapisz na serwerze jeśli klucz jest obecny i użytkownik ma token
-      if (trimmedKey && user?.token) {
+      // Zapisz na serwerze wyłącznie jako administrator, jeśli klucz jest obecny
+      if (trimmedKey && user?.token && user?.is_admin) {
         fetch(`${API_BASE_URL}/api/live/save-key`, {
           method: "POST",
           headers: {
@@ -1478,6 +1480,17 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
   };
 
   const handleSendClassicVoice = async (audioBlob) => {
+    // Ochrona przed pętlą wysyłania samej ciszy / mikrodźwięków do STT/LLM
+    if ((!audioBlob || audioBlob.size < 1200) && !localTranscriptRef.current?.trim()) {
+      classicEmptyTurnsRef.current += 1;
+      if (classicEmptyTurnsRef.current < 4) {
+        startClassicRecording();
+      } else {
+        setErrorMessage("Wstrzymano tryb klasyczny po kilku pustych nagraniach.");
+      }
+      return;
+    }
+
     setIsClassicProcessing(true);
     try {
       const historyForApi = chatMessages.map((msg) => ({
@@ -1521,10 +1534,18 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
       const result = await response.json();
       if (result.error) throw new Error(result.error);
 
+      classicConsecutiveErrorRef.current = 0;
+      const transText = (result.transcription || localTranscriptRef.current || "").trim();
+      if (!transText) {
+        classicEmptyTurnsRef.current += 1;
+      } else {
+        classicEmptyTurnsRef.current = 0;
+      }
+
       const userMsg = {
         id: "user-" + Date.now(),
         sender: "user",
-        text: result.transcription || localTranscriptRef.current || "(Brak transkrypcji)",
+        text: transText || "(Brak transkrypcji)",
         evaluation: result.user_evaluation,
       };
 
@@ -1535,11 +1556,18 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
       };
 
       setChatMessages((prev) => [...prev, userMsg, botMsg]);
+      if (classicEmptyTurnsRef.current >= 3) {
+        setErrorMessage("Tryb klasyczny został wstrzymany — nie wykryto mowy.");
+        return;
+      }
       playClassicTutorAudio(result.bot_response, result.audio_base64);
     } catch (err) {
       console.error("Error in classic voice:", err);
-      alert("Wystąpił problem z połączeniem: " + err.message);
-      startClassicRecording();
+      classicConsecutiveErrorRef.current += 1;
+      setErrorMessage("Wystąpił problem z połączeniem: " + err.message);
+      if (classicConsecutiveErrorRef.current < 2) {
+        startClassicRecording();
+      }
     } finally {
       setIsClassicProcessing(false);
     }

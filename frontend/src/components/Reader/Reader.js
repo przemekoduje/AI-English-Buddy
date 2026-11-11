@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { API_BASE_URL } from "../../config";
+import { API_BASE_URL, getAuthHeaders } from "../../config";
 import "./Reader.css";
 import "../Practice/PracticeMode.css";
 
@@ -193,7 +193,7 @@ const Reader = ({
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           text: text,
           voice: selectedVoiceURI || "en-US-BrianNeural"

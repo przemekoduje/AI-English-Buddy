@@ -84,6 +84,10 @@ export class GeminiLiveClient {
 
     // Monitorowanie kosztów i zużycia tokenów Gemini Live
     this.sessionStartTime = null;
+    this.lastActivityTime = null;
+    this.idleTimeoutMs = (typeof options.idleTimeoutSeconds === 'number' && options.idleTimeoutSeconds > 0)
+      ? options.idleTimeoutSeconds * 1000
+      : 180000; // Auto-rozłączenie po 3 min bezczynności, aby nie generować kosztów
     this.sessionPromptTokens = 0;
     this.sessionCompletionTokens = 0;
     this.maxSeenTokens = 0;
@@ -143,11 +147,25 @@ export class GeminiLiveClient {
           this.quotaTicker = null;
         }
         this.sessionStartTime = Date.now();
+        this.lastActivityTime = Date.now();
         this.lastTrackedSeconds = 0;
 
         this.quotaTicker = setInterval(async () => {
           if (!this.isConnected || !this.sessionStartTime || this.isDestroyed) return;
-          const elapsedSec = Math.round((Date.now() - this.sessionStartTime) / 1000);
+          const nowTs = Date.now();
+          const elapsedSec = Math.round((nowTs - this.sessionStartTime) / 1000);
+
+          if (this.lastActivityTime && (nowTs - this.lastActivityTime) >= this.idleTimeoutMs) {
+            console.warn("[GeminiLive] Auto-rozłączenie po 3 minutach bezczynności (ochrona limitu i kosztów).");
+            clearInterval(this.quotaTicker);
+            this.quotaTicker = null;
+            this.onQuotaExceeded({
+              elapsedSeconds: elapsedSec,
+              reason: "Sesja Live AI została automatycznie wstrzymana po 3 minutach ciszy, aby chronić Twój limit minut."
+            });
+            this.cleanup();
+            return;
+          }
 
           if (this.maxDurationSeconds !== null) {
             const remaining = this.maxDurationSeconds - elapsedSec;
@@ -535,6 +553,7 @@ export class GeminiLiveClient {
         if (!isSuppressed) {
           const isSpeechFrame = rms > 0.006;
           if (isSpeechFrame) {
+            this.lastActivityTime = Date.now();
             if (this.botTurnStarted) {
               this.hasUserSpokenSinceBotStarted = true;
             }
@@ -717,8 +736,11 @@ export class GeminiLiveClient {
     this.lastSpeechResultLength = 0;
     this.lastUserTranscript = '';
 
+    let isRestartingScheduled = false;
+    let consecutiveErrors = 0;
+    let fatalSpeechError = false;
     const startRec = () => {
-      if (this.isDestroyed || !this.isConnected || this.isSpeechRecPausedForBot) return;
+      if (this.isDestroyed || !this.isConnected || this.isSpeechRecPausedForBot || fatalSpeechError) return;
 
       try {
         if (this.speechRecognition) {
@@ -787,6 +809,8 @@ export class GeminiLiveClient {
           }
 
           if (combined !== this.lastUserTranscript) {
+            consecutiveErrors = 0;
+            this.lastActivityTime = Date.now();
             this.lastUserTranscript = combined;
             this.onTranscript({
               id: this.ensureUserTurnId(),
@@ -807,18 +831,27 @@ export class GeminiLiveClient {
           }
           this.userTurnStartIndex = 0;
 
-          // Auto-restart jeśli połączenie jest aktywne, klient nie został zniszczony i bot aktualnie nie mówi
-          if (this.isConnected && !this.isDestroyed && !this.isSpeechRecPausedForBot) {
+          // Auto-restart z backoffem jeśli połączenie jest aktywne, brak błędu krytycznego i limitu powtórzeń
+          if (this.isConnected && !this.isDestroyed && !this.isSpeechRecPausedForBot && !fatalSpeechError && consecutiveErrors < 5 && !isRestartingScheduled) {
+            isRestartingScheduled = true;
+            const backoffMs = 150 + Math.min(consecutiveErrors * 600, 3000);
             setTimeout(() => {
-              if (this.isConnected && !this.isDestroyed && !this.isSpeechRecPausedForBot) {
+              isRestartingScheduled = false;
+              if (this.isConnected && !this.isDestroyed && !this.isSpeechRecPausedForBot && !fatalSpeechError && consecutiveErrors < 5) {
                 startRec();
               }
-            }, 120);
+            }, backoffMs);
           }
         };
 
         rec.onerror = (e) => {
+          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+            fatalSpeechError = true;
+            console.warn("[GeminiLive] SpeechRecognition zatrzymany z powodu błędu uprawnień:", e.error);
+            return;
+          }
           if (e.error !== 'no-speech' && e.error !== 'aborted') {
+            consecutiveErrors += 1;
             console.warn("[GeminiLive] SpeechRecognition info:", e.error);
           }
         };
@@ -1347,9 +1380,10 @@ export class GeminiLiveClient {
       canvas.height = 480;
       const ctx = canvas.getContext('2d');
 
-      // Wysyłamy 1 klatkę na sekundę
+      // Wysyłamy 1 klatkę co 1500ms, z pominięciem gdy karta jest nieaktywna w tle
       this.videoFrameInterval = setInterval(() => {
         if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        if (typeof document !== 'undefined' && document.hidden) return;
         if (!this.videoElement || this.videoElement.readyState < 2) return;
 
         ctx.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
@@ -1369,7 +1403,7 @@ export class GeminiLiveClient {
           };
           this.sendJson(videoFrameMessage);
         }
-      }, 1000);
+      }, 1500);
 
       return true;
     } catch (err) {
@@ -1439,9 +1473,10 @@ export class GeminiLiveClient {
       canvas.height = 576;
       const ctx = canvas.getContext('2d');
 
-      // Wysyłamy klatkę co 1000ms do Gemini Multimodal Live API
+      // Wysyłamy klatkę co 1500ms do Gemini Multimodal Live API (pauza gdy karta w tle)
       this.videoFrameInterval = setInterval(() => {
         if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        if (typeof document !== 'undefined' && document.hidden) return;
         if (!this.videoElement || this.videoElement.readyState < 2) return;
 
         ctx.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
@@ -1461,7 +1496,7 @@ export class GeminiLiveClient {
           };
           this.sendJson(videoFrameMessage);
         }
-      }, 1000);
+      }, 1500);
 
       return true;
     } catch (err) {

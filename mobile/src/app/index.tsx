@@ -127,7 +127,7 @@ const getInitialBackendUrl = () => {
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
     if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
-      return 'https://ai-english-buddy-backend-665075210565.europe-west1.run.app';
+      return 'https://speakling-backend-665075210565.europe-central2.run.app';
     }
   }
   // Lokalne dev: dynamiczne wykrycie IP hosta z Expo
@@ -248,6 +248,7 @@ export default function HomeScreen() {
     };
     if (user?.token) {
       headers['Authorization'] = `Bearer ${user.token}`;
+      headers['X-Session-Token'] = user.token;
     }
     return fetch(url, { ...options, headers });
   };
@@ -1146,7 +1147,6 @@ ${exerciseInstructions}`;
       Alert.alert("Błąd połączenia", "Nie udało się przesłać dźwięku: " + err.message);
       setIsVoiceTutorProcessing(false);
       voiceTutorIsProcessingRef.current = false;
-      startVoiceTutorRecording();
     } finally {
       setIsVoiceTutorProcessing(false);
       voiceTutorIsProcessingRef.current = false;
@@ -1162,7 +1162,7 @@ ${exerciseInstructions}`;
       let base64_data = cachedBase64;
       if (!base64_data) {
         console.log("Mobile: TTS base64 not pre-generated, fetching from api...");
-        const response = await fetch(`${backendUrl}/api/tts`, {
+        const response = await customFetch(`${backendUrl}/api/tts`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1432,8 +1432,8 @@ ${exerciseInstructions}`;
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
       const hostname = window.location.hostname;
       if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
-        if (!activeBackendUrl || activeBackendUrl.startsWith('http://') || activeBackendUrl.includes('192.168.')) {
-          activeBackendUrl = 'https://ai-english-buddy-backend-665075210565.europe-west1.run.app';
+        if (!activeBackendUrl || activeBackendUrl.startsWith('http://') || activeBackendUrl.includes('192.168.') || activeBackendUrl.includes('ai-english-buddy-backend')) {
+          activeBackendUrl = 'https://speakling-backend-665075210565.europe-central2.run.app';
         }
       }
     }
@@ -1479,11 +1479,20 @@ ${exerciseInstructions}`;
           apiBaseUrl: activeBackendUrl,
           sessionToken: user?.token || null,
           userEmail: user?.email || null,
+          maxDurationSeconds: typeof tokenData.remaining_seconds === 'number' ? tokenData.remaining_seconds : null,
+          idleTimeoutSeconds: 180,
           audioContext: preAudioContext,
           mediaStream: preMediaStream,
           reuseMediaStream: true,
           systemInstruction: contextualInstruction,
           initialGreetingPrompt: contextualGreeting,
+          onQuotaExceeded: ({ reason }: { reason: string }) => {
+            setIsVoiceTutorActive(false);
+            voiceTutorIsActiveRef.current = false;
+            setLiveOrbStatus("inactive");
+            setLiveStatusDetail(reason || "Limit minut sesji Live AI został wyczerpany.");
+            Alert.alert("Informacja o sesji Live", reason || "Limit minut sesji Live AI został wyczerpany.");
+          },
           onStatusChange: (status) => {
             setLiveOrbStatus(status);
             if (status === 'active' || status === 'listening') {
@@ -1778,8 +1787,8 @@ ${exerciseInstructions}`;
         if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
           const hostname = window.location.hostname;
           if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
-            if (!activeBackendUrl || activeBackendUrl.startsWith('http://') || activeBackendUrl.includes('192.168.')) {
-              activeBackendUrl = 'https://ai-english-buddy-backend-665075210565.europe-west1.run.app';
+            if (!activeBackendUrl || activeBackendUrl.startsWith('http://') || activeBackendUrl.includes('192.168.') || activeBackendUrl.includes('ai-english-buddy-backend')) {
+              activeBackendUrl = 'https://speakling-backend-665075210565.europe-central2.run.app';
             }
           }
         }
@@ -1903,8 +1912,8 @@ ${exerciseInstructions}`;
         if (typeof window !== 'undefined' && window.location) {
           const hostname = window.location.hostname;
           if (hostname && !hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !hostname.startsWith('192.168.')) {
-            if (!storedIP || storedIP.startsWith('http://') || storedIP.includes('192.168.') || storedIP.includes('localhost')) {
-              storedIP = 'https://ai-english-buddy-backend-665075210565.europe-west1.run.app';
+            if (!storedIP || storedIP.startsWith('http://') || storedIP.includes('192.168.') || storedIP.includes('localhost') || storedIP.includes('ai-english-buddy-backend')) {
+              storedIP = 'https://speakling-backend-665075210565.europe-central2.run.app';
               await AsyncStorage.setItem('buddy_backend_url', storedIP);
             }
           }

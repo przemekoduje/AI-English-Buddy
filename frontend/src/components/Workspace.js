@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, getAuthHeaders } from '../config';
 import "../App.css";
 import "./Workspace.css";
 import globalAudioManager from '../globalAudioManager';
@@ -1808,7 +1808,7 @@ function Workspace({
       try {
         const response = await fetch(`${API_BASE_URL}/api/tts`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({
             text: clean,
             voice: voiceToUse
@@ -1859,10 +1859,10 @@ function Workspace({
     }
   }, [textChunks, selectedVoiceURI, prefetchSentenceAudio]);
 
-  // Wstępny prefetch pierwszych 2-3 zdań przy wczytaniu tekstu, aby start Play był natychmiastowy
+  // Wstępny prefetch tylko pierwszego zdania przy wczytaniu tekstu (ochrona przed nadmiarowymi wywołaniami TTS)
   useEffect(() => {
     if (textChunks && textChunks.length > 0) {
-      prefetchUpcomingChunks(0, 3);
+      prefetchUpcomingChunks(0, 1);
     }
   }, [textChunks, prefetchUpcomingChunks]);
 
@@ -2295,7 +2295,7 @@ function Workspace({
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           text: word,
           voice: selectedVoiceURI || "en-US-BrianNeural"
@@ -2533,7 +2533,7 @@ function Workspace({
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           text: selectedText,
           voice: selectedVoiceURI || "en-US-BrianNeural"

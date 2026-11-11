@@ -25,6 +25,10 @@ export interface GeminiLiveOptions {
   mediaStream?: any;
   audioContext?: any;
   reuseMediaStream?: boolean;
+  maxDurationSeconds?: number | null;
+  idleTimeoutSeconds?: number;
+  onRemainingTimeWarning?: (remainingSeconds: number) => void;
+  onQuotaExceeded?: (info: { elapsedSeconds: number; reason: string }) => void;
   onStatusChange?: (status: 'inactive' | 'connecting' | 'listening' | 'user-speaking' | 'speaking' | 'active') => void;
   onBotSpeaking?: (isSpeaking: boolean) => void;
   onUserVolume?: (volume: number) => void;
@@ -55,6 +59,16 @@ export class GeminiLiveClient {
   public onTranscript: (transcript: { id?: string; sender: 'user' | 'bot'; text: string; isFinal: boolean; remove?: boolean }) => void;
   public onError: (err: string) => void;
   public onClose: (event: any) => void;
+  public onRemainingTimeWarning: (remainingSeconds: number) => void;
+  public onQuotaExceeded: (info: { elapsedSeconds: number; reason: string }) => void;
+
+  private maxDurationSeconds: number | null = null;
+  private idleTimeoutMs: number = 180000;
+  private quotaTicker: any = null;
+  private lastActivityTime: number | null = null;
+  private lastTrackedSeconds: number = 0;
+  private warningGiven: boolean = false;
+  private isDestroyed: boolean = false;
 
   private ws: WebSocket | null = null;
   public isConnected = false;
@@ -118,6 +132,12 @@ export class GeminiLiveClient {
     this.onTranscript = options.onTranscript || (() => {});
     this.onError = options.onError || (() => {});
     this.onClose = options.onClose || (() => {});
+    this.onRemainingTimeWarning = options.onRemainingTimeWarning || (() => {});
+    this.onQuotaExceeded = options.onQuotaExceeded || (() => {});
+    this.maxDurationSeconds = typeof options.maxDurationSeconds === 'number' ? options.maxDurationSeconds : null;
+    if (typeof options.idleTimeoutSeconds === 'number' && options.idleTimeoutSeconds > 0) {
+      this.idleTimeoutMs = options.idleTimeoutSeconds * 1000;
+    }
 
     this.apiBaseUrl = options.apiBaseUrl || '';
     this.sessionToken = options.sessionToken || null;
@@ -150,6 +170,10 @@ export class GeminiLiveClient {
         clearTimeout(connectTimeout);
         console.log("[GeminiLive Mobile] WebSocket otwarty. Wysyłam ramkę setup...");
         this.sessionStartTime = Date.now();
+        this.lastActivityTime = Date.now();
+        this.lastTrackedSeconds = 0;
+        this.warningGiven = false;
+        this.isDestroyed = false;
         this.usageReported = false;
         this.isConnected = true;
 
@@ -160,7 +184,76 @@ export class GeminiLiveClient {
         } catch (setupErr: any) {
           console.error("[GeminiLive Mobile] Błąd w onopen:", setupErr);
           this.onError("Błąd mikrofonu po połączeniu: " + (setupErr.message || setupErr));
+          return;
         }
+
+        if (this.quotaTicker) {
+          clearInterval(this.quotaTicker);
+          this.quotaTicker = null;
+        }
+        this.quotaTicker = setInterval(async () => {
+          if (!this.isConnected || !this.sessionStartTime || this.isDestroyed) return;
+          const nowTs = Date.now();
+          const elapsedSec = Math.round((nowTs - this.sessionStartTime) / 1000);
+
+          if (this.lastActivityTime && (nowTs - this.lastActivityTime) >= this.idleTimeoutMs) {
+            console.warn("[GeminiLive Mobile] Auto-rozłączenie po 3 minutach bezczynności.");
+            clearInterval(this.quotaTicker);
+            this.quotaTicker = null;
+            this.onQuotaExceeded({
+              elapsedSeconds: elapsedSec,
+              reason: "Sesja Live AI została automatycznie wstrzymana po 3 minutach ciszy, aby chronić Twój limit minut."
+            });
+            this.cleanup();
+            return;
+          }
+
+          if (this.maxDurationSeconds !== null) {
+            const remaining = this.maxDurationSeconds - elapsedSec;
+            if (remaining <= 60 && remaining > 0 && !this.warningGiven) {
+              this.warningGiven = true;
+              this.onRemainingTimeWarning(remaining);
+            }
+            if (remaining <= 0) {
+              console.warn("[GeminiLive Mobile] Osiągnięto limit minut sesji Live AI.");
+              clearInterval(this.quotaTicker);
+              this.quotaTicker = null;
+              this.onQuotaExceeded({
+                elapsedSeconds: elapsedSec,
+                reason: "Twój limit minut sesji Live AI został wyczerpany."
+              });
+              this.cleanup();
+              return;
+            }
+          }
+
+          if (elapsedSec - this.lastTrackedSeconds >= 30) {
+            const deltaSeconds = elapsedSec - this.lastTrackedSeconds;
+            this.lastTrackedSeconds = elapsedSec;
+            try {
+              const res = await fetch(`${this.apiBaseUrl}/api/subscription/track-live-time`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(this.sessionToken ? { 'X-Session-Token': this.sessionToken } : {})
+                },
+                body: JSON.stringify({ duration_seconds: deltaSeconds })
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.quota_exceeded) {
+                  clearInterval(this.quotaTicker);
+                  this.quotaTicker = null;
+                  this.onQuotaExceeded({
+                    elapsedSeconds: elapsedSec,
+                    reason: "Twój limit minut sesji Live AI został wyczerpany."
+                  });
+                  this.cleanup();
+                }
+              }
+            } catch (e) {}
+          }
+        }, 1000);
       };
 
       this.ws.onmessage = async (event: any) => {
@@ -419,6 +512,7 @@ export class GeminiLiveClient {
               }
             }
             this.userAudioSpeechFrames += 1;
+            this.lastActivityTime = Date.now();
           }
           if (this.isCapturingUserAudio) {
             if (this.currentUserAudioChunks.length < 450) {
@@ -1181,14 +1275,15 @@ export class GeminiLiveClient {
         })
       });
 
-      // Śledzenie limitu minut subskrypcji
-      if (durationSeconds > 0) {
+      // Śledzenie wyłącznie niezsynchronizowanej dotąd reszty czasu sesji
+      const unsyncedSeconds = Math.max(0, durationSeconds - this.lastTrackedSeconds);
+      if (unsyncedSeconds > 0) {
+        this.lastTrackedSeconds = durationSeconds;
         await fetch(`${this.apiBaseUrl}/api/subscription/track-live-time`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            duration_seconds: durationSeconds,
-            user_email: this.userEmail
+            duration_seconds: unsyncedSeconds
           })
         }).catch(() => {});
       }
@@ -1217,7 +1312,13 @@ export class GeminiLiveClient {
 
   cleanup(): void {
     this.reportSessionUsage();
+    this.isDestroyed = true;
     this.isConnected = false;
+
+    if (this.quotaTicker) {
+      clearInterval(this.quotaTicker);
+      this.quotaTicker = null;
+    }
 
     this.stopBotAudio();
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { API_BASE_URL } from "../../config";
+import { API_BASE_URL, getAuthHeaders } from "../../config";
 import "./VocabularyDrawer.css";
 import Flashcards from "../Flashcards";
 import WordExplanationModal from "../Notebook/WordExplanationModal";
@@ -92,7 +92,7 @@ const VocabularyDrawer = ({ user }) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/tts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           text,
           voice: "en-US-BrianNeural",
