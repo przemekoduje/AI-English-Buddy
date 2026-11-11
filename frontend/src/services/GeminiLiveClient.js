@@ -101,6 +101,9 @@ export class GeminiLiveClient {
     // Ochrona przed echem akustycznym z głośników komputera (bez słuchawek)
     this.lastBotSpeakingEndTime = 0;
     this.recentBotPhrases = [];
+    this.isSpeechRecPausedForBot = false;
+    this.resumeSpeechRecTimer = null;
+    this.startSpeechRecFn = null;
   }
 
   /**
@@ -347,6 +350,9 @@ export class GeminiLiveClient {
                 if (!this.currentUserTurnId && !this.currentUserTurnText && !this.lastUserTranscript && !this.savedTurnPrefixText && this.userAudioSpeechFrames === 0) {
                   this.userTurnStartIndex = this.lastSpeechResultLength || 0;
                 }
+                this.scheduleResumeSpeechRecognition(550);
+              } else if (isSpeaking) {
+                this.pauseSpeechRecognitionForBot();
               }
               this.isBotCurrentlySpeaking = isSpeaking;
               this.onBotSpeaking(isSpeaking);
@@ -360,18 +366,60 @@ export class GeminiLiveClient {
   }
 
   /**
-   * Sprawdza czy aktywna jest ochrona przed echem akustycznym (tylko gdy lektor aktualnie odtwarza dźwięk - bez sztucznego okna po zakończeniu)
+   * Sprawdza czy aktywna jest ochrona przed echem akustycznym dla mikrofonu WebSocket (tylko w trakcie odtwarzania lektora)
    */
   isEchoSuppressionActive() {
     return Boolean(this.isBotCurrentlySpeaking);
   }
 
   /**
-   * Sprawdza czy dany tekst z SpeechRecognition jest echem słów wypowiedzianych przez lektora przez głośniki
+   * Dla lokalnego SpeechRecognition przeglądarki dodajemy krótkie wygaszenie pogłosu głośników (~900 ms)
+   */
+  isSpeechRecBlockedForEcho() {
+    if (this.isBotCurrentlySpeaking || this.isSpeechRecPausedForBot) return true;
+    if (Date.now() - (this.lastBotSpeakingEndTime || 0) < 900) return true;
+    return false;
+  }
+
+  pauseSpeechRecognitionForBot() {
+    if (this.resumeSpeechRecTimer) {
+      clearTimeout(this.resumeSpeechRecTimer);
+      this.resumeSpeechRecTimer = null;
+    }
+    this.isSpeechRecPausedForBot = true;
+    if (this.speechRecognition) {
+      try {
+        this.speechRecognition.onresult = null;
+        this.speechRecognition.onend = null;
+        this.speechRecognition.onerror = null;
+        this.speechRecognition.abort();
+      } catch (e) {}
+      this.speechRecognition = null;
+    }
+    this.userTurnStartIndex = 0;
+    this.lastSpeechResultLength = 0;
+  }
+
+  scheduleResumeSpeechRecognition(delayMs = 550) {
+    if (this.resumeSpeechRecTimer) {
+      clearTimeout(this.resumeSpeechRecTimer);
+    }
+    this.resumeSpeechRecTimer = setTimeout(() => {
+      this.resumeSpeechRecTimer = null;
+      if (this.isBotCurrentlySpeaking || this.isDestroyed || !this.isConnected) return;
+      this.isSpeechRecPausedForBot = false;
+      if (this.startSpeechRecFn && !this.speechRecognition) {
+        this.startSpeechRecFn();
+      }
+    }, delayMs);
+  }
+
+  /**
+   * Sprawdza czy dany tekst jest echem słów wypowiedzianych przez lektora przez głośniki
    */
   isMatchingRecentBotText(userText) {
     if (!userText) return false;
-    const cleanUser = userText.toLowerCase().replace(/[^a-z0-9\s]/gi, '').trim();
+    const cleanUser = userText.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, ' ').trim();
     if (!cleanUser || cleanUser.length < 4) return false;
 
     // Zbieramy frazy lektora: bieżącą oraz ostatnie
@@ -388,27 +436,27 @@ export class GeminiLiveClient {
     if (userWords.length === 0) return false;
 
     for (const phrase of candidates) {
-      const cleanBot = phrase.toLowerCase().replace(/[^a-z0-9\s]/gi, '').trim();
+      const cleanBot = phrase.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, ' ').trim();
       if (!cleanBot) continue;
 
       // 1. Jeśli wypowiedź ucznia zawiera się w mowie bota (np. mikrofon wychwycił fragment zdania z głośnika)
-      if (cleanUser.length >= 10 && cleanBot.includes(cleanUser)) {
+      if (cleanUser.length >= 12 && cleanBot.includes(cleanUser)) {
         return true;
       }
 
       // 2. Jeśli mowa bota zawiera się w wypowiedzi (np. całe zdanie lektora wpadło do mikrofonu)
-      if (cleanBot.length >= 10 && cleanUser.includes(cleanBot)) {
+      if (cleanBot.length >= 12 && cleanUser.includes(cleanBot)) {
         return true;
       }
 
-      // 3. Pokrycie słów: jeśli większość słów (>= 60%) to słowa z wypowiedzi lektora
-      if (userWords.length >= 2) {
+      // 3. Pokrycie słów: jeśli przy >= 3 dłuższych słowach większość (>= 65%) pokrywa się z ostatnią kwestią bota
+      if (userWords.length >= 3) {
         const botWords = new Set(cleanBot.split(/\s+/));
         let matchCount = 0;
         for (const w of userWords) {
           if (botWords.has(w)) matchCount++;
         }
-        if (matchCount / userWords.length >= 0.6) {
+        if (matchCount / userWords.length >= 0.65) {
           return true;
         }
       }
@@ -509,12 +557,6 @@ export class GeminiLiveClient {
             if (this.userPreRollChunks.length > 12) {
               this.userPreRollChunks.shift();
             }
-          }
-        } else {
-          const rawResampled = this.resampleAudio(inputData, nativeSampleRate, targetSampleRate);
-          this.userPreRollChunks.push(new Float32Array(rawResampled));
-          if (this.userPreRollChunks.length > 12) {
-            this.userPreRollChunks.shift();
           }
         }
 
@@ -676,7 +718,7 @@ export class GeminiLiveClient {
     this.lastUserTranscript = '';
 
     const startRec = () => {
-      if (this.isDestroyed || !this.isConnected) return;
+      if (this.isDestroyed || !this.isConnected || this.isSpeechRecPausedForBot) return;
 
       try {
         if (this.speechRecognition) {
@@ -699,8 +741,10 @@ export class GeminiLiveClient {
           if (!event || !event.results) return;
 
           // Ochrona przed echem akustycznym bez słuchawek:
-          // Jeśli lektor mówi lub dźwięk z głośników właśnie wygasł, odrzucamy dźwięk
-          if (this.isEchoSuppressionActive()) {
+          // Pomijamy i przesuwamy indeks poza wyniki nagrane podczas mówienia bota lub pogłosu głośników.
+          if (this.isSpeechRecBlockedForEcho()) {
+            this.lastSpeechResultLength = event.results.length;
+            this.userTurnStartIndex = event.results.length;
             return;
           }
 
@@ -732,6 +776,7 @@ export class GeminiLiveClient {
 
           // Odrzucenie echa lektora, jeśli treść pokrywa się ze słowami wypowiedzianymi przez bota
           if (this.isMatchingRecentBotText(combined)) {
+            this.userTurnStartIndex = event.results.length;
             return;
           }
 
@@ -754,19 +799,21 @@ export class GeminiLiveClient {
 
         rec.onend = () => {
           // Po automatycznym zatrzymaniu przez przeglądarkę (np. po milczeniu/pauzie):
-          // Zapisujemy dotychczas wygenerowany tekst tury w savedTurnPrefixText
-          if (this.lastUserTranscript && this.lastUserTranscript.trim()) {
-            this.savedTurnPrefixText = this.lastUserTranscript.trim();
+          // Zapisujemy dotychczas wygenerowany tekst tury w savedTurnPrefixText (tylko gdy nie było echem bota)
+          if (!this.isSpeechRecPausedForBot && !this.isSpeechRecBlockedForEcho() && this.lastUserTranscript && this.lastUserTranscript.trim()) {
+            if (!this.isMatchingRecentBotText(this.lastUserTranscript)) {
+              this.savedTurnPrefixText = this.lastUserTranscript.trim();
+            }
           }
           this.userTurnStartIndex = 0;
 
-          // Auto-restart jeśli połączenie jest aktywne i klient nie został zniszczony
-          if (this.isConnected && !this.isDestroyed) {
+          // Auto-restart jeśli połączenie jest aktywne, klient nie został zniszczony i bot aktualnie nie mówi
+          if (this.isConnected && !this.isDestroyed && !this.isSpeechRecPausedForBot) {
             setTimeout(() => {
-              if (this.isConnected && !this.isDestroyed) {
+              if (this.isConnected && !this.isDestroyed && !this.isSpeechRecPausedForBot) {
                 startRec();
               }
-            }, 100);
+            }, 120);
           }
         };
 
@@ -782,6 +829,7 @@ export class GeminiLiveClient {
       }
     };
 
+    this.startSpeechRecFn = startRec;
     startRec();
   }
 
@@ -1063,6 +1111,7 @@ export class GeminiLiveClient {
 
       if (!this.isBotCurrentlySpeaking) {
         this.isBotCurrentlySpeaking = true;
+        this.pauseSpeechRecognitionForBot();
         this.onBotSpeaking(true);
       }
 
@@ -1167,6 +1216,23 @@ export class GeminiLiveClient {
               if (this.recentBotPhrases.length > 8) {
                 this.recentBotPhrases.shift();
               }
+              // Retroaktywne czyszczenie echa: jeśli SpeechRecognition zdążył wcześniej wrzucić głos bota jako turę użytkownika
+              if (this.currentUserTurnId && this.isMatchingRecentBotText(this.currentUserTurnText || this.lastUserTranscript)) {
+                this.onTranscript({ id: this.currentUserTurnId, sender: 'user', text: '', remove: true, isFinal: true });
+                this.currentUserTurnId = null;
+                this.currentUserTurnText = '';
+                this.lastUserTranscript = '';
+                this.savedTurnPrefixText = '';
+              }
+              if (this.lastCompletedUserTurn && this.isMatchingRecentBotText(this.lastCompletedUserTurn.rawText)) {
+                this.onTranscript({ id: this.lastCompletedUserTurn.id, sender: 'user', text: '', remove: true, isFinal: true });
+                this.lastCompletedUserTurn = null;
+              }
+            } else if (sender === 'user' && this.isMatchingRecentBotText(text)) {
+              if (turnId) {
+                this.onTranscript({ id: turnId, sender: 'user', text: '', remove: true, isFinal: true });
+              }
+              return '';
             }
             this.onTranscript({
               id: turnId,
@@ -1235,6 +1301,7 @@ export class GeminiLiveClient {
     }
     this.isBotCurrentlySpeaking = false;
     this.onBotSpeaking(false);
+    this.scheduleResumeSpeechRecognition(350);
 
     if (wasTurnStarted && partialBotText) {
       this.recentBotPhrases.push(partialBotText);
@@ -1615,6 +1682,11 @@ export class GeminiLiveClient {
     if (this.checkSpeakingInterval) {
       clearInterval(this.checkSpeakingInterval);
       this.checkSpeakingInterval = null;
+    }
+
+    if (this.resumeSpeechRecTimer) {
+      clearTimeout(this.resumeSpeechRecTimer);
+      this.resumeSpeechRecTimer = null;
     }
 
     if (this.speechRecognition) {

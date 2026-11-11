@@ -94,6 +94,7 @@ export class GeminiLiveClient {
   private userAudioSpeechFrames = 0;
   private isCapturingUserAudio = false;
   private pendingTranscriptions: Set<Promise<void>> = new Set();
+  private recentBotPhrases: string[] = [];
 
   constructor(options: GeminiLiveOptions = {}) {
     this.provider = options.provider || 'google_ai_studio';
@@ -393,33 +394,41 @@ export class GeminiLiveClient {
           sum += inputData[i] * inputData[i];
         }
         const rms = Math.sqrt(sum / inputData.length);
-        this.onUserVolume(rms);
+        const isSuppressed = this.isBotCurrentlySpeaking && rms <= 0.16;
+        if (this.isBotCurrentlySpeaking && rms > 0.16) {
+          this.stopBotAudio();
+        }
+        this.onUserVolume(isSuppressed ? 0 : rms);
 
-        const resampledData = this.resampleAudio(inputData, nativeSampleRate, targetSampleRate);
+        const resampledData = isSuppressed
+          ? new Float32Array(Math.max(1, Math.round(inputData.length / (nativeSampleRate / targetSampleRate))))
+          : this.resampleAudio(inputData, nativeSampleRate, targetSampleRate);
         const pcm16Buffer = this.floatTo16BitPCM(resampledData);
         const base64Audio = this.arrayBufferToBase64(pcm16Buffer);
 
         // Buforowanie 16kHz audio użytkownika do fallbackowego STT (/api/live/transcribe)
-        const SPEECH_RMS_THRESHOLD = 0.006;
-        const chunkCopy = new Float32Array(resampledData);
-        if (rms >= SPEECH_RMS_THRESHOLD) {
-          if (!this.isCapturingUserAudio) {
-            this.isCapturingUserAudio = true;
-            if (this.userPreRollChunks.length > 0) {
-              this.currentUserAudioChunks.push(...this.userPreRollChunks);
-              this.userPreRollChunks = [];
+        if (!isSuppressed) {
+          const SPEECH_RMS_THRESHOLD = 0.006;
+          const chunkCopy = new Float32Array(resampledData);
+          if (rms >= SPEECH_RMS_THRESHOLD) {
+            if (!this.isCapturingUserAudio) {
+              this.isCapturingUserAudio = true;
+              if (this.userPreRollChunks.length > 0) {
+                this.currentUserAudioChunks.push(...this.userPreRollChunks);
+                this.userPreRollChunks = [];
+              }
             }
+            this.userAudioSpeechFrames += 1;
           }
-          this.userAudioSpeechFrames += 1;
-        }
-        if (this.isCapturingUserAudio) {
-          if (this.currentUserAudioChunks.length < 450) {
-            this.currentUserAudioChunks.push(chunkCopy);
-          }
-        } else {
-          this.userPreRollChunks.push(chunkCopy);
-          if (this.userPreRollChunks.length > 12) {
-            this.userPreRollChunks.shift();
+          if (this.isCapturingUserAudio) {
+            if (this.currentUserAudioChunks.length < 450) {
+              this.currentUserAudioChunks.push(chunkCopy);
+            }
+          } else {
+            this.userPreRollChunks.push(chunkCopy);
+            if (this.userPreRollChunks.length > 12) {
+              this.userPreRollChunks.shift();
+            }
           }
         }
 
@@ -487,6 +496,58 @@ export class GeminiLiveClient {
       .replace(/[ \t]+\n/g, '\n')
       .replace(/[ \t]{2,}/g, ' ')
       .trim();
+  }
+
+  private isMatchingRecentBotText(userText: string): boolean {
+    if (!userText) return false;
+    const cleanUser = userText.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, ' ').trim();
+    if (!cleanUser || cleanUser.length < 4) return false;
+
+    const candidates: string[] = [];
+    if (this.currentBotTurnText && this.currentBotTurnText.trim()) {
+      candidates.push(this.currentBotTurnText.trim());
+    }
+    if (this.recentBotPhrases.length > 0) {
+      candidates.push(...this.recentBotPhrases);
+    }
+    if (candidates.length === 0) return false;
+
+    const userWords = cleanUser.split(/\s+/).filter((w) => w.length > 2);
+    if (userWords.length === 0) return false;
+
+    for (const phrase of candidates) {
+      const cleanBot = phrase.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, ' ').trim();
+      if (!cleanBot) continue;
+      if (cleanUser.length >= 12 && cleanBot.includes(cleanUser)) return true;
+      if (cleanBot.length >= 12 && cleanUser.includes(cleanBot)) return true;
+      if (userWords.length >= 3) {
+        const botWords = new Set(cleanBot.split(/\s+/));
+        let matchCount = 0;
+        for (const w of userWords) {
+          if (botWords.has(w)) matchCount++;
+        }
+        if (matchCount / userWords.length >= 0.65) return true;
+      }
+    }
+    return false;
+  }
+
+  private pushBotPhrase(phrase: string): void {
+    const clean = (phrase || '').trim();
+    if (!clean) return;
+    this.recentBotPhrases.push(clean);
+    if (this.recentBotPhrases.length > 8) {
+      this.recentBotPhrases.shift();
+    }
+    if (this.currentUserTurnId && this.isMatchingRecentBotText(this.currentUserTurnText)) {
+      this.onTranscript({ id: this.currentUserTurnId, sender: 'user', text: '', isFinal: true, remove: true });
+      this.currentUserTurnId = null;
+      this.currentUserTurnText = '';
+    }
+    if (this.lastCompletedUserTurn && this.isMatchingRecentBotText(this.lastCompletedUserTurn.text)) {
+      this.onTranscript({ id: this.lastCompletedUserTurn.id, sender: 'user', text: '', isFinal: true, remove: true });
+      this.lastCompletedUserTurn = null;
+    }
   }
 
   private finalizeUserTurn(): void {
@@ -707,6 +768,7 @@ export class GeminiLiveClient {
       this.currentTurnAudioChunks = [];
 
       if (finalizedBotText) {
+        this.pushBotPhrase(finalizedBotText);
         this.onTranscript({
           id: botTurnId || this.nextTurnId('bot'),
           sender: 'bot',
@@ -922,6 +984,18 @@ export class GeminiLiveClient {
           const data = await res.json();
           const text = (data.text || '').trim();
           if (text) {
+            if (sender === 'bot') {
+              this.pushBotPhrase(text);
+            } else if (sender === 'user' && this.isMatchingRecentBotText(text)) {
+              this.onTranscript({
+                id: turnId,
+                sender: 'user',
+                text: '',
+                isFinal: true,
+                remove: true
+              });
+              return;
+            }
             if (sender === 'user' && this.lastCompletedUserTurn && this.lastCompletedUserTurn.id === turnId) {
               this.lastCompletedUserTurn.text = text;
             }
