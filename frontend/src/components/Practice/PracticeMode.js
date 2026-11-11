@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from '../../config';
 import "./PracticeMode.css";
+import { SmartHintPill, useRegisterHintContext, emitHintUsed } from '../../features/hints';
 
 const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActivity, onOpenPaywall }) => {
   const [phase, setPhase] = useState(1);
@@ -30,6 +31,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const [translationModalData, setTranslationModalData] = useState(null);
 
   const showSentenceTranslationModal = (item, index) => {
+    emitHintUsed('mastery_translate');
     setTranslationModalData({
       en: item.en,
       pl: item.pl,
@@ -668,6 +670,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
 
       if (e.key.toLowerCase() === 'p') {
         e.preventDefault();
+        emitHintUsed('mastery_p');
         if (handleTogglePlayPauseRef.current) {
           handleTogglePlayPauseRef.current();
         }
@@ -677,6 +680,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       if (e.code === 'Space' || e.key === ' ') {
         e.preventDefault();
         if (isRecordingRef.current) return;
+        emitHintUsed('mastery_space');
         if (currentAudioRef.current || isSpeakingRef.current || isPausedRef.current) {
           if (handleTogglePlayPauseRef.current) {
             handleTogglePlayPauseRef.current();
@@ -703,6 +707,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     ? Math.max((currentIndex + 1) / masteryData.length, visitedIndices.size / masteryData.length)
     : 0;
   const showLiveChatBadge = readProgressRatio >= 0.70;
+  useRegisterHintContext('mastery', !liveChatActive);
 
   const startPracticeChatSession = async () => {
     unlockDesktopAudio();
@@ -1311,6 +1316,8 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
             </div>
           </div>
         </div>
+
+        <SmartHintPill hintId="mastery_space" active={!isRecording && !liveChatActive} />
 
         <footer className="practice-footer">
            <button className="step-btn" onClick={onExit}>Close</button>

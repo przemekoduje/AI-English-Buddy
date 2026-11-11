@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './TopBar.css';
 import { API_BASE_URL } from '../config';
+import { ShortcutsTriggerButton } from '../features/hints';
 
 const AVAILABLE_NARRATORS = [
   { id: 'en-US-BrianNeural', name: 'Brian (US — Natural)' },
@@ -137,6 +138,8 @@ const TopBar = ({
           </svg>
           <span className="lang-text">EN → PL</span>
         </button>
+
+        <ShortcutsTriggerButton />
 
         <button className="topbar-icon-btn" title="Powiadomienia">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

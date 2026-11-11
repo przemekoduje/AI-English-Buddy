@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { API_BASE_URL } from '../../config';
 import './HelpFeedback.css';
+import { HelpShortcutsSection } from '../../features/hints';
 
 const HelpFeedback = ({ user, onNavigate }) => {
   const [activeTab, setActiveTab] = useState('guide'); // 'guide' | 'troubleshooting' | 'feedback'
@@ -181,6 +182,8 @@ const HelpFeedback = ({ user, onNavigate }) => {
                 </li>
               </ul>
             </article>
+
+            <HelpShortcutsSection />
 
           </div>
         )}

@@ -13,6 +13,7 @@ import PronunciationPracticeModal from "./Notebook/PronunciationPracticeModal";
 import { calculateCEFRLevel } from "./Story/SavedStories";
 import { DEMO_STORIES, DEMO_DICTIONARY, DEMO_SENTENCES } from "../data/demoStoriesData";
 import { detectSentenceSyntax } from "../utils/syntaxDetector";
+import { SmartHintPill, emitHintUsed } from "../features/hints";
 
 // Curated vocabulary metadata for rich inline word card details & key story words
 const VOCABULARY_INFO = {
@@ -921,6 +922,7 @@ function Workspace({
         e.preventDefault();
         e.stopPropagation();
         if (e.repeat) return;
+        emitHintUsed('workspace_space');
         if (document.activeElement && document.activeElement.tagName === 'BUTTON') {
           document.activeElement.blur();
         }
@@ -933,6 +935,7 @@ function Workspace({
       if (e.key.toLowerCase() === 'p') {
         if (e.repeat) return;
         e.preventDefault();
+        emitHintUsed('workspace_p');
         if (handlePlaybackRef.current) {
           handlePlaybackRef.current();
         }
@@ -3554,6 +3557,7 @@ function Workspace({
           </button>
         </div>
       )}
+      <SmartHintPill hintId="workspace_space" active={(isSpeaking || isPaused) && !showPracticeMode} floating />
 
       {menuVisible && (
         <div

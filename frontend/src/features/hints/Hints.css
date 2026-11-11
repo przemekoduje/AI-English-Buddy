@@ -1,0 +1,478 @@
+/* ==========================================================================
+   Speakling — System podpowiedzi i skrótów (moduł izolowany / uninstallable)
+   Korzysta z tokenów z src/DesignTokens.css
+   ========================================================================== */
+
+.kbd-cap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.45rem;
+  padding: 0 0.42rem;
+  font-family: var(--font-main, system-ui, sans-serif);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--gray-900, #202124);
+  background: var(--gray-100, #f1f3f4);
+  border: 1px solid var(--gray-300, #e2e8f0);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.kbd-cap-lg {
+  height: 1.65rem;
+  padding: 0 0.55rem;
+  font-size: 0.76rem;
+}
+
+/* ── SmartHintPill (Auto-Graduate) ──────────────────────────────────────── */
+
+.smart-hint-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  padding: 0.42rem 0.65rem 0.42rem 0.6rem;
+  margin: 0.5rem auto 0;
+  border-radius: 999px;
+  background: var(--gray-0, #ffffff);
+  border: 1px solid var(--gray-300, #e2e8f0);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  font-size: 0.78rem;
+  color: var(--gray-700, #3c4043);
+  animation: hintFadeSlideIn 0.22s ease-out;
+  z-index: 30;
+}
+
+.smart-hint-pill.hint-floating {
+  position: fixed;
+  bottom: 1.1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 9500;
+}
+
+.smart-hint-pill.hint-confirmed {
+  background: var(--color-success-bg, #ecfdf5);
+  border-color: var(--color-success, #10b981);
+  color: #065f46;
+}
+
+.smart-hint-badge-dot {
+  font-size: 0.85rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.smart-hint-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.smart-hint-text {
+  line-height: 1.3;
+}
+
+.smart-hint-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.25rem;
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--gray-200, #e8eaed);
+}
+
+.smart-hint-more-btn {
+  background: transparent;
+  border: none;
+  padding: 0.15rem 0.35rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--brand-blue, #1a73e8);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.smart-hint-more-btn:hover {
+  background: var(--brand-blue-light, #e8f0fe);
+}
+
+.smart-hint-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--gray-500, #5f6368);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.smart-hint-close-btn:hover {
+  background: var(--gray-100, #f1f3f4);
+  color: var(--gray-900, #202124);
+}
+
+/* Na urządzeniach czysto dotykowych ukrywamy podpowiedzi klawiaturowe */
+@media (hover: none) and (pointer: coarse) {
+  .smart-hint-pill.hint-desktop-only {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .smart-hint-pill.hint-floating {
+    bottom: 0.75rem;
+    max-width: calc(100vw - 1.5rem);
+  }
+  .smart-hint-more-btn {
+    display: none;
+  }
+}
+
+@keyframes hintFadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── ShortcutsModal (?) ─────────────────────────────────────────────────── */
+
+.shortcuts-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 12000;
+}
+
+.shortcuts-modal-card {
+  width: 100%;
+  max-width: 720px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--gray-0, #ffffff);
+  border: 1px solid var(--gray-300, #e2e8f0);
+  border-radius: 18px;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.shortcuts-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--gray-200, #e8eaed);
+}
+
+.shortcuts-modal-kicker {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--brand-blue, #1a73e8);
+  margin-bottom: 0.25rem;
+}
+
+.shortcuts-modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--gray-900, #202124);
+}
+
+.shortcuts-modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--gray-200, #e8eaed);
+  background: var(--gray-0, #ffffff);
+  color: var(--gray-500, #5f6368);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.shortcuts-modal-close:hover {
+  background: var(--gray-100, #f1f3f4);
+  color: var(--gray-900, #202124);
+}
+
+.shortcuts-modal-body {
+  padding: 1.15rem 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.shortcuts-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.shortcuts-group-active {
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  background: var(--brand-blue-light, #e8f0fe);
+  border: 1px solid var(--brand-blue-mid, rgba(26, 115, 232, 0.2));
+}
+
+.shortcuts-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.shortcuts-active-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--brand-blue, #1a73e8);
+}
+
+.shortcuts-group-header h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--gray-900, #202124);
+}
+
+.shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.shortcuts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  background: var(--gray-0, #ffffff);
+  border: 1px solid var(--gray-200, #e8eaed);
+}
+
+.shortcuts-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.shortcuts-row-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: var(--gray-900, #202124);
+}
+
+.shortcuts-type-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.12rem 0.4rem;
+  border-radius: 6px;
+  background: var(--gray-100, #f1f3f4);
+  color: var(--gray-500, #5f6368);
+}
+
+.shortcuts-used-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--color-success-bg, #ecfdf5);
+  color: #047857;
+}
+
+.shortcuts-row-desc {
+  margin: 0.2rem 0 0;
+  font-size: 0.79rem;
+  line-height: 1.45;
+  color: var(--gray-500, #5f6368);
+}
+
+.shortcuts-row-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.shortcuts-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.9rem 1.5rem;
+  background: var(--slate-50, #f8fafc);
+  border-top: 1px solid var(--gray-200, #e8eaed);
+}
+
+.shortcuts-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--gray-700, #3c4043);
+  cursor: pointer;
+}
+
+.shortcuts-footer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.shortcuts-reset-btn {
+  padding: 0.38rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--gray-300, #e2e8f0);
+  background: var(--gray-0, #ffffff);
+  color: var(--gray-700, #3c4043);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shortcuts-reset-btn:hover {
+  background: var(--gray-100, #f1f3f4);
+}
+
+.shortcuts-key-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--gray-500, #5f6368);
+}
+
+/* ── HelpFeedback integration ───────────────────────────────────────────── */
+
+.help-shortcuts-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.help-shortcuts-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.help-shortcuts-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--brand-blue-mid, rgba(26, 115, 232, 0.25));
+  background: var(--brand-blue-light, #e8f0fe);
+  color: var(--brand-blue, #1a73e8);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.help-shortcuts-pill-btn.secondary {
+  border-color: var(--gray-300, #e2e8f0);
+  background: var(--gray-0, #ffffff);
+  color: var(--gray-700, #3c4043);
+}
+
+.help-shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.help-shortcuts-module {
+  padding: 1rem;
+  border-radius: 12px;
+  background: var(--slate-50, #f8fafc);
+  border: 1px solid var(--gray-200, #e8eaed);
+}
+
+.help-shortcuts-module h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--gray-900, #202124);
+}
+
+.help-shortcuts-module ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.help-shortcut-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.help-shortcut-keys {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.help-shortcut-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.help-shortcut-info strong {
+  font-size: 0.84rem;
+  color: var(--gray-900, #202124);
+}
+
+.help-shortcut-info span {
+  font-size: 0.79rem;
+  line-height: 1.4;
+  color: var(--gray-500, #5f6368);
+}
+

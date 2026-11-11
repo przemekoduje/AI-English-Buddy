@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { API_BASE_URL } from "../config";
 import logoImg from "../assets/logo.png";
 import "./Flashcards.css";
+import { useRegisterHintContext, emitHintUsed } from "../features/hints";
 
 function Flashcards({
   words,
@@ -205,20 +206,26 @@ function Flashcards({
   };
 
   // Keyboard navigation: Space (flip), ArrowLeft (Review again), ArrowRight (Know it)
+  useRegisterHintContext("flashcards", !showResults);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (showResults) return;
 
       if (e.code === "Space") {
         e.preventDefault();
+        emitHintUsed("flashcards_space");
         handleFlip();
       } else if (e.code === "ArrowLeft") {
         e.preventDefault();
+        emitHintUsed("flashcards_arrows");
         handleAnswer(false);
       } else if (e.code === "ArrowRight") {
         e.preventDefault();
+        emitHintUsed("flashcards_arrows");
         handleAnswer(true);
       } else if (e.code === "Escape") {
+        emitHintUsed("flashcards_esc");
         handleExit();
       }
     };

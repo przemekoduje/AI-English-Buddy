@@ -16,6 +16,7 @@ import AdminDashboard from './components/Admin/AdminDashboard';
 import GoodToKnow, { DualNBackModal, BreathingModal, PhonemicFluencyModal, SemanticFluencyModal } from './components/GoodToKnow';
 import HelpFeedback from './components/Help/HelpFeedback';
 import PaywallModal from './components/Paywall/PaywallModal';
+import { HintsProvider, ShortcutsModal } from './features/hints';
 
 function App() {
   const [currentView, setCurrentView] = useState(() => {
@@ -353,6 +354,7 @@ function App() {
   }
 
   return (
+    <HintsProvider currentView={currentView}>
     <div className="App mission-layout">
       <Sidebar 
         currentView={currentView} 
@@ -578,7 +580,9 @@ function App() {
           </svg>
         </button>
       )}
+      <ShortcutsModal />
     </div>
+    </HintsProvider>
   );
 }
 
