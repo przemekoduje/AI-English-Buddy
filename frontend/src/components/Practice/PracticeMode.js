@@ -59,7 +59,11 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const evalRequestIdRef = useRef(0);
   const mediaMimeTypeRef = useRef("audio/webm");
   const handleTogglePlayPauseRef = useRef(null);
+  const handleNextRef = useRef(null);
   const isPausedRef = useRef(false);
+  const isSpeakingRef = useRef(false);
+  const hasFinishedSentenceRef = useRef(false);
+  const translationModalOpenRef = useRef(false);
 
   // Live Chat Refs
   const chatMediaRecorderRef = useRef(null);
@@ -147,6 +151,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     evalRequestIdRef.current += 1;
     setEvaluation(null);
     setIsEvaluating(false);
+    hasFinishedSentenceRef.current = false;
     if (currentIndex !== -1) {
       const element = document.getElementById(`sentence-${currentIndex}`);
       if (element) {
@@ -267,9 +272,12 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     setProgress(0);
     setIsPaused(false);
     isPausedRef.current = false;
+    isSpeakingRef.current = true;
+    hasFinishedSentenceRef.current = false;
 
     if (index < 0 || index >= masteryData.length) {
       setIsSpeaking(false);
+      isSpeakingRef.current = false;
       setIsPaused(false);
       return;
     }
@@ -310,6 +318,10 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       if (!data.audio_base64) throw new Error("No audio data returned");
 
       if (requestId !== activeTTSRequestIdRef.current || isPausedRef.current) {
+        if (requestId === activeTTSRequestIdRef.current) {
+          isSpeakingRef.current = false;
+          setIsSpeaking(false);
+        }
         return;
       }
 
@@ -320,7 +332,9 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       audio.onplay = () => {
         if (requestId !== activeTTSRequestIdRef.current) return;
         setIsSpeaking(true);
+        isSpeakingRef.current = true;
         setIsPaused(false);
+        isPausedRef.current = false;
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         
         const updateProgress = () => {
@@ -341,13 +355,17 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       audio.onpause = () => {
         if (requestId !== activeTTSRequestIdRef.current) return;
         setIsPaused(true);
+        isPausedRef.current = true;
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       };
 
       audio.onended = () => {
         if (requestId !== activeTTSRequestIdRef.current) return;
         setIsSpeaking(false);
+        isSpeakingRef.current = false;
         setIsPaused(false);
+        isPausedRef.current = false;
+        hasFinishedSentenceRef.current = true;
         setProgress(100);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         currentAudioRef.current = null;
@@ -356,7 +374,9 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       audio.onerror = () => {
         if (requestId !== activeTTSRequestIdRef.current) return;
         setIsSpeaking(false);
+        isSpeakingRef.current = false;
         setIsPaused(false);
+        isPausedRef.current = false;
         setProgress(0);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         currentAudioRef.current = null;
@@ -369,6 +389,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       if (requestId === activeTTSRequestIdRef.current) {
         console.error("Error playing practice voice:", err);
         setIsSpeaking(false);
+        isSpeakingRef.current = false;
         setProgress(0);
       }
     }
@@ -564,6 +585,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
         return;
       }
       setEvaluation(result);
+      hasFinishedSentenceRef.current = true;
 
       if (onLogActivity && result && typeof result.score !== 'undefined') {
         onLogActivity({
@@ -617,30 +639,56 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       if (isPaused || currentAudioRef.current.paused) {
         currentAudioRef.current.play();
         setIsPaused(false);
+        isPausedRef.current = false;
         setIsSpeaking(true);
+        isSpeakingRef.current = true;
       } else {
         currentAudioRef.current.pause();
         setIsPaused(true);
         isPausedRef.current = true;
       }
-    } else if (isSpeaking) {
+    } else if (isSpeaking || isSpeakingRef.current) {
       setIsPaused(true);
       isPausedRef.current = true;
       setIsSpeaking(false);
+      isSpeakingRef.current = false;
     } else {
       const targetSegment = phase === 2 ? (currentSegmentIndex === -1 ? 0 : currentSegmentIndex) : -1;
       speakSentence(currentIndex === -1 ? 0 : currentIndex, currentLang, targetSegment);
     }
   };
   handleTogglePlayPauseRef.current = handleTogglePlayPause;
+  handleNextRef.current = handleNext;
+  translationModalOpenRef.current = Boolean(translationModalData);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) return;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName) || e.target?.isContentEditable) return;
+      if (liveChatActiveRef.current || translationModalOpenRef.current) return;
+
       if (e.key.toLowerCase() === 'p') {
         e.preventDefault();
         if (handleTogglePlayPauseRef.current) {
           handleTogglePlayPauseRef.current();
+        }
+        return;
+      }
+
+      if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault();
+        if (isRecordingRef.current) return;
+        if (currentAudioRef.current || isSpeakingRef.current || isPausedRef.current) {
+          if (handleTogglePlayPauseRef.current) {
+            handleTogglePlayPauseRef.current();
+          }
+        } else if (hasFinishedSentenceRef.current) {
+          if (handleNextRef.current) {
+            handleNextRef.current();
+          }
+        } else {
+          if (handleTogglePlayPauseRef.current) {
+            handleTogglePlayPauseRef.current();
+          }
         }
       }
     };
@@ -1227,7 +1275,7 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
                   </>
                 ) : (
                   <>
-                    <button className="ctrl-btn play-pause" onClick={handleTogglePlayPause} title="Odtwarzaj / Pauza (Skrót klawiaturowy: P)">
+                    <button className="ctrl-btn play-pause" onClick={handleTogglePlayPause} title="Odtwarzaj / Pauza (Skrót: Spacja lub P)">
                       {isSpeaking && !isPaused ? (
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                           <rect x="6" y="4" width="4" height="16" rx="1" />
