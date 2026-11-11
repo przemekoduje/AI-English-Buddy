@@ -7011,37 +7011,49 @@ def evaluate_mastery():
             "message": "Moduł Mastery Path jest dostępny w pakiecie Pro i Intensive. Uaktualnij subskrypcję, aby korzystać z oceny wymowy!"
         }), 403
 
-    transcription = request.form.get('transcription', '').strip()
-    original_text = request.form.get('target_text', '')
-    
-    # Jeśli nie otrzymaliśmy gotowej transkrypcji z frontendu, próbujemy Whisper API
+    client_transcription = request.form.get('transcription', '').strip()
+    original_text = request.form.get('target_text', '').strip()
+    stt_transcription = ""
+
+    # Zawsze transkrybuj przesłane pełne nagranie audio, aby uniknąć uciętych fraz z przeglądarkowego Web Speech API.
+    if 'audio' in request.files:
+        audio_file = request.files['audio']
+        try:
+            audio_data = audio_file.read()
+            if audio_data and len(audio_data) > 500:
+                print(f"Sending full audio to STT (Gemini/HF)... Size: {len(audio_data)} bytes", flush=True)
+                stt_transcription = transcribe_audio_bytes(
+                    audio_data,
+                    mime_type=get_audio_content_type(audio_file),
+                    user_email=user_email,
+                    feature="mastery_evaluate_stt"
+                ).strip()
+                print(f"Server STT result: '{stt_transcription}' (client hint: '{client_transcription}')", flush=True)
+        except Exception as e:
+            print(f"Server STT connection/processing error: {e}", flush=True)
+            if not client_transcription:
+                return jsonify({"error": "Transcription service communication failure.", "details": str(e)}), 500
+
+    # Wybierz pełniejszą transkrypcję (domyślnie serwerowe pełne audio, chyba że klient zebrał wyraźnie więcej pasujących słów)
+    transcription = stt_transcription or client_transcription
+    if stt_transcription and client_transcription:
+        target_tokens = set(re.findall(r"[a-zA-Z0-9']+", original_text.lower()))
+        stt_tokens = re.findall(r"[a-zA-Z0-9']+", stt_transcription.lower())
+        client_tokens = re.findall(r"[a-zA-Z0-9']+", client_transcription.lower())
+        if target_tokens:
+            stt_matches = sum(1 for t in stt_tokens if t in target_tokens)
+            client_matches = sum(1 for t in client_tokens if t in target_tokens)
+            if client_matches >= stt_matches + 2 and len(client_tokens) > len(stt_tokens):
+                transcription = client_transcription
+        elif len(client_tokens) > len(stt_tokens) + 2:
+            transcription = client_transcription
+
     if not transcription:
         if 'audio' not in request.files:
             return jsonify({"error": "No audio file or transcription text provided."}), 400
-        
-        audio_file = request.files['audio']
+        return jsonify({"error": "No speech detected. Please speak louder or closer to the mic."}), 400
 
-        try:
-            # 1. Transkrypcja (Gemini, zapas: Hugging Face Whisper)
-            audio_data = audio_file.read()
-            print(f"Sending audio to STT (Gemini/HF)... Size: {len(audio_data)} bytes")
-            transcription = transcribe_audio_bytes(
-                audio_data,
-                mime_type=get_audio_content_type(audio_file),
-                user_email=get_user_from_request(),
-                feature="mastery_evaluate_stt"
-            )
-            
-            if not transcription:
-                 print("Whisper returned empty transcription.")
-                 return jsonify({"error": "No speech detected. Please speak louder or closer to the mic."}), 400
-                 
-            print(f"Transcription success: '{transcription}'")
-        except Exception as e:
-            print(f"Whisper connection/processing error: {e}")
-            return jsonify({"error": "Transcription service communication failure.", "details": str(e)}), 500
-    else:
-        print(f"Using client-side transcription: '{transcription}'")
+    print(f"Final chosen transcription for Mastery evaluation: '{transcription}'", flush=True)
 
     try:
         # 2. Ewaluacja przez AI

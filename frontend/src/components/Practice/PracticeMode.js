@@ -50,6 +50,14 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   const audioChunksRef = useRef([]);
   const recognitionRef = useRef(null);
   const speechTranscriptRef = useRef("");
+  const accumulatedTranscriptRef = useRef("");
+  const sessionFinalTranscriptRef = useRef("");
+  const sessionInterimTranscriptRef = useRef("");
+  const isRecordingRef = useRef(false);
+  const recordingTargetIndexRef = useRef(-1);
+  const skipNextEvalRef = useRef(false);
+  const evalRequestIdRef = useRef(0);
+  const mediaMimeTypeRef = useRef("audio/webm");
   const handleTogglePlayPauseRef = useRef(null);
   const isPausedRef = useRef(false);
 
@@ -99,11 +107,26 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     prepareContent();
     return () => {
       liveChatActiveRef.current = false;
+      isRecordingRef.current = false;
+      skipNextEvalRef.current = true;
+      evalRequestIdRef.current += 1;
       activeTTSRequestIdRef.current++;
       activeChatTTSRequestIdRef.current++;
       if (currentAudioRef.current) {
         currentAudioRef.current.pause();
         currentAudioRef.current = null;
+      }
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.stop();
+        } catch (e) {}
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        try {
+          mediaRecorderRef.current.stop();
+          mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop());
+        } catch (e) {}
       }
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       if (chatAudioRef.current) {
@@ -120,6 +143,10 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
   }, []);
 
   useEffect(() => {
+    // Wyczyść ocenę/diagnozę czytania po przejściu do kolejnego lub innego zdania
+    evalRequestIdRef.current += 1;
+    setEvaluation(null);
+    setIsEvaluating(false);
     if (currentIndex !== -1) {
       const element = document.getElementById(`sentence-${currentIndex}`);
       if (element) {
@@ -196,8 +223,41 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     }
   };
 
+  const cancelRecordingSilently = () => {
+    skipNextEvalRef.current = true;
+    isRecordingRef.current = false;
+    evalRequestIdRef.current += 1;
+    setIsRecording(false);
+    setIsEvaluating(false);
+    setEvaluation(null);
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onend = null;
+        recognitionRef.current.stop();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.onstop = null;
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop());
+      } catch (e) {}
+    }
+  };
+
   const speakSentence = async (index, lang = "en", segmentIdx = -1) => {
     const requestId = ++activeTTSRequestIdRef.current;
+
+    if (index !== currentIndex) {
+      if (isRecordingRef.current) {
+        cancelRecordingSilently();
+      } else {
+        evalRequestIdRef.current += 1;
+        setEvaluation(null);
+        setIsEvaluating(false);
+      }
+    }
 
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
@@ -314,50 +374,142 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     }
   };
 
+  const launchSpeechRecognitionSession = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition || !isRecordingRef.current) return;
+
+    try {
+      const rec = new SpeechRecognition();
+      rec.lang = "en-US";
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+
+      sessionFinalTranscriptRef.current = "";
+      sessionInterimTranscriptRef.current = "";
+
+      rec.onresult = (event) => {
+        let finalPart = "";
+        let interimPart = "";
+        for (let i = 0; i < event.results.length; i++) {
+          const transcript = event.results[i][0]?.transcript || "";
+          if (event.results[i].isFinal) {
+            finalPart += (finalPart ? " " : "") + transcript.trim();
+          } else {
+            interimPart += (interimPart ? " " : "") + transcript.trim();
+          }
+        }
+        sessionFinalTranscriptRef.current = finalPart;
+        sessionInterimTranscriptRef.current = interimPart;
+        speechTranscriptRef.current = [
+          accumulatedTranscriptRef.current,
+          finalPart,
+          interimPart,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+      };
+
+      rec.onerror = (e) => {
+        if (e.error !== "aborted" && e.error !== "no-speech") {
+          console.warn("Local speech recognition error:", e.error);
+        }
+      };
+
+      rec.onend = () => {
+        const finalized = [
+          accumulatedTranscriptRef.current,
+          sessionFinalTranscriptRef.current || sessionInterimTranscriptRef.current,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        accumulatedTranscriptRef.current = finalized;
+        sessionFinalTranscriptRef.current = "";
+        sessionInterimTranscriptRef.current = "";
+        speechTranscriptRef.current = finalized;
+
+        if (isRecordingRef.current) {
+          // Automatyczne wznowienie nasłuchu w razie krótkiej przerwy w trakcie długiego zdania
+          setTimeout(() => {
+            if (isRecordingRef.current) launchSpeechRecognitionSession();
+          }, 80);
+        }
+      };
+
+      recognitionRef.current = rec;
+      rec.start();
+    } catch (e) {
+      console.warn("SpeechRecognition start warning:", e);
+    }
+  };
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      mediaRecorderRef.current.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      
-      speechTranscriptRef.current = "";
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const rec = new SpeechRecognition();
-        rec.lang = "en-US";
-        rec.continuous = false;
-        rec.interimResults = false;
-        rec.maxAlternatives = 1;
-        
-        rec.onresult = (event) => {
-          const resultText = event.results[0][0].transcript;
-          console.log("Local speech recognition transcript:", resultText);
-          speechTranscriptRef.current = resultText;
-        };
-        rec.onerror = (e) => {
-          console.warn("Local speech recognition error:", e.error);
-        };
-        recognitionRef.current = rec;
-        rec.start();
-      }
+      const preferredTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/ogg;codecs=opus",
+      ];
+      const supportedMime =
+        typeof MediaRecorder !== "undefined" && typeof MediaRecorder.isTypeSupported === "function"
+          ? preferredTypes.find((t) => MediaRecorder.isTypeSupported(t)) || ""
+          : "";
 
-      mediaRecorderRef.current.onstop = () => {
-        setTimeout(() => {
-          handleEvaluate(new Blob(audioChunksRef.current, { type: 'audio/webm' }), speechTranscriptRef.current);
-        }, 500);
+      const recorder = supportedMime
+        ? new MediaRecorder(stream, { mimeType: supportedMime })
+        : new MediaRecorder(stream);
+
+      mediaMimeTypeRef.current = recorder.mimeType || supportedMime || "audio/webm";
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
       };
 
-      mediaRecorderRef.current.start();
+      speechTranscriptRef.current = "";
+      accumulatedTranscriptRef.current = "";
+      sessionFinalTranscriptRef.current = "";
+      sessionInterimTranscriptRef.current = "";
+      skipNextEvalRef.current = false;
+      recordingTargetIndexRef.current = currentIndex;
+      isRecordingRef.current = true;
+
+      launchSpeechRecognitionSession();
+
+      recorder.onstop = () => {
+        if (skipNextEvalRef.current) return;
+        const targetIdx = recordingTargetIndexRef.current;
+        const blobMime = mediaMimeTypeRef.current || "audio/webm";
+        setTimeout(() => {
+          if (skipNextEvalRef.current) return;
+          const fullTranscript = [
+            accumulatedTranscriptRef.current,
+            sessionFinalTranscriptRef.current,
+            sessionInterimTranscriptRef.current,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .trim() || speechTranscriptRef.current;
+          handleEvaluate(new Blob(audioChunksRef.current, { type: blobMime }), fullTranscript, targetIdx);
+        }, 350);
+      };
+
+      recorder.start(250);
       setIsRecording(true);
       setEvaluation(null);
-    } catch (err) { 
+    } catch (err) {
+      isRecordingRef.current = false;
       console.error(err);
-      alert("Microphone access denied."); 
+      alert("Microphone access denied.");
     }
   };
 
   const stopRecording = () => {
+    isRecordingRef.current = false;
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -366,32 +518,47 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       }
     }
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+      try {
+        if (mediaRecorderRef.current.state !== "inactive") {
+          mediaRecorderRef.current.stop();
+        }
+        mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
+      } catch (e) {
+        console.warn("Error stopping MediaRecorder:", e);
+      }
       setIsRecording(false);
-      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
     }
   };
 
-  const handleEvaluate = async (audioBlob, localTranscript = "") => {
+  const handleEvaluate = async (audioBlob, localTranscript = "", targetIdx = currentIndex) => {
+    const requestId = ++evalRequestIdRef.current;
+    const targetItem = masteryData[targetIdx];
+    if (!targetItem) return;
+
     setIsEvaluating(true);
     setEvaluation(null);
     try {
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'speech.webm');
-      formData.append('target_text', masteryData[currentIndex].en);
+      const isMp4 = (audioBlob?.type || mediaMimeTypeRef.current || "").includes("mp4");
+      formData.append('audio', audioBlob, isMp4 ? 'speech.mp4' : 'speech.webm');
+      formData.append('target_text', targetItem.en);
       if (localTranscript) {
         formData.append('transcription', localTranscript);
       }
-      const res = await fetch(`${API_BASE_URL}/api/mastery-evaluate`, { 
-        method: "POST", 
+      const res = await fetch(`${API_BASE_URL}/api/mastery-evaluate`, {
+        method: "POST",
         headers: { "X-Session-Token": user?.token || "" },
-        body: formData 
+        body: formData
       });
+      if (requestId !== evalRequestIdRef.current) return;
+
       if (res.status === 403) {
         if (onOpenPaywall) onOpenPaywall({ feature: 'mastery' });
         return;
       }
       const result = await res.json();
+      if (requestId !== evalRequestIdRef.current) return;
+
       if (result?.error === "PAYWALL_REQUIRED") {
         if (onOpenPaywall) onOpenPaywall({ feature: 'mastery' });
         return;
@@ -401,20 +568,32 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
       if (onLogActivity && result && typeof result.score !== 'undefined') {
         onLogActivity({
           type: "practice",
-          word_or_phrase: masteryData[currentIndex].en,
+          word_or_phrase: targetItem.en,
           timestamp: Date.now(),
           details: {
             practice_score: result.score,
-            practice_sentence: masteryData[currentIndex].en,
+            practice_sentence: targetItem.en,
             practice_transcription: result.transcription || localTranscript || ""
           }
         });
       }
-    } catch (err) { console.error("Evaluation error:", err); }
-    finally { setIsEvaluating(false); }
+    } catch (err) {
+      console.error("Evaluation error:", err);
+    } finally {
+      if (requestId === evalRequestIdRef.current) {
+        setIsEvaluating(false);
+      }
+    }
   };
 
   const handleNext = () => {
+    if (isRecordingRef.current) {
+      cancelRecordingSilently();
+    } else {
+      evalRequestIdRef.current += 1;
+      setEvaluation(null);
+      setIsEvaluating(false);
+    }
     if (phase === 2) {
       const currentItem = masteryData[currentIndex];
       if (currentItem.segments && currentSegmentIndex + 1 < currentItem.segments.length) {
@@ -881,6 +1060,13 @@ const PracticeMode = ({ text, voices, selectedVoiceURI, user, onExit, onLogActiv
     liveChatActiveRef.current = false;
     activeTTSRequestIdRef.current++;
     activeChatTTSRequestIdRef.current++;
+    if (isRecordingRef.current) {
+      cancelRecordingSilently();
+    } else {
+      evalRequestIdRef.current += 1;
+      setEvaluation(null);
+      setIsEvaluating(false);
+    }
     setPhase(newPhase);
     setSubPhase(1);
     setCurrentIndex(0);
