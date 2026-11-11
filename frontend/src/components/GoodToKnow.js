@@ -11,6 +11,84 @@ const LETTERS = ['C', 'H', 'K', 'L', 'Q', 'R', 'S', 'T'];
 const GRID_POSITIONS = [0, 1, 2, 3, 5, 6, 7, 8]; // 8 outer cells around center fixation cross (index 4)
 const STORAGE_KEY = 'speakling_dual_nback_stats_v1';
 
+// Cache studio-quality neural letter audio so Dual N-Back never suffers from distorted OS speechSynthesis
+const NBACK_AUDIO_CACHE = new Map();
+const NBACK_PREFETCH_INFLIGHT = new Set();
+
+const NOVELTY_VOICES_REGEX = /zarvox|trinoids|bells|bubbles|boing|cellos|deranged|good news|bad news|hysterical|whisper|albert|fred|junior|kathy|organ|princess|ralph|wobble|bahh|jester|superstar/i;
+
+const pickCleanEnglishVoice = () => {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices() || [];
+  const englishVoices = voices.filter(
+    (v) => v.lang && v.lang.toLowerCase().startsWith('en') && !NOVELTY_VOICES_REGEX.test(v.name || '')
+  );
+  if (englishVoices.length === 0) return null;
+
+  const preferredNames = [
+    'Google US English',
+    'Samantha',
+    'Daniel',
+    'Karen',
+    'Alex',
+    'Ava',
+    'Allison',
+    'Microsoft Aria',
+    'Microsoft Jenny',
+    'Microsoft Guy',
+    'Google UK English Female',
+    'Google UK English Male',
+  ];
+
+  for (const name of preferredNames) {
+    const match = englishVoices.find((v) => v.name && v.name.includes(name));
+    if (match) return match;
+  }
+
+  return englishVoices.find((v) => v.lang.toLowerCase() === 'en-us') || englishVoices[0];
+};
+
+const getNBackVoiceName = () => {
+  try {
+    const saved = localStorage.getItem('buddy_selected_voice');
+    if (saved && saved.startsWith('en-') && saved.includes('Neural')) {
+      return saved;
+    }
+  } catch (e) {}
+  return 'en-US-BrianNeural';
+};
+
+const fetchNBackLetterAudio = async (letter, voice) => {
+  const key = `${voice}:${letter}`;
+  if (NBACK_AUDIO_CACHE.has(key) || NBACK_PREFETCH_INFLIGHT.has(key)) return;
+  NBACK_PREFETCH_INFLIGHT.add(key);
+
+  try {
+    let headers = { 'Content-Type': 'application/json' };
+    try {
+      const userRaw = localStorage.getItem('buddy_user');
+      const token = userRaw ? JSON.parse(userRaw)?.token : null;
+      if (token) headers.Authorization = `Bearer ${token}`;
+    } catch (e) {}
+
+    const res = await fetch(`${API_BASE_URL}/api/tts`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ text: letter.toUpperCase(), voice }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.audio_base64) {
+        NBACK_AUDIO_CACHE.set(key, `data:audio/mp3;base64,${data.audio_base64}`);
+      }
+    }
+  } catch (e) {
+    // fallback to browser speechSynthesis if offline
+  } finally {
+    NBACK_PREFETCH_INFLIGHT.delete(key);
+  }
+};
+
 const loadStats = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -115,6 +193,8 @@ export const DualNBackGame = ({ onClose }) => {
   const audioEnabledRef = useRef(audioEnabled);
   const stepTimerRef = useRef(null);
   const flashTimerRef = useRef(null);
+  const letterAudioRef = useRef(null);
+  const speakTimeoutRef = useRef(null);
 
   useEffect(() => {
     nLevelRef.current = nLevel;
@@ -124,21 +204,76 @@ export const DualNBackGame = ({ onClose }) => {
     audioEnabledRef.current = audioEnabled;
   }, [audioEnabled]);
 
-  const speakLetter = useCallback((letter) => {
-    if (!audioEnabledRef.current || typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      return;
+  // Preload crystal-clear neural voice audio for all 8 Dual N-Back letters
+  useEffect(() => {
+    const voice = getNBackVoiceName();
+    LETTERS.forEach((ltr) => {
+      fetchNBackLetterAudio(ltr, voice);
+    });
+  }, []);
+
+  const stopLetterAudio = useCallback(() => {
+    if (speakTimeoutRef.current) {
+      clearTimeout(speakTimeoutRef.current);
+      speakTimeoutRef.current = null;
     }
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(letter.toLowerCase());
-      utterance.lang = 'en-US';
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
-      // ignore speech synthesis errors
+    if (letterAudioRef.current) {
+      try {
+        letterAudioRef.current.pause();
+        letterAudioRef.current.currentTime = 0;
+      } catch (e) {}
+      letterAudioRef.current = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+          window.speechSynthesis.cancel();
+        }
+      } catch (e) {}
     }
   }, []);
+
+  const speakLetter = useCallback((letter) => {
+    if (!audioEnabledRef.current || typeof window === 'undefined') {
+      return;
+    }
+    stopLetterAudio();
+
+    const voice = getNBackVoiceName();
+    const cachedSrc = NBACK_AUDIO_CACHE.get(`${voice}:${letter}`);
+
+    if (cachedSrc) {
+      try {
+        const audio = new Audio(cachedSrc);
+        letterAudioRef.current = audio;
+        audio.play().catch(() => {});
+        return;
+      } catch (e) {
+        // fallback below
+      }
+    } else {
+      fetchNBackLetterAudio(letter, voice);
+    }
+
+    if (!('speechSynthesis' in window)) return;
+    const triggerFallbackSpeech = () => {
+      if (!isRunningRef.current || !audioEnabledRef.current) return;
+      try {
+        const utterance = new SpeechSynthesisUtterance(letter.toUpperCase());
+        const cleanVoice = pickCleanEnglishVoice();
+        if (cleanVoice) utterance.voice = cleanVoice;
+        utterance.lang = cleanVoice?.lang || 'en-US';
+        utterance.rate = 0.98;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        // ignore speech synthesis errors
+      }
+    };
+
+    // Short delay after cancel() avoids Chromium/macOS audio buffer distortion
+    speakTimeoutRef.current = setTimeout(triggerFallbackSpeech, 25);
+  }, [stopLetterAudio]);
 
   const clearTimers = useCallback(() => {
     if (stepTimerRef.current) {
@@ -273,25 +408,21 @@ export const DualNBackGame = ({ onClose }) => {
 
   const stopGame = useCallback(() => {
     clearTimers();
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    stopLetterAudio();
     isRunningRef.current = false;
     setIsRunning(false);
     setIsFlashActive(false);
     setCurrentStep(-1);
     setPosFeedback(null);
     setLetterFeedback(null);
-  }, [clearTimers]);
+  }, [clearTimers, stopLetterAudio]);
 
   useEffect(() => {
     return () => {
       clearTimers();
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
+      stopLetterAudio();
     };
-  }, [clearTimers]);
+  }, [clearTimers, stopLetterAudio]);
 
   const handleUserResponse = useCallback((type) => {
     if (!isRunningRef.current) return;
