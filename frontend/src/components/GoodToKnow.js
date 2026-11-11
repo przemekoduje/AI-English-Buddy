@@ -11,8 +11,10 @@ const LETTERS = ['C', 'H', 'K', 'L', 'Q', 'R', 'S', 'T'];
 const GRID_POSITIONS = [0, 1, 2, 3, 5, 6, 7, 8]; // 8 outer cells around center fixation cross (index 4)
 const STORAGE_KEY = 'speakling_dual_nback_stats_v1';
 
-// Cache studio-quality neural letter audio so Dual N-Back never suffers from distorted OS speechSynthesis
+// Cache studio-quality neural letter audio (en-US-AriaNeural has full, non-whispered articulation for all 8 letters)
+const NBACK_VOICE = 'en-US-AriaNeural';
 const NBACK_AUDIO_CACHE = new Map();
+const NBACK_BUFFER_CACHE = new Map();
 const NBACK_PREFETCH_INFLIGHT = new Set();
 
 const NOVELTY_VOICES_REGEX = /zarvox|trinoids|bells|bubbles|boing|cellos|deranged|good news|bad news|hysterical|whisper|albert|fred|junior|kathy|organ|princess|ralph|wobble|bahh|jester|superstar/i;
@@ -48,19 +50,51 @@ const pickCleanEnglishVoice = () => {
   return englishVoices.find((v) => v.lang.toLowerCase() === 'en-us') || englishVoices[0];
 };
 
-const getNBackVoiceName = () => {
-  try {
-    const saved = localStorage.getItem('buddy_selected_voice');
-    if (saved && saved.startsWith('en-') && saved.includes('Neural')) {
-      return saved;
-    }
-  } catch (e) {}
-  return 'en-US-BrianNeural';
+const base64ToArrayBuffer = (base64) => {
+  const binaryString = window.atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
 };
 
-const fetchNBackLetterAudio = async (letter, voice) => {
-  const key = `${voice}:${letter}`;
-  if (NBACK_AUDIO_CACHE.has(key) || NBACK_PREFETCH_INFLIGHT.has(key)) return;
+const decodeAndNormalizeLetterBuffer = async (ctx, letter, base64Data) => {
+  if (!ctx || !base64Data) return null;
+  const key = `${NBACK_VOICE}:${letter}`;
+  if (NBACK_BUFFER_CACHE.has(key)) return NBACK_BUFFER_CACHE.get(key);
+
+  try {
+    const arrayBuf = base64ToArrayBuffer(base64Data);
+    const audioBuffer = await ctx.decodeAudioData(arrayBuf);
+    // Compute peak amplitude to normalize all 8 letters to uniform crisp loudness
+    let maxPeak = 0;
+    for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+      const data = audioBuffer.getChannelData(ch);
+      for (let i = 0; i < data.length; i++) {
+        const abs = Math.abs(data[i]);
+        if (abs > maxPeak) maxPeak = abs;
+      }
+    }
+    const normGain = maxPeak > 0.02 ? Math.min(2.2, 0.85 / maxPeak) : 1.0;
+    const entry = { buffer: audioBuffer, gain: normGain };
+    NBACK_BUFFER_CACHE.set(key, entry);
+    return entry;
+  } catch (e) {
+    return null;
+  }
+};
+
+const fetchNBackLetterAudio = async (letter, audioCtx = null) => {
+  const key = `${NBACK_VOICE}:${letter}`;
+  if (NBACK_AUDIO_CACHE.has(key)) {
+    if (audioCtx && !NBACK_BUFFER_CACHE.has(key)) {
+      decodeAndNormalizeLetterBuffer(audioCtx, letter, NBACK_AUDIO_CACHE.get(key).base64);
+    }
+    return;
+  }
+  if (NBACK_PREFETCH_INFLIGHT.has(key)) return;
   NBACK_PREFETCH_INFLIGHT.add(key);
 
   try {
@@ -74,12 +108,18 @@ const fetchNBackLetterAudio = async (letter, voice) => {
     const res = await fetch(`${API_BASE_URL}/api/tts`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ text: letter.toUpperCase(), voice }),
+      body: JSON.stringify({ text: letter.toUpperCase(), voice: NBACK_VOICE }),
     });
     if (res.ok) {
       const data = await res.json();
       if (data && data.audio_base64) {
-        NBACK_AUDIO_CACHE.set(key, `data:audio/mp3;base64,${data.audio_base64}`);
+        NBACK_AUDIO_CACHE.set(key, {
+          base64: data.audio_base64,
+          dataUri: `data:audio/mp3;base64,${data.audio_base64}`,
+        });
+        if (audioCtx) {
+          decodeAndNormalizeLetterBuffer(audioCtx, letter, data.audio_base64);
+        }
       }
     }
   } catch (e) {
@@ -195,6 +235,47 @@ export const DualNBackGame = ({ onClose }) => {
   const flashTimerRef = useRef(null);
   const letterAudioRef = useRef(null);
   const speakTimeoutRef = useRef(null);
+  const nbackAudioCtxRef = useRef(null);
+  const activeSourceRef = useRef(null);
+  const keepaliveOscRef = useRef(null);
+
+  const ensureNBackAudioContext = useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return null;
+    if (!nbackAudioCtxRef.current || nbackAudioCtxRef.current.state === 'closed') {
+      nbackAudioCtxRef.current = new AudioCtx();
+    }
+    if (nbackAudioCtxRef.current.state === 'suspended') {
+      nbackAudioCtxRef.current.resume().catch(() => {});
+    }
+    return nbackAudioCtxRef.current;
+  }, []);
+
+  const startKeepalive = useCallback((ctx) => {
+    if (!ctx || keepaliveOscRef.current) return;
+    try {
+      // Sub-audible -100dB signal keeps Bluetooth/CoreAudio active so letters never clip at the start
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 30;
+      gain.gain.value = 0.00001;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      keepaliveOscRef.current = osc;
+    } catch (e) {}
+  }, []);
+
+  const stopKeepalive = useCallback(() => {
+    if (keepaliveOscRef.current) {
+      try {
+        keepaliveOscRef.current.stop();
+        keepaliveOscRef.current.disconnect();
+      } catch (e) {}
+      keepaliveOscRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     nLevelRef.current = nLevel;
@@ -206,9 +287,8 @@ export const DualNBackGame = ({ onClose }) => {
 
   // Preload crystal-clear neural voice audio for all 8 Dual N-Back letters
   useEffect(() => {
-    const voice = getNBackVoiceName();
     LETTERS.forEach((ltr) => {
-      fetchNBackLetterAudio(ltr, voice);
+      fetchNBackLetterAudio(ltr, nbackAudioCtxRef.current);
     });
   }, []);
 
@@ -216,6 +296,13 @@ export const DualNBackGame = ({ onClose }) => {
     if (speakTimeoutRef.current) {
       clearTimeout(speakTimeoutRef.current);
       speakTimeoutRef.current = null;
+    }
+    if (activeSourceRef.current) {
+      try {
+        activeSourceRef.current.stop();
+        activeSourceRef.current.disconnect();
+      } catch (e) {}
+      activeSourceRef.current = null;
     }
     if (letterAudioRef.current) {
       try {
@@ -239,22 +326,42 @@ export const DualNBackGame = ({ onClose }) => {
     }
     stopLetterAudio();
 
-    const voice = getNBackVoiceName();
-    const cachedSrc = NBACK_AUDIO_CACHE.get(`${voice}:${letter}`);
+    const key = `${NBACK_VOICE}:${letter}`;
+    const ctx = ensureNBackAudioContext();
+    const normEntry = NBACK_BUFFER_CACHE.get(key);
 
-    if (cachedSrc) {
+    // 1) Best path: Peak-normalized decoded PCM via kept-warm AudioContext (zero startup clipping)
+    if (ctx && normEntry && normEntry.buffer) {
       try {
-        const audio = new Audio(cachedSrc);
+        const source = ctx.createBufferSource();
+        source.buffer = normEntry.buffer;
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = normEntry.gain;
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        source.start(0);
+        activeSourceRef.current = source;
+        return;
+      } catch (e) {}
+    }
+
+    // 2) Second path: Cached MP3 data URI (while decoding buffer for next use)
+    const cachedObj = NBACK_AUDIO_CACHE.get(key);
+    if (cachedObj && cachedObj.dataUri) {
+      if (ctx && cachedObj.base64) {
+        decodeAndNormalizeLetterBuffer(ctx, letter, cachedObj.base64);
+      }
+      try {
+        const audio = new Audio(cachedObj.dataUri);
         letterAudioRef.current = audio;
         audio.play().catch(() => {});
         return;
-      } catch (e) {
-        // fallback below
-      }
+      } catch (e) {}
     } else {
-      fetchNBackLetterAudio(letter, voice);
+      fetchNBackLetterAudio(letter, ctx);
     }
 
+    // 3) Offline fallback: OS speechSynthesis
     if (!('speechSynthesis' in window)) return;
     const triggerFallbackSpeech = () => {
       if (!isRunningRef.current || !audioEnabledRef.current) return;
@@ -266,14 +373,11 @@ export const DualNBackGame = ({ onClose }) => {
         utterance.rate = 0.98;
         utterance.pitch = 1.0;
         window.speechSynthesis.speak(utterance);
-      } catch (e) {
-        // ignore speech synthesis errors
-      }
+      } catch (e) {}
     };
 
-    // Short delay after cancel() avoids Chromium/macOS audio buffer distortion
     speakTimeoutRef.current = setTimeout(triggerFallbackSpeech, 25);
-  }, [stopLetterAudio]);
+  }, [ensureNBackAudioContext, stopLetterAudio]);
 
   const clearTimers = useCallback(() => {
     if (stepTimerRef.current) {
@@ -288,6 +392,7 @@ export const DualNBackGame = ({ onClose }) => {
 
   const finishRound = useCallback(() => {
     clearTimers();
+    stopKeepalive();
     isRunningRef.current = false;
     setIsRunning(false);
     setIsFlashActive(false);
@@ -359,7 +464,7 @@ export const DualNBackGame = ({ onClose }) => {
       saveStats(updated);
       return updated;
     });
-  }, [clearTimers]);
+  }, [clearTimers, stopKeepalive]);
 
   const runStep = useCallback(
     (stepIdx) => {
@@ -392,6 +497,19 @@ export const DualNBackGame = ({ onClose }) => {
 
   const startGame = () => {
     clearTimers();
+    const ctx = ensureNBackAudioContext();
+    if (ctx) {
+      startKeepalive(ctx);
+      LETTERS.forEach((ltr) => {
+        const cached = NBACK_AUDIO_CACHE.get(`${NBACK_VOICE}:${ltr}`);
+        if (cached && cached.base64) {
+          decodeAndNormalizeLetterBuffer(ctx, ltr, cached.base64);
+        } else {
+          fetchNBackLetterAudio(ltr, ctx);
+        }
+      });
+    }
+
     const newSeq = generateNBackSequence(nLevel, 20);
     sequenceRef.current = newSeq;
     responsesRef.current = {};
@@ -409,20 +527,26 @@ export const DualNBackGame = ({ onClose }) => {
   const stopGame = useCallback(() => {
     clearTimers();
     stopLetterAudio();
+    stopKeepalive();
     isRunningRef.current = false;
     setIsRunning(false);
     setIsFlashActive(false);
     setCurrentStep(-1);
     setPosFeedback(null);
     setLetterFeedback(null);
-  }, [clearTimers, stopLetterAudio]);
+  }, [clearTimers, stopKeepalive, stopLetterAudio]);
 
   useEffect(() => {
     return () => {
       clearTimers();
       stopLetterAudio();
+      stopKeepalive();
+      if (nbackAudioCtxRef.current && nbackAudioCtxRef.current.state !== 'closed') {
+        nbackAudioCtxRef.current.close().catch(() => {});
+        nbackAudioCtxRef.current = null;
+      }
     };
-  }, [clearTimers, stopLetterAudio]);
+  }, [clearTimers, stopKeepalive, stopLetterAudio]);
 
   const handleUserResponse = useCallback((type) => {
     if (!isRunningRef.current) return;
