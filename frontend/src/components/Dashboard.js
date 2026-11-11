@@ -831,30 +831,60 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
             setLiveStatus((prev) => (prev === "speaking" ? "listening" : prev));
           }
         },
-        onTranscript: ({ sender, text, isFinal }) => {
-          if (!text || !text.trim()) return;
-
+        onTranscript: ({ id, sender, text, isFinal, remove }) => {
           setChatMessages((prev) => {
+            if (remove && id) {
+              return prev.filter((m) => m.id !== id);
+            }
+            const trimmed = typeof text === "string" ? text.trim() : "";
+            if (!trimmed) return prev;
+
+            if (id) {
+              const idx = prev.findIndex((m) => m.id === id);
+              if (idx !== -1) {
+                const existing = prev[idx];
+                // Nie nadpisuj gotowego tekstu placeholderem "Speaking..."
+                if (trimmed === "Speaking..." && existing.text && existing.text !== "Speaking...") {
+                  return prev;
+                }
+                const updated = [...prev];
+                updated[idx] = {
+                  ...existing,
+                  text: trimmed,
+                  isFinal: Boolean(isFinal),
+                };
+                return updated;
+              }
+              return [
+                ...prev,
+                {
+                  id,
+                  sender,
+                  text: trimmed,
+                  isFinal: Boolean(isFinal),
+                },
+              ];
+            }
+
             const lastMsg = prev[prev.length - 1];
             if (lastMsg && lastMsg.sender === sender && !lastMsg.isFinal) {
               const updated = [...prev];
               updated[updated.length - 1] = {
                 ...lastMsg,
-                text: text.trim(),
-                isFinal: isFinal,
+                text: trimmed,
+                isFinal: Boolean(isFinal),
               };
               return updated;
-            } else {
-              return [
-                ...prev,
-                {
-                  id: `${sender}-${Date.now()}`,
-                  sender: sender,
-                  text: text.trim(),
-                  isFinal: isFinal,
-                },
-              ];
             }
+            return [
+              ...prev,
+              {
+                id: `${sender}-${Date.now()}`,
+                sender: sender,
+                text: trimmed,
+                isFinal: Boolean(isFinal),
+              },
+            ];
           });
         },
         onError: (err) => {
@@ -990,15 +1020,20 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
     }
   };
 
-  const stopLiveSession = () => {
+  const stopLiveSession = async () => {
     if (liveHangoverTimerRef.current) {
       clearTimeout(liveHangoverTimerRef.current);
       liveHangoverTimerRef.current = null;
     }
     stopScaleLoop();
     if (geminiLiveRef.current) {
-      geminiLiveRef.current.cleanup();
+      const client = geminiLiveRef.current;
       geminiLiveRef.current = null;
+      if (typeof client.finalizeAndCleanup === "function") {
+        await client.finalizeAndCleanup();
+      } else {
+        client.cleanup();
+      }
     }
     setIsCameraActive(false);
     setIsScreenShareActive(false);
@@ -1491,7 +1526,7 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
 
   const handleEndSession = async () => {
     if (chatMode === "live") {
-      stopLiveSession();
+      await stopLiveSession();
     } else {
       stopClassicAudio();
       stopClassicRecordingLocally();
@@ -1500,11 +1535,16 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
 
     setIsChatActive(false);
 
+    // Daj Reactowi cykl na zsynchronizowanie chatMessagesRef po finalizeAndCleanup
+    await new Promise((r) => setTimeout(r, 50));
+
     // Pobieramy historię z refa, aby uniknąć problemu z przestarzałym domknięciem stanu
-    const messagesToSummarize = (chatMessagesRef.current || []).map((msg) => ({
-      sender: msg.sender,
-      text: msg.text,
-    }));
+    const messagesToSummarize = (chatMessagesRef.current || [])
+      .filter((msg) => msg.text && msg.text.trim() && msg.text.trim() !== "Speaking...")
+      .map((msg) => ({
+        sender: msg.sender,
+        text: msg.text,
+      }));
 
     // Generowanie podsumowania, jeśli są jakiekolwiek wiadomości
     if (messagesToSummarize.length > 0) {

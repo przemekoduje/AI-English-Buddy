@@ -54,8 +54,16 @@ export class GeminiLiveClient {
     this.userTurnStartIndex = 0;
     this.lastSpeechResultLength = 0;
     this.isDestroyed = false;
+    this.turnSeq = 0;
+    this.currentUserTurnId = null;
     this.currentUserTurnText = '';
     this.hasServerUserTranscription = false;
+    this.lastCompletedUserTurn = null;
+    this.hasUserSpokenSinceBotStarted = false;
+    this.currentUserAudioChunks = [];
+    this.userPreRollChunks = [];
+    this.userAudioSpeechFrames = 0;
+    this.userAudioHangoverFrames = 0;
 
     // Web Audio Output (Odtwarzanie Gemini)
     this.outputAudioContext = null;
@@ -83,9 +91,12 @@ export class GeminiLiveClient {
     this.lastTrackedSeconds = 0;
 
     // Bufor aktualnej wypowiedzi lektora
+    this.currentBotTurnId = null;
     this.currentBotTurnText = '';
+    this.hasModelTurnSpokenText = false;
     this.currentTurnAudioChunks = [];
     this.botTurnStarted = false;
+    this.pendingTranscriptions = new Set();
 
     // Ochrona przed echem akustycznym z głośników komputera (bez słuchawek)
     this.lastBotSpeakingEndTime = 0;
@@ -465,6 +476,33 @@ export class GeminiLiveClient {
         // Resampling do 16000 Hz, jeśli natywna częstotliwość karty dźwiękowej jest inna (np. 44100 / 48000 Hz)
         const resampledData = this.resampleAudio(inputData, nativeSampleRate, targetSampleRate);
 
+        // Buforowanie mowy użytkownika (16kHz PCM) jako zapas dla transkrypcji EN+PL przez backend
+        const isSpeechFrame = rms > 0.015;
+        if (isSpeechFrame) {
+          if (this.botTurnStarted) {
+            this.hasUserSpokenSinceBotStarted = true;
+          }
+          if (this.userAudioSpeechFrames === 0 && this.userPreRollChunks.length > 0) {
+            this.currentUserAudioChunks.push(...this.userPreRollChunks);
+            this.userPreRollChunks = [];
+          }
+          this.userAudioSpeechFrames += 1;
+          this.userAudioHangoverFrames = 12; // ~0.5s ogona po zakończeniu słowa
+          if (this.currentUserAudioChunks.length < 240) {
+            this.currentUserAudioChunks.push(new Float32Array(resampledData));
+          }
+        } else if (this.userAudioHangoverFrames > 0) {
+          this.userAudioHangoverFrames -= 1;
+          if (this.currentUserAudioChunks.length < 240) {
+            this.currentUserAudioChunks.push(new Float32Array(resampledData));
+          }
+        } else {
+          this.userPreRollChunks.push(new Float32Array(resampledData));
+          if (this.userPreRollChunks.length > 6) {
+            this.userPreRollChunks.shift();
+          }
+        }
+
         // Konwersja do 16-bit PCM Little Endian
         const pcm16Buffer = this.floatTo16BitPCM(resampledData);
 
@@ -495,19 +533,82 @@ export class GeminiLiveClient {
     }
   }
 
+  nextTurnId(sender) {
+    this.turnSeq += 1;
+    return `${sender}-live-${Date.now()}-${this.turnSeq}`;
+  }
+
+  ensureUserTurnId() {
+    if (!this.currentUserTurnId) {
+      this.currentUserTurnId = this.nextTurnId('user');
+    }
+    return this.currentUserTurnId;
+  }
+
+  mergeStreamText(current, fragment) {
+    if (!fragment) return current || '';
+    if (!current) return fragment;
+    if (fragment.startsWith(current) && fragment.length >= current.length) {
+      return fragment;
+    }
+    const cleanCurr = current.trimEnd();
+    const cleanFrag = fragment.trim();
+    if (cleanFrag.length > 4 && cleanCurr.endsWith(cleanFrag)) {
+      return current;
+    }
+    return current + fragment;
+  }
+
+  formatTranscriptText(raw) {
+    return (raw || '').replace(/\s+/g, ' ').trim();
+  }
+
   finalizeUserTurn() {
-    if (this.lastUserTranscript && this.lastUserTranscript.trim()) {
+    const turnId = this.currentUserTurnId || this.nextTurnId('user');
+    const text = this.formatTranscriptText(this.currentUserTurnText || this.lastUserTranscript);
+    const hadServerText = this.hasServerUserTranscription;
+    const userAudioChunks = this.currentUserAudioChunks;
+    const hadSpeechAudio = this.userAudioSpeechFrames >= 3;
+
+    if (text) {
       this.onTranscript({
+        id: turnId,
         sender: 'user',
-        text: this.lastUserTranscript.trim(),
+        text,
         isFinal: true
       });
     }
-    // Natychmiast po wysłaniu sfinalizowanej tury użytkownika, zerujemy stan tury:
+
+    // Jeśli serwer Gemini Live nie przysłał własnej transkrypcji inputTranscription
+    // (np. ChromeSpeech zawiódł, użytkownik użył polskich wtrąceń albo Safari nie ma SpeechRecognition),
+    // zlecamy dokładną dwujęzyczną transkrypcję zapisanego audio ucznia w tle.
+    if (!hadServerText && hadSpeechAudio && userAudioChunks && userAudioChunks.length > 0) {
+      this.lastCompletedUserTurn = {
+        id: turnId,
+        rawText: this.currentUserTurnText || text || '',
+        hadServerText: false
+      };
+      this.transcribeAudioTurn(userAudioChunks, 16000, 'user', turnId, 'user_turn.wav');
+    } else if (text || hadServerText) {
+      this.lastCompletedUserTurn = {
+        id: turnId,
+        rawText: this.currentUserTurnText || text || '',
+        hadServerText
+      };
+    } else {
+      this.lastCompletedUserTurn = null;
+    }
+
+    // Natychmiast po wysłaniu/zleceniu sfinalizowanej tury użytkownika, zerujemy stan nowej tury:
+    this.currentUserTurnId = null;
     this.currentUserTurnText = '';
     this.lastUserTranscript = '';
     this.savedTurnPrefixText = '';
     this.hasServerUserTranscription = false;
+    this.currentUserAudioChunks = [];
+    this.userPreRollChunks = [];
+    this.userAudioSpeechFrames = 0;
+    this.userAudioHangoverFrames = 0;
     this.userTurnStartIndex = this.lastSpeechResultLength || 0;
   }
 
@@ -515,8 +616,13 @@ export class GeminiLiveClient {
     this.userTurnStartIndex = this.lastSpeechResultLength || 0;
     this.savedTurnPrefixText = '';
     this.lastUserTranscript = '';
+    this.currentUserTurnId = null;
     this.currentUserTurnText = '';
     this.hasServerUserTranscription = false;
+    this.currentUserAudioChunks = [];
+    this.userPreRollChunks = [];
+    this.userAudioSpeechFrames = 0;
+    this.userAudioHangoverFrames = 0;
   }
 
   /**
@@ -600,6 +706,7 @@ export class GeminiLiveClient {
           if (combined !== this.lastUserTranscript) {
             this.lastUserTranscript = combined;
             this.onTranscript({
+              id: this.ensureUserTurnId(),
               sender: 'user',
               text: combined,
               isFinal: false
@@ -700,7 +807,10 @@ export class GeminiLiveClient {
     if (message.serverContent && message.serverContent.modelTurn) {
       if (!this.botTurnStarted) {
         this.botTurnStarted = true;
+        this.hasUserSpokenSinceBotStarted = false;
+        this.currentBotTurnId = this.nextTurnId('bot');
         this.currentBotTurnText = '';
+        this.hasModelTurnSpokenText = false;
         this.finalizeUserTurn();
       }
       const parts = message.serverContent.modelTurn.parts || [];
@@ -720,12 +830,17 @@ export class GeminiLiveClient {
         // Tekst wypowiedzi lektora (pomijamy myśli modelu: part.thought === true)
         if (part.text && !part.thought) {
           hasPartText = true;
-          this.currentBotTurnText += part.text;
-          this.onTranscript({
-            sender: 'bot',
-            text: this.currentBotTurnText,
-            isFinal: false
-          });
+          this.hasModelTurnSpokenText = true;
+          this.currentBotTurnText = this.mergeStreamText(this.currentBotTurnText, part.text);
+          const formattedBot = this.formatTranscriptText(this.currentBotTurnText);
+          if (formattedBot) {
+            this.onTranscript({
+              id: this.currentBotTurnId || (this.currentBotTurnId = this.nextTurnId('bot')),
+              sender: 'bot',
+              text: formattedBot,
+              isFinal: false
+            });
+          }
         }
       }
     }
@@ -738,19 +853,41 @@ export class GeminiLiveClient {
                    message.serverContent.interim_input_transcription ||
                    message.inputTranscription ||
                    message.input_transcription;
-      if (inTr && inTr.text) {
-        const trText = inTr.text.trim();
-        if (trText) {
-          if (!this.currentUserTurnText || !this.currentUserTurnText.includes(trText)) {
-            this.currentUserTurnText = this.currentUserTurnText ? `${this.currentUserTurnText} ${trText}` : trText;
+      const rawFragment = inTr && typeof inTr.text === 'string' ? inTr.text : '';
+      if (rawFragment && rawFragment.trim()) {
+        // Jeśli inputTranscription spłynęło z małym opóźnieniem już po starcie odpowiedzi bota,
+        // przypinamy je do poprzedniej tury użytkownika (aktualizacja w miejscu zamiast dzielenia dymków).
+        if (this.botTurnStarted && !this.hasUserSpokenSinceBotStarted && this.lastCompletedUserTurn) {
+          this.lastCompletedUserTurn.rawText = this.mergeStreamText(
+            this.lastCompletedUserTurn.hadServerText ? this.lastCompletedUserTurn.rawText : '',
+            rawFragment
+          );
+          this.lastCompletedUserTurn.hadServerText = true;
+          const updatedUserText = this.formatTranscriptText(this.lastCompletedUserTurn.rawText);
+          if (updatedUserText) {
+            this.onTranscript({
+              id: this.lastCompletedUserTurn.id,
+              sender: 'user',
+              text: updatedUserText,
+              isFinal: true
+            });
           }
-          this.lastUserTranscript = this.currentUserTurnText;
+        } else {
+          this.currentUserTurnText = this.mergeStreamText(
+            this.hasServerUserTranscription ? this.currentUserTurnText : '',
+            rawFragment
+          );
           this.hasServerUserTranscription = true;
-          this.onTranscript({
-            sender: 'user',
-            text: this.currentUserTurnText,
-            isFinal: false
-          });
+          const formattedUser = this.formatTranscriptText(this.currentUserTurnText);
+          if (formattedUser) {
+            this.lastUserTranscript = formattedUser;
+            this.onTranscript({
+              id: this.ensureUserTurnId(),
+              sender: 'user',
+              text: formattedUser,
+              isFinal: Boolean(inTr.finished)
+            });
+          }
         }
       }
     }
@@ -758,33 +895,45 @@ export class GeminiLiveClient {
     // Bezpośrednia transkrypcja mowy lektora ze strumienia outputTranscription (jeśli przesłana przez Gemini)
     if (message.serverContent) {
       const outTr = message.serverContent.outputTranscription || message.serverContent.output_transcription;
-      if (outTr && outTr.text && !hasPartText) {
-        this.currentBotTurnText += outTr.text;
-        this.onTranscript({
-          sender: 'bot',
-          text: this.currentBotTurnText,
-          isFinal: false
-        });
+      if (outTr && typeof outTr.text === 'string' && outTr.text.length > 0 && !hasPartText && !this.hasModelTurnSpokenText) {
+        this.currentBotTurnText = this.mergeStreamText(this.currentBotTurnText, outTr.text);
+        const formattedBot = this.formatTranscriptText(this.currentBotTurnText);
+        if (formattedBot) {
+          this.onTranscript({
+            id: this.currentBotTurnId || (this.currentBotTurnId = this.nextTurnId('bot')),
+            sender: 'bot',
+            text: formattedBot,
+            isFinal: false
+          });
+        }
       }
     }
 
-    // 3. Koniec tura lektora
+    // 3. Koniec tury lektora
     if (message.serverContent && message.serverContent.turnComplete) {
       this.botTurnStarted = false;
-      if (this.currentBotTurnText) {
-        this.recentBotPhrases.push(this.currentBotTurnText);
+      this.hasUserSpokenSinceBotStarted = false;
+      const finishedBotTurnId = this.currentBotTurnId || this.nextTurnId('bot');
+      const finalBotText = this.formatTranscriptText(this.currentBotTurnText);
+      const chunksForFallback = this.currentTurnAudioChunks;
+      this.currentBotTurnId = null;
+      this.currentBotTurnText = '';
+      this.hasModelTurnSpokenText = false;
+      this.currentTurnAudioChunks = [];
+
+      if (finalBotText) {
+        this.recentBotPhrases.push(finalBotText);
         if (this.recentBotPhrases.length > 8) {
           this.recentBotPhrases.shift();
         }
         this.onTranscript({
+          id: finishedBotTurnId,
           sender: 'bot',
-          text: this.currentBotTurnText,
+          text: finalBotText,
           isFinal: true
         });
-        this.currentBotTurnText = '';
-        this.currentTurnAudioChunks = [];
       } else {
-        this.transcribeBotTurn();
+        this.transcribeBotTurn(chunksForFallback, finishedBotTurnId);
       }
     }
   }
@@ -835,8 +984,15 @@ export class GeminiLiveClient {
 
       if (!this.botTurnStarted) {
         this.botTurnStarted = true;
+        this.hasUserSpokenSinceBotStarted = false;
+        this.currentBotTurnId = this.nextTurnId('bot');
+        this.currentBotTurnText = '';
+        this.hasModelTurnSpokenText = false;
         this.finalizeUserTurn();
+      }
+      if (!this.currentBotTurnText && !this.hasModelTurnSpokenText) {
         this.onTranscript({
+          id: this.currentBotTurnId || (this.currentBotTurnId = this.nextTurnId('bot')),
           sender: 'bot',
           text: 'Speaking...',
           isFinal: false
@@ -915,20 +1071,27 @@ export class GeminiLiveClient {
   }
 
   /**
-   * Przesyła zarejestrowane audio tury lektora do backendu w celu uzyskania dokładnej transkrypcji (Gemini 3.8 / Whisper)
+   * Wspólny helper przesyłający bufor audio (PCM Float32) do /api/live/transcribe z aktualizacją konkretnego turnId.
    */
-  async transcribeBotTurn(explicitChunks = null) {
-    const chunks = explicitChunks || this.currentTurnAudioChunks;
-    if (!chunks || chunks.length === 0) return;
-    if (!explicitChunks) {
-      this.currentTurnAudioChunks = [];
+  transcribeAudioTurn(chunks, sampleRate, sender, turnId, filename) {
+    if (!chunks || chunks.length === 0) {
+      if (sender === 'bot' && turnId) {
+        this.onTranscript({ id: turnId, sender: 'bot', text: '', remove: true, isFinal: true });
+      }
+      return Promise.resolve('');
     }
 
     let totalLength = 0;
     for (let i = 0; i < chunks.length; i++) {
       totalLength += chunks[i].length;
     }
-    if (totalLength < 4800) return; // Mniej niż 0.2s pomijamy
+    const minSamples = Math.round(sampleRate * 0.25);
+    if (totalLength < minSamples) {
+      if (sender === 'bot' && turnId) {
+        this.onTranscript({ id: turnId, sender: 'bot', text: '', remove: true, isFinal: true });
+      }
+      return Promise.resolve('');
+    }
 
     const combined = new Float32Array(totalLength);
     let offset = 0;
@@ -937,45 +1100,71 @@ export class GeminiLiveClient {
       offset += chunks[i].length;
     }
 
-    try {
-      const wavBuffer = this.encodeWAV(combined, 24000);
-      const blob = new Blob([wavBuffer], { type: 'audio/wav' });
-      const formData = new FormData();
-      formData.append('audio', blob, 'bot_turn.wav');
-      if (this.userEmail) {
-        formData.append('user_email', this.userEmail);
-      }
-
-      const headers = {};
-      if (this.sessionToken) {
-        headers['X-Session-Token'] = this.sessionToken;
-      }
-
-      const res = await fetch(`${this.apiBaseUrl}/api/live/transcribe`, {
-        method: 'POST',
-        headers,
-        body: formData
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = (data.text || '').trim();
-        if (text) {
-          this.recentBotPhrases.push(text);
-          if (this.recentBotPhrases.length > 8) {
-            this.recentBotPhrases.shift();
-          }
-          this.onTranscript({
-            sender: 'bot',
-            text: text,
-            isFinal: true
-          });
-          return;
+    const promise = (async () => {
+      try {
+        const wavBuffer = this.encodeWAV(combined, sampleRate);
+        const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+        const formData = new FormData();
+        formData.append('audio', blob, filename);
+        if (this.userEmail) {
+          formData.append('user_email', this.userEmail);
         }
+
+        const headers = {};
+        if (this.sessionToken) {
+          headers['X-Session-Token'] = this.sessionToken;
+        }
+
+        const res = await fetch(`${this.apiBaseUrl}/api/live/transcribe`, {
+          method: 'POST',
+          headers,
+          body: formData
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const text = (data.text || '').trim();
+          if (text) {
+            if (sender === 'bot') {
+              this.recentBotPhrases.push(text);
+              if (this.recentBotPhrases.length > 8) {
+                this.recentBotPhrases.shift();
+              }
+            }
+            this.onTranscript({
+              id: turnId,
+              sender,
+              text,
+              isFinal: true
+            });
+            return text;
+          }
+        }
+      } catch (e) {
+        console.warn(`[GeminiLive] Błąd transkrypcji tury (${sender}):`, e);
       }
-    } catch (e) {
-      console.warn("[GeminiLive] Błąd transkrypcji wypowiedzi lektora:", e);
+
+      if (sender === 'bot' && turnId) {
+        this.onTranscript({ id: turnId, sender: 'bot', text: '', remove: true, isFinal: true });
+      }
+      return '';
+    })();
+
+    this.pendingTranscriptions.add(promise);
+    promise.finally(() => this.pendingTranscriptions.delete(promise));
+    return promise;
+  }
+
+  /**
+   * Przesyła zarejestrowane audio tury lektora do backendu w celu uzyskania dokładnej transkrypcji
+   */
+  async transcribeBotTurn(explicitChunks = null, explicitTurnId = null) {
+    const chunks = explicitChunks || this.currentTurnAudioChunks;
+    const turnId = explicitTurnId || this.currentBotTurnId || this.nextTurnId('bot');
+    if (!explicitChunks) {
+      this.currentTurnAudioChunks = [];
     }
+    return this.transcribeAudioTurn(chunks, 24000, 'bot', turnId, 'bot_turn.wav');
   }
 
   /**
@@ -991,9 +1180,14 @@ export class GeminiLiveClient {
     this.scheduledSources = [];
 
     const chunksToTranscribe = this.currentTurnAudioChunks;
+    const partialBotTurnId = this.currentBotTurnId;
+    const partialBotText = this.formatTranscriptText(this.currentBotTurnText);
     this.currentTurnAudioChunks = [];
     const wasTurnStarted = this.botTurnStarted;
     this.botTurnStarted = false;
+    this.currentBotTurnId = null;
+    this.currentBotTurnText = '';
+    this.hasModelTurnSpokenText = false;
     this.resetUserTurnIndex();
 
     if (this.outputAudioContext) {
@@ -1006,10 +1200,23 @@ export class GeminiLiveClient {
     this.isBotCurrentlySpeaking = false;
     this.onBotSpeaking(false);
 
-    // Jeśli lektor został przerwany przez użytkownika (Barge-in), ale zdążył już coś wypowiedzieć,
-    // transkrybujemy to co wypowiedział do momentu przerwania.
-    if (wasTurnStarted && !this.currentBotTurnText && chunksToTranscribe && chunksToTranscribe.length > 0) {
-      this.transcribeBotTurn(chunksToTranscribe);
+    if (wasTurnStarted && partialBotText) {
+      this.recentBotPhrases.push(partialBotText);
+      if (this.recentBotPhrases.length > 8) {
+        this.recentBotPhrases.shift();
+      }
+      if (partialBotTurnId) {
+        this.onTranscript({
+          id: partialBotTurnId,
+          sender: 'bot',
+          text: partialBotText,
+          isFinal: true
+        });
+      }
+    } else if (wasTurnStarted && chunksToTranscribe && chunksToTranscribe.length > 0) {
+      this.transcribeBotTurn(chunksToTranscribe, partialBotTurnId);
+    } else if (wasTurnStarted && partialBotTurnId) {
+      this.onTranscript({ id: partialBotTurnId, sender: 'bot', text: '', remove: true, isFinal: true });
     }
   }
 
@@ -1308,11 +1515,34 @@ export class GeminiLiveClient {
   }
 
   /**
+   * Finalizuje otwartą turę użytkownika/bota, czeka chwilę na transkrypcje w locie i sprząta zasoby
+   */
+  async finalizeAndCleanup(timeoutMs = 3500) {
+    if (!this.isDestroyed) {
+      if (this.currentUserTurnText || this.lastUserTranscript || this.userAudioSpeechFrames >= 3) {
+        this.finalizeUserTurn();
+      }
+      this.cleanup();
+    }
+    if (this.pendingTranscriptions.size > 0) {
+      try {
+        await Promise.race([
+          Promise.allSettled(Array.from(this.pendingTranscriptions)),
+          new Promise((resolve) => setTimeout(resolve, timeoutMs))
+        ]);
+      } catch (e) {}
+    }
+  }
+
+  /**
    * Pełne sprzątanie zasobów
    */
   cleanup() {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
+    if (this.currentUserTurnText || this.lastUserTranscript || this.userAudioSpeechFrames >= 3) {
+      this.finalizeUserTurn();
+    }
     if (this.quotaTicker) {
       clearInterval(this.quotaTicker);
       this.quotaTicker = null;

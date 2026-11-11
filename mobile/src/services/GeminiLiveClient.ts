@@ -29,7 +29,7 @@ export interface GeminiLiveOptions {
   onBotSpeaking?: (isSpeaking: boolean) => void;
   onUserVolume?: (volume: number) => void;
   onBotVolume?: (volume: number) => void;
-  onTranscript?: (transcript: { sender: 'user' | 'bot'; text: string; isFinal: boolean }) => void;
+  onTranscript?: (transcript: { id?: string; sender: 'user' | 'bot'; text: string; isFinal: boolean; remove?: boolean }) => void;
   onError?: (err: string) => void;
   onClose?: (event: any) => void;
 }
@@ -52,7 +52,7 @@ export class GeminiLiveClient {
   public onBotSpeaking: (isSpeaking: boolean) => void;
   public onUserVolume: (volume: number) => void;
   public onBotVolume: (volume: number) => void;
-  public onTranscript: (transcript: { sender: 'user' | 'bot'; text: string; isFinal: boolean }) => void;
+  public onTranscript: (transcript: { id?: string; sender: 'user' | 'bot'; text: string; isFinal: boolean; remove?: boolean }) => void;
   public onError: (err: string) => void;
   public onClose: (event: any) => void;
 
@@ -79,10 +79,21 @@ export class GeminiLiveClient {
   private maxSeenTokens = 0;
   private usageReported = false;
 
+  private turnSeq = 0;
+  private currentBotTurnId: string | null = null;
   private currentBotTurnText = '';
+  private hasModelTurnSpokenText = false;
   private currentTurnAudioChunks: Float32Array[] = [];
   private botTurnStarted = false;
+  private currentUserTurnId: string | null = null;
   private currentUserTurnText = '';
+  private hasServerUserTranscription = false;
+  private lastCompletedUserTurn: { id: string; text: string; hasServerTranscription: boolean; finalizedAt: number } | null = null;
+  private currentUserAudioChunks: Float32Array[] = [];
+  private userPreRollChunks: Float32Array[] = [];
+  private userAudioSpeechFrames = 0;
+  private isCapturingUserAudio = false;
+  private pendingTranscriptions: Set<Promise<void>> = new Set();
 
   constructor(options: GeminiLiveOptions = {}) {
     this.provider = options.provider || 'google_ai_studio';
@@ -380,6 +391,30 @@ export class GeminiLiveClient {
         const pcm16Buffer = this.floatTo16BitPCM(resampledData);
         const base64Audio = this.arrayBufferToBase64(pcm16Buffer);
 
+        // Buforowanie 16kHz audio użytkownika do fallbackowego STT (/api/live/transcribe)
+        const SPEECH_RMS_THRESHOLD = 0.015;
+        const chunkCopy = new Float32Array(resampledData);
+        if (rms >= SPEECH_RMS_THRESHOLD) {
+          if (!this.isCapturingUserAudio) {
+            this.isCapturingUserAudio = true;
+            if (this.userPreRollChunks.length > 0) {
+              this.currentUserAudioChunks.push(...this.userPreRollChunks);
+              this.userPreRollChunks = [];
+            }
+          }
+          this.userAudioSpeechFrames += 1;
+        }
+        if (this.isCapturingUserAudio) {
+          if (this.currentUserAudioChunks.length < 240) {
+            this.currentUserAudioChunks.push(chunkCopy);
+          }
+        } else {
+          this.userPreRollChunks.push(chunkCopy);
+          if (this.userPreRollChunks.length > 6) {
+            this.userPreRollChunks.shift();
+          }
+        }
+
         const realtimeAudioMessage = {
           realtimeInput: {
             mediaChunks: [
@@ -397,6 +432,115 @@ export class GeminiLiveClient {
     } catch (err: any) {
       console.error("[GeminiLive Mobile] Błąd mikrofonu:", err);
       throw new Error("Brak dostępu do mikrofonu: " + (err.message || err));
+    }
+  }
+
+  private nextTurnId(sender: 'user' | 'bot'): string {
+    this.turnSeq += 1;
+    return `${sender}-turn-${Date.now()}-${this.turnSeq}`;
+  }
+
+  private ensureUserTurnId(): string {
+    if (!this.currentUserTurnId) {
+      this.currentUserTurnId = this.nextTurnId('user');
+    }
+    return this.currentUserTurnId;
+  }
+
+  private ensureBotTurnId(): string {
+    if (!this.currentBotTurnId) {
+      this.currentBotTurnId = this.nextTurnId('bot');
+    }
+    return this.currentBotTurnId;
+  }
+
+  private mergeStreamText(current: string, fragment: string): string {
+    if (!fragment) return current;
+    if (!current) return fragment;
+    if (fragment.startsWith(current) && fragment.length > current.length) {
+      return fragment;
+    }
+    if (current.endsWith(fragment) && fragment.trim().length > 2) {
+      return current;
+    }
+    const needsSpace =
+      /[A-Za-z0-9\p{L}.,!?;:)]$/u.test(current) &&
+      /^[A-Za-z0-9\p{L}(]/u.test(fragment) &&
+      !/\s$/.test(current) &&
+      !/^\s/.test(fragment) &&
+      fragment.length > 3 &&
+      !fragment.startsWith("'") &&
+      !fragment.startsWith("’");
+    return needsSpace ? `${current} ${fragment}` : `${current}${fragment}`;
+  }
+
+  private formatTranscriptText(raw: string): string {
+    return (raw || '')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim();
+  }
+
+  private finalizeUserTurn(): void {
+    const turnId = this.currentUserTurnId;
+    const finalizedText = this.formatTranscriptText(this.currentUserTurnText);
+    const hadServerTr = this.hasServerUserTranscription;
+    const chunks = this.currentUserAudioChunks;
+    const speechFrames = this.userAudioSpeechFrames;
+
+    this.currentUserTurnId = null;
+    this.currentUserTurnText = '';
+    this.hasServerUserTranscription = false;
+    this.currentUserAudioChunks = [];
+    this.userPreRollChunks = [];
+    this.userAudioSpeechFrames = 0;
+    this.isCapturingUserAudio = false;
+
+    if (finalizedText) {
+      const resolvedId = turnId || this.nextTurnId('user');
+      this.lastCompletedUserTurn = {
+        id: resolvedId,
+        text: finalizedText,
+        hasServerTranscription: hadServerTr,
+        finalizedAt: Date.now()
+      };
+      this.onTranscript({
+        id: resolvedId,
+        sender: 'user',
+        text: finalizedText,
+        isFinal: true
+      });
+      return;
+    }
+
+    if (!hadServerTr && speechFrames >= 3 && chunks.length >= 4) {
+      const resolvedId = turnId || this.nextTurnId('user');
+      this.lastCompletedUserTurn = {
+        id: resolvedId,
+        text: '',
+        hasServerTranscription: false,
+        finalizedAt: Date.now()
+      };
+      this.onTranscript({
+        id: resolvedId,
+        sender: 'user',
+        text: '🎙️ Speaking...',
+        isFinal: false
+      });
+      this.transcribeAudioTurn(chunks, {
+        sender: 'user',
+        turnId: resolvedId,
+        sampleRate: 16000,
+        filename: 'user_turn.wav'
+      });
+    } else if (turnId) {
+      this.onTranscript({
+        id: turnId,
+        sender: 'user',
+        text: '',
+        isFinal: true,
+        remove: true
+      });
     }
   }
 
@@ -452,16 +596,11 @@ export class GeminiLiveClient {
     let hasPartText = false;
     if (message.serverContent && message.serverContent.modelTurn) {
       if (!this.botTurnStarted) {
+        this.finalizeUserTurn();
         this.botTurnStarted = true;
+        this.currentBotTurnId = this.nextTurnId('bot');
         this.currentBotTurnText = '';
-        if (this.currentUserTurnText) {
-          this.onTranscript({
-            sender: 'user',
-            text: this.currentUserTurnText.trim(),
-            isFinal: true
-          });
-          this.currentUserTurnText = '';
-        }
+        this.hasModelTurnSpokenText = false;
       }
       const parts = message.serverContent.modelTurn.parts || [];
 
@@ -478,12 +617,18 @@ export class GeminiLiveClient {
 
         if (part.text && !part.thought) {
           hasPartText = true;
-          this.currentBotTurnText += part.text;
-          this.onTranscript({
-            sender: 'bot',
-            text: this.currentBotTurnText,
-            isFinal: false
-          });
+          this.hasModelTurnSpokenText = true;
+          const botTurnId = this.ensureBotTurnId();
+          this.currentBotTurnText = this.mergeStreamText(this.currentBotTurnText, part.text);
+          const formatted = this.formatTranscriptText(this.currentBotTurnText);
+          if (formatted) {
+            this.onTranscript({
+              id: botTurnId,
+              sender: 'bot',
+              text: formatted,
+              isFinal: false
+            });
+          }
         }
       }
     }
@@ -496,45 +641,85 @@ export class GeminiLiveClient {
                    message.serverContent.interim_input_transcription ||
                    message.inputTranscription ||
                    message.input_transcription;
-      if (inTr && inTr.text) {
-        const trText = inTr.text.trim();
-        if (trText) {
-          if (!this.currentUserTurnText || !this.currentUserTurnText.includes(trText)) {
-            this.currentUserTurnText = this.currentUserTurnText ? `${this.currentUserTurnText} ${trText}` : trText;
+      if (inTr && typeof inTr.text === 'string' && inTr.text.trim()) {
+        if (!this.botTurnStarted || this.currentUserTurnId) {
+          const userTurnId = this.ensureUserTurnId();
+          this.hasServerUserTranscription = true;
+          this.currentUserTurnText = this.mergeStreamText(this.currentUserTurnText, inTr.text);
+          const formatted = this.formatTranscriptText(this.currentUserTurnText);
+          if (formatted) {
+            this.onTranscript({
+              id: userTurnId,
+              sender: 'user',
+              text: formatted,
+              isFinal: false
+            });
           }
-          this.onTranscript({
-            sender: 'user',
-            text: this.currentUserTurnText,
-            isFinal: false
-          });
+        } else if (this.lastCompletedUserTurn && Date.now() - this.lastCompletedUserTurn.finalizedAt < 6000) {
+          this.lastCompletedUserTurn.hasServerTranscription = true;
+          this.lastCompletedUserTurn.text = this.mergeStreamText(this.lastCompletedUserTurn.text, inTr.text);
+          const formatted = this.formatTranscriptText(this.lastCompletedUserTurn.text);
+          if (formatted) {
+            this.onTranscript({
+              id: this.lastCompletedUserTurn.id,
+              sender: 'user',
+              text: formatted,
+              isFinal: true
+            });
+          }
         }
       }
     }
 
     if (message.serverContent) {
       const outTr = message.serverContent.outputTranscription || message.serverContent.output_transcription;
-      if (outTr && outTr.text && !hasPartText) {
-        this.currentBotTurnText += outTr.text;
-        this.onTranscript({
-          sender: 'bot',
-          text: this.currentBotTurnText,
-          isFinal: false
-        });
+      if (outTr && typeof outTr.text === 'string' && outTr.text.trim() && !hasPartText && !this.hasModelTurnSpokenText) {
+        const botTurnId = this.ensureBotTurnId();
+        this.currentBotTurnText = this.mergeStreamText(this.currentBotTurnText, outTr.text);
+        const formatted = this.formatTranscriptText(this.currentBotTurnText);
+        if (formatted) {
+          this.onTranscript({
+            id: botTurnId,
+            sender: 'bot',
+            text: formatted,
+            isFinal: false
+          });
+        }
       }
     }
 
     if (message.serverContent && message.serverContent.turnComplete) {
+      const botTurnId = this.currentBotTurnId;
+      const finalizedBotText = this.formatTranscriptText(this.currentBotTurnText);
+      const botChunks = this.currentTurnAudioChunks;
       this.botTurnStarted = false;
-      if (this.currentBotTurnText) {
+      this.hasModelTurnSpokenText = false;
+      this.currentBotTurnId = null;
+      this.currentBotTurnText = '';
+      this.currentTurnAudioChunks = [];
+
+      if (finalizedBotText) {
         this.onTranscript({
+          id: botTurnId || this.nextTurnId('bot'),
           sender: 'bot',
-          text: this.currentBotTurnText,
+          text: finalizedBotText,
           isFinal: true
         });
-        this.currentBotTurnText = '';
-        this.currentTurnAudioChunks = [];
-      } else {
-        this.transcribeBotTurn();
+      } else if (botChunks.length > 0) {
+        this.transcribeAudioTurn(botChunks, {
+          sender: 'bot',
+          turnId: botTurnId || this.nextTurnId('bot'),
+          sampleRate: 24000,
+          filename: 'bot_turn.wav'
+        });
+      } else if (botTurnId) {
+        this.onTranscript({
+          id: botTurnId,
+          sender: 'bot',
+          text: '',
+          isFinal: true,
+          remove: true
+        });
       }
     }
   }
@@ -576,20 +761,18 @@ export class GeminiLiveClient {
       this.currentTurnAudioChunks.push(float32Array);
 
       if (!this.botTurnStarted) {
+        this.finalizeUserTurn();
         this.botTurnStarted = true;
-        if (this.currentUserTurnText) {
+        this.hasModelTurnSpokenText = false;
+        const botTurnId = this.ensureBotTurnId();
+        if (!this.currentBotTurnText) {
           this.onTranscript({
-            sender: 'user',
-            text: this.currentUserTurnText.trim(),
-            isFinal: true
+            id: botTurnId,
+            sender: 'bot',
+            text: 'Speaking...',
+            isFinal: false
           });
-          this.currentUserTurnText = '';
         }
-        this.onTranscript({
-          sender: 'bot',
-          text: '🎙️ Speaking...',
-          isFinal: false
-        });
       }
 
       const audioBuffer = this.audioContext.createBuffer(1, float32Array.length, sampleRate);
@@ -663,10 +846,27 @@ export class GeminiLiveClient {
     return buffer;
   }
 
-  async transcribeBotTurn(explicitChunks?: Float32Array[] | null): Promise<void> {
-    const chunks = explicitChunks || this.currentTurnAudioChunks;
-    if (!chunks || chunks.length === 0) return;
-    if (!explicitChunks) {
+  async transcribeBotTurn(explicitChunks?: Float32Array[] | null, botTurnId?: string | null): Promise<void> {
+    return this.transcribeAudioTurn(explicitChunks, {
+      sender: 'bot',
+      turnId: botTurnId || this.currentBotTurnId || this.nextTurnId('bot'),
+      sampleRate: 24000,
+      filename: 'bot_turn.wav'
+    });
+  }
+
+  transcribeAudioTurn(
+    explicitChunks?: Float32Array[] | null,
+    options: { sender?: 'user' | 'bot'; turnId?: string; sampleRate?: number; filename?: string } = {}
+  ): Promise<void> {
+    const sender = options.sender || 'bot';
+    const turnId = options.turnId || this.nextTurnId(sender);
+    const sampleRate = options.sampleRate || (sender === 'user' ? 16000 : 24000);
+    const filename = options.filename || `${sender}_turn.wav`;
+
+    const chunks = explicitChunks || (sender === 'bot' ? this.currentTurnAudioChunks : this.currentUserAudioChunks);
+    if (!chunks || chunks.length === 0) return Promise.resolve();
+    if (!explicitChunks && sender === 'bot') {
       this.currentTurnAudioChunks = [];
     }
 
@@ -674,7 +874,13 @@ export class GeminiLiveClient {
     for (let i = 0; i < chunks.length; i++) {
       totalLength += chunks[i].length;
     }
-    if (totalLength < 4800) return;
+    const minSamples = sampleRate === 16000 ? 4000 : 4800;
+    if (totalLength < minSamples) {
+      if (sender === 'user' && !(this.lastCompletedUserTurn && this.lastCompletedUserTurn.id === turnId && this.lastCompletedUserTurn.text)) {
+        this.onTranscript({ id: turnId, sender, text: '', isFinal: true, remove: true });
+      }
+      return Promise.resolve();
+    }
 
     const combined = new Float32Array(totalLength);
     let offset = 0;
@@ -683,41 +889,64 @@ export class GeminiLiveClient {
       offset += chunks[i].length;
     }
 
-    try {
-      const wavBuffer = this.encodeWAV(combined, 24000);
-      const blob = new Blob([wavBuffer], { type: 'audio/wav' });
-      const formData = new FormData();
-      formData.append('audio', blob, 'bot_turn.wav');
-      if (this.userEmail) {
-        formData.append('user_email', this.userEmail);
-      }
-
-      const headers: Record<string, string> = {};
-      if (this.sessionToken) {
-        headers['X-Session-Token'] = this.sessionToken;
-      }
-
-      const res = await fetch(`${this.apiBaseUrl}/api/live/transcribe`, {
-        method: 'POST',
-        headers,
-        body: formData
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = (data.text || '').trim();
-        if (text) {
-          this.onTranscript({
-            sender: 'bot',
-            text: text,
-            isFinal: true
-          });
-          return;
+    const task = (async () => {
+      try {
+        const wavBuffer = this.encodeWAV(combined, sampleRate);
+        const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+        const formData = new FormData();
+        formData.append('audio', blob, filename);
+        if (this.userEmail) {
+          formData.append('user_email', this.userEmail);
         }
+
+        const headers: Record<string, string> = {};
+        if (this.sessionToken) {
+          headers['X-Session-Token'] = this.sessionToken;
+        }
+
+        const res = await fetch(`${this.apiBaseUrl}/api/live/transcribe`, {
+          method: 'POST',
+          headers,
+          body: formData
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const text = (data.text || '').trim();
+          if (text) {
+            if (sender === 'user' && this.lastCompletedUserTurn && this.lastCompletedUserTurn.id === turnId) {
+              this.lastCompletedUserTurn.text = text;
+            }
+            this.onTranscript({
+              id: turnId,
+              sender,
+              text,
+              isFinal: true
+            });
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("[GeminiLive Mobile] Błąd transkrypcji:", e);
       }
-    } catch (e) {
-      console.warn("[GeminiLive Mobile] Błąd transkrypcji:", e);
-    }
+
+      if (sender === 'user' && this.lastCompletedUserTurn && this.lastCompletedUserTurn.id === turnId && this.lastCompletedUserTurn.text) {
+        return;
+      }
+      this.onTranscript({
+        id: turnId,
+        sender,
+        text: '',
+        isFinal: true,
+        remove: true
+      });
+    })();
+
+    this.pendingTranscriptions.add(task);
+    task.finally(() => {
+      this.pendingTranscriptions.delete(task);
+    });
+    return task;
   }
 
   stopBotAudio(): void {
@@ -731,7 +960,12 @@ export class GeminiLiveClient {
     const chunksToTranscribe = this.currentTurnAudioChunks;
     this.currentTurnAudioChunks = [];
     const wasTurnStarted = this.botTurnStarted;
+    const botTurnId = this.currentBotTurnId;
+    const existingBotText = this.formatTranscriptText(this.currentBotTurnText);
     this.botTurnStarted = false;
+    this.hasModelTurnSpokenText = false;
+    this.currentBotTurnId = null;
+    this.currentBotTurnText = '';
 
     if (this.audioContext) {
       this.nextPlayTime = this.audioContext.currentTime;
@@ -740,8 +974,28 @@ export class GeminiLiveClient {
     this.isBotCurrentlySpeaking = false;
     this.onBotSpeaking(false);
 
-    if (wasTurnStarted && !this.currentBotTurnText && chunksToTranscribe && chunksToTranscribe.length > 0) {
-      this.transcribeBotTurn(chunksToTranscribe);
+    if (wasTurnStarted && existingBotText && botTurnId) {
+      this.onTranscript({
+        id: botTurnId,
+        sender: 'bot',
+        text: existingBotText,
+        isFinal: true
+      });
+    } else if (wasTurnStarted && !existingBotText && chunksToTranscribe && chunksToTranscribe.length > 0) {
+      this.transcribeAudioTurn(chunksToTranscribe, {
+        sender: 'bot',
+        turnId: botTurnId || this.nextTurnId('bot'),
+        sampleRate: 24000,
+        filename: 'bot_turn.wav'
+      });
+    } else if (wasTurnStarted && !existingBotText && botTurnId) {
+      this.onTranscript({
+        id: botTurnId,
+        sender: 'bot',
+        text: '',
+        isFinal: true,
+        remove: true
+      });
     }
   }
 
@@ -861,6 +1115,22 @@ export class GeminiLiveClient {
     } catch (e) {
       console.warn("[GeminiLive Mobile] Błąd raportowania zużycia:", e);
     }
+  }
+
+  async finalizeAndCleanup(timeoutMs = 3500): Promise<void> {
+    if (this.currentUserTurnText || this.currentUserAudioChunks.length > 0) {
+      this.finalizeUserTurn();
+    }
+    this.stopBotAudio();
+
+    if (this.pendingTranscriptions.size > 0) {
+      const pending = Array.from(this.pendingTranscriptions);
+      await Promise.race([
+        Promise.allSettled(pending),
+        new Promise((resolve) => setTimeout(resolve, timeoutMs))
+      ]);
+    }
+    this.cleanup();
   }
 
   cleanup(): void {

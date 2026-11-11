@@ -914,9 +914,15 @@ def get_audio_content_type(audio_file):
 # Modele Gemini używane do zamiany mowy na tekst (w kolejności prób).
 # gemini-3.5-transcribe to dedykowany model ASR (zwraca part 'audioTranscription'),
 # gemini-flash-lite-latest to szybki model multimodalny jako zapas.
-GEMINI_TRANSCRIBE_MODELS = ["gemini-3.5-transcribe", "gemini-flash-lite-latest"]
+GEMINI_TRANSCRIBE_MODELS = [
+    "gemini-3.5-transcribe",
+    "gemini-2.5-flash",
+    "gemini-flash-lite-latest",
+    "gemini-2.5-flash-lite",
+]
 TRANSCRIBE_PROMPT = (
-    "Transcribe the spoken audio verbatim in its original language. "
+    "Transcribe the spoken audio verbatim in its original language(s). "
+    "If the speaker mixes English with Polish words or phrases, transcribe all English and Polish words accurately as spoken. "
     "Output ONLY the plain transcription text, nothing else. "
     "No markdown, no commentary, no quotation marks. If there is no speech, output nothing."
 )
@@ -8000,22 +8006,27 @@ def chat_free():
 
     print(f"DEBUG chat-free: files={list(request.files.keys())}, form={list(request.form.keys())}, transcription='{transcription}', voice='{voice}', ai_mode='{ai_mode}'", flush=True)
 
-    if not transcription and 'audio' in request.files:
+    client_transcription = transcription
+    stt_transcription = ""
+
+    if 'audio' in request.files:
         audio_file = request.files['audio']
         print("DEBUG chat-free: Found 'audio' in request.files", flush=True)
         try:
             audio_file.seek(0)
             audio_data = audio_file.read()
             print(f"DEBUG chat-free: Read {len(audio_data)} bytes of audio data", flush=True)
-            transcription = transcribe_audio_bytes(
+            stt_transcription = transcribe_audio_bytes(
                 audio_data,
                 mime_type=get_audio_content_type(audio_file),
                 user_email=user_email,
                 feature="chat_free_stt"
             )
-            print(f"DEBUG chat-free: Transcription = '{transcription}'", flush=True)
+            print(f"DEBUG chat-free: Server STT = '{stt_transcription}' (client hint: '{client_transcription}')", flush=True)
         except Exception as e:
             print(f"STT error in chat-free: {e}", flush=True)
+
+    transcription = stt_transcription or client_transcription
 
     # Usunięcie typowych halucynacji Whisper dla ciszy/szumów
     whisper_hallucinations = [

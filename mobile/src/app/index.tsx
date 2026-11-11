@@ -478,6 +478,10 @@ ${exerciseInstructions}`;
 
   const [isVoiceTutorActive, setIsVoiceTutorActive] = useState<boolean>(false);
   const [voiceTutorMessages, setVoiceTutorMessages] = useState<any[]>([]);
+  const voiceTutorMessagesRef = useRef<any[]>([]);
+  useEffect(() => {
+    voiceTutorMessagesRef.current = voiceTutorMessages;
+  }, [voiceTutorMessages]);
   const [isVoiceTutorRecording, setIsVoiceTutorRecording] = useState<boolean>(false);
   const [isVoiceTutorProcessing, setIsVoiceTutorProcessing] = useState<boolean>(false);
   const [isVoiceTutorBotSpeaking, setIsVoiceTutorBotSpeaking] = useState<boolean>(false);
@@ -1501,13 +1505,55 @@ ${exerciseInstructions}`;
               setLiveOrbStatus("listening");
             }
           },
-          onTranscript: ({ sender, text, isFinal }) => {
-            if (!text || !text.trim()) return;
+          onTranscript: ({ id, sender, text, isFinal, remove }: { id?: string; sender: 'user' | 'bot'; text: string; isFinal: boolean; remove?: boolean }) => {
             setVoiceTutorMessages((prev) => {
+              let next = prev;
+              if (remove && id) {
+                next = prev.filter((m) => m.id !== id);
+                voiceTutorMessagesRef.current = next;
+                return next;
+              }
+              const newText = typeof text === "string" ? text.trim() : "";
+              if (!newText) return prev;
+
+              if (id) {
+                const idx = prev.findIndex((m) => m.id === id);
+                if (idx !== -1) {
+                  const existing = prev[idx];
+                  const existingText = (existing.text || "").trim();
+                  if (
+                    (newText === "Speaking..." || newText === "🎙️ Speaking...") &&
+                    existingText &&
+                    existingText !== "Speaking..." &&
+                    existingText !== "🎙️ Speaking..."
+                  ) {
+                    return prev;
+                  }
+                  const updated = [...prev];
+                  updated[idx] = {
+                    ...existing,
+                    text: newText,
+                    isFinal: Boolean(isFinal),
+                  };
+                  voiceTutorMessagesRef.current = updated;
+                  return updated;
+                }
+                next = [
+                  ...prev,
+                  {
+                    id,
+                    sender,
+                    text: newText,
+                    isFinal: Boolean(isFinal),
+                  },
+                ];
+                voiceTutorMessagesRef.current = next;
+                return next;
+              }
+
               const lastMsg = prev[prev.length - 1];
-              if (lastMsg && lastMsg.sender === sender) {
+              if (lastMsg && lastMsg.sender === sender && !lastMsg.isFinal) {
                 const updated = [...prev];
-                const newText = text.trim();
                 const existingText = (lastMsg.text || "").trim();
 
                 let textToUse = newText;
@@ -1522,18 +1568,20 @@ ${exerciseInstructions}`;
                   text: textToUse,
                   isFinal: lastMsg.isFinal || isFinal,
                 };
+                voiceTutorMessagesRef.current = updated;
                 return updated;
-              } else {
-                return [
-                  ...prev,
-                  {
-                    id: `${sender}-${Date.now()}`,
-                    sender: sender,
-                    text: text.trim(),
-                    isFinal: isFinal,
-                  },
-                ];
               }
+              next = [
+                ...prev,
+                {
+                  id: `${sender}-${Date.now()}`,
+                  sender: sender,
+                  text: newText,
+                  isFinal: isFinal,
+                },
+              ];
+              voiceTutorMessagesRef.current = next;
+              return next;
             });
           },
           onError: (err) => {
@@ -1579,8 +1627,13 @@ ${exerciseInstructions}`;
     setLiveOrbStatus("inactive");
 
     if (geminiLiveClientRef.current) {
-      geminiLiveClientRef.current.cleanup();
+      const client = geminiLiveClientRef.current;
       geminiLiveClientRef.current = null;
+      if (typeof client.finalizeAndCleanup === "function") {
+        await client.finalizeAndCleanup();
+      } else {
+        client.cleanup();
+      }
     }
 
     // Wyciszamy mikrofon w zapamiętanym strumieniu (bez niszczenia ścieżek, by uniknąć monitu przy kolejnym starcie)
@@ -1595,7 +1648,15 @@ ${exerciseInstructions}`;
     cleanupVoiceTutorVAD();
     setVoiceTutorShowTranscript(false);
 
-    if (voiceTutorMessages.length > 0) {
+    await new Promise((r) => setTimeout(r, 50));
+    const messagesForSummary = (voiceTutorMessagesRef.current || []).filter(
+      (msg) => {
+        const t = (msg?.text || "").trim();
+        return t && t !== "Speaking..." && t !== "🎙️ Speaking...";
+      }
+    );
+
+    if (messagesForSummary.length > 0) {
       setIsVoiceTutorGeneratingSummary(true);
       try {
         let activeBackendUrl = backendUrl;
@@ -1615,7 +1676,7 @@ ${exerciseInstructions}`;
             "bypass-tunnel-reminder": "true",
           },
           body: JSON.stringify({
-            history: voiceTutorMessages.map((msg) => ({
+            history: messagesForSummary.map((msg) => ({
               sender: msg.sender,
               text: msg.text,
             })),
