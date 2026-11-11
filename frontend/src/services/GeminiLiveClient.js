@@ -295,7 +295,6 @@ export class GeminiLiveClient {
         realtimeInputConfig: {
           automaticActivityDetection: {
             disabled: false,
-            startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
             endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
             prefixPaddingMs: 300,
             silenceDurationMs: 1600
@@ -467,12 +466,13 @@ export class GeminiLiveClient {
         const rms = Math.sqrt(sum / inputData.length);
 
         // Ochrona przed echem akustycznym bez słuchawek:
-        // Kiedy lektor aktywnie mówi, przepuszczamy wyraźny głos użytkownika (Barge-in >= 0.04),
+        // Kiedy lektor aktywnie mówi, wysoki próg (>= 0.16) chroni przed samoprzerywaniem przez dźwięk z głośników,
         // a przy niższej głośności utrzymujemy ciągłość strumienia zerowym PCM (żeby VAD po stronie Gemini nie tracił taktowania)
         // oraz zbieramy pre-roll na wypadek wczesnego początku wypowiedzi.
-        const isSuppressed = this.isEchoSuppressionActive() && rms <= 0.04;
-        if (this.isEchoSuppressionActive() && rms > 0.04) {
-          console.log("[GeminiLive] Wykryto wtrącenie użytkownika (Barge-in). Zatrzymuję lektora.");
+        const isEchoActive = this.isEchoSuppressionActive();
+        const isSuppressed = isEchoActive && rms <= 0.16;
+        if (isEchoActive && rms > 0.16) {
+          console.log("[GeminiLive] Wykryto głośne wtrącenie użytkownika (Barge-in). Zatrzymuję lektora.");
           this.stopBotAudio();
         }
 
