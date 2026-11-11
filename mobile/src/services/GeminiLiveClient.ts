@@ -246,6 +246,15 @@ export class GeminiLiveClient {
             }
           }
         },
+        realtimeInputConfig: {
+          automaticActivityDetection: {
+            disabled: false,
+            startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
+            endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
+            prefixPaddingMs: 300,
+            silenceDurationMs: 1600
+          }
+        },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         systemInstruction: {
@@ -392,7 +401,7 @@ export class GeminiLiveClient {
         const base64Audio = this.arrayBufferToBase64(pcm16Buffer);
 
         // Buforowanie 16kHz audio użytkownika do fallbackowego STT (/api/live/transcribe)
-        const SPEECH_RMS_THRESHOLD = 0.015;
+        const SPEECH_RMS_THRESHOLD = 0.006;
         const chunkCopy = new Float32Array(resampledData);
         if (rms >= SPEECH_RMS_THRESHOLD) {
           if (!this.isCapturingUserAudio) {
@@ -405,12 +414,12 @@ export class GeminiLiveClient {
           this.userAudioSpeechFrames += 1;
         }
         if (this.isCapturingUserAudio) {
-          if (this.currentUserAudioChunks.length < 240) {
+          if (this.currentUserAudioChunks.length < 450) {
             this.currentUserAudioChunks.push(chunkCopy);
           }
         } else {
           this.userPreRollChunks.push(chunkCopy);
-          if (this.userPreRollChunks.length > 6) {
+          if (this.userPreRollChunks.length > 12) {
             this.userPreRollChunks.shift();
           }
         }

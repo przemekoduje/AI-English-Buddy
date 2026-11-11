@@ -832,29 +832,143 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
           }
         },
         onTranscript: ({ id, sender, text, isFinal, remove }) => {
+          const mergeSegmentTexts = (order, segmentsMap) => {
+            const nonEmpty = order
+              .map((segId) => ({ segId, val: (segmentsMap[segId] || "").trim() }))
+              .filter((item) => item.val.length > 0);
+            if (nonEmpty.length === 0) return "";
+            const isPlaceholder = (v) => v === "Speaking..." || v === "🎙️ Speaking...";
+            const realParts = nonEmpty.filter((item) => !isPlaceholder(item.val));
+            if (realParts.length === 0) return nonEmpty[0].val;
+
+            let combined = "";
+            for (const part of realParts) {
+              const b = part.val;
+              if (!combined) {
+                combined = b;
+                continue;
+              }
+              const aLow = combined.toLowerCase();
+              const bLow = b.toLowerCase();
+              if (bLow === aLow) continue;
+
+              const wordsA = combined.split(/\s+/);
+              const wordsB = b.split(/\s+/);
+              const norm = (w) => w.toLowerCase().replace(/^[^a-z0-9\p{L}]+|[^a-z0-9\p{L}]+$/gu, "");
+
+              if (wordsB.length === 1 && wordsA.length > 0 && norm(wordsB[0]) && norm(wordsB[0]) === norm(wordsA[wordsA.length - 1])) {
+                continue;
+              }
+
+              let overlapK = 0;
+              const maxK = Math.min(6, wordsA.length, wordsB.length);
+              for (let k = maxK; k >= 2; k--) {
+                let matched = true;
+                for (let j = 0; j < k; j++) {
+                  if (norm(wordsA[wordsA.length - k + j]) !== norm(wordsB[j])) {
+                    matched = false;
+                    break;
+                  }
+                }
+                if (matched) {
+                  overlapK = k;
+                  break;
+                }
+              }
+
+              if (overlapK > 0) {
+                const rest = wordsB.slice(overlapK).join(" ");
+                combined = rest ? `${combined} ${rest}` : combined;
+              } else {
+                combined = `${combined} ${b}`;
+              }
+            }
+            return combined.trim();
+          };
+
           setChatMessages((prev) => {
             if (remove && id) {
-              return prev.filter((m) => m.id !== id);
+              const targetIdx = prev.findIndex(
+                (m) => m.id === id || (m.segments && Object.prototype.hasOwnProperty.call(m.segments, id))
+              );
+              if (targetIdx === -1) return prev;
+              const target = prev[targetIdx];
+              if (target.segments && target.segmentsOrder) {
+                const nextSegments = { ...target.segments };
+                delete nextSegments[id];
+                const nextOrder = target.segmentsOrder.filter((sId) => sId !== id);
+                const nextText = mergeSegmentTexts(nextOrder, nextSegments);
+                if (!nextOrder.length || !nextText) {
+                  return prev.filter((_, i) => i !== targetIdx);
+                }
+                const updated = [...prev];
+                updated[targetIdx] = {
+                  ...target,
+                  segments: nextSegments,
+                  segmentsOrder: nextOrder,
+                  text: nextText,
+                };
+                return updated;
+              }
+              return prev.filter((_, i) => i !== targetIdx);
             }
+
             const trimmed = typeof text === "string" ? text.trim() : "";
             if (!trimmed) return prev;
 
             if (id) {
-              const idx = prev.findIndex((m) => m.id === id);
+              const idx = prev.findIndex(
+                (m) => m.id === id || (m.segments && Object.prototype.hasOwnProperty.call(m.segments, id))
+              );
               if (idx !== -1) {
                 const existing = prev[idx];
-                // Nie nadpisuj gotowego tekstu placeholderem "Speaking..."
-                if (trimmed === "Speaking..." && existing.text && existing.text !== "Speaking...") {
+                const existingSegText = existing.segments ? existing.segments[id] : existing.text;
+                if (
+                  (trimmed === "Speaking..." || trimmed === "🎙️ Speaking...") &&
+                  existingSegText &&
+                  existingSegText !== "Speaking..." &&
+                  existingSegText !== "🎙️ Speaking..."
+                ) {
                   return prev;
                 }
+                const nextOrder = existing.segmentsOrder
+                  ? (existing.segmentsOrder.includes(id) ? existing.segmentsOrder : [...existing.segmentsOrder, id])
+                  : [existing.id];
+                const nextSegments = {
+                  ...(existing.segments || { [existing.id]: existing.text }),
+                  [id]: trimmed,
+                };
+                const nextText = mergeSegmentTexts(nextOrder, nextSegments) || trimmed;
                 const updated = [...prev];
                 updated[idx] = {
                   ...existing,
-                  text: trimmed,
+                  segmentsOrder: nextOrder,
+                  segments: nextSegments,
+                  text: nextText,
                   isFinal: Boolean(isFinal),
                 };
                 return updated;
               }
+
+              // Łączymy kolejne wypowiedzi użytkownika (np. po przerwie na zastanowienie lub usuniętej pustej turze bota) w jeden dymek
+              const lastMsg = prev[prev.length - 1];
+              if (sender === "user" && lastMsg && lastMsg.sender === "user") {
+                const baseOrder = lastMsg.segmentsOrder || [lastMsg.id];
+                const baseSegments = lastMsg.segments || { [lastMsg.id]: lastMsg.text };
+                const nextOrder = baseOrder.includes(id) ? baseOrder : [...baseOrder, id];
+                const nextSegments = { ...baseSegments, [id]: trimmed };
+                const nextText = mergeSegmentTexts(nextOrder, nextSegments) || trimmed;
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...lastMsg,
+                  segmentsOrder: nextOrder,
+                  segments: nextSegments,
+                  text: nextText,
+                  isFinal: Boolean(isFinal),
+                };
+                return updated;
+              }
+
               return [
                 ...prev,
                 {
@@ -862,6 +976,8 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
                   sender,
                   text: trimmed,
                   isFinal: Boolean(isFinal),
+                  segmentsOrder: [id],
+                  segments: { [id]: trimmed },
                 },
               ];
             }
@@ -1879,43 +1995,14 @@ function Dashboard({ user, onNavigateToWorkspace, subscription, onOpenPaywall, o
 
               <div className="drawer-scroll-list" ref={transcriptScrollRef}>
                 {chatMessages.length === 0 ? (
-                  <>
-                    <div className="transcript-msg-card bot">
-                      <div className="msg-card-meta">
-                        <span className="speaker-tag buddy">Buddy</span>
-                        <span className="msg-time">03:01</span>
-                      </div>
-                      <p className="msg-en-text">What helped you settle into your new role?</p>
-                      <p className="msg-pl-sub">Co pomogło Ci odnaleźć się w nowej roli?</p>
-                      <div className="msg-card-actions">
-                        <button className="msg-action-btn" title="Copy">
-                          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                          </svg>
-                        </button>
-                        <button className="msg-action-btn save-word">+ Save word</button>
-                      </div>
-                    </div>
-
-                    <div className="transcript-msg-card user">
-                      <div className="msg-card-meta">
-                        <span className="speaker-tag you">You</span>
-                        <span className="msg-time">03:12</span>
-                      </div>
-                      <p className="msg-en-text">I had to adapt to a new routine, but my colleagues were supportive.</p>
-                      <p className="msg-pl-sub">Musiałam dostosować się do nowej rutyny, ale moi koledzy byli wspierający.</p>
-                      <div className="msg-card-actions">
-                        <button className="msg-action-btn" title="Copy">
-                          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                          </svg>
-                        </button>
-                        <button className="msg-action-btn save-word">+ Save word</button>
-                      </div>
-                    </div>
-                  </>
+                  <div className="transcript-msg-card bot" style={{ opacity: 0.78, textAlign: "center", padding: "20px 16px" }}>
+                    <p className="msg-en-text" style={{ marginBottom: 4 }}>
+                      Rozmowa i transkrypcja na żywo pojawią się tutaj.
+                    </p>
+                    <p className="msg-pl-sub" style={{ margin: 0 }}>
+                      Poczekaj na powitanie Buddy’ego lub zacznij mówić po uruchomieniu sesji.
+                    </p>
+                  </div>
                 ) : (
                   chatMessages.map((msg) => {
                     const isBot = msg.sender === "bot";

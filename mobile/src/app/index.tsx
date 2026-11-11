@@ -1506,10 +1506,88 @@ ${exerciseInstructions}`;
             }
           },
           onTranscript: ({ id, sender, text, isFinal, remove }: { id?: string; sender: 'user' | 'bot'; text: string; isFinal: boolean; remove?: boolean }) => {
+            const mergeSegmentTexts = (order: string[], segmentsMap: Record<string, string>) => {
+              const nonEmpty = order
+                .map((segId) => ({ segId, val: (segmentsMap[segId] || "").trim() }))
+                .filter((item) => item.val.length > 0);
+              if (nonEmpty.length === 0) return "";
+              const isPlaceholder = (v: string) => v === "Speaking..." || v === "🎙️ Speaking...";
+              const realParts = nonEmpty.filter((item) => !isPlaceholder(item.val));
+              if (realParts.length === 0) return nonEmpty[0].val;
+
+              let combined = "";
+              for (const part of realParts) {
+                const b = part.val;
+                if (!combined) {
+                  combined = b;
+                  continue;
+                }
+                const aLow = combined.toLowerCase();
+                const bLow = b.toLowerCase();
+                if (bLow === aLow) continue;
+
+                const wordsA = combined.split(/\s+/);
+                const wordsB = b.split(/\s+/);
+                const norm = (w: string) => w.toLowerCase().replace(/^[^a-z0-9\p{L}]+|[^a-z0-9\p{L}]+$/gu, "");
+
+                if (wordsB.length === 1 && wordsA.length > 0 && norm(wordsB[0]) && norm(wordsB[0]) === norm(wordsA[wordsA.length - 1])) {
+                  continue;
+                }
+
+                let overlapK = 0;
+                const maxK = Math.min(6, wordsA.length, wordsB.length);
+                for (let k = maxK; k >= 2; k--) {
+                  let matched = true;
+                  for (let j = 0; j < k; j++) {
+                    if (norm(wordsA[wordsA.length - k + j]) !== norm(wordsB[j])) {
+                      matched = false;
+                      break;
+                    }
+                  }
+                  if (matched) {
+                    overlapK = k;
+                    break;
+                  }
+                }
+
+                if (overlapK > 0) {
+                  const rest = wordsB.slice(overlapK).join(" ");
+                  combined = rest ? `${combined} ${rest}` : combined;
+                } else {
+                  combined = `${combined} ${b}`;
+                }
+              }
+              return combined.trim();
+            };
+
             setVoiceTutorMessages((prev) => {
               let next = prev;
               if (remove && id) {
-                next = prev.filter((m) => m.id !== id);
+                const targetIdx = prev.findIndex(
+                  (m) => m.id === id || (m.segments && Object.prototype.hasOwnProperty.call(m.segments, id))
+                );
+                if (targetIdx === -1) return prev;
+                const target = prev[targetIdx];
+                if (target.segments && target.segmentsOrder) {
+                  const nextSegments = { ...target.segments };
+                  delete nextSegments[id];
+                  const nextOrder = target.segmentsOrder.filter((sId: string) => sId !== id);
+                  const nextText = mergeSegmentTexts(nextOrder, nextSegments);
+                  if (!nextOrder.length || !nextText) {
+                    next = prev.filter((_, i) => i !== targetIdx);
+                  } else {
+                    const updated = [...prev];
+                    updated[targetIdx] = {
+                      ...target,
+                      segments: nextSegments,
+                      segmentsOrder: nextOrder,
+                      text: nextText,
+                    };
+                    next = updated;
+                  }
+                } else {
+                  next = prev.filter((_, i) => i !== targetIdx);
+                }
                 voiceTutorMessagesRef.current = next;
                 return next;
               }
@@ -1517,27 +1595,59 @@ ${exerciseInstructions}`;
               if (!newText) return prev;
 
               if (id) {
-                const idx = prev.findIndex((m) => m.id === id);
+                const idx = prev.findIndex(
+                  (m) => m.id === id || (m.segments && Object.prototype.hasOwnProperty.call(m.segments, id))
+                );
                 if (idx !== -1) {
                   const existing = prev[idx];
-                  const existingText = (existing.text || "").trim();
+                  const existingSegText = existing.segments ? existing.segments[id] : existing.text;
                   if (
                     (newText === "Speaking..." || newText === "🎙️ Speaking...") &&
-                    existingText &&
-                    existingText !== "Speaking..." &&
-                    existingText !== "🎙️ Speaking..."
+                    existingSegText &&
+                    existingSegText !== "Speaking..." &&
+                    existingSegText !== "🎙️ Speaking..."
                   ) {
                     return prev;
                   }
+                  const nextOrder = existing.segmentsOrder
+                    ? (existing.segmentsOrder.includes(id) ? existing.segmentsOrder : [...existing.segmentsOrder, id])
+                    : [existing.id];
+                  const nextSegments = {
+                    ...(existing.segments || { [existing.id]: existing.text }),
+                    [id]: newText,
+                  };
+                  const mergedText = mergeSegmentTexts(nextOrder, nextSegments) || newText;
                   const updated = [...prev];
                   updated[idx] = {
                     ...existing,
-                    text: newText,
+                    segmentsOrder: nextOrder,
+                    segments: nextSegments,
+                    text: mergedText,
                     isFinal: Boolean(isFinal),
                   };
                   voiceTutorMessagesRef.current = updated;
                   return updated;
                 }
+
+                const lastMsg = prev[prev.length - 1];
+                if (sender === "user" && lastMsg && lastMsg.sender === "user") {
+                  const baseOrder: string[] = lastMsg.segmentsOrder || [lastMsg.id];
+                  const baseSegments: Record<string, string> = lastMsg.segments || { [lastMsg.id]: lastMsg.text };
+                  const nextOrder = baseOrder.includes(id) ? baseOrder : [...baseOrder, id];
+                  const nextSegments = { ...baseSegments, [id]: newText };
+                  const mergedText = mergeSegmentTexts(nextOrder, nextSegments) || newText;
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    ...lastMsg,
+                    segmentsOrder: nextOrder,
+                    segments: nextSegments,
+                    text: mergedText,
+                    isFinal: Boolean(isFinal),
+                  };
+                  voiceTutorMessagesRef.current = updated;
+                  return updated;
+                }
+
                 next = [
                   ...prev,
                   {
@@ -1545,6 +1655,8 @@ ${exerciseInstructions}`;
                     sender,
                     text: newText,
                     isFinal: Boolean(isFinal),
+                    segmentsOrder: [id],
+                    segments: { [id]: newText },
                   },
                 ];
                 voiceTutorMessagesRef.current = next;

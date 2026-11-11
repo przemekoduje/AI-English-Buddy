@@ -292,6 +292,15 @@ export class GeminiLiveClient {
             }
           }
         },
+        realtimeInputConfig: {
+          automaticActivityDetection: {
+            disabled: false,
+            startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
+            endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
+            prefixPaddingMs: 300,
+            silenceDurationMs: 1600
+          }
+        },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         systemInstruction: {
@@ -334,9 +343,11 @@ export class GeminiLiveClient {
             const isSpeaking = this.outputAudioContext.currentTime < this.nextPlayTime - 0.05;
             if (isSpeaking !== this.isBotCurrentlySpeaking) {
               if (this.isBotCurrentlySpeaking && !isSpeaking) {
-                // Lektor właśnie skończył mówić - zapisujemy czas zakończenia dla okna tłumienia echa i resetujemy indeks tury ucznia
+                // Lektor właśnie skończył mówić - zapisujemy czas zakończenia; nie kasujemy buforowanej tury ucznia!
                 this.lastBotSpeakingEndTime = Date.now();
-                this.resetUserTurnIndex();
+                if (!this.currentUserTurnId && !this.currentUserTurnText && !this.lastUserTranscript && !this.savedTurnPrefixText && this.userAudioSpeechFrames === 0) {
+                  this.userTurnStartIndex = this.lastSpeechResultLength || 0;
+                }
               }
               this.isBotCurrentlySpeaking = isSpeaking;
               this.onBotSpeaking(isSpeaking);
@@ -350,12 +361,10 @@ export class GeminiLiveClient {
   }
 
   /**
-   * Sprawdza czy aktywna jest ochrona przed echem akustycznym (lektor mówi lub dźwięk z głośników właśnie wygasł)
+   * Sprawdza czy aktywna jest ochrona przed echem akustycznym (tylko gdy lektor aktualnie odtwarza dźwięk - bez sztucznego okna po zakończeniu)
    */
   isEchoSuppressionActive() {
-    if (this.isBotCurrentlySpeaking) return true;
-    if (Date.now() - (this.lastBotSpeakingEndTime || 0) < 500) return true;
-    return false;
+    return Boolean(this.isBotCurrentlySpeaking);
   }
 
   /**
@@ -458,47 +467,53 @@ export class GeminiLiveClient {
         const rms = Math.sqrt(sum / inputData.length);
 
         // Ochrona przed echem akustycznym bez słuchawek:
-        // Kiedy lektor mówi przez głośniki komputera, mikrofon wyłapuje jego głos.
-        if (this.isEchoSuppressionActive()) {
-          // Jeśli uczeń celowo mówi głośno ponad dźwiękiem z głośników -> wtrącenie (Barge-in)
-          if (rms > 0.18) {
-            console.log("[GeminiLive] Wykryto głośne wtrącenie użytkownika (Barge-in). Zatrzymuję lektora.");
-            this.stopBotAudio();
-          } else {
-            // Wyciszamy wskaźnik orba i nie wysyłamy echa lektora z powrotem do Gemini Live
-            this.onUserVolume(0);
-            return;
-          }
+        // Kiedy lektor aktywnie mówi, przepuszczamy wyraźny głos użytkownika (Barge-in >= 0.04),
+        // a przy niższej głośności utrzymujemy ciągłość strumienia zerowym PCM (żeby VAD po stronie Gemini nie tracił taktowania)
+        // oraz zbieramy pre-roll na wypadek wczesnego początku wypowiedzi.
+        const isSuppressed = this.isEchoSuppressionActive() && rms <= 0.04;
+        if (this.isEchoSuppressionActive() && rms > 0.04) {
+          console.log("[GeminiLive] Wykryto wtrącenie użytkownika (Barge-in). Zatrzymuję lektora.");
+          this.stopBotAudio();
         }
 
-        this.onUserVolume(rms);
+        this.onUserVolume(isSuppressed ? 0 : rms);
 
         // Resampling do 16000 Hz, jeśli natywna częstotliwość karty dźwiękowej jest inna (np. 44100 / 48000 Hz)
-        const resampledData = this.resampleAudio(inputData, nativeSampleRate, targetSampleRate);
+        const resampledData = isSuppressed
+          ? new Float32Array(Math.max(1, Math.round(inputData.length / (nativeSampleRate / targetSampleRate))))
+          : this.resampleAudio(inputData, nativeSampleRate, targetSampleRate);
 
         // Buforowanie mowy użytkownika (16kHz PCM) jako zapas dla transkrypcji EN+PL przez backend
-        const isSpeechFrame = rms > 0.015;
-        if (isSpeechFrame) {
-          if (this.botTurnStarted) {
-            this.hasUserSpokenSinceBotStarted = true;
-          }
-          if (this.userAudioSpeechFrames === 0 && this.userPreRollChunks.length > 0) {
-            this.currentUserAudioChunks.push(...this.userPreRollChunks);
-            this.userPreRollChunks = [];
-          }
-          this.userAudioSpeechFrames += 1;
-          this.userAudioHangoverFrames = 12; // ~0.5s ogona po zakończeniu słowa
-          if (this.currentUserAudioChunks.length < 240) {
-            this.currentUserAudioChunks.push(new Float32Array(resampledData));
-          }
-        } else if (this.userAudioHangoverFrames > 0) {
-          this.userAudioHangoverFrames -= 1;
-          if (this.currentUserAudioChunks.length < 240) {
-            this.currentUserAudioChunks.push(new Float32Array(resampledData));
+        if (!isSuppressed) {
+          const isSpeechFrame = rms > 0.006;
+          if (isSpeechFrame) {
+            if (this.botTurnStarted) {
+              this.hasUserSpokenSinceBotStarted = true;
+            }
+            if (this.userAudioSpeechFrames === 0 && this.userPreRollChunks.length > 0) {
+              this.currentUserAudioChunks.push(...this.userPreRollChunks);
+              this.userPreRollChunks = [];
+            }
+            this.userAudioSpeechFrames += 1;
+            this.userAudioHangoverFrames = 18; // ~0.75s ogona po zakończeniu słowa
+            if (this.currentUserAudioChunks.length < 600) {
+              this.currentUserAudioChunks.push(new Float32Array(resampledData));
+            }
+          } else if (this.userAudioHangoverFrames > 0) {
+            this.userAudioHangoverFrames -= 1;
+            if (this.currentUserAudioChunks.length < 600) {
+              this.currentUserAudioChunks.push(new Float32Array(resampledData));
+            }
+          } else {
+            this.userPreRollChunks.push(new Float32Array(resampledData));
+            if (this.userPreRollChunks.length > 12) {
+              this.userPreRollChunks.shift();
+            }
           }
         } else {
-          this.userPreRollChunks.push(new Float32Array(resampledData));
-          if (this.userPreRollChunks.length > 6) {
+          const rawResampled = this.resampleAudio(inputData, nativeSampleRate, targetSampleRate);
+          this.userPreRollChunks.push(new Float32Array(rawResampled));
+          if (this.userPreRollChunks.length > 12) {
             this.userPreRollChunks.shift();
           }
         }
@@ -561,6 +576,29 @@ export class GeminiLiveClient {
 
   formatTranscriptText(raw) {
     return (raw || '').replace(/\s+/g, ' ').trim();
+  }
+
+  seedTurnFromBrowserPrefix(browserText, firstServerFragment) {
+    const cleanBrowser = this.formatTranscriptText(browserText);
+    const cleanFrag = this.formatTranscriptText(firstServerFragment);
+    if (!cleanBrowser) return firstServerFragment || '';
+    if (!cleanFrag) return cleanBrowser;
+
+    const norm = (s) => s.toLowerCase().replace(/[^a-z0-9\p{L}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+    const bWords = norm(cleanBrowser);
+    const sWords = norm(cleanFrag);
+    if (bWords.length === 0 || sWords.length === 0) return firstServerFragment;
+
+    const sSet = new Set(sWords);
+    let overlapCount = 0;
+    for (const w of bWords) {
+      if (sSet.has(w)) overlapCount += 1;
+    }
+    // Jeśli pierwszy fragment z serwera już zawiera początek wypowiedzi (ten sam tekst z ASR), używamy wersji serwerowej bez dublowania
+    if (overlapCount / bWords.length >= 0.4 || bWords.some((w) => w === sWords[0] && w.length >= 3)) {
+      return firstServerFragment;
+    }
+    return `${cleanBrowser} ${firstServerFragment.trimStart()}`;
   }
 
   finalizeUserTurn() {
@@ -873,10 +911,9 @@ export class GeminiLiveClient {
             });
           }
         } else {
-          this.currentUserTurnText = this.mergeStreamText(
-            this.hasServerUserTranscription ? this.currentUserTurnText : '',
-            rawFragment
-          );
+          this.currentUserTurnText = this.hasServerUserTranscription
+            ? this.mergeStreamText(this.currentUserTurnText, rawFragment)
+            : this.seedTurnFromBrowserPrefix(this.lastUserTranscript || this.savedTurnPrefixText, rawFragment);
           this.hasServerUserTranscription = true;
           const formattedUser = this.formatTranscriptText(this.currentUserTurnText);
           if (formattedUser) {
@@ -1188,7 +1225,6 @@ export class GeminiLiveClient {
     this.currentBotTurnId = null;
     this.currentBotTurnText = '';
     this.hasModelTurnSpokenText = false;
-    this.resetUserTurnIndex();
 
     if (this.outputAudioContext) {
       this.nextPlayTime = this.outputAudioContext.currentTime;
