@@ -972,6 +972,7 @@ export const BreathingExercise = ({ onClose }) => {
   const [volume, setVolume] = useState(0.65);
   const [sessionMinutes, setSessionMinutes] = useState(3);
   const [sessionTimeLeft, setSessionTimeLeft] = useState(0);
+  const [isFinishingCycle, setIsFinishingCycle] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
 
   const audioEngineRef = useRef(null);
@@ -1004,6 +1005,8 @@ export const BreathingExercise = ({ onClose }) => {
         audioEngineRef.current?.stopAll();
         setPhase('idle');
         setTimeLeft(0);
+        setSessionTimeLeft(0);
+        setIsFinishingCycle(false);
         onClose();
       }
     };
@@ -1020,19 +1023,11 @@ export const BreathingExercise = ({ onClose }) => {
       if (currentPhaseRef.current === 'idle') return;
       const now = performance.now();
       const sessionRemainingMs = sessionEndAtRef.current - now;
-
-      if (sessionRemainingMs <= 0) {
-        currentPhaseRef.current = 'idle';
-        audioEngineRef.current?.stopAll();
-        setPhase('idle');
-        setTimeLeft(0);
-        setSessionTimeLeft(0);
-        setSessionCompleted(true);
-        return;
-      }
+      const finishingNow = sessionRemainingMs <= 0;
 
       const nextSessionSec = Math.max(0, Math.ceil(sessionRemainingMs / 1000));
       setSessionTimeLeft((prev) => (prev !== nextSessionSec ? nextSessionSec : prev));
+      setIsFinishingCycle((prev) => (prev !== finishingNow ? finishingNow : prev));
 
       const remainingMs = phaseEndAtRef.current - now;
 
@@ -1041,15 +1036,27 @@ export const BreathingExercise = ({ onClose }) => {
         const spec = BREATHING_PHASES[current];
         if (!spec) return;
 
+        if (current === 'exhale') {
+          setCycles((c) => c + 1);
+          // When target duration has elapsed, always finish the active cycle before ending
+          if (finishingNow) {
+            currentPhaseRef.current = 'idle';
+            audioEngineRef.current?.stopAll();
+            setPhase('idle');
+            setTimeLeft(0);
+            setSessionTimeLeft(0);
+            setIsFinishingCycle(false);
+            setSessionCompleted(true);
+            return;
+          }
+        }
+
         const nextPhase = spec.next;
         const nextDuration = BREATHING_PHASES[nextPhase].durationSec;
         // Compensate overshoot so long breathing sessions stay locked to exact 4-7-8 cadence
         phaseEndAtRef.current = now + nextDuration * 1000 + Math.max(-250, remainingMs);
         currentPhaseRef.current = nextPhase;
 
-        if (current === 'exhale') {
-          setCycles((c) => c + 1);
-        }
         setPhase(nextPhase);
         setTimeLeft(nextDuration);
         audioEngineRef.current?.playPhaseCue(nextPhase);
@@ -1104,6 +1111,7 @@ export const BreathingExercise = ({ onClose }) => {
       sessionEndAtRef.current = now + sessionMinutes * 60 * 1000;
       currentPhaseRef.current = 'inhale';
       setSessionCompleted(false);
+      setIsFinishingCycle(false);
       setSessionTimeLeft(sessionMinutes * 60);
       setCycles(0);
       setPhase('inhale');
@@ -1115,6 +1123,7 @@ export const BreathingExercise = ({ onClose }) => {
       setPhase('idle');
       setTimeLeft(0);
       setSessionTimeLeft(0);
+      setIsFinishingCycle(false);
     }
   };
 
@@ -1144,6 +1153,8 @@ export const BreathingExercise = ({ onClose }) => {
               audioEngineRef.current?.stopAll();
               setPhase('idle');
               setTimeLeft(0);
+              setSessionTimeLeft(0);
+              setIsFinishingCycle(false);
               onClose();
             }}
             title="Zamknij (Esc)"
@@ -1236,7 +1247,7 @@ export const BreathingExercise = ({ onClose }) => {
               <span className="breathing-volume-label">Długość sesji</span>
               <span className="breathing-slider-value">
                 {phase !== 'idle'
-                  ? `${formatSessionTime(sessionTimeLeft)} / ${sessionMinutes} min`
+                  ? (isFinishingCycle ? 'Ostatni cykl' : `${formatSessionTime(sessionTimeLeft)} / ${sessionMinutes} min`)
                   : `${sessionMinutes} min`}
               </span>
             </div>
@@ -1252,7 +1263,9 @@ export const BreathingExercise = ({ onClose }) => {
                 if (phase !== 'idle') {
                   const nextEndAt = sessionStartAtRef.current + nextMin * 60 * 1000;
                   sessionEndAtRef.current = nextEndAt;
-                  setSessionTimeLeft(Math.max(0, Math.ceil((nextEndAt - performance.now()) / 1000)));
+                  const remMs = nextEndAt - performance.now();
+                  setIsFinishingCycle(remMs <= 0);
+                  setSessionTimeLeft(Math.max(0, Math.ceil(remMs / 1000)));
                 }
               }}
               className="breathing-volume-slider"
@@ -1261,8 +1274,11 @@ export const BreathingExercise = ({ onClose }) => {
           </div>
         </div>
 
-        {(cycles > 0 || sessionCompleted) && (
+        {(cycles > 0 || sessionCompleted || isFinishingCycle) && (
           <div className="breathing-session-status-row">
+            {isFinishingCycle && (
+              <span className="breathing-cycles-badge">Dokańczanie cyklu...</span>
+            )}
             {sessionCompleted && (
               <span className="breathing-cycles-badge is-completed">✓ Sesja ukończona</span>
             )}
