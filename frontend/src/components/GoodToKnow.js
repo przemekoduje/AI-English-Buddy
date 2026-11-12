@@ -950,6 +950,12 @@ export const DualNBackModal = ({ isOpen, onClose }) => {
   );
 };
 
+const BREATHING_PHASES = {
+  inhale: { durationSec: 4, next: 'hold' },
+  hold: { durationSec: 7, next: 'exhale' },
+  exhale: { durationSec: 8, next: 'inhale' },
+};
+
 export const BreathingExercise = ({ onClose }) => {
   const [phase, setPhase] = useState('idle'); // idle, inhale, hold, exhale
   const [timeLeft, setTimeLeft] = useState(0);
@@ -959,6 +965,9 @@ export const BreathingExercise = ({ onClose }) => {
   const [volume, setVolume] = useState(0.65);
 
   const audioEngineRef = useRef(null);
+  const phaseEndAtRef = useRef(0);
+  const currentPhaseRef = useRef('idle');
+
   const getAudioEngine = useCallback(() => {
     if (!audioEngineRef.current) {
       audioEngineRef.current = new LoFiBreathingEngine();
@@ -979,6 +988,7 @@ export const BreathingExercise = ({ onClose }) => {
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === 'Escape' && onClose) {
+        currentPhaseRef.current = 'idle';
         audioEngineRef.current?.stopAll();
         setPhase('idle');
         setTimeLeft(0);
@@ -989,38 +999,42 @@ export const BreathingExercise = ({ onClose }) => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  // Countdown timer and 4-7-8 phase transitions
+  // Drift-free 4-7-8 phase scheduler anchored to monotonic performance.now()
+  const isExerciseRunning = phase !== 'idle';
   useEffect(() => {
-    if (phase === 'idle') return;
+    if (!isExerciseRunning) return;
 
-    if (timeLeft > 0) {
-      const timer = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
-      return () => clearTimeout(timer);
-    } else {
-      if (phase === 'inhale') {
-        setPhase('hold');
-        setTimeLeft(7);
-      } else if (phase === 'hold') {
-        setPhase('exhale');
-        setTimeLeft(8);
-      } else if (phase === 'exhale') {
-        setCycles((c) => c + 1);
-        setPhase('inhale');
-        setTimeLeft(4);
+    const tick = () => {
+      if (currentPhaseRef.current === 'idle') return;
+      const now = performance.now();
+      const remainingMs = phaseEndAtRef.current - now;
+
+      if (remainingMs <= 0) {
+        const current = currentPhaseRef.current;
+        const spec = BREATHING_PHASES[current];
+        if (!spec) return;
+
+        const nextPhase = spec.next;
+        const nextDuration = BREATHING_PHASES[nextPhase].durationSec;
+        // Compensate overshoot so long breathing sessions stay locked to exact 4-7-8 cadence
+        phaseEndAtRef.current = now + nextDuration * 1000 + Math.max(-250, remainingMs);
+        currentPhaseRef.current = nextPhase;
+
+        if (current === 'exhale') {
+          setCycles((c) => c + 1);
+        }
+        setPhase(nextPhase);
+        setTimeLeft(nextDuration);
+        audioEngineRef.current?.playPhaseCue(nextPhase);
+      } else {
+        const nextSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+        setTimeLeft((prev) => (prev !== nextSeconds ? nextSeconds : prev));
       }
-    }
-  }, [phase, timeLeft]);
+    };
 
-  // Trigger distinct Lo-Fi phase sound cues on every phase transition
-  useEffect(() => {
-    const engine = audioEngineRef.current;
-    if (!engine) return;
-    if (phase === 'idle') {
-      engine.stopAll();
-    } else {
-      engine.playPhaseCue(phase);
-    }
-  }, [phase]);
+    const interval = setInterval(tick, 100);
+    return () => clearInterval(interval);
+  }, [isExerciseRunning]);
 
   // Keep mute and volume synchronized
   useEffect(() => {
@@ -1052,14 +1066,19 @@ export const BreathingExercise = ({ onClose }) => {
     const engine = getAudioEngine();
     if (phase === 'idle') {
       const activeScene = soundscape || pickRandomSoundscape();
+      const initialDuration = BREATHING_PHASES.inhale.durationSec;
       engine.cancelPreviewTimeout();
       engine.setVolume(volume);
       engine.setMuted(isMuted);
       engine.startAmbience(activeScene.id);
+      phaseEndAtRef.current = performance.now() + initialDuration * 1000;
+      currentPhaseRef.current = 'inhale';
       setCycles(0);
       setPhase('inhale');
-      setTimeLeft(4);
+      setTimeLeft(initialDuration);
+      engine.playPhaseCue('inhale');
     } else {
+      currentPhaseRef.current = 'idle';
       engine.stopAll();
       setPhase('idle');
       setTimeLeft(0);
@@ -1088,6 +1107,7 @@ export const BreathingExercise = ({ onClose }) => {
             type="button"
             className="nback-modal-close-btn"
             onClick={() => {
+              currentPhaseRef.current = 'idle';
               audioEngineRef.current?.stopAll();
               setPhase('idle');
               setTimeLeft(0);
