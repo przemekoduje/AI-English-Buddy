@@ -1035,26 +1035,17 @@
   border-color: #0f172a;
 }
 
-.breathing-lofi-sliders {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.breathing-sliders-row {
+.breathing-lofi-sliders-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.85rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
   align-items: center;
 }
 
-.breathing-sliders-row-session {
-  grid-template-columns: 1fr;
-}
-
-@media (max-width: 480px) {
-  .breathing-sliders-row {
+@media (max-width: 520px) {
+  .breathing-lofi-sliders-row {
     grid-template-columns: 1fr;
+    gap: 0.55rem;
   }
 }
 
