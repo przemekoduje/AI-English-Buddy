@@ -970,6 +970,7 @@ export const BreathingExercise = ({ onClose }) => {
   const [soundscape, setSoundscape] = useState(() => pickRandomSoundscape());
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.65);
+  const [cueVolume, setCueVolume] = useState(0.45);
   const [sessionMinutes, setSessionMinutes] = useState(3);
   const [sessionTimeLeft, setSessionTimeLeft] = useState(0);
   const [isFinishingCycle, setIsFinishingCycle] = useState(false);
@@ -1075,13 +1076,15 @@ export const BreathingExercise = ({ onClose }) => {
     const engine = audioEngineRef.current;
     if (!engine) return;
     engine.setVolume(volume);
+    engine.setCueVolume(cueVolume);
     engine.setMuted(isMuted);
-  }, [volume, isMuted]);
+  }, [volume, cueVolume, isMuted]);
 
   const selectSoundscape = (nextScene) => {
     setSoundscape(nextScene);
     const engine = getAudioEngine();
     engine.setVolume(volume);
+    engine.setCueVolume(cueVolume);
     engine.setMuted(isMuted);
     if (phase !== 'idle') {
       engine.cancelPreviewTimeout();
@@ -1104,6 +1107,7 @@ export const BreathingExercise = ({ onClose }) => {
       const now = performance.now();
       engine.cancelPreviewTimeout();
       engine.setVolume(volume);
+      engine.setCueVolume(cueVolume);
       engine.setMuted(isMuted);
       engine.startAmbience(activeScene.id);
       phaseEndAtRef.current = now + initialDuration * 1000;
@@ -1218,59 +1222,87 @@ export const BreathingExercise = ({ onClose }) => {
           ))}
         </div>
 
-        <div className="breathing-lofi-volume-row">
-          <div className="breathing-slider-group">
-            <div className="breathing-slider-header">
-              <span className="breathing-volume-label">Głośność</span>
-              <span className="breathing-slider-value">
-                {isMuted ? '0%' : `${Math.round(volume * 100)}%`}
-              </span>
+        <div className="breathing-lofi-sliders">
+          <div className="breathing-sliders-row">
+            <div className="breathing-slider-group">
+              <div className="breathing-slider-header">
+                <span className="breathing-volume-label">Głośność efektów</span>
+                <span className="breathing-slider-value">
+                  {isMuted ? '0%' : `${Math.round(volume * 100)}%`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.05"
+                value={isMuted ? 0 : volume}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setIsMuted(false);
+                  setVolume(val);
+                }}
+                className="breathing-volume-slider"
+                aria-label="Głośność efektów dźwiękowych tła"
+              />
             </div>
-            <input
-              type="range"
-              min="0.1"
-              max="1"
-              step="0.05"
-              value={isMuted ? 0 : volume}
-              onChange={(e) => {
-                const val = parseFloat(e.target.value);
-                setIsMuted(false);
-                setVolume(val);
-              }}
-              className="breathing-volume-slider"
-              aria-label="Głośność dźwięków lo-fi"
-            />
+
+            <div className="breathing-slider-group">
+              <div className="breathing-slider-header">
+                <span className="breathing-volume-label">Dźwięki fazy</span>
+                <span className="breathing-slider-value">
+                  {Math.round(cueVolume * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={cueVolume}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setCueVolume(val);
+                  const engine = getAudioEngine();
+                  engine.setCueVolume(val);
+                }}
+                className="breathing-volume-slider"
+                aria-label="Głośność dźwięków zmiany fazy oddechu"
+              />
+            </div>
           </div>
 
-          <div className="breathing-slider-group">
-            <div className="breathing-slider-header">
-              <span className="breathing-volume-label">Długość sesji</span>
-              <span className="breathing-slider-value">
-                {phase !== 'idle'
-                  ? (isFinishingCycle ? 'Ostatni cykl' : `${formatSessionTime(sessionTimeLeft)} / ${sessionMinutes} min`)
-                  : `${sessionMinutes} min`}
-              </span>
+          <div className="breathing-sliders-row breathing-sliders-row-session">
+            <div className="breathing-slider-group">
+              <div className="breathing-slider-header">
+                <span className="breathing-volume-label">Długość sesji</span>
+                <span className="breathing-slider-value">
+                  {phase !== 'idle'
+                    ? (isFinishingCycle ? 'Ostatni cykl' : `${formatSessionTime(sessionTimeLeft)} / ${sessionMinutes} min`)
+                    : `${sessionMinutes} min`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                step="1"
+                value={sessionMinutes}
+                onChange={(e) => {
+                  const nextMin = parseInt(e.target.value, 10);
+                  setSessionMinutes(nextMin);
+                  if (phase !== 'idle') {
+                    const nextEndAt = sessionStartAtRef.current + nextMin * 60 * 1000;
+                    sessionEndAtRef.current = nextEndAt;
+                    const remMs = nextEndAt - performance.now();
+                    setIsFinishingCycle(remMs <= 0);
+                    setSessionTimeLeft(Math.max(0, Math.ceil(remMs / 1000)));
+                  }
+                }}
+                className="breathing-volume-slider"
+                aria-label="Długość sesji oddechowej w minutach"
+              />
             </div>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              step="1"
-              value={sessionMinutes}
-              onChange={(e) => {
-                const nextMin = parseInt(e.target.value, 10);
-                setSessionMinutes(nextMin);
-                if (phase !== 'idle') {
-                  const nextEndAt = sessionStartAtRef.current + nextMin * 60 * 1000;
-                  sessionEndAtRef.current = nextEndAt;
-                  const remMs = nextEndAt - performance.now();
-                  setIsFinishingCycle(remMs <= 0);
-                  setSessionTimeLeft(Math.max(0, Math.ceil(remMs / 1000)));
-                }
-              }}
-              className="breathing-volume-slider"
-              aria-label="Długość sesji oddechowej w minutach"
-            />
           </div>
         </div>
 

@@ -1035,11 +1035,27 @@
   border-color: #0f172a;
 }
 
-.breathing-lofi-volume-row {
+.breathing-lofi-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.breathing-sliders-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.85rem;
   align-items: center;
+}
+
+.breathing-sliders-row-session {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 480px) {
+  .breathing-sliders-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .breathing-slider-group {

@@ -113,6 +113,7 @@ export class LoFiBreathingEngine {
     this.stopSceneTimeout = null;
     this.isMuted = false;
     this.volume = 0.7;
+    this.cueVolume = 0.45;
     this.currentSceneId = null;
     this.isRunning = false;
   }
@@ -161,7 +162,7 @@ export class LoFiBreathingEngine {
       cueFilter.Q.value = 0.5;
 
       this.phaseCueGain = this.ctx.createGain();
-      this.phaseCueGain.gain.value = 1.0;
+      this.phaseCueGain.gain.value = this.cueVolume;
 
       const cueDelay = this.ctx.createDelay(1.0);
       cueDelay.delayTime.value = 0.22;
@@ -195,6 +196,13 @@ export class LoFiBreathingEngine {
     this.volume = Math.max(0, Math.min(1, val));
     if (this.ctx && this.masterGain && !this.isMuted) {
       this.masterGain.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.06);
+    }
+  }
+
+  setCueVolume(val) {
+    this.cueVolume = Math.max(0, Math.min(1, val));
+    if (this.ctx && this.phaseCueGain) {
+      this.phaseCueGain.gain.setTargetAtTime(this.cueVolume, this.ctx.currentTime, 0.04);
     }
   }
 
@@ -447,12 +455,15 @@ export class LoFiBreathingEngine {
     };
   }
 
-  _duckAmbience(duckLevel = 0.42, recoverySec = 1.4) {
+  _duckAmbience(duckLevel = 0.60, recoverySec = 1.35) {
     if (!this.ctx || !this.ambientGain || !this.isRunning) return;
     const now = this.ctx.currentTime;
     this.ambientGain.gain.cancelScheduledValues(now);
     this.ambientGain.gain.setValueAtTime(Math.max(0.0001, this.ambientGain.gain.value), now);
-    this.ambientGain.gain.linearRampToValueAtTime(duckLevel, now + 0.08);
+    // Subtle ducking proportional to cueVolume so background effects stay present and natural
+    const duckDepth = (0.85 - duckLevel) * Math.min(1, Math.max(0, this.cueVolume * 1.5));
+    const targetDuck = Math.max(0.45, 0.85 - duckDepth);
+    this.ambientGain.gain.linearRampToValueAtTime(targetDuck, now + 0.08);
     this.ambientGain.gain.linearRampToValueAtTime(0.85, now + recoverySec);
   }
 
@@ -601,7 +612,8 @@ export class LoFiBreathingEngine {
     if (!ctx) return;
 
     this._stopPhaseCues();
-    this._duckAmbience(0.42, 1.35);
+    if (this.cueVolume <= 0.005) return;
+    this._duckAmbience(0.60, 1.35);
 
     if (phase === 'inhale') {
       // Unmistakable upward climbing arpeggio: C5 -> E5 -> G5 -> C6
