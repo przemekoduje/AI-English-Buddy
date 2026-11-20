@@ -122,6 +122,18 @@
         "destination": "/keepgoals/index.html"
       },
       {
+        "source": "/autopilot",
+        "destination": "/autopilot/index.html"
+      },
+      {
+        "source": "/autopilot/",
+        "destination": "/autopilot/index.html"
+      },
+      {
+        "source": "/autopilot/**",
+        "destination": "/autopilot/index.html"
+      },
+      {
         "source": "/speakling",
         "destination": "/speakling.html"
       },

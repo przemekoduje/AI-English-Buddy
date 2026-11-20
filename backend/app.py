@@ -9072,6 +9072,300 @@ def grant_mode_access():
     except Exception as e:
         return f"Błąd podczas przyznawania dostępu: {str(e)}", 500
 
+
+# ==============================================================================
+# AUTOPILOT — Asystent Regulacji Emocji i Ćwiczeń Wideo (FB & Instagram Reels)
+# ==============================================================================
+
+DEFAULT_AUTOPILOT_REELS = [
+    {
+        "id": "reel_physiological_sigh",
+        "title": "Fizjologiczne Westchnięcie (Reset stresu w 30 sekund)",
+        "emotion_tags": ["stres", "napięcie", "lęk", "panika", "wysokie tętno", "klatka piersiowa"],
+        "goal": "Natychmiastowe obniżenie tętna i wyłączenie reakcji walki lub ucieczki",
+        "duration_sec": 60,
+        "steps": [
+            "Wykonaj głęboki wdech nosem (ok. 80% pojemności płuc).",
+            "Bez wypuszczania powietrza dobierz drugi, krótki wdech nosem do pełna.",
+            "Wypuszczaj powietrze bardzo powoli ustami przez 6–8 sekund.",
+            "Powtórz cykl 3 razy — poczujesz natychmiastowe rozluźnienie barków."
+        ],
+        "why_it_works": "Podwójny wdech otwiera zapadnięte pęcherzyki płucne i maksymalizuje wyrzut CO2, co pobudza nerw błędny do natychmiastowego zwolnienia akcji serca.",
+        "instagram_url": "https://www.instagram.com/reels/",
+        "facebook_url": "https://www.facebook.com/reel/",
+        "category": "Oddech i Układ Nerwowy"
+    },
+    {
+        "id": "reel_panoramic_vision",
+        "title": "Widzenie Panoramiczne (Wyłączenie gonitwy myśli)",
+        "emotion_tags": ["przebodźcowanie", "gonitwa myśli", "chaos", "ekran", "zmęczenie psychiczne", "overthinking"],
+        "goal": "Przełączenie mózgu z trybu tunelowego (stresowego) w stan spokoju i otwartości",
+        "duration_sec": 90,
+        "steps": [
+            "Patrząc przed siebie w jeden punkt, nie poruszaj gałkami ocznymi.",
+            "Rozszerz uwagę na boki — spróbuj jednocześnie dostrzec ściany po lewej i prawej stronie oraz sufit.",
+            "Utrzymaj miękki, szeroki wzrok przez 60 sekund, oddychając spokojnie nosem."
+        ],
+        "why_it_works": "Widzenie tunelowe jest biologicznie powiązane z wyrzutem adrenaliny. Rozszerzenie pola widzenia na obwód mechanicznie hamuje aktywność ciała migdałowatego.",
+        "instagram_url": "https://www.instagram.com/reels/",
+        "facebook_url": "https://www.facebook.com/reel/",
+        "category": "Układ Wzrokowy i Fokus"
+    },
+    {
+        "id": "reel_box_breathing",
+        "title": "Oddech Pudełkowy 4-4-4-4 (Fokus pod presją)",
+        "emotion_tags": ["rozproszenie", "brak skupienia", "egzamin", "rozmowa kwalifikacyjna", "trema", "prezentacja"],
+        "goal": "Odzyskanie zimnej krwi i ostrej koncentracji przed ważnym zadaniem",
+        "duration_sec": 120,
+        "steps": [
+            "Wdech nosem przez 4 sekundy.",
+            "Zatrzymaj powietrze w płucach na 4 sekundy.",
+            "Równy wydech przez 4 sekundy.",
+            "Zatrzymaj na bezdechu po wydechu przez 4 sekundy."
+        ],
+        "why_it_works": "Stosowany przez operatorów jednostek specjalnych protokół stabilizuje poziom CO2 we krwi i przywraca kontrolę kory przedczołowej nad emocjami.",
+        "instagram_url": "https://www.instagram.com/reels/",
+        "facebook_url": "https://www.facebook.com/reel/",
+        "category": "Koncentracja i Trema"
+    },
+    {
+        "id": "reel_somatic_shake",
+        "title": "Somatyczne Strzepanie Napięcia (Reset po konflikcie lub złości)",
+        "emotion_tags": ["złość", "frustracja", "gniew", "irytacja", "sztywność karku", "agresja"],
+        "goal": "Fizyczne rozładowanie kortyzolu i adrenaliny zgromadzonej w mięśniach",
+        "duration_sec": 60,
+        "steps": [
+            "Wstań i zacznij energicznie potrząsać dłońmi oraz nadgarstkami przez 15 sekund.",
+            "Przenieś ruch na ramiona, barki i całe tułowie, lekko sprężynując na piętach.",
+            "Zrób głośny wydech z dźwiękiem ulgi i zatrzymaj się na 15 sekund, obserwując mrowienie w dłoniach."
+        ],
+        "why_it_works": "Zwierzęta w naturze po ucieczce przed drapieżnikiem dosłownie wytrzęsają napięcie z układu mięśniowo-powięziowego, zamykając cykl reakcji stresowej.",
+        "instagram_url": "https://www.instagram.com/reels/",
+        "facebook_url": "https://www.facebook.com/reel/",
+        "category": "Praca z Ciałem (Somatyka)"
+    },
+    {
+        "id": "reel_dopamine_microstart",
+        "title": "Protokół 120 Sekund (Przełamanie paraliżu i prokrastynacji)",
+        "emotion_tags": ["prokrastynacja", "brak energii", "lenistwo", "przytłoczenie", "paraliż decyzyjny", "brak motywacji"],
+        "goal": "Uruchomienie pętli dopaminowej i bezbolesne wejście w działanie",
+        "duration_sec": 120,
+        "steps": [
+            "Wybierz tylko jeden, najmniejszy fizyczny krok zadania (np. otwarcie dokumentu i napisanie jednego zdania).",
+            "Obiecaj sobie, że po 120 sekundach masz pełne prawo przerwać.",
+            "Skieruj wzrok w jeden punkt na ekranie na 15 sekund przed startem, aby podnieść poziom noradrenaliny."
+        ],
+        "why_it_works": "Opór przed startem wynika z nadaktywności kory zakrętu obręczy. Kontrakt na 2 minuty omija barierę lęku, a rozpoczęcie ruchu wyzwala dopaminę podtrzymującą działanie.",
+        "instagram_url": "https://www.instagram.com/reels/",
+        "facebook_url": "https://www.facebook.com/reel/",
+        "category": "Motywacja i Dopamina"
+    },
+    {
+        "id": "reel_478_sleep_reset",
+        "title": "Technika 4-7-8 (Wieczorne wyciszenie i bezsenność)",
+        "emotion_tags": ["bezsenność", "wieczór", "sen", "zmęczenie", "niepokój wieczorny", "wyciszenie"],
+        "goal": "Głęboka aktywacja układu przywspółczulnego przed snem lub odpoczynkiem",
+        "duration_sec": 120,
+        "steps": [
+            "Umieść czubek języka za górnymi zębami.",
+            "Wciągaj powietrze cicho nosem przez 4 sekundy.",
+            "Wstrzymaj oddech na 7 sekund.",
+            "Wydychaj powoli ustami przez 8 sekund. Powtórz 4 cykle."
+        ],
+        "why_it_works": "Wydłużony dwukrotnie wydech względem wdechu działa jak naturalny środek uspokajający dla układu nerwowego, obniżając ciśnienie krwi.",
+        "instagram_url": "https://www.instagram.com/reels/",
+        "facebook_url": "https://www.facebook.com/reel/",
+        "category": "Sen i Regeneracja"
+    },
+    {
+        "id": "reel_vagus_neck_release",
+        "title": "Stymulacja Nerwu Błędnego (Wzrokowo-Karkowy Reset)",
+        "emotion_tags": ["napięcie karku", "ból głowy", "zamrożenie", "odcięcie", "apatia", "smutek"],
+        "goal": "Odblokowanie nerwu błędnego i przywrócenie poczucia bezpieczeństwa w ciele",
+        "duration_sec": 90,
+        "steps": [
+            "Spleć dłonie z tyłu głowy i oprzyj potylicę w dłoniach.",
+            "Nie obracając głowy, skieruj same oczy maksymalnie w prawo i utrzymaj je tam przez 30 sekund, aż pojawi się naturalne westchnięcie lub ziewnięcie.",
+            "Powtórz to samo, kierując oczy maksymalnie w lewo przez 30 sekund."
+        ],
+        "why_it_works": "Ćwiczenie Stanleya Rosenberga bezpośrednio rozluźnia mięśnie podpotyliczne i stymuluje brzuszny nerw błędny odpowiedzialny za stan spokoju społecznego.",
+        "instagram_url": "https://www.instagram.com/reels/",
+        "facebook_url": "https://www.facebook.com/reel/",
+        "category": "Nerw Błędny i Somatyka"
+    },
+    {
+        "id": "reel_dual_nback_focus",
+        "title": "Rozgrzewka Bufora Pamięci Roboczej (dlPFC)",
+        "emotion_tags": ["mgła mózgowa", "brain fog", "nauka", "pamięć", "zapominanie", "rozkojarzenie"],
+        "goal": "Aktywacja grzbietowo-bocznej kory przedczołowej przed nauką lub pracą koncepcyjną",
+        "duration_sec": 90,
+        "steps": [
+            "Przez 60 sekund wymieniaj na głos jak najwięcej słów na jedną wylosowaną literę (np. 'K', bez imion).",
+            "Następnie przez 30 sekund śledź wzrokiem 4 rogi pomieszczenia, przypisując każdemu kolejną cyfrę w pamięci."
+        ],
+        "why_it_works": "Wymuszenie szybkiego dostępu leksykalnego i przestrzennego zwiększa przepływ krwi i gęstość sygnalizacji dopaminowej w korze przedczołowej (dlPFC).",
+        "instagram_url": "https://www.instagram.com/reels/",
+        "facebook_url": "https://www.facebook.com/reel/",
+        "category": "Kognitywistyka i Pamięć"
+    }
+]
+
+
+def get_autopilot_reels_from_db():
+    try:
+        docs = list(db.collection("autopilot_reels").stream())
+        if not docs:
+            for item in DEFAULT_AUTOPILOT_REELS:
+                db.collection("autopilot_reels").document(item["id"]).set(item)
+            return list(DEFAULT_AUTOPILOT_REELS)
+        reels = []
+        for d in docs:
+            data = d.to_dict() or {}
+            data["id"] = d.id
+            reels.append(data)
+        return reels
+    except Exception as e:
+        print(f"[Autopilot] Fallback do domyślnej bazy rolek: {e}")
+        return list(DEFAULT_AUTOPILOT_REELS)
+
+
+@app.route("/api/autopilot/reels", methods=["GET", "POST"])
+def autopilot_reels_handler():
+    if request.method == "GET":
+        reels = get_autopilot_reels_from_db()
+        return jsonify({"reels": reels}), 200
+
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "Tytuł ćwiczenia / rolki jest wymagany."}), 400
+
+    reel_id = data.get("id") or f"reel_{int(time.time())}"
+    raw_tags = data.get("emotion_tags") or []
+    if isinstance(raw_tags, str):
+        raw_tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
+
+    raw_steps = data.get("steps") or []
+    if isinstance(raw_steps, str):
+        raw_steps = [s.strip() for s in raw_steps.split("\n") if s.strip()]
+
+    new_reel = {
+        "id": reel_id,
+        "title": title,
+        "category": (data.get("category") or "Regulacja Emocji").strip(),
+        "goal": (data.get("goal") or "").strip(),
+        "duration_sec": int(data.get("duration_sec") or 60),
+        "emotion_tags": raw_tags,
+        "steps": raw_steps,
+        "why_it_works": (data.get("why_it_works") or "").strip(),
+        "instagram_url": (data.get("instagram_url") or "https://www.instagram.com/reels/").strip(),
+        "facebook_url": (data.get("facebook_url") or "https://www.facebook.com/reel/").strip(),
+        "updated_at": datetime.utcnow().isoformat() + "Z"
+    }
+    try:
+        db.collection("autopilot_reels").document(reel_id).set(new_reel)
+    except Exception as e:
+        print(f"[Autopilot] Błąd zapisu rolki: {e}")
+    return jsonify({"reel": new_reel, "reels": get_autopilot_reels_from_db()}), 200
+
+
+@app.route("/api/autopilot/reels/<reel_id>", methods=["DELETE"])
+def autopilot_delete_reel(reel_id):
+    try:
+        db.collection("autopilot_reels").document(reel_id).delete()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"deleted": reel_id, "reels": get_autopilot_reels_from_db()}), 200
+
+
+@app.route("/api/autopilot/chat", methods=["POST"])
+def autopilot_chat():
+    data = request.get_json() or {}
+    user_message = (data.get("message") or "").strip()
+    history = data.get("history") or []
+    if not user_message:
+        return jsonify({"error": "Wpisz swój obecny stan emocjonalny lub na co szukasz ćwiczenia."}), 400
+
+    reels = get_autopilot_reels_from_db()
+    reels_catalog_json = json.dumps(reels, ensure_ascii=False)
+
+    system_prompt = (
+        "Jesteś Autopilot AI — empatycznym, konkretnym trenerem neuroregulacji emocji i pracy z ciałem. "
+        "Użytkownik opisuje swój obecny stan emocjonalny oraz na co szuka ćwiczenia.\n"
+        "Twoim zadaniem jest:\n"
+        "1. Ze zrozumieniem i spokojem nazwać stan użytkownika oraz krótko (2-3 zdania) wyjaśnić, co dzieje się w jego układzie nerwowym.\n"
+        "2. Dobrać z poniższej BAZY FILMÓW / ROLEK (Facebook & Instagram Reels) od 1 do 2 najlepiej dopasowanych ćwiczeń i dokładnie wyjaśnić dlaczego pomogą w tej sytuacji.\n"
+        "3. Zwróć odpowiedź WYŁĄCZNIE jako poprawny obiekt JSON w formacie:\n"
+        "{\n"
+        '  "reply": "Twoja empatyczna odpowiedź i wskazówka krok po kroku (w języku polskim, z użyciem akapitów)...",\n'
+        '  "recommended_reel_ids": ["id_rolki_1", "id_rolki_2"],\n'
+        '  "detected_emotion": "Krótka nazwa wykrytego stanu (np. Wysoki stres i napięcie)"\n'
+        "}\n\n"
+        f"BAZA FILMÓW (ROLKI FB & INSTAGRAM):\n{reels_catalog_json}"
+    )
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for h in history[-6:]:
+        role = "assistant" if h.get("role") == "assistant" else "user"
+        content = (h.get("content") or "").strip()
+        if content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user_message})
+
+    reply_text = ""
+    recommended_ids = []
+    detected_emotion = "Regulacja układu nerwowego"
+
+    if gemini_client:
+        try:
+            resp = gemini_client.chat.completions.create(
+                model="gemini-flash-lite-latest",
+                messages=messages,
+                response_format={"type": "json_object"}
+            )
+            raw_content = resp.choices[0].message.content or "{}"
+            parsed = json.loads(raw_content)
+            reply_text = parsed.get("reply") or ""
+            recommended_ids = parsed.get("recommended_reel_ids") or []
+            detected_emotion = parsed.get("detected_emotion") or detected_emotion
+            log_api_usage("gemini-flash-lite-latest", "Autopilot Chat")
+        except Exception as e:
+            print(f"[Autopilot] Gemini fallback: {e}")
+
+    # Fallback / uzupełnienie dopasowania po słowach kluczowych jeśli AI nie zwróciło ID
+    if not recommended_ids:
+        msg_lower = user_message.lower()
+        scored = []
+        for r in reels:
+            score = 0
+            for tag in r.get("emotion_tags", []):
+                if tag.lower() in msg_lower:
+                    score += 3
+            if any(w in msg_lower for w in r.get("title", "").lower().split()):
+                score += 1
+            scored.append((score, r))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        recommended_ids = [scored[0][1]["id"]] if scored else ([reels[0]["id"]] if reels else [])
+
+    reel_map = {r["id"]: r for r in reels}
+    recommended_reels = [reel_map[rid] for rid in recommended_ids if rid in reel_map]
+    if not recommended_reels and reels:
+        recommended_reels = [reels[0]]
+
+    if not reply_text:
+        top = recommended_reels[0]
+        reply_text = (
+            f"Rozumiem, jak się teraz czujesz. Twój układ nerwowy sygnalizuje potrzebę szybkiej regulacji. "
+            f"Na podstawie bazy ćwiczeń wideo (Rolki FB & Instagram) najlepiej sprawdzi się teraz **{top['title']}** "
+            f"({top['duration_sec']} sekund). Poniżej znajdziesz instrukcję krok po kroku oraz bezpośrednie linki do rolki na Instagramie i Facebooku."
+        )
+
+    return jsonify({
+        "reply": reply_text,
+        "detected_emotion": detected_emotion,
+        "recommended_reels": recommended_reels
+    }), 200
+
 if __name__ == "__main__":
     # db.create_all() # Nie potrzebne dla Firestore, Firebase zarządza strukturą dokumentów
     # print("Baza danych zainicjalizowana.")

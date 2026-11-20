@@ -102,6 +102,47 @@ def sync_and_build_keepgoals():
     print(f"[KeepGoals] Skopiowano {kg_dist} -> {target_kg}")
 
 
+def find_autopilot_dir():
+    parent = os.path.dirname(ROOT_DIR)
+    for candidate in ("autopilot", "Autopilot"):
+        path = os.path.join(parent, candidate)
+        if os.path.isdir(os.path.join(path, "frontend")):
+            return path
+    return None
+
+
+def sync_and_build_autopilot():
+    ap_dir = find_autopilot_dir()
+    if not ap_dir:
+        print("[WARN] Nie znaleziono lokalnego katalogu autopilot obok AI-English-Buddy.")
+        return
+
+    ap_frontend = os.path.join(ap_dir, "frontend")
+    ap_dist = os.path.join(ap_frontend, "dist")
+    ap_index = os.path.join(ap_dist, "index.html")
+    node_modules = os.path.join(ap_frontend, "node_modules")
+    npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
+
+    if not os.path.isdir(node_modules):
+        print(f"[Autopilot] Instalacja zależności npm w {ap_frontend}...")
+        code, out, err = run_cmd([npm_cmd, "install"], cwd=ap_frontend)
+        if code != 0:
+            print(f"[ERROR] Błąd npm install w Autopilot:\n{err}\n{out}", file=sys.stderr)
+            sys.exit(1)
+
+    print(f"[Autopilot] Budowanie frontendu Autopilot w {ap_frontend}...")
+    code, out, err = run_cmd([npm_cmd, "run", "build"], cwd=ap_frontend)
+    if code != 0:
+        print(f"[ERROR] Błąd budowania Autopilot:\n{err}\n{out}", file=sys.stderr)
+        sys.exit(1)
+
+    target_ap = os.path.join(BUILD_DIR, "autopilot")
+    if os.path.isdir(target_ap):
+        shutil.rmtree(target_ap)
+    shutil.copytree(ap_dist, target_ap)
+    print(f"[Autopilot] Skopiowano {ap_dist} -> {target_ap}")
+
+
 def record_speakling_commit():
     sp_head = get_git_head(ROOT_DIR)
     if sp_head and os.path.isdir(BUILD_DIR):
@@ -131,6 +172,11 @@ def verify_bundle_integrity():
     if not os.path.isfile(kg_html) or not kg_js:
         errors.append("Brak zbudowanej aplikacji KeepGoals (keepgoals/index.html / keepgoals/assets/*.js)")
 
+    ap_html = os.path.join(BUILD_DIR, "autopilot", "index.html")
+    ap_js = glob.glob(os.path.join(BUILD_DIR, "autopilot", "assets", "*.js"))
+    if not os.path.isfile(ap_html) or not ap_js:
+        errors.append("Brak zbudowanej aplikacji Autopilot (autopilot/index.html / autopilot/assets/*.js)")
+
     if errors:
         print("\n[BLOKADA WDROŻENIA] Wykryto naruszenie integralności pakietu:", file=sys.stderr)
         for e in errors:
@@ -141,11 +187,13 @@ def verify_bundle_integrity():
     print(f"[OK] Speakling Desktop:    {os.path.basename(speakling_js[0])}")
     print(f"[OK] Speakling Mobile:     {mobile_html}")
     print(f"[OK] KeepGoals:            {os.path.basename(kg_js[0])}")
+    print(f"[OK] Autopilot:            {os.path.basename(ap_js[0])}")
     print("=== Integralność wszystkich aplikacji potwierdzona! ===")
 
 
 if __name__ == "__main__":
     sync_and_build_keepgoals()
+    sync_and_build_autopilot()
     record_speakling_commit()
     verify_bundle_integrity()
 
