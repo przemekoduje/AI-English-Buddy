@@ -3,194 +3,630 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>przemokoduje.com</title>
+  <title>przemokoduje.com — Narzędzia, które buduję</title>
+  <meta name="description" content="Trzy niezależne aplikacje webowe stworzone do codziennej pracy i rozwoju: Speakling, KeepGoals i Autopilot." />
   <link rel="icon" type="image/png" href="https://przemokoduje.com/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('przemokoduje_theme');
+        if (saved === 'dark' || saved === 'light') {
+          document.documentElement.setAttribute('data-theme', saved);
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <style>
+    /* ==========================================================================
+       przemokoduje.com — Start Page (Figma Direction A · Light & Dark Mode)
+       ========================================================================== */
+    :root,
+    [data-theme="light"] {
+      --bg-subtle: #fafafa;
+      --bg-canvas: #ffffff;
+      --bg-muted: #f4f4f5;
+      --border-default: #e4e4e7;
+      --border-strong: #18181b;
+      --text-primary: #09090b;
+      --text-secondary: #52525b;
+      --text-muted: #71717a;
+      --icon-muted: #71717a;
+      --icon-hover-bg: #09090b;
+      --icon-hover-fg: #ffffff;
+      --shadow-card: 0px 2px 8px 0px rgba(0, 0, 0, 0.03);
+      --shadow-card-hover: 0px 12px 28px 0px rgba(0, 0, 0, 0.08);
+      --shadow-card-mobile: 0px 2px 6px 0px rgba(0, 0, 0, 0.03);
+      --shadow-card-mobile-hover: 0px 8px 20px 0px rgba(0, 0, 0, 0.08);
+      --dot-green: #10b981;
+    }
+
+    [data-theme="dark"] {
+      --bg-subtle: #09090b;
+      --bg-canvas: #111113;
+      --bg-muted: #1c1c1f;
+      --border-default: #27272a;
+      --border-strong: #e4e4e7;
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --icon-muted: #71717a;
+      --icon-hover-bg: #fafafa;
+      --icon-hover-fg: #09090b;
+      --shadow-card: 0px 2px 8px 0px rgba(0, 0, 0, 0.25);
+      --shadow-card-hover: 0px 12px 28px 0px rgba(0, 0, 0, 0.45);
+      --shadow-card-mobile: 0px 2px 6px 0px rgba(0, 0, 0, 0.25);
+      --shadow-card-mobile-hover: 0px 8px 20px 0px rgba(0, 0, 0, 0.45);
+      --dot-green: #10b981;
+    }
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
 
+    html,
+    body {
+      height: 100%;
+    }
+
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background-color: #ffffff;
-      color: #0f172a;
+      background-color: var(--bg-subtle);
+      color: var(--text-primary);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 2rem 1.5rem;
+      justify-content: space-between;
+      padding: 56px 80px 40px;
       -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      transition: background-color 0.2s ease, color 0.2s ease;
     }
 
-    .hub-wrapper {
+    /* Subtle top spacer matching Figma frame */
+    .top-bar {
       width: 100%;
-      max-width: 820px;
+      max-width: 1008px;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      min-height: 1px;
+    }
+
+    .theme-toggle {
+      position: fixed;
+      top: 24px;
+      right: 28px;
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-default);
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+      z-index: 50;
+    }
+
+    .theme-toggle:hover {
+      border-color: var(--border-strong);
+      color: var(--text-primary);
+      transform: translateY(-1px);
+    }
+
+    .theme-toggle .icon-sun {
+      display: none;
+    }
+
+    [data-theme="dark"] .theme-toggle .icon-sun {
+      display: block;
+    }
+
+    [data-theme="dark"] .theme-toggle .icon-moon {
+      display: none;
+    }
+
+    /* Main Content Container */
+    .main-content {
+      width: 100%;
+      max-width: 1008px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2.5rem;
+      gap: 48px;
+      margin: auto 0;
     }
 
-    .hub-brand {
-      font-size: 1.15rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: #0f172a;
+    /* Hero Header */
+    .hero-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      text-align: center;
+    }
+
+    .domain-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-default);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: normal;
+      color: var(--text-primary);
       text-decoration: none;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
     }
 
-    .apps-grid {
-      width: 100%;
+    .domain-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: var(--dot-green);
+      flex-shrink: 0;
+    }
+
+    .hero-title {
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      color: var(--text-primary);
+    }
+
+    .hero-subtitle {
+      font-size: 16px;
+      font-weight: 400;
+      line-height: 1.5;
+      color: var(--text-muted);
+      max-width: 574px;
+    }
+
+    /* Product Cards Row (Desktop) */
+    .cards-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1.25rem;
+      grid-template-columns: repeat(3, 320px);
+      gap: 24px;
+      width: 100%;
+      justify-content: center;
     }
 
-    .app-tile {
+    .product-card {
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-default);
+      border-radius: 20px;
+      height: 252px;
+      padding: 28px 28px 26px;
+      box-shadow: var(--shadow-card);
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 1.15rem;
-      padding: 2.75rem 1.5rem;
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 20px;
+      justify-content: space-between;
       text-decoration: none;
-      color: #0f172a;
-      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+      color: inherit;
+      position: relative;
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
                   border-color 0.2s ease,
-                  box-shadow 0.2s ease;
+                  box-shadow 0.22s ease,
+                  background-color 0.2s ease;
     }
 
-    .app-tile:hover {
-      transform: translateY(-4px);
-      border-color: #0f172a;
-      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    .product-card:hover,
+    .product-card:focus-visible {
+      outline: none;
+      border-color: var(--border-strong);
+      border-width: 1.25px;
+      box-shadow: var(--shadow-card-hover);
+      transform: translateY(-2px);
     }
 
-    .tile-icon {
-      width: 52px;
-      height: 52px;
-      border-radius: 14px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
+    .card-top {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      width: 100%;
+    }
+
+    .card-header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .icon-and-title-mobile {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .icon-tile {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--bg-muted);
+      color: var(--text-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #0f172a;
-      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+      flex-shrink: 0;
+      transition: background-color 0.2s ease, color 0.2s ease;
     }
 
-    .app-tile:hover .tile-icon {
-      background: #0f172a;
-      border-color: #0f172a;
-      color: #ffffff;
+    .product-card:hover .icon-tile,
+    .product-card:focus-visible .icon-tile {
+      background: var(--icon-hover-bg);
+      color: var(--icon-hover-fg);
     }
 
-    .tile-name {
-      font-size: 1.2rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: #0f172a;
+    .card-title-mobile {
+      display: none;
+      font-size: 17px;
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: -0.17px;
+      color: var(--text-primary);
     }
 
-    .tile-arrow {
-      color: #94a3b8;
-      display: flex;
-      align-items: center;
+    .icon-arrow-up-right {
+      color: var(--icon-muted);
+      flex-shrink: 0;
       transition: transform 0.2s ease, color 0.2s ease;
     }
 
-    .app-tile:hover .tile-arrow {
-      color: #0f172a;
+    .product-card:hover .icon-arrow-up-right,
+    .product-card:focus-visible .icon-arrow-up-right {
+      color: var(--text-primary);
+      transform: translate(1.5px, -1.5px);
+    }
+
+    .card-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .card-title-desktop {
+      font-size: 19px;
+      font-weight: 600;
+      line-height: 1.25;
+      letter-spacing: -0.19px;
+      color: var(--text-primary);
+    }
+
+    .card-desc {
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+
+    .card-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: normal;
+      color: var(--text-secondary);
+      transition: color 0.2s ease;
+    }
+
+    .card-cta svg {
+      transition: transform 0.2s ease;
+    }
+
+    .product-card:hover .card-cta,
+    .product-card:focus-visible .card-cta {
+      color: var(--text-primary);
+    }
+
+    .product-card:hover .card-cta svg,
+    .product-card:focus-visible .card-cta svg {
       transform: translateX(3px);
     }
 
-    @media (max-width: 720px) {
-      .apps-grid {
+    /* Footer */
+    .hub-footer {
+      font-size: 13px;
+      font-weight: 400;
+      line-height: normal;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 40px;
+    }
+
+    .hub-footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .hub-footer a:hover {
+      color: var(--text-primary);
+    }
+
+    .footer-sep {
+      opacity: 0.65;
+      user-select: none;
+    }
+
+    /* Tablet Responsive */
+    @media (max-width: 1080px) {
+      body {
+        padding: 48px 32px 36px;
+      }
+
+      .cards-grid {
+        grid-template-columns: repeat(3, minmax(240px, 320px));
+        gap: 18px;
+      }
+    }
+
+    /* Mobile Responsive (Figma 390px Frame) */
+    @media (max-width: 820px) {
+      body {
+        padding: 52px 20px 32px;
+      }
+
+      .theme-toggle {
+        top: 16px;
+        right: 16px;
+        width: 34px;
+        height: 34px;
+      }
+
+      .main-content {
+        gap: 32px;
+        margin: 0;
+      }
+
+      .hero-header {
+        gap: 10px;
+      }
+
+      .domain-pill {
+        padding: 5px 12px;
+        gap: 7px;
+        font-size: 12px;
+      }
+
+      .domain-dot {
+        width: 6px;
+        height: 6px;
+      }
+
+      .hero-title {
+        font-size: 28px;
+        letter-spacing: -0.7px;
+      }
+
+      .hero-subtitle {
+        font-size: 14px;
+        line-height: 1.45;
+        max-width: 310px;
+      }
+
+      .cards-grid {
         grid-template-columns: 1fr;
-        max-width: 340px;
+        gap: 14px;
+        max-width: 400px;
       }
 
-      .app-tile {
-        flex-direction: row;
-        justify-content: flex-start;
-        padding: 1.25rem 1.4rem;
+      .product-card {
+        height: auto;
+        border-radius: 16px;
+        padding: 20px 20px 18px;
+        gap: 14px;
+        box-shadow: var(--shadow-card-mobile);
       }
 
-      .tile-arrow {
-        margin-left: auto;
+      .product-card:hover,
+      .product-card:focus-visible {
+        box-shadow: var(--shadow-card-mobile-hover);
+      }
+
+      .card-top {
+        gap: 14px;
+      }
+
+      .card-header-row {
+        align-items: center;
+      }
+
+      .icon-tile {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+      }
+
+      .card-title-mobile {
+        display: block;
+      }
+
+      .card-title-desktop {
+        display: none;
+      }
+
+      .card-desc {
+        font-size: 13.5px;
+        line-height: 1.45;
+      }
+
+      .hub-footer {
+        font-size: 12px;
+        margin-top: 32px;
       }
     }
   </style>
 </head>
 <body>
-  <main class="hub-wrapper">
-    <a href="/" class="hub-brand">przemokoduje.com</a>
+  <div class="top-bar">
+    <button type="button" class="theme-toggle" id="themeToggle" aria-label="Przełącz tryb jasny i ciemny" title="Przełącz motyw">
+      <!-- Moon (Light Mode) -->
+      <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <!-- Sun (Dark Mode) -->
+      <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+    </button>
+  </div>
 
-    <section class="apps-grid" aria-label="Aplikacje">
-      <a href="/speakling" class="app-tile tile-speakling">
-        <div class="tile-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-            <line x1="12" y1="19" x2="12" y2="23"></line>
-            <line x1="8" y1="23" x2="16" y2="23"></line>
-          </svg>
+  <main class="main-content">
+    <header class="hero-header">
+      <a href="/" class="domain-pill">
+        <span class="domain-dot" aria-hidden="true"></span>
+        <span>przemokoduje.com</span>
+      </a>
+      <h1 class="hero-title">Narzędzia, które buduję</h1>
+      <p class="hero-subtitle">Trzy niezależne aplikacje webowe stworzone do codziennej pracy i rozwoju.</p>
+    </header>
+
+    <section class="cards-grid" aria-label="Aplikacje">
+      <!-- Card 1: Speakling -->
+      <a href="/speakling" class="product-card tile-speakling">
+        <div class="card-top">
+          <div class="card-header-row">
+            <div class="icon-and-title-mobile">
+              <div class="icon-tile">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                  <line x1="12" y1="19" x2="12" y2="23"></line>
+                  <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+              </div>
+              <span class="card-title-mobile">Speakling</span>
+            </div>
+            <svg class="icon-arrow-up-right" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="7" y1="17" x2="17" y2="7"></line>
+              <polyline points="7 7 17 7 17 17"></polyline>
+            </svg>
+          </div>
+          <div class="card-copy">
+            <h2 class="card-title-desktop">Speakling</h2>
+            <p class="card-desc">Ćwicz mówienie w obcym języku z natychmiastową informacją zwrotną.</p>
+          </div>
         </div>
-        <span class="tile-name">Speakling</span>
-        <span class="tile-arrow">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="card-cta">
+          <span>Otwórz aplikację</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="5" y1="12" x2="19" y2="12"></line>
             <polyline points="12 5 19 12 12 19"></polyline>
           </svg>
-        </span>
+        </div>
       </a>
 
-      <a href="/keepgoals/" class="app-tile">
-        <div class="tile-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <circle cx="12" cy="12" r="6"></circle>
-            <circle cx="12" cy="12" r="2"></circle>
-          </svg>
+      <!-- Card 2: KeepGoals -->
+      <a href="/keepgoals/" class="product-card">
+        <div class="card-top">
+          <div class="card-header-row">
+            <div class="icon-and-title-mobile">
+              <div class="icon-tile">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <circle cx="12" cy="12" r="6"></circle>
+                  <circle cx="12" cy="12" r="2"></circle>
+                </svg>
+              </div>
+              <span class="card-title-mobile">KeepGoals</span>
+            </div>
+            <svg class="icon-arrow-up-right" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="7" y1="17" x2="17" y2="7"></line>
+              <polyline points="7 7 17 7 17 17"></polyline>
+            </svg>
+          </div>
+          <div class="card-copy">
+            <h2 class="card-title-desktop">KeepGoals</h2>
+            <p class="card-desc">Śledź cele i codzienne nawyki w jednym przejrzystym widoku.</p>
+          </div>
         </div>
-        <span class="tile-name">KeepGoals</span>
-        <span class="tile-arrow">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="card-cta">
+          <span>Otwórz aplikację</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="5" y1="12" x2="19" y2="12"></line>
             <polyline points="12 5 19 12 12 19"></polyline>
           </svg>
-        </span>
+        </div>
       </a>
 
-      <a href="/autopilot/" class="app-tile">
-        <div class="tile-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
-          </svg>
+      <!-- Card 3: Autopilot -->
+      <a href="/autopilot/" class="product-card">
+        <div class="card-top">
+          <div class="card-header-row">
+            <div class="icon-and-title-mobile">
+              <div class="icon-tile">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                </svg>
+              </div>
+              <span class="card-title-mobile">Autopilot</span>
+            </div>
+            <svg class="icon-arrow-up-right" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="7" y1="17" x2="17" y2="7"></line>
+              <polyline points="7 7 17 7 17 17"></polyline>
+            </svg>
+          </div>
+          <div class="card-copy">
+            <h2 class="card-title-desktop">Autopilot</h2>
+            <p class="card-desc">Automatyzuj powtarzalne zadania i oszczędzaj czas każdego dnia.</p>
+          </div>
         </div>
-        <span class="tile-name">Autopilot</span>
-        <span class="tile-arrow">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="card-cta">
+          <span>Otwórz aplikację</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="5" y1="12" x2="19" y2="12"></line>
             <polyline points="12 5 19 12 12 19"></polyline>
           </svg>
-        </span>
+        </div>
       </a>
     </section>
   </main>
 
+  <footer class="hub-footer">
+    <span>&copy; przemokoduje.com</span>
+    <span class="footer-sep">&middot;</span>
+    <a href="https://github.com/przemekoduje" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <span class="footer-sep">&middot;</span>
+    <a href="https://x.com" target="_blank" rel="noopener noreferrer">X</a>
+    <span class="footer-sep">&middot;</span>
+    <a href="mailto:kontakt@przemokoduje.com">Kontakt</a>
+  </footer>
+
   <script>
-    (function() {
+    (function () {
+      // Mobile redirect for Speakling tile
       var isPhoneDevice = /Mobi|Android.*Mobile|iPhone|iPod/i.test(navigator.userAgent) ||
                           (window.screen && Math.min(window.screen.width, window.screen.height) <= 500);
       var isMobileViewport = window.innerWidth < 768;
@@ -200,6 +636,19 @@
         if (speaklingTile) {
           speaklingTile.setAttribute('href', '/speakling/mobile/');
         }
+      }
+
+      // Light / Dark Mode toggle (respects system default, persists manual choice)
+      var toggleBtn = document.getElementById('themeToggle');
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', function () {
+          var current = document.documentElement.getAttribute('data-theme') || 'light';
+          var next = current === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          try {
+            localStorage.setItem('przemokoduje_theme', next);
+          } catch (e) {}
+        });
       }
     })();
   </script>
