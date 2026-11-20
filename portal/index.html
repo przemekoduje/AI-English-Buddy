@@ -3,28 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>przemokoduje.com — Ekosystem Inteligentnych Aplikacji AI</title>
-  <meta name="description" content="Autorskie aplikacje i narzędzia AI od przemokoduje.com: Speakling (trener języka angielskiego) oraz KeepGoals (zarządzanie celami, notatkami i czasem)." />
+  <title>przemokoduje.com</title>
   <link rel="icon" type="image/png" href="https://przemokoduje.com/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
-    :root {
-      --bg-dark: #07090e;
-      --card-bg: rgba(16, 22, 36, 0.65);
-      --card-border: rgba(255, 255, 255, 0.08);
-      --card-hover-border: rgba(255, 255, 255, 0.2);
-      --text-main: #f3f4f6;
-      --text-muted: #94a3b8;
-      --speakling-accent: #8b5cf6;
-      --speakling-glow: rgba(139, 92, 246, 0.25);
-      --keepgoals-accent: #10b981;
-      --keepgoals-glow: rgba(16, 185, 129, 0.25);
-      --soon-accent: #f59e0b;
-    }
-
     * {
       margin: 0;
       padding: 0;
@@ -32,652 +16,189 @@
     }
 
     body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      background-color: var(--bg-dark);
-      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #ffffff;
+      color: #0f172a;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      position: relative;
-      overflow-x: hidden;
-      line-height: 1.6;
-    }
-
-    /* Tło z dynamicznymi poświatami */
-    .bg-mesh {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: -1;
-      pointer-events: none;
-      background: 
-        radial-gradient(circle at 15% 20%, rgba(139, 92, 246, 0.13) 0%, transparent 45%),
-        radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.12) 0%, transparent 40%),
-        radial-gradient(circle at 50% 80%, rgba(59, 130, 246, 0.08) 0%, transparent 50%);
-    }
-
-    .container {
-      width: 100%;
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
-
-    /* Nawigacja górna */
-    header {
-      padding: 28px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      backdrop-filter: blur(12px);
-    }
-
-    .nav-wrapper {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      text-decoration: none;
-      color: #fff;
-    }
-
-    .logo-icon {
-      width: 38px;
-      height: 38px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #6366f1 0%, #10b981 100%);
-      display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 800;
-      font-size: 18px;
-      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+      padding: 2rem 1.5rem;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .logo-text {
-      font-size: 20px;
+    .hub-wrapper {
+      width: 100%;
+      max-width: 820px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2.5rem;
+    }
+
+    .hub-brand {
+      font-size: 1.15rem;
       font-weight: 700;
-      letter-spacing: -0.5px;
+      letter-spacing: -0.02em;
+      color: #0f172a;
+      text-decoration: none;
     }
 
-    .logo-text span {
-      background: linear-gradient(90deg, #818cf8, #34d399);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .system-status {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.25);
-      padding: 6px 14px;
-      border-radius: 9999px;
-      font-size: 12px;
-      font-weight: 600;
-      color: #34d399;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: #10b981;
-      box-shadow: 0 0 10px #10b981;
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.85); }
-    }
-
-    /* Hero Section */
-    .hero {
-      text-align: center;
-      padding: 72px 0 54px;
-    }
-
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 8px 18px;
-      border-radius: 9999px;
-      font-size: 13px;
-      font-weight: 600;
-      color: #cbd5e1;
-      margin-bottom: 24px;
-    }
-
-    .hero-title {
-      font-size: clamp(32px, 5vw, 54px);
-      font-weight: 800;
-      letter-spacing: -1.5px;
-      line-height: 1.15;
-      margin-bottom: 18px;
-      background: linear-gradient(180deg, #ffffff 30%, #94a3b8 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .hero-subtitle {
-      font-size: clamp(16px, 2vw, 19px);
-      color: var(--text-muted);
-      max-width: 680px;
-      margin: 0 auto;
-      font-weight: 400;
-    }
-
-    /* Grid z aplikacjami */
     .apps-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-      gap: 28px;
-      margin-bottom: 72px;
-    }
-
-    .app-card {
-      background: var(--card-bg);
-      backdrop-filter: blur(20px);
-      border: 1px solid var(--card-border);
-      border-radius: 24px;
-      padding: 36px 32px;
-      display: flex;
-      flex-direction: column;
-      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .app-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      opacity: 0;
-      transition: opacity 0.35s ease;
-    }
-
-    .app-card:hover {
-      transform: translateY(-6px);
-      border-color: var(--card-hover-border);
-    }
-
-    /* Karta Speakling */
-    .card-speakling:hover {
-      box-shadow: 0 20px 40px -15px var(--speakling-glow);
-    }
-    .card-speakling::before {
-      background: linear-gradient(90deg, #8b5cf6, #c084fc);
-    }
-    .card-speakling:hover::before {
-      opacity: 1;
-    }
-
-    /* Karta KeepGoals */
-    .card-keepgoals:hover {
-      box-shadow: 0 20px 40px -15px var(--keepgoals-glow);
-    }
-    .card-keepgoals::before {
-      background: linear-gradient(90deg, #10b981, #6ee7b7);
-    }
-    .card-keepgoals:hover::before {
-      opacity: 1;
-    }
-
-    /* Karta Soon */
-    .card-soon {
-      opacity: 0.8;
-      border-style: dashed;
-    }
-
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 24px;
-    }
-
-    .app-badge-icon {
-      width: 58px;
-      height: 58px;
-      border-radius: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-    }
-
-    .icon-speakling {
-      background: rgba(139, 92, 246, 0.15);
-      border: 1px solid rgba(139, 92, 246, 0.3);
-      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.2);
-    }
-
-    .icon-keepgoals {
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.2);
-    }
-
-    .icon-soon {
-      background: rgba(245, 158, 11, 0.15);
-      border: 1px solid rgba(245, 158, 11, 0.3);
-    }
-
-    .card-tag {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      padding: 5px 12px;
-      border-radius: 9999px;
-    }
-
-    .tag-active {
-      background: rgba(139, 92, 246, 0.15);
-      color: #c084fc;
-      border: 1px solid rgba(139, 92, 246, 0.3);
-    }
-
-    .tag-new {
-      background: rgba(16, 185, 129, 0.15);
-      color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.3);
-    }
-
-    .tag-soon {
-      background: rgba(245, 158, 11, 0.15);
-      color: #fbbf24;
-      border: 1px solid rgba(245, 158, 11, 0.3);
-    }
-
-    .app-title {
-      font-size: 26px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      margin-bottom: 6px;
-      color: #fff;
-    }
-
-    .app-headline {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 14px;
-    }
-
-    .headline-speakling {
-      color: #a78bfa;
-    }
-
-    .headline-keepgoals {
-      color: #34d399;
-    }
-
-    .headline-soon {
-      color: #fbbf24;
-    }
-
-    .app-desc {
-      font-size: 14px;
-      color: var(--text-muted);
-      margin-bottom: 24px;
-      line-height: 1.55;
-    }
-
-    .features-list {
-      list-style: none;
-      margin-bottom: 32px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .features-list li {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
-      color: #cbd5e1;
-    }
-
-    .feature-check {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .check-speakling {
-      background: rgba(139, 92, 246, 0.2);
-      color: #c084fc;
-    }
-
-    .check-keepgoals {
-      background: rgba(16, 185, 129, 0.2);
-      color: #34d399;
-    }
-
-    .check-soon {
-      background: rgba(245, 158, 11, 0.2);
-      color: #fbbf24;
-    }
-
-    .feature-check svg {
-      width: 11px;
-      height: 11px;
-      stroke-width: 3;
-    }
-
-    .card-footer {
-      margin-top: auto;
-    }
-
-    .btn-launch {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
       width: 100%;
-      padding: 14px 20px;
-      border-radius: 14px;
-      font-size: 14px;
-      font-weight: 700;
-      text-decoration: none;
-      transition: all 0.25s ease;
-      cursor: pointer;
-      border: none;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
     }
 
-    .btn-speakling {
-      background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
-      color: #fff;
-      box-shadow: 0 4px 20px rgba(124, 58, 237, 0.3);
-    }
-
-    .btn-speakling:hover {
-      background: linear-gradient(135deg, #8b5cf6 0%, #4f46e5 100%);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(124, 58, 237, 0.45);
-    }
-
-    .btn-keepgoals {
-      background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
-      color: #fff;
-      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
-    }
-
-    .btn-keepgoals:hover {
-      background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.45);
-    }
-
-    .btn-soon {
-      background: rgba(255, 255, 255, 0.05);
-      color: #64748b;
-      cursor: not-allowed;
-    }
-
-    /* Sekcja Technologii */
-    .tech-stack {
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-      padding: 48px 0;
-      text-align: center;
-    }
-
-    .tech-title {
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      color: #64748b;
-      margin-bottom: 24px;
-    }
-
-    .tech-badges {
+    .app-tile {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
+      align-items: center;
       justify-content: center;
-      gap: 12px;
+      gap: 1.15rem;
+      padding: 2.75rem 1.5rem;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 20px;
+      text-decoration: none;
+      color: #0f172a;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                  border-color 0.2s ease,
+                  box-shadow 0.2s ease;
     }
 
-    .tech-badge {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.07);
-      padding: 8px 16px;
-      border-radius: 12px;
-      font-size: 13px;
-      font-weight: 600;
+    .app-tile:hover {
+      transform: translateY(-4px);
+      border-color: #0f172a;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    }
+
+    .tile-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0f172a;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .app-tile:hover .tile-icon {
+      background: #0f172a;
+      border-color: #0f172a;
+      color: #ffffff;
+    }
+
+    .tile-name {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #0f172a;
+    }
+
+    .tile-arrow {
       color: #94a3b8;
       display: flex;
       align-items: center;
-      gap: 8px;
+      transition: transform 0.2s ease, color 0.2s ease;
     }
 
-    /* Stopka */
-    footer {
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-      padding: 32px 0;
-      margin-top: auto;
-      text-align: center;
-      font-size: 13px;
-      color: #64748b;
+    .app-tile:hover .tile-arrow {
+      color: #0f172a;
+      transform: translateX(3px);
     }
 
-    footer a {
-      color: #94a3b8;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
+    @media (max-width: 720px) {
+      .apps-grid {
+        grid-template-columns: 1fr;
+        max-width: 340px;
+      }
 
-    footer a:hover {
-      color: #fff;
+      .app-tile {
+        flex-direction: row;
+        justify-content: flex-start;
+        padding: 1.25rem 1.4rem;
+      }
+
+      .tile-arrow {
+        margin-left: auto;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="bg-mesh"></div>
+  <main class="hub-wrapper">
+    <a href="/" class="hub-brand">przemokoduje.com</a>
 
-  <!-- Nawigacja górna -->
-  <header>
-    <div class="container nav-wrapper">
-      <a href="/" class="logo">
-        <div class="logo-icon">p</div>
-        <div class="logo-text">przemo<span>koduje</span></div>
+    <section class="apps-grid" aria-label="Aplikacje">
+      <a href="/speakling" class="app-tile tile-speakling">
+        <div class="tile-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+        </div>
+        <span class="tile-name">Speakling</span>
+        <span class="tile-arrow">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </span>
       </a>
-      <div class="system-status">
-        <span class="status-dot"></span>
-        Wszystkie systemy aktywne
-      </div>
-    </div>
-  </header>
 
-  <!-- Główna zawartość -->
-  <main class="container">
-    <section class="hero">
-      <div class="hero-badge">
-        <span>⚡ Ekosystem Inteligentnych Narzędzi AI</span>
-      </div>
-      <h1 class="hero-title">Aplikacje, które rewolucjonizują<br/>Twoją codzienną produktywność</h1>
-      <p class="hero-subtitle">
-        Autorskie systemy napędzane zaawansowanymi modelami sztucznej inteligencji. Wybierz narzędzie i zacznij działać sprawniej.
-      </p>
-    </section>
+      <a href="/keepgoals/" class="app-tile">
+        <div class="tile-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <circle cx="12" cy="12" r="6"></circle>
+            <circle cx="12" cy="12" r="2"></circle>
+          </svg>
+        </div>
+        <span class="tile-name">KeepGoals</span>
+        <span class="tile-arrow">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </span>
+      </a>
 
-    <!-- Kafle z aplikacjami -->
-    <section class="apps-grid">
-      
-      <!-- Karta Speakling -->
-      <div class="app-card card-speakling">
-        <div class="card-header">
-          <div class="app-badge-icon icon-speakling">
-            <img src="/favicon.png" alt="Speakling" style="width: 36px; height: 36px; object-fit: contain;" />
-          </div>
-          <span class="card-tag tag-active">Dostępna • v1.4</span>
+      <a href="/autopilot/" class="app-tile">
+        <div class="tile-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+          </svg>
         </div>
-        <h2 class="app-title">Speakling</h2>
-        <div class="app-headline headline-speakling">Twój inteligentny trener języka angielskiego AI</div>
-        <p class="app-desc">
-          Przełam barierę językową i rozwijaj płynność dzięki interaktywnym konwersacjom głosowym w czasie rzeczywistym, inteligentnym fiszkom i analizie wymowy.
-        </p>
-        <ul class="features-list">
-          <li>
-            <span class="feature-check check-speakling">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </span>
-            Płynne rozmowy głosowe w czasie rzeczywistym
-          </li>
-          <li>
-            <span class="feature-check check-speakling">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </span>
-            Inteligentny słownik i spersonalizowane historie
-          </li>
-          <li>
-            <span class="feature-check check-speakling">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </span>
-            Wersja desktopowa oraz dedykowana mobilna (PWA)
-          </li>
-        </ul>
-        <div class="card-footer">
-          <a href="/speakling" class="btn-launch btn-speakling">
-            <span>Uruchom Speakling</span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-          </a>
-        </div>
-      </div>
-
-      <!-- Karta KeepGoals -->
-      <div class="app-card card-keepgoals">
-        <div class="card-header">
-          <div class="app-badge-icon icon-keepgoals">🎯</div>
-          <span class="card-tag tag-new">Nowość • v2.0</span>
-        </div>
-        <h2 class="app-title">KeepGoals</h2>
-        <div class="app-headline headline-keepgoals">Inteligentne notatki, cele i zarządzanie czasem</div>
-        <p class="app-desc">
-          System nowej generacji zamieniający nagrania audio i wideo w ustrukturyzowane notatki, plany strategiczne, delegowane zadania oraz kalendarz celów.
-        </p>
-        <ul class="features-list">
-          <li>
-            <span class="feature-check check-keepgoals">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </span>
-            Transkrypcja audio/wideo z automatyczną analizą AI
-          </li>
-          <li>
-            <span class="feature-check check-keepgoals">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </span>
-            Oś czasu projektów, kamienie milowe i cele
-          </li>
-          <li>
-            <span class="feature-check check-keepgoals">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </span>
-            Delegowanie zadań z dedykowanym podsumowaniem AI
-          </li>
-        </ul>
-        <div class="card-footer">
-          <a href="/keepgoals/" class="btn-launch btn-keepgoals">
-            <span>Uruchom KeepGoals</span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-          </a>
-        </div>
-      </div>
-
-      <!-- Karta Autopilot -->
-      <div class="app-card card-speakling">
-        <div class="card-header">
-          <div class="app-badge-icon icon-speakling">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
-            </svg>
-          </div>
-          <span class="card-tag tag-new">Nowość • v1.0</span>
-        </div>
-        <h2 class="app-title">Autopilot</h2>
-        <div class="app-headline headline-speakling">Asystent regulacji emocji i ćwiczeń wideo</div>
-        <p class="app-desc">
-          Opisz swój obecny stan emocjonalny w oknie czatu AI, a Autopilot natychmiast dobierze konkretne ćwiczenie z bazy rolek Facebook & Instagram Reels.
-        </p>
-        <ul class="features-list">
-          <li>
-            <span class="feature-check check-speakling">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </span>
-            Inteligentny czat AI rozpoznający stan układu nerwowego
-          </li>
-          <li>
-            <span class="feature-check check-speakling">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </span>
-            Baza ćwiczeń wideo powiązana z Rolkami FB & Instagram
-          </li>
-          <li>
-            <span class="feature-check check-speakling">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </span>
-            Instrukcje krok po kroku oraz wbudowany stoper
-          </li>
-        </ul>
-        <div class="card-footer">
-          <a href="/autopilot/" class="btn-launch btn-speakling">
-            <span>Uruchom Autopilot</span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-          </a>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- Sekcja Technologii -->
-    <section class="tech-stack">
-      <div class="tech-title">Nowoczesny stos technologiczny & Infrastruktura chmurowa</div>
-      <div class="tech-badges">
-        <div class="tech-badge"><span>⚡</span> FastAPI & Python 3.11</div>
-        <div class="tech-badge"><span>⚛️</span> React 19 & Vite</div>
-        <div class="tech-badge"><span>☁️</span> Cloud Run Serverless</div>
-        <div class="tech-badge"><span>🔥</span> Firestore Database</div>
-        <div class="tech-badge"><span>✨</span> Gemini & OpenAI Models</div>
-        <div class="tech-badge"><span>🚀</span> Groq High-Speed LLM</div>
-      </div>
+        <span class="tile-name">Autopilot</span>
+        <span class="tile-arrow">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </span>
+      </a>
     </section>
   </main>
 
-  <!-- Stopka -->
-  <footer>
-    <div class="container">
-      <p>&copy; 2026 <a href="https://przemokoduje.com">przemokoduje.com</a>. Wszelkie prawa zastrzeżone.</p>
-    </div>
-  </footer>
   <script>
     (function() {
-      var isPhoneDevice = /Mobi|Android.*Mobile|iPhone|iPod/i.test(navigator.userAgent) || 
+      var isPhoneDevice = /Mobi|Android.*Mobile|iPhone|iPod/i.test(navigator.userAgent) ||
                           (window.screen && Math.min(window.screen.width, window.screen.height) <= 500);
       var isMobileViewport = window.innerWidth < 768;
 
       if (isPhoneDevice || isMobileViewport) {
-        var speaklingBtn = document.querySelector('.btn-speakling');
-        if (speaklingBtn) {
-          speaklingBtn.setAttribute('href', '/speakling/mobile/');
+        var speaklingTile = document.querySelector('.tile-speakling');
+        if (speaklingTile) {
+          speaklingTile.setAttribute('href', '/speakling/mobile/');
         }
       }
     })();
